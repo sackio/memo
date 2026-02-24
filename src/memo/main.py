@@ -34,7 +34,7 @@ async def memo_store(
     metadata: dict[str, Any] | None = None,
     db_path: str | None = None,
 ) -> dict:
-    """Store a document with automatic embedding generation."""
+    """Store a document with automatic embedding and token count."""
     embedding = await embeddings.embed(content)
     doc_id = await db.store(
         db_path=db_path,
@@ -53,18 +53,31 @@ async def memo_search(
     limit: int = 10,
     min_score: float | None = None,
     tags: list[str] | None = None,
+    after: float | None = None,
+    before: float | None = None,
+    min_tokens: int | None = None,
+    max_tokens: int | None = None,
     db_path: str | None = None,
 ) -> list[dict]:
-    """Search documents by semantic similarity."""
+    """Search documents by semantic similarity with optional filters.
+
+    Filters:
+    - tags: only return docs that have at least one of these tags
+    - after/before: Unix timestamps bounding created_at
+    - min_tokens/max_tokens: bound by stored token_count of content
+    """
     embedding = await embeddings.embed(query)
-    results = await db.search(
+    return await db.search(
         db_path=db_path,
         embedding=embedding,
         limit=limit,
         min_score=min_score,
         tags=tags or [],
+        after=after,
+        before=before,
+        min_tokens=min_tokens,
+        max_tokens=max_tokens,
     )
-    return results
 
 
 @mcp.tool()
@@ -83,11 +96,29 @@ async def memo_delete(id: str, db_path: str | None = None) -> dict:
 @mcp.tool()
 async def memo_list(
     tags: list[str] | None = None,
+    after: float | None = None,
+    before: float | None = None,
+    min_tokens: int | None = None,
+    max_tokens: int | None = None,
     limit: int = 100,
     db_path: str | None = None,
 ) -> list[dict]:
-    """List documents with optional tag filter."""
-    return await db.list_docs(db_path=db_path, tags=tags or [], limit=limit)
+    """List documents with optional filters.
+
+    Filters:
+    - tags: only return docs that have at least one of these tags
+    - after/before: Unix timestamps bounding created_at
+    - min_tokens/max_tokens: bound by stored token_count of content
+    """
+    return await db.list_docs(
+        db_path=db_path,
+        tags=tags or [],
+        limit=limit,
+        after=after,
+        before=before,
+        min_tokens=min_tokens,
+        max_tokens=max_tokens,
+    )
 
 
 # --- FastAPI app ---
@@ -124,10 +155,17 @@ async def store_document(req: StoreRequest):
 @app.get("/documents", response_model=list[Document])
 async def list_documents(
     tags: list[str] = Query(default=[]),
+    after: float | None = Query(default=None),
+    before: float | None = Query(default=None),
+    min_tokens: int | None = Query(default=None),
+    max_tokens: int | None = Query(default=None),
     limit: int = Query(default=100),
     db_path: str | None = Query(default=None),
 ):
-    docs = await db.list_docs(db_path=db_path, tags=tags, limit=limit)
+    docs = await db.list_docs(
+        db_path=db_path, tags=tags, limit=limit,
+        after=after, before=before, min_tokens=min_tokens, max_tokens=max_tokens,
+    )
     return [Document(**d) for d in docs]
 
 
@@ -154,6 +192,10 @@ async def search_documents(req: SearchRequest):
         limit=req.limit,
         min_score=req.min_score,
         tags=req.tags,
+        after=req.after,
+        before=req.before,
+        min_tokens=req.min_tokens,
+        max_tokens=req.max_tokens,
     )
     return [SearchResult(document=Document(**r["document"]), score=r["score"]) for r in results]
 
