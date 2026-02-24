@@ -1,0 +1,6 @@
+{
+  "type": "http",
+  "url": "http://localhost:8000/mcp/",
+  "name": "memo",
+  "description": "Semantic document storage and retrieval"
+}
