@@ -1,0 +1,22 @@
+services:
+  memo:
+    build: .
+    container_name: memo
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8000}:8000"
+    volumes:
+      - memo_data:/data
+    environment:
+      DEFAULT_DB_PATH: /data/memo.db
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-openai/text-embedding-3-small}
+      EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-1536}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  memo_data:

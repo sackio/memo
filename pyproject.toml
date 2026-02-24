@@ -1,0 +1,25 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "memo"
+version = "0.1.0"
+description = "Lightweight HTTP API + MCP server for SQLite vector document storage"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "mcp>=1.23.0",
+    "openai>=1.0.0",
+    "sqlite-vec>=0.1.6",
+    "python-dotenv>=1.0.0",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+]
+
+[project.scripts]
+memo = "memo.main:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/memo"]
