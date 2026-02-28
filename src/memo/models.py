@@ -58,5 +58,25 @@ class UpdateRequest(BaseModel):
     db_path: str | None = None
 
 
+class ContextRequest(BaseModel):
+    query: str
+    token_budget: int = 4000
+    queries: list[str] = []          # additional search angles run in parallel
+    limit_per_query: int = 10
+    min_score: float | None = None
+    tags: list[str] = []
+    after: float | None = None
+    before: float | None = None
+    db_path: str | None = None
+    scope: str = "local"
+
+
+class ContextResponse(BaseModel):
+    content: str
+    token_count: int
+    doc_count: int
+    truncated: bool
+
+
 class DeleteResponse(BaseModel):
     deleted: bool

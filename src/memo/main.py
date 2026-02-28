@@ -1,3 +1,4 @@
+import asyncio
 import contextlib
 from contextlib import asynccontextmanager
 from typing import Any
@@ -8,7 +9,10 @@ from mcp.server.fastmcp import FastMCP
 
 from memo import db, embeddings
 from memo.config import settings
+from memo.db import _count_tokens
 from memo.models import (
+    ContextRequest,
+    ContextResponse,
     DeleteResponse,
     Document,
     SearchRequest,
@@ -177,6 +181,90 @@ async def memo_list(
     return await db.list_docs(db_path=db_path, **kwargs)
 
 
+@mcp.tool()
+async def memo_context(
+    query: str,
+    token_budget: int = 4000,
+    queries: list[str] | None = None,
+    limit_per_query: int = 10,
+    min_score: float | None = None,
+    tags: list[str] | None = None,
+    after: float | None = None,
+    before: float | None = None,
+    db_path: str | None = None,
+    scope: str = "local",
+) -> dict:
+    """Search memo with one or more query angles in parallel, deduplicate results,
+    and return content formatted to fit within a token budget.
+
+    Designed for context retrieval without flooding the caller's context window —
+    all intermediate results are collapsed into a single budgeted string.
+
+    queries: optional list of additional search angles run alongside query.
+             More angles = better recall at the cost of more embedding calls.
+    token_budget: maximum tokens in the returned content string.
+    scope: "local" (default), "global", or "all" (merge local + global DBs).
+
+    Returns:
+      content: formatted markdown string of results within budget
+      token_count: actual token count of content
+      doc_count: number of memos included
+      truncated: true if results were cut off by the budget
+    """
+    all_queries = [query] + (queries or [])
+    search_kwargs = dict(
+        limit=limit_per_query, min_score=min_score, tags=tags or [],
+        after=after, before=before, min_tokens=None, max_tokens=None,
+    )
+
+    # Embed all queries concurrently
+    embedding_list = await asyncio.gather(*[embeddings.embed(q) for q in all_queries])
+
+    # Determine search function based on scope
+    if scope == "global" or db_path is None:
+        async def _search(emb):
+            return await db.search(db_path=None, embedding=emb, **search_kwargs)
+    elif scope == "all":
+        paths = list({db.global_path(), db._resolve_path(db_path)})
+        async def _search(emb):
+            return await db.search_multi(paths, embedding=emb, **search_kwargs)
+    else:
+        async def _search(emb):
+            return await db.search(db_path=db_path, embedding=emb, **search_kwargs)
+
+    all_results = await asyncio.gather(*[_search(emb) for emb in embedding_list])
+
+    # Deduplicate: keep highest score per doc_id
+    best: dict[str, dict] = {}
+    for results in all_results:
+        for item in results:
+            doc_id = item["document"]["id"]
+            if doc_id not in best or item["score"] > best[doc_id]["score"]:
+                best[doc_id] = item
+
+    ranked = sorted(best.values(), key=lambda x: x["score"], reverse=True)
+
+    # Greedily fill token budget
+    parts: list[str] = []
+    total_tokens = 0
+    truncated = False
+
+    for item in ranked:
+        doc = item["document"]
+        title = doc.get("title") or doc["id"]
+        tags_str = (", ".join(doc["tags"]) + " ") if doc["tags"] else ""
+        section = f"## {title} {tags_str}(score: {item['score']:.2f})\n{doc['content']}\n"
+        section_tokens = _count_tokens(section)
+        if total_tokens + section_tokens > token_budget:
+            truncated = True
+            break
+        parts.append(section)
+        total_tokens += section_tokens
+
+    content = "\n".join(parts)
+    return {"content": content, "token_count": total_tokens, "doc_count": len(parts), "truncated": truncated}
+
+
 # --- FastAPI app ---
 
 @asynccontextmanager
@@ -271,6 +359,23 @@ async def search_documents(req: SearchRequest):
         max_tokens=req.max_tokens,
     )
     return [SearchResult(document=Document(**r["document"]), score=r["score"]) for r in results]
+
+
+@app.post("/context", response_model=ContextResponse)
+async def context_documents(req: ContextRequest):
+    result = await memo_context(
+        query=req.query,
+        token_budget=req.token_budget,
+        queries=req.queries or None,
+        limit_per_query=req.limit_per_query,
+        min_score=req.min_score,
+        tags=req.tags or None,
+        after=req.after,
+        before=req.before,
+        db_path=req.db_path,
+        scope=req.scope,
+    )
+    return ContextResponse(**result)
 
 
 def main():
