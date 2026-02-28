@@ -17,7 +17,19 @@ _tokenizer = tiktoken.get_encoding("cl100k_base")
 
 def _resolve_path(db_path: str | None) -> str:
     if db_path:
-        return db_path
+        p = Path(db_path)
+        if p.suffix in (".db", ".sqlite", ".sqlite3"):
+            # Explicit DB file — use as-is
+            return db_path
+        # Directory path — encode as a safe filename within the data volume
+        # e.g. /mnt/nas/data/files → <data_dir>/mnt_nas_data_files.memo.db
+        safe_name = str(p).strip("/").replace("/", "_")
+        data_dir = Path(settings.resolved_default_db_path).parent
+        return str(data_dir / f"{safe_name}.memo.db")
+    return settings.resolved_default_db_path
+
+
+def global_path() -> str:
     return settings.resolved_default_db_path
 
 
@@ -115,6 +127,36 @@ def _sync_store(db_path: str, content: str, title: str | None, tags: list[str],
     )
     conn.commit()
     return doc_id
+
+
+def _sync_update(db_path: str, doc_id: str, content: str | None, title: str | None,
+                 tags: list[str] | None, metadata: dict | None,
+                 embedding: list[float] | None) -> dict | None:
+    conn = _get_or_create_conn(db_path)
+    row = conn.execute("SELECT * FROM documents WHERE id = ?", (doc_id,)).fetchone()
+    if row is None:
+        return None
+    existing = _row_to_dict(row)
+
+    new_content = content if content is not None else existing["content"]
+    new_title = title if title is not None else existing["title"]
+    new_tags = tags if tags is not None else existing["tags"]
+    new_metadata = metadata if metadata is not None else existing["metadata"]
+    new_token_count = _count_tokens(new_content) if content is not None else existing["token_count"]
+
+    conn.execute(
+        "UPDATE documents SET content=?, title=?, tags=?, metadata=?, token_count=?, updated_at=? WHERE id=?",
+        (new_content, new_title, json.dumps(new_tags), json.dumps(new_metadata), new_token_count, time(), doc_id),
+    )
+    if embedding is not None:
+        conn.execute("DELETE FROM document_embeddings WHERE doc_id = ?", (doc_id,))
+        conn.execute(
+            "INSERT INTO document_embeddings (doc_id, embedding) VALUES (?, ?)",
+            (doc_id, _serialize_vector(embedding)),
+        )
+    conn.commit()
+    updated = conn.execute("SELECT * FROM documents WHERE id = ?", (doc_id,)).fetchone()
+    return _row_to_dict(updated)
 
 
 def _sync_search(db_path: str, embedding: list[float], limit: int, min_score: float | None,
@@ -224,6 +266,13 @@ async def get(db_path: str | None, doc_id: str) -> dict | None:
     return await asyncio.to_thread(_sync_get, path, doc_id)
 
 
+async def update(db_path: str | None, doc_id: str, content: str | None, title: str | None,
+                 tags: list[str] | None, metadata: dict | None,
+                 embedding: list[float] | None) -> dict | None:
+    path = _resolve_path(db_path)
+    return await asyncio.to_thread(_sync_update, path, doc_id, content, title, tags, metadata, embedding)
+
+
 async def delete(db_path: str | None, doc_id: str) -> bool:
     path = _resolve_path(db_path)
     return await asyncio.to_thread(_sync_delete, path, doc_id)
@@ -233,3 +282,51 @@ async def list_docs(db_path: str | None, tags: list[str], limit: int, after: flo
                     before: float | None, min_tokens: int | None, max_tokens: int | None) -> list[dict]:
     path = _resolve_path(db_path)
     return await asyncio.to_thread(_sync_list, path, tags, limit, after, before, min_tokens, max_tokens)
+
+
+async def search_multi(
+    paths: list[str], embedding: list[float], limit: int, min_score: float | None,
+    tags: list[str], after: float | None, before: float | None,
+    min_tokens: int | None, max_tokens: int | None,
+) -> list[dict]:
+    """Search multiple DBs concurrently, merge by score, deduplicate by doc id."""
+    tasks = [
+        asyncio.to_thread(_sync_search, p, embedding, limit, min_score, tags, after, before, min_tokens, max_tokens)
+        for p in paths
+    ]
+    per_db = await asyncio.gather(*tasks, return_exceptions=True)
+    seen: set[str] = set()
+    merged: list[dict] = []
+    for result in per_db:
+        if isinstance(result, Exception):
+            continue
+        for item in result:
+            doc_id = item["document"]["id"]
+            if doc_id not in seen:
+                seen.add(doc_id)
+                merged.append(item)
+    merged.sort(key=lambda x: x["score"], reverse=True)
+    return merged[:limit]
+
+
+async def list_docs_multi(
+    paths: list[str], tags: list[str], limit: int, after: float | None,
+    before: float | None, min_tokens: int | None, max_tokens: int | None,
+) -> list[dict]:
+    """List documents from multiple DBs, merge by created_at desc, deduplicate by doc id."""
+    tasks = [
+        asyncio.to_thread(_sync_list, p, tags, limit, after, before, min_tokens, max_tokens)
+        for p in paths
+    ]
+    per_db = await asyncio.gather(*tasks, return_exceptions=True)
+    seen: set[str] = set()
+    merged: list[dict] = []
+    for result in per_db:
+        if isinstance(result, Exception):
+            continue
+        for doc in result:
+            if doc["id"] not in seen:
+                seen.add(doc["id"])
+                merged.append(doc)
+    merged.sort(key=lambda x: x["created_at"], reverse=True)
+    return merged[:limit]

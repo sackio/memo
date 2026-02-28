@@ -50,5 +50,13 @@ class SearchResult(BaseModel):
     score: float
 
 
+class UpdateRequest(BaseModel):
+    content: str | None = None
+    title: str | None = None
+    tags: list[str] | None = None
+    metadata: dict[str, Any] | None = None
+    db_path: str | None = None
+
+
 class DeleteResponse(BaseModel):
     deleted: bool
