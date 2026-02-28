@@ -13,6 +13,8 @@ from memo.db import _count_tokens
 from memo.models import (
     ContextRequest,
     ContextResponse,
+    CopyMoveRequest,
+    CopyMoveResponse,
     DeleteResponse,
     Document,
     SearchRequest,
@@ -142,6 +144,39 @@ async def memo_delete(id: str, db_path: str | None = None) -> dict:
     """
     deleted = await db.delete(db_path=db_path, doc_id=id)
     return {"deleted": deleted}
+
+
+@mcp.tool()
+async def memo_copy(
+    id: str,
+    to_db_path: str | None = None,
+    from_db_path: str | None = None,
+) -> dict | None:
+    """Copy a memo to another database without re-embedding.
+
+    from_db_path: source DB (None = global default).
+    to_db_path: destination DB (None = global default).
+    Returns {id: <new_uuid>} for the copy, or null if the source memo was not found.
+    """
+    new_id = await db.copy(from_db_path=from_db_path, doc_id=id, to_db_path=to_db_path)
+    return {"id": new_id} if new_id else None
+
+
+@mcp.tool()
+async def memo_move(
+    id: str,
+    to_db_path: str | None = None,
+    from_db_path: str | None = None,
+) -> dict | None:
+    """Move a memo to another database without re-embedding.
+
+    Copies the memo to to_db_path then deletes it from from_db_path.
+    from_db_path: source DB (None = global default).
+    to_db_path: destination DB (None = global default).
+    Returns {id: <new_uuid>} in the destination, or null if source memo not found.
+    """
+    new_id = await db.move(from_db_path=from_db_path, doc_id=id, to_db_path=to_db_path)
+    return {"id": new_id} if new_id else None
 
 
 @mcp.tool()
@@ -342,6 +377,22 @@ async def update_document(doc_id: str, req: UpdateRequest):
 async def delete_document(doc_id: str, db_path: str | None = Query(default=None)):
     deleted = await db.delete(db_path=db_path, doc_id=doc_id)
     return DeleteResponse(deleted=deleted)
+
+
+@app.post("/documents/{doc_id}/copy", response_model=CopyMoveResponse)
+async def copy_document(doc_id: str, req: CopyMoveRequest):
+    new_id = await db.copy(from_db_path=req.from_db_path, doc_id=doc_id, to_db_path=req.to_db_path)
+    if new_id is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return CopyMoveResponse(id=new_id)
+
+
+@app.post("/documents/{doc_id}/move", response_model=CopyMoveResponse)
+async def move_document(doc_id: str, req: CopyMoveRequest):
+    new_id = await db.move(from_db_path=req.from_db_path, doc_id=doc_id, to_db_path=req.to_db_path)
+    if new_id is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return CopyMoveResponse(id=new_id)
 
 
 @app.post("/search", response_model=list[SearchResult])

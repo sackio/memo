@@ -80,3 +80,12 @@ class ContextResponse(BaseModel):
 
 class DeleteResponse(BaseModel):
     deleted: bool
+
+
+class CopyMoveRequest(BaseModel):
+    to_db_path: str | None = None
+    from_db_path: str | None = None
+
+
+class CopyMoveResponse(BaseModel):
+    id: str

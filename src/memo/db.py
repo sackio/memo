@@ -206,6 +206,48 @@ def _sync_delete(db_path: str, doc_id: str) -> bool:
     return cur.rowcount > 0
 
 
+def _sync_copy(src_path: str, doc_id: str, dst_path: str) -> str | None:
+    """Copy a document to another DB, reusing raw embedding bytes (no re-embedding)."""
+    conn_src = _get_or_create_conn(src_path)
+    conn_dst = _get_or_create_conn(dst_path)
+
+    row = conn_src.execute("SELECT * FROM documents WHERE id = ?", (doc_id,)).fetchone()
+    if row is None:
+        return None
+    doc = _row_to_dict(row)
+
+    emb_row = conn_src.execute(
+        "SELECT embedding FROM document_embeddings WHERE doc_id = ?", (doc_id,)
+    ).fetchone()
+    if emb_row is None:
+        return None
+    embedding_bytes = emb_row["embedding"]
+
+    new_id = str(uuid.uuid4())
+    now = time()
+    conn_dst.execute(
+        "INSERT INTO documents (id, content, title, tags, metadata, token_count, created_at, updated_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (new_id, doc["content"], doc["title"], json.dumps(doc["tags"]),
+         json.dumps(doc["metadata"]), doc["token_count"], now, now),
+    )
+    conn_dst.execute(
+        "INSERT INTO document_embeddings (doc_id, embedding) VALUES (?, ?)",
+        (new_id, embedding_bytes),
+    )
+    conn_dst.commit()
+    return new_id
+
+
+def _sync_move(src_path: str, doc_id: str, dst_path: str) -> str | None:
+    """Copy a document to another DB then delete from source."""
+    new_id = _sync_copy(src_path, doc_id, dst_path)
+    if new_id is None:
+        return None
+    _sync_delete(src_path, doc_id)
+    return new_id
+
+
 def _sync_list(db_path: str, tags: list[str], limit: int, after: float | None,
                before: float | None, min_tokens: int | None, max_tokens: int | None) -> list[dict]:
     conn = _get_or_create_conn(db_path)
@@ -307,6 +349,18 @@ async def search_multi(
                 merged.append(item)
     merged.sort(key=lambda x: x["score"], reverse=True)
     return merged[:limit]
+
+
+async def copy(from_db_path: str | None, doc_id: str, to_db_path: str | None) -> str | None:
+    src = _resolve_path(from_db_path)
+    dst = _resolve_path(to_db_path)
+    return await asyncio.to_thread(_sync_copy, src, doc_id, dst)
+
+
+async def move(from_db_path: str | None, doc_id: str, to_db_path: str | None) -> str | None:
+    src = _resolve_path(from_db_path)
+    dst = _resolve_path(to_db_path)
+    return await asyncio.to_thread(_sync_move, src, doc_id, dst)
 
 
 async def list_docs_multi(
