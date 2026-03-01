@@ -1,6 +1,6 @@
 ---
 name: recall
-description: Search memo for relevant stored memories. Use when the user asks to recall, remember, look up, or retrieve something from memory.
+description: Search memo for relevant stored memories. Use when the user asks to recall, remember, look up, retrieve, find, or search for something from memory or past context. Trigger phrases include: "do you remember", "what do you know about", "have we talked about", "what did we say about", "pull up", "look up", "find notes on", "any context on", "what's in memory about", "search for", "remind me about", "dig up", "what have we discussed about".
 argument-hint: <query> [#tag1 #tag2] [--limit N] [--min-score F]
 disable-model-invocation: false
 ---

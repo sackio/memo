@@ -1,6 +1,6 @@
 ---
 name: memorize
-description: Store or update something in memo (semantic document storage). Use when the user asks to remember, memorize, save, or update something for later retrieval.
+description: Store or update something in memo (semantic document storage). Use when the user asks to remember, memorize, save, record, or store something for later retrieval. Trigger phrases include: "remember this", "keep in mind", "make a note", "note that", "don't forget", "save this", "store this", "hold onto this", "jot this down", "take note of", "memorize this", "keep track of", "log this", "record this", "keep this for later".
 argument-hint: [content] [#tag1 #tag2] [--update <id>]
 disable-model-invocation: false
 ---

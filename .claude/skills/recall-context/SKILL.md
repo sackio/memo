@@ -1,6 +1,6 @@
 ---
 name: recall-context
-description: Retrieve a token-budgeted block of relevant memos on a topic without consuming the main agent's context. Use when the user asks to load context, pull in memories, or retrieve background on a subject within a token limit. Runs as an isolated subagent — all search overhead stays out of the main context window.
+description: Retrieve a token-budgeted block of relevant memos on a topic without consuming the main agent's context. Use when the user asks to load context, pull in memories, get background on a subject, or retrieve past notes within a token limit. Prefer this over recall when the user wants a broader context load rather than specific search results. Trigger phrases include: "load context on", "get background on", "what do we know about", "bring in context", "pull context", "load memories about", "give me context on", "background on", "what's stored about", "load notes on". Runs as an isolated subagent — all search overhead stays out of the main context window.
 argument-hint: <topic> [--budget <tokens>] [#tag1 #tag2] [--scope global|local|all]
 context: fork
 agent: general-purpose
