@@ -121,16 +121,52 @@ DELETE /documents/{id}?db_path=...
 
 ```
 GET /documents
-  ?tags=db&tags=sqlite    // any-match tag filter
-  &after=1700000000.0     // created_at >= (Unix timestamp)
-  &before=1800000000.0    // created_at <= (Unix timestamp)
+  ?query=sqlite+vector     // optional — enables vector search, ranked by similarity
+  &min_score=0.4           // optional, only applies when query is set
+  &tags=db&tags=sqlite     // any-match tag filter
+  &after=1700000000.0      // created_at >= (Unix timestamp)
+  &before=1800000000.0     // created_at <= (Unix timestamp)
   &min_tokens=10
   &max_tokens=500
-  &limit=100              // default 100
+  &limit=100               // default 100
   &db_path=...
 
 → [{memo}, ...]
 ```
+
+Without `query`, returns memos in reverse-chronological order. With `query`, embeds via OpenRouter and returns results ranked by cosine similarity.
+
+### Copy
+
+```
+POST /documents/{id}/copy
+Content-Type: application/json
+
+{
+  "from_db_path": null,   // source DB (null = global default)
+  "to_db_path": "..."     // destination DB
+}
+
+→ {"id": "<new-uuid>"}
+```
+
+Copies the memo to another database, reusing the stored embedding bytes — no re-embedding API call.
+
+### Move
+
+```
+POST /documents/{id}/move
+Content-Type: application/json
+
+{
+  "from_db_path": null,   // source DB (null = global default)
+  "to_db_path": "..."     // destination DB
+}
+
+→ {"id": "<new-uuid>"}
+```
+
+Copies to destination then deletes from source. Returns the new ID in the destination.
 
 ### Semantic search
 
@@ -298,10 +334,12 @@ Returns `{content, token_count, doc_count, truncated}`.
 
 #### `memo_list`
 
-List memos in reverse-chronological order with optional filters.
+List memos with optional filters. When `query` is provided, uses OpenRouter vector embeddings to rank by semantic similarity. Without `query`, returns memos in reverse-chronological order.
 
 | Param | Type | Default | Description |
 |---|---|---|---|
+| `query` | string | `null` | Optional — enables vector search ranked by similarity |
+| `min_score` | float | `null` | Minimum cosine similarity (only applies with `query`) |
 | `tags` | string[] | `null` | Any-match tag filter |
 | `after` | float | `null` | `created_at >=` |
 | `before` | float | `null` | `created_at <=` |
@@ -330,6 +368,30 @@ Delete a memo by ID.
 | `db_path` | string | DB override |
 
 Returns `{"deleted": true/false}`.
+
+#### `memo_copy`
+
+Copy a memo to another database. Reuses stored embedding bytes — no re-embedding API call.
+
+| Param | Type | Default | Description |
+|---|---|---|---|
+| `id` | string | *(required)* | Memo UUID |
+| `to_db_path` | string | `null` | Destination DB |
+| `from_db_path` | string | `null` | Source DB |
+
+Returns `{"id": "<new-uuid>"}` for the copy, or `null` if source not found.
+
+#### `memo_move`
+
+Move a memo to another database. Copies to destination then deletes from source.
+
+| Param | Type | Default | Description |
+|---|---|---|---|
+| `id` | string | *(required)* | Memo UUID |
+| `to_db_path` | string | `null` | Destination DB |
+| `from_db_path` | string | `null` | Source DB |
+
+Returns `{"id": "<new-uuid>"}` in the destination, or `null` if source not found.
 
 ---
 
