@@ -181,16 +181,22 @@ async def memo_move(
 
 @mcp.tool()
 async def memo_list(
+    query: str | None = None,
     tags: list[str] | None = None,
     after: float | None = None,
     before: float | None = None,
     min_tokens: int | None = None,
     max_tokens: int | None = None,
     limit: int = 100,
+    min_score: float | None = None,
     db_path: str | None = None,
     scope: str = "local",
 ) -> list[dict]:
     """List documents with optional filters.
+
+    When query is provided, uses OpenRouter vector embeddings to rank results by
+    semantic similarity (same engine as memo_search). Without query, returns
+    documents in reverse-chronological order via SQL.
 
     db_path: directory path (uses <dir>/.memo.db), explicit .db file, or None for global DB.
     scope controls which database(s) to list from:
@@ -202,7 +208,21 @@ async def memo_list(
     - tags: only return docs that have at least one of these tags
     - after/before: Unix timestamps bounding created_at
     - min_tokens/max_tokens: bound by stored token_count of content
+    - min_score: minimum cosine similarity (only applies when query is provided)
     """
+    if query is not None:
+        embedding = await embeddings.embed(query)
+        kwargs = dict(embedding=embedding, limit=limit, min_score=min_score, tags=tags or [],
+                      after=after, before=before, min_tokens=min_tokens, max_tokens=max_tokens)
+        if scope == "global" or (scope == "local" and db_path is None):
+            results = await db.search(db_path=None, **kwargs)
+        elif scope == "all" and db_path is not None:
+            paths = list({db.global_path(), db._resolve_path(db_path)})
+            results = await db.search_multi(paths, **kwargs)
+        else:
+            results = await db.search(db_path=db_path, **kwargs)
+        return [r["document"] for r in results]
+
     kwargs = dict(tags=tags or [], limit=limit, after=after, before=before,
                   min_tokens=min_tokens, max_tokens=max_tokens)
 
@@ -333,14 +353,23 @@ async def store_document(req: StoreRequest):
 
 @app.get("/documents", response_model=list[Document])
 async def list_documents(
+    query: str | None = Query(default=None),
     tags: list[str] = Query(default=[]),
     after: float | None = Query(default=None),
     before: float | None = Query(default=None),
     min_tokens: int | None = Query(default=None),
     max_tokens: int | None = Query(default=None),
+    min_score: float | None = Query(default=None),
     limit: int = Query(default=100),
     db_path: str | None = Query(default=None),
 ):
+    if query is not None:
+        embedding = await embeddings.embed(query)
+        results = await db.search(
+            db_path=db_path, embedding=embedding, limit=limit, min_score=min_score,
+            tags=tags, after=after, before=before, min_tokens=min_tokens, max_tokens=max_tokens,
+        )
+        return [Document(**r["document"]) for r in results]
     docs = await db.list_docs(
         db_path=db_path, tags=tags, limit=limit,
         after=after, before=before, min_tokens=min_tokens, max_tokens=max_tokens,
