@@ -89,3 +89,16 @@ class CopyMoveRequest(BaseModel):
 
 class CopyMoveResponse(BaseModel):
     id: str
+
+
+class AutoStoreRequest(BaseModel):
+    content: str
+    session_id: str | None = None
+    db_path: str | None = None
+
+
+class AutoStoreResponse(BaseModel):
+    action: str          # "created", "updated", "skipped"
+    id: str | None = None
+    title: str | None = None
+    reason: str | None = None

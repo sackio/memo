@@ -17,6 +17,11 @@ class Settings(BaseSettings):
     memo_recall_min_score: float = 0.5
     memo_recall_token_budget: int = 2000
 
+    # Auto-store settings
+    memo_auto_store: bool = True
+    auto_store_model: str = "openai/gpt-4o-mini"
+    auto_store_similarity_threshold: float = 0.82
+
     @property
     def resolved_default_db_path(self) -> str:
         return str(Path(self.default_db_path).expanduser())

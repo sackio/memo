@@ -14,6 +14,8 @@ from memo import db, embeddings
 from memo.config import settings
 from memo.db import _count_tokens
 from memo.models import (
+    AutoStoreRequest,
+    AutoStoreResponse,
     ContextRequest,
     ContextResponse,
     CopyMoveRequest,
@@ -466,6 +468,83 @@ async def index_documents(
                                min_tokens=None, max_tokens=None)
     return [{"id": d["id"], "title": d["title"], "tags": d["tags"],
              "created_at": d["created_at"], "token_count": d["token_count"]} for d in docs]
+
+
+@app.post("/auto-store", response_model=AutoStoreResponse)
+async def auto_store(req: AutoStoreRequest):
+    """Extract knowledge from raw content (e.g. a conversation exchange), deduplicate against
+    existing memos, then create a new memo or merge into the closest existing one.
+
+    The LLM first decides if the content is worth storing at all.  If yes, it embeds the
+    extracted content and searches for near-duplicates (cosine similarity >=
+    settings.auto_store_similarity_threshold).  If a similar memo is found a second LLM call
+    decides whether to merge, create a separate memo, or skip entirely.
+    """
+    from memo.auto_store import analyze_for_store, analyze_for_merge
+
+    # 1. LLM: is this worth storing?
+    analysis = await analyze_for_store(req.content)
+    if not analysis.get("should_store"):
+        return AutoStoreResponse(action="skipped", reason=analysis.get("reason", "not worth storing"))
+
+    extracted = analysis.get("content") or req.content
+    title = analysis.get("title")
+    tags = analysis.get("tags") or []
+
+    # 2. Embed extracted content and look for near-duplicates
+    embedding = await embeddings.embed(extracted)
+    similar = await db.search(
+        db_path=req.db_path,
+        embedding=embedding,
+        limit=3,
+        min_score=settings.auto_store_similarity_threshold,
+        tags=[],
+        after=None,
+        before=None,
+        min_tokens=None,
+        max_tokens=None,
+    )
+
+    if similar:
+        best = similar[0]["document"]
+
+        # 3. LLM: merge into existing, create separate, or skip?
+        merge = await analyze_for_merge(best["content"], extracted)
+        action = merge.get("action", "create")
+
+        if action == "skip":
+            return AutoStoreResponse(action="skipped", reason=merge.get("reason", "already covered"))
+
+        if action == "merge":
+            merged_content = merge.get("merged_content") or extracted
+            merged_title = merge.get("title") or title or best.get("title")
+            merged_tags = merge.get("tags") or list(dict.fromkeys(tags + best.get("tags", [])))
+            merged_embedding = await embeddings.embed(merged_content)
+            await db.update(
+                db_path=req.db_path,
+                doc_id=best["id"],
+                content=merged_content,
+                title=merged_title,
+                tags=merged_tags,
+                metadata=None,
+                embedding=merged_embedding,
+            )
+            return AutoStoreResponse(
+                action="updated", id=best["id"], title=merged_title,
+                reason=merge.get("reason"),
+            )
+        # action == "create" — fall through
+
+    # 4. Create new memo
+    doc_id = await db.store(
+        db_path=req.db_path,
+        content=extracted,
+        title=title,
+        tags=tags,
+        metadata={},
+        embedding=embedding,
+    )
+    return AutoStoreResponse(action="created", id=doc_id, title=title, reason=analysis.get("reason"))
 
 
 @app.post("/context", response_model=ContextResponse)
