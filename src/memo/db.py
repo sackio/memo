@@ -363,6 +363,28 @@ async def move(from_db_path: str | None, doc_id: str, to_db_path: str | None) ->
     return await asyncio.to_thread(_sync_move, src, doc_id, dst)
 
 
+def _sync_recount_tokens(db_path: str) -> dict:
+    """Recalculate token_count for docs where token_count=0 but content is non-empty."""
+    conn = _get_or_create_conn(db_path)
+    rows = conn.execute(
+        "SELECT id, content FROM documents WHERE token_count = 0 AND content != ''"
+    ).fetchall()
+    updated = 0
+    for row in rows:
+        count = _count_tokens(row["content"])
+        if count > 0:
+            conn.execute("UPDATE documents SET token_count = ? WHERE id = ?", (count, row["id"]))
+            updated += 1
+    if updated:
+        conn.commit()
+    return {"fixed": updated, "scanned": len(rows)}
+
+
+async def recount_tokens(db_path: str | None) -> dict:
+    path = _resolve_path(db_path)
+    return await asyncio.to_thread(_sync_recount_tokens, path)
+
+
 async def list_docs_multi(
     paths: list[str], tags: list[str], limit: int, after: float | None,
     before: float | None, min_tokens: int | None, max_tokens: int | None,

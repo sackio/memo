@@ -467,7 +467,19 @@ async def index_documents(
     docs = await db.list_docs(db_path=db_path, tags=[], limit=limit, after=None, before=None,
                                min_tokens=None, max_tokens=None)
     return [{"id": d["id"], "title": d["title"], "tags": d["tags"],
-             "created_at": d["created_at"], "token_count": d["token_count"]} for d in docs]
+             "created_at": d["created_at"], "updated_at": d["updated_at"],
+             "token_count": d["token_count"]} for d in docs]
+
+
+@app.post("/admin/recount-tokens")
+async def recount_tokens(db_path: str | None = Query(default=None)):
+    """Recalculate token_count for docs that have content but token_count=0.
+
+    This fixes documents stored before the token_count column existed or
+    created via paths that bypassed token counting.
+    """
+    result = await db.recount_tokens(db_path=db_path)
+    return result
 
 
 @app.post("/auto-store", response_model=AutoStoreResponse)
