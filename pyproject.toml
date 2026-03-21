@@ -21,6 +21,7 @@ dependencies = [
 
 [project.scripts]
 memo = "memo.main:main"
+memo-hooks = "memo.hooks:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/memo"]

@@ -11,6 +11,12 @@ class Settings(BaseSettings):
     embedding_dimensions: int = 1536
     default_db_path: str = "~/.memo/memo.db"
 
+    # Hook settings (written to ~/.memo/hooks.env during memo-hooks install)
+    memo_auto_recall: bool = True
+    memo_prework_recall: bool = True
+    memo_recall_min_score: float = 0.5
+    memo_recall_token_budget: int = 2000
+
     @property
     def resolved_default_db_path(self) -> str:
         return str(Path(self.default_db_path).expanduser())

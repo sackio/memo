@@ -6,3 +6,5 @@ __pycache__/
 dist/
 *.egg-info/
 .eggs/
+ui/node_modules/
+ui/dist/

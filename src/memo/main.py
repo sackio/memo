@@ -1,10 +1,13 @@
 import asyncio
 import contextlib
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from mcp.server.fastmcp import FastMCP
 
 from memo import db, embeddings
@@ -329,7 +332,20 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="memo", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app.mount("/mcp", mcp_starlette)
+
+import os as _os
+_ui_dist = Path(_os.environ.get("MEMO_UI_DIST", "/app/ui/dist"))
+if _ui_dist.exists():
+    app.mount("/ui", StaticFiles(directory=str(_ui_dist), html=True), name="ui")
 
 
 @app.get("/health")
@@ -439,6 +455,17 @@ async def search_documents(req: SearchRequest):
         max_tokens=req.max_tokens,
     )
     return [SearchResult(document=Document(**r["document"]), score=r["score"]) for r in results]
+
+
+@app.get("/index")
+async def index_documents(
+    db_path: str | None = Query(default=None),
+    limit: int = Query(default=200),
+):
+    docs = await db.list_docs(db_path=db_path, tags=[], limit=limit, after=None, before=None,
+                               min_tokens=None, max_tokens=None)
+    return [{"id": d["id"], "title": d["title"], "tags": d["tags"],
+             "created_at": d["created_at"], "token_count": d["token_count"]} for d in docs]
 
 
 @app.post("/context", response_model=ContextResponse)
