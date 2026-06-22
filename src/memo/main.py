@@ -9,6 +9,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 
 from memo import db, embeddings
 from memo.config import settings
@@ -31,7 +32,14 @@ from memo.models import (
 
 # --- MCP server ---
 
-mcp = FastMCP("memo", stateless_http=True, streamable_http_path="/")
+mcp = FastMCP(
+    "memo",
+    stateless_http=True,
+    streamable_http_path="/",
+    transport_security=TransportSecuritySettings(
+        enable_dns_rebinding_protection=False,
+    ),
+)
 mcp_starlette = mcp.streamable_http_app()
 mcp_starlette.router.lifespan_context = lambda app: contextlib.AsyncExitStack()
 
