@@ -1,0 +1,18 @@
+[Unit]
+Description=memo public umbrella MCP (memo.pushbuild.com)
+After=network-online.target docker.service
+Wants=network-online.target
+RequiresMountsFor=/mnt/nas
+
+[Service]
+Type=simple
+User=ben
+Group=ben
+WorkingDirectory=/mnt/nas/data/code/memo/public
+ExecStart=/usr/bin/python3 /mnt/nas/data/code/memo/public/memo_public_mcp.py
+Restart=always
+RestartSec=5
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+[Install]
+WantedBy=multi-user.target
