@@ -83,6 +83,36 @@ if not ALLOWLIST:
     print("[memo-public] WARNING: no *_LOGIN_SECRET env vars set — no user can log in")
 
 
+# ---------------------------------------------------------------------------
+# Static long-lived API tokens (headless / CLI installs).
+# Each env var matching `<LABEL>_API_TOKEN` is a pre-shared bearer token. At
+# startup these are seeded into the OAuth provider's access store with
+# expires_at=None, so they validate forever via the normal Bearer flow.
+# Usage:
+#     claude mcp add --transport http \
+#         --header "Authorization: Bearer <LABEL_API_TOKEN>" \
+#         memo https://memo.pushbuild.com
+# Distinct from <LABEL>_LOGIN_SECRET: the secret is for browser /login flow
+# (issues short-lived tokens via OAuth code exchange). The API token bypasses
+# the browser entirely — useful for headless-SSH installs of Claude Code CLI.
+# Revoke an API token by removing/rotating its env var + restarting the service.
+# ---------------------------------------------------------------------------
+def _load_api_tokens() -> dict[str, str]:
+    """Return {token_value: user_label}."""
+    tokens: dict[str, str] = {}
+    for k, v in os.environ.items():
+        if not k.endswith("_API_TOKEN"):
+            continue
+        if not v:
+            continue
+        label = k[: -len("_API_TOKEN")].lower()
+        tokens[v] = label
+    return tokens
+
+
+API_TOKENS = _load_api_tokens()
+
+
 def _validate_secret(submitted: str) -> str | None:
     """Constant-time compare against every allowlisted secret. Return the
     matching user label or None."""
@@ -107,6 +137,21 @@ class UmbrellaOAuth(OAuthAuthorizationServerProvider):
         self._refresh: dict = {}
         self._pending: dict = {}  # rid -> {cid, params, ts, user}
         self._token_user: dict = {}  # access_token -> user_label (audit)
+        self._static_tokens: set[str] = set()  # tokens that must not be auto-purged on refresh-exchange
+
+        # Seed long-lived API tokens (for headless / Claude Code CLI installs).
+        # These bypass the browser /login flow — caller sends them directly
+        # via `Authorization: Bearer <token>`.
+        for token, label in API_TOKENS.items():
+            self._access[token] = AccessToken(
+                token=token,
+                client_id=f"static-{label}",
+                scopes=["memo"],
+                expires_at=None,  # never expires
+            )
+            self._token_user[token] = label
+            self._static_tokens.add(token)
+            print(f"[memo-public] seeded static API token for user={label}")
 
     async def get_client(self, client_id):
         return self._clients.get(client_id)
@@ -201,7 +246,12 @@ class UmbrellaOAuth(OAuthAuthorizationServerProvider):
                           refresh_token=r, scope=" ".join(sc) if sc else None)
 
     async def revoke_token(self, token):
+        # Don't honor revoke for static API tokens — the only way to kill those
+        # is to remove the <LABEL>_API_TOKEN env var + restart the service.
         if isinstance(token, AccessToken):
+            if token.token in self._static_tokens:
+                print(f"[memo-public] revoke ignored for static token (user={self._token_user.get(token.token,'?')})")
+                return
             self._access.pop(token.token, None)
             self._token_user.pop(token.token, None)
         else:
@@ -272,7 +322,8 @@ async def login_submit(request: Request):
 @mcp.custom_route("/health", methods=["GET"])
 async def health(request: Request):
     return PlainTextResponse(
-        f"ok: memo-public-mcp ({len(ALLOWLIST)} user(s) in allowlist, backend={MEMO_BACKEND})"
+        f"ok: memo-public-mcp ({len(ALLOWLIST)} login-secret user(s), "
+        f"{len(API_TOKENS)} static API token(s), backend={MEMO_BACKEND})"
     )
 
 
@@ -355,5 +406,8 @@ except Exception as e:  # noqa: BLE001
 
 
 if __name__ == "__main__":
-    print(f"[memo-public-mcp] {n_tools} tools | allowlist: {sorted(ALLOWLIST.values())} | issuer {ISSUER_URL} | listening {HOST}:{PORT}")
+    print(f"[memo-public-mcp] {n_tools} tools | "
+          f"login-secrets: {sorted(ALLOWLIST.values())} | "
+          f"static-API-tokens: {sorted(API_TOKENS.values())} | "
+          f"issuer {ISSUER_URL} | listening {HOST}:{PORT}")
     mcp.run(transport="streamable-http")
