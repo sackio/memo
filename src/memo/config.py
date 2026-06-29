@@ -22,6 +22,11 @@ class Settings(BaseSettings):
     auto_store_model: str = "openai/gpt-4o-mini"
     auto_store_similarity_threshold: float = 0.82
 
+    # Single-global refactor (2026-06-29): db_path is ignored server-side
+    # but kept in the schema for backward compat. Toggle to suppress the
+    # sampled warning if it becomes noisy.
+    ignored_db_path_warning: bool = True
+
     @property
     def resolved_default_db_path(self) -> str:
         return str(Path(self.default_db_path).expanduser())

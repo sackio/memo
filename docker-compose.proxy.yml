@@ -1,0 +1,38 @@
+# Proxy variant — deployed on office + server5 after the 2026-06-29 single-global
+# refactor. Forwards all HTTP + MCP SSE traffic to MEMO_PROXY_UPSTREAM (default
+# http://server4:8000). Same image as the canonical memo deployment, but
+# entrypoint runs the proxy module instead of the full server.
+#
+# Usage on office/server5:
+#     docker compose -f docker-compose.proxy.yml up -d
+#
+# The memo_data volume is kept around but unused by the proxy — leaving it
+# in place means the old DB is recoverable for rollback (see the plan's
+# Rollback Playbook). Run `docker compose -f docker-compose.proxy.yml down`
+# + `docker compose up -d` (with the original compose file) to revert.
+
+services:
+  memo:
+    build: .
+    image: memo-memo
+    container_name: memo
+    restart: unless-stopped
+    command: ["python", "-m", "memo.proxy_main"]
+    ports:
+      - "${PORT:-8000}:8000"
+    volumes:
+      - memo_data:/data       # kept for rollback; proxy doesn't read/write it
+    environment:
+      MEMO_PROXY_UPSTREAM: ${MEMO_PROXY_UPSTREAM:-http://server4:8000}
+      MEMO_PROXY_PORT: "8000"
+      # OPENROUTER_API_KEY not needed by proxy, but kept so a rollback to the
+      # main compose works without re-setting .env
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-unused-by-proxy}
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 300s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  memo_data:

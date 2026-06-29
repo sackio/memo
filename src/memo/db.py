@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import sqlite3
 import struct
 import uuid
@@ -11,21 +12,27 @@ import tiktoken
 
 from memo.config import settings
 
+logger = logging.getLogger(__name__)
+
 _connections: dict[str, sqlite3.Connection] = {}
 _tokenizer = tiktoken.get_encoding("cl100k_base")
+_ignored_db_path_seen: set[str] = set()  # sampling set so we don't log-spam
 
 
 def _resolve_path(db_path: str | None) -> str:
-    if db_path:
-        p = Path(db_path)
-        if p.suffix in (".db", ".sqlite", ".sqlite3"):
-            # Explicit DB file — use as-is
-            return db_path
-        # Directory path — encode as a safe filename within the data volume
-        # e.g. /mnt/nas/data/files → <data_dir>/mnt_nas_data_files.memo.db
-        safe_name = str(p).strip("/").replace("/", "_")
-        data_dir = Path(settings.resolved_default_db_path).parent
-        return str(data_dir / f"{safe_name}.memo.db")
+    # 2026-06-29 refactor: every request routes to the single global DB on
+    # server4. db_path is preserved in the request schema for backward
+    # compatibility but the server ignores it. Log a sampled warning so we
+    # can find callers that still pass it.
+    if db_path and settings.ignored_db_path_warning:
+        key = str(db_path)
+        if key not in _ignored_db_path_seen:
+            _ignored_db_path_seen.add(key)
+            logger.warning(
+                "db_path argument %r ignored — server is now single-global. "
+                "Update your caller to drop the db_path argument.",
+                key,
+            )
     return settings.resolved_default_db_path
 
 
@@ -352,14 +359,27 @@ async def search_multi(
 
 
 async def copy(from_db_path: str | None, doc_id: str, to_db_path: str | None) -> str | None:
+    # 2026-06-29 refactor: both paths resolve to the single global DB.
+    # Copy is a no-op now — the doc is already where the caller wants it.
     src = _resolve_path(from_db_path)
     dst = _resolve_path(to_db_path)
+    if src == dst:
+        # Verify the doc exists; return its id if so, else None.
+        conn = _get_or_create_conn(src)
+        row = conn.execute("SELECT id FROM documents WHERE id = ?", (doc_id,)).fetchone()
+        return row["id"] if row else None
     return await asyncio.to_thread(_sync_copy, src, doc_id, dst)
 
 
 async def move(from_db_path: str | None, doc_id: str, to_db_path: str | None) -> str | None:
+    # 2026-06-29 refactor: both paths resolve to the single global DB.
+    # Move is a no-op now (the doc is already at the destination).
     src = _resolve_path(from_db_path)
     dst = _resolve_path(to_db_path)
+    if src == dst:
+        conn = _get_or_create_conn(src)
+        row = conn.execute("SELECT id FROM documents WHERE id = ?", (doc_id,)).fetchone()
+        return row["id"] if row else None
     return await asyncio.to_thread(_sync_move, src, doc_id, dst)
 
 
