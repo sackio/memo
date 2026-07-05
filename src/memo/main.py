@@ -490,6 +490,21 @@ async def recount_tokens(db_path: str | None = Query(default=None)):
     return result
 
 
+@app.get("/admin/access-stats")
+async def access_stats(
+    stale_days: int = Query(default=90, description="Days of no access before considered stale"),
+    limit: int = Query(default=100),
+):
+    """L3c 2026-07-05: expose per-doc access counters for utility-based reaping.
+
+    Returns docs that have not been fetched in `stale_days` days AND have no
+    writes in that same window — reap candidates for Phase F.
+    Also returns a hot-list (most-fetched) + no-fetch-ever docs.
+    """
+    result = await db.access_stats(stale_days=stale_days, limit=limit)
+    return result
+
+
 @app.post("/auto-store", response_model=AutoStoreResponse)
 async def auto_store(req: AutoStoreRequest):
     """Extract knowledge from raw content (e.g. a conversation exchange), deduplicate against

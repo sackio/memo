@@ -81,12 +81,49 @@ def _init_schema(conn: sqlite3.Connection) -> None:
             doc_id TEXT,
             embedding FLOAT[{settings.embedding_dimensions}] distance_metric=cosine
         );
+
+        -- L3c 2026-07-05: per-doc access counters for utility-based reaping.
+        -- Incremented on every GET /documents/<id>, PATCH, DELETE. Enables
+        -- Phase F to reap memos never fetched in N days.
+        CREATE TABLE IF NOT EXISTS doc_access (
+            doc_id TEXT PRIMARY KEY,
+            get_count INTEGER NOT NULL DEFAULT 0,
+            patch_count INTEGER NOT NULL DEFAULT 0,
+            delete_count INTEGER NOT NULL DEFAULT 0,
+            last_fetched_at REAL,
+            last_patched_at REAL,
+            last_deleted_at REAL
+        );
     """)
     # Migration: add token_count to existing DBs that predate this column
     cols = {row[1] for row in conn.execute("PRAGMA table_info(documents)")}
     if "token_count" not in cols:
         conn.execute("ALTER TABLE documents ADD COLUMN token_count INTEGER NOT NULL DEFAULT 0")
     conn.commit()
+
+
+def _bump_access(conn: sqlite3.Connection, doc_id: str, kind: str) -> None:
+    """Increment access counter (best-effort; never raises)."""
+    now = time()
+    try:
+        if kind == "get":
+            conn.execute("""INSERT INTO doc_access (doc_id, get_count, last_fetched_at) VALUES (?, 1, ?)
+                            ON CONFLICT(doc_id) DO UPDATE SET
+                                get_count = get_count + 1,
+                                last_fetched_at = excluded.last_fetched_at""", (doc_id, now))
+        elif kind == "patch":
+            conn.execute("""INSERT INTO doc_access (doc_id, patch_count, last_patched_at) VALUES (?, 1, ?)
+                            ON CONFLICT(doc_id) DO UPDATE SET
+                                patch_count = patch_count + 1,
+                                last_patched_at = excluded.last_patched_at""", (doc_id, now))
+        elif kind == "delete":
+            conn.execute("""INSERT INTO doc_access (doc_id, delete_count, last_deleted_at) VALUES (?, 1, ?)
+                            ON CONFLICT(doc_id) DO UPDATE SET
+                                delete_count = delete_count + 1,
+                                last_deleted_at = excluded.last_deleted_at""", (doc_id, now))
+        conn.commit()
+    except Exception:
+        pass  # never let access-log failures break the actual request
 
 
 def _serialize_vector(v: list[float]) -> bytes:
@@ -162,6 +199,7 @@ def _sync_update(db_path: str, doc_id: str, content: str | None, title: str | No
             (doc_id, _serialize_vector(embedding)),
         )
     conn.commit()
+    _bump_access(conn, doc_id, "patch")
     updated = conn.execute("SELECT * FROM documents WHERE id = ?", (doc_id,)).fetchone()
     return _row_to_dict(updated)
 
@@ -202,7 +240,10 @@ def _sync_search(db_path: str, embedding: list[float], limit: int, min_score: fl
 def _sync_get(db_path: str, doc_id: str) -> dict | None:
     conn = _get_or_create_conn(db_path)
     row = conn.execute("SELECT * FROM documents WHERE id = ?", (doc_id,)).fetchone()
-    return _row_to_dict(row) if row else None
+    if row:
+        _bump_access(conn, doc_id, "get")
+        return _row_to_dict(row)
+    return None
 
 
 def _sync_delete(db_path: str, doc_id: str) -> bool:
@@ -210,6 +251,8 @@ def _sync_delete(db_path: str, doc_id: str) -> bool:
     cur = conn.execute("DELETE FROM documents WHERE id = ?", (doc_id,))
     conn.execute("DELETE FROM document_embeddings WHERE doc_id = ?", (doc_id,))
     conn.commit()
+    if cur.rowcount > 0:
+        _bump_access(conn, doc_id, "delete")
     return cur.rowcount > 0
 
 
@@ -274,23 +317,25 @@ def _sync_list(db_path: str, tags: list[str], limit: int, after: float | None,
         clauses.append("token_count <= ?")
         params.append(max_tokens)
 
+    # L3c fix 2026-07-05: when tags are provided, the previous version fetched
+    # only limit*3 newest rows and post-filtered, so rare tags on older memos
+    # returned 0. Fix: push tag matching into SQL via json_each so pagination
+    # is correct end-to-end.
+    if tags:
+        # Build an OR match: at least one supplied tag must appear in the doc's tags JSON.
+        tag_clause = " OR ".join(["EXISTS (SELECT 1 FROM json_each(documents.tags) WHERE json_each.value = ?)"] * len(tags))
+        clauses.insert(0, f"({tag_clause})")
+        # Tag params go BEFORE the WHERE-derived params in the SQL, so prepend.
+        params = list(tags) + params
+
     where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
-    fetch_limit = limit * 3 if tags else limit
-    params.append(fetch_limit)
+    params.append(limit)
 
     rows = conn.execute(
         f"SELECT * FROM documents {where} ORDER BY created_at DESC LIMIT ?", params
     ).fetchall()
 
-    results = []
-    for row in rows:
-        doc = _row_to_dict(row)
-        if tags and not any(t in doc["tags"] for t in tags):
-            continue
-        results.append(doc)
-        if len(results) >= limit:
-            break
-    return results
+    return [_row_to_dict(row) for row in rows]
 
 
 # --- Async wrappers ---
@@ -403,6 +448,79 @@ def _sync_recount_tokens(db_path: str) -> dict:
 async def recount_tokens(db_path: str | None) -> dict:
     path = _resolve_path(db_path)
     return await asyncio.to_thread(_sync_recount_tokens, path)
+
+
+def _sync_access_stats(db_path: str, stale_days: int, limit: int) -> dict:
+    """L3c 2026-07-05: aggregate per-doc access counters for utility-based reaping."""
+    conn = _get_or_create_conn(db_path)
+    cutoff = time() - (stale_days * 86400)
+
+    # Totals
+    total_docs = conn.execute("SELECT COUNT(*) FROM documents").fetchone()[0]
+    total_with_access = conn.execute("SELECT COUNT(*) FROM doc_access WHERE get_count > 0").fetchone()[0]
+
+    # Reap candidates: docs OLDER than stale_days with no access in that window.
+    reap_candidates = conn.execute(
+        """SELECT d.id, d.title, d.created_at, d.updated_at,
+                  COALESCE(a.get_count, 0) AS get_count,
+                  COALESCE(a.patch_count, 0) AS patch_count,
+                  a.last_fetched_at, a.last_patched_at
+             FROM documents d
+             LEFT JOIN doc_access a ON a.doc_id = d.id
+            WHERE d.created_at < ?
+              AND (a.last_fetched_at IS NULL OR a.last_fetched_at < ?)
+              AND (a.last_patched_at IS NULL OR a.last_patched_at < ?)
+            ORDER BY COALESCE(a.last_fetched_at, d.created_at) ASC
+            LIMIT ?""",
+        (cutoff, cutoff, cutoff, limit),
+    ).fetchall()
+
+    # Hot list: most fetched in the last 30d.
+    hot_cutoff = time() - 30 * 86400
+    hot = conn.execute(
+        """SELECT d.id, d.title, a.get_count, a.last_fetched_at
+             FROM doc_access a
+             JOIN documents d ON d.id = a.doc_id
+            WHERE a.last_fetched_at >= ?
+            ORDER BY a.get_count DESC
+            LIMIT 20""",
+        (hot_cutoff,),
+    ).fetchall()
+
+    return {
+        "as_of": time(),
+        "total_docs": total_docs,
+        "total_with_any_get": total_with_access,
+        "coverage_pct": round(100.0 * total_with_access / max(total_docs, 1), 1),
+        "stale_days_threshold": stale_days,
+        "reap_candidates": [
+            {
+                "id": r["id"],
+                "title": r["title"],
+                "created_at": r["created_at"],
+                "updated_at": r["updated_at"],
+                "get_count": r["get_count"],
+                "patch_count": r["patch_count"],
+                "last_fetched_at": r["last_fetched_at"],
+                "last_patched_at": r["last_patched_at"],
+            }
+            for r in reap_candidates
+        ],
+        "hot_last_30d": [
+            {
+                "id": r["id"],
+                "title": r["title"],
+                "get_count": r["get_count"],
+                "last_fetched_at": r["last_fetched_at"],
+            }
+            for r in hot
+        ],
+    }
+
+
+async def access_stats(stale_days: int, limit: int) -> dict:
+    path = _resolve_path(None)
+    return await asyncio.to_thread(_sync_access_stats, path, stale_days, limit)
 
 
 async def list_docs_multi(
