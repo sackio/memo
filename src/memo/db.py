@@ -94,6 +94,23 @@ def _init_schema(conn: sqlite3.Connection) -> None:
             last_patched_at REAL,
             last_deleted_at REAL
         );
+
+        -- v0.3.1 2026-07-21: log each malformed-write refusal so the
+        -- client-side corruption can be diagnosed over time from a growing
+        -- corpus of incidents. The corruption is upstream of the server;
+        -- this is a passive detector, not a fix. Grep query:
+        --   SELECT ts, matched_fragment, endpoint, content_head, content_tail
+        --   FROM leak_incidents ORDER BY ts DESC LIMIT 20;
+        CREATE TABLE IF NOT EXISTS leak_incidents (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ts REAL NOT NULL,
+            endpoint TEXT NOT NULL,       -- "memo_store" | "memo_update" | "POST /documents" | ...
+            matched_fragment TEXT,        -- which fragment ("<parameter name=", "<tags>", "</invoke>")
+            tags_state TEXT NOT NULL,     -- "None" or "empty-list"
+            content_len INTEGER NOT NULL,
+            content_head TEXT,            -- first 200 chars of content
+            content_tail TEXT             -- last 400 chars of content (contains the fingerprint)
+        );
     """)
     # Migration: add token_count to existing DBs that predate this column
     cols = {row[1] for row in conn.execute("PRAGMA table_info(documents)")}
@@ -580,6 +597,44 @@ def _sync_access_stats(db_path: str, stale_days: int, limit: int) -> dict:
 async def access_stats(stale_days: int, limit: int) -> dict:
     path = _resolve_path(None)
     return await asyncio.to_thread(_sync_access_stats, path, stale_days, limit)
+
+
+def _sync_log_leak(db_path: str, endpoint: str, matched_fragment: str | None,
+                   tags_state: str, content: str) -> None:
+    """Record a malformed-write rejection to leak_incidents. Best-effort — never raises."""
+    try:
+        conn = _get_or_create_conn(db_path)
+        conn.execute(
+            "INSERT INTO leak_incidents (ts, endpoint, matched_fragment, tags_state, "
+            "content_len, content_head, content_tail) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (time(), endpoint, matched_fragment, tags_state,
+             len(content or ""), (content or "")[:200], (content or "")[-400:]),
+        )
+        conn.commit()
+    except Exception:
+        pass  # never let logging failures propagate into the request path
+
+
+async def log_leak(endpoint: str, matched_fragment: str | None, tags_state: str,
+                    content: str) -> None:
+    path = _resolve_path(None)
+    await asyncio.to_thread(_sync_log_leak, path, endpoint, matched_fragment,
+                             tags_state, content)
+
+
+def _sync_leak_incidents(db_path: str, limit: int) -> list[dict]:
+    conn = _get_or_create_conn(db_path)
+    rows = conn.execute(
+        "SELECT id, ts, endpoint, matched_fragment, tags_state, content_len, "
+        "content_head, content_tail FROM leak_incidents ORDER BY ts DESC LIMIT ?",
+        (limit,),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+async def leak_incidents(limit: int) -> list[dict]:
+    path = _resolve_path(None)
+    return await asyncio.to_thread(_sync_leak_incidents, path, limit)
 
 
 async def list_docs_multi(

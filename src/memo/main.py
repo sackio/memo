@@ -73,13 +73,18 @@ _LEAK_MARKER = "</content>"
 _LEAK_FRAGMENTS = ("<parameter name=", "<tags>", "</invoke>")
 
 
-def _reject_leaked_tool_call(content: str | None, tags: list[str] | None) -> None:
+async def _reject_leaked_tool_call(content: str | None, tags: list[str] | None,
+                                    endpoint: str = "unknown") -> None:
     """Refuse a write whose content shows the truncated-tool-call fingerprint.
 
     All three conditions must hold to reject:
       - `</content>` in the last 400 chars
       - Any of `<parameter name=`, `<tags>`, `</invoke>` in that same tail
       - Tags is None or empty list (this condition is load-bearing — see comment above)
+
+    Every rejection is logged to `leak_incidents` for later diagnosis of the
+    upstream client-side corruption (v0.3.1 addition — the guard is the
+    mitigation, this log is the passive detector).
     """
     if not content or tags:
         return
@@ -89,6 +94,12 @@ def _reject_leaked_tool_call(content: str | None, tags: list[str] | None) -> Non
     matched_fragment = next((f for f in _LEAK_FRAGMENTS if f in tail), None)
     if matched_fragment is None:
         return
+    tags_state = "None" if tags is None else "empty-list"
+    # Log first so we always have the incident on disk even if the caller ignores the raise.
+    try:
+        await db.log_leak(endpoint, matched_fragment, tags_state, content)
+    except Exception:
+        pass  # never let logging break the guard's primary job
     raise ValueError(
         "memo: refusing a malformed write. The content ends with leaked tool-call syntax "
         f"({_LEAK_MARKER}...{matched_fragment}...) and `tags` arrived empty, which means the "
@@ -116,7 +127,7 @@ async def memo_store(
     - directory path (e.g. current working directory): stores in <dir>/.memo.db
     - explicit .db file path: stores in that file
     """
-    _reject_leaked_tool_call(content, tags)
+    await _reject_leaked_tool_call(content, tags, "memo_store")
     embedding = await embeddings.embed(content)
     doc_id = await db.store(
         db_path=db_path,
@@ -143,7 +154,7 @@ async def memo_update(
     If content is updated, the embedding and token_count are recomputed automatically.
     Returns the updated memo, or null if the ID was not found.
     """
-    _reject_leaked_tool_call(content, tags)
+    await _reject_leaked_tool_call(content, tags, "memo_update")
     embedding = await embeddings.embed(content) if content is not None else None
     result = await db.update(
         db_path=db_path,
@@ -423,7 +434,7 @@ async def health():
 @app.post("/documents", response_model=StoreResponse)
 async def store_document(req: StoreRequest):
     try:
-        _reject_leaked_tool_call(req.content, req.tags)
+        await _reject_leaked_tool_call(req.content, req.tags, "POST /documents")
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
     embedding = await embeddings.embed(req.content)
@@ -475,7 +486,7 @@ async def get_document(doc_id: str, db_path: str | None = Query(default=None)):
 @app.patch("/documents/{doc_id}", response_model=Document)
 async def update_document(doc_id: str, req: UpdateRequest):
     try:
-        _reject_leaked_tool_call(req.content, req.tags)
+        await _reject_leaked_tool_call(req.content, req.tags, "PATCH /documents/{id}")
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
     embedding = await embeddings.embed(req.content) if req.content is not None else None
@@ -570,6 +581,19 @@ async def access_stats(
     return result
 
 
+@app.get("/admin/leak-incidents")
+async def leak_incidents_endpoint(limit: int = Query(default=50, le=500)):
+    """v0.3.1 2026-07-21: expose the malformed-write rejection log.
+
+    Every time `_reject_leaked_tool_call` refuses a write, a row is inserted
+    into the `leak_incidents` table with the endpoint, matched fragment,
+    tag state, and content head/tail. This endpoint returns the most recent
+    N incidents so the upstream client-side corruption can be diagnosed
+    against a growing corpus rather than one incident at a time.
+    """
+    return await db.leak_incidents(limit=limit)
+
+
 @app.post("/auto-store", response_model=AutoStoreResponse)
 async def auto_store(req: AutoStoreRequest):
     """Extract knowledge from raw content (e.g. a conversation exchange), deduplicate against
@@ -590,7 +614,7 @@ async def auto_store(req: AutoStoreRequest):
     extracted = analysis.get("content") or req.content
     title = analysis.get("title")
     tags = analysis.get("tags") or []
-    _reject_leaked_tool_call(extracted, tags)
+    await _reject_leaked_tool_call(extracted, tags, "auto_store:extracted")
 
     # 2. Embed extracted content and look for near-duplicates
     embedding = await embeddings.embed(extracted)
@@ -620,7 +644,7 @@ async def auto_store(req: AutoStoreRequest):
             merged_content = merge.get("merged_content") or extracted
             merged_title = merge.get("title") or title or best.get("title")
             merged_tags = merge.get("tags") or list(dict.fromkeys(tags + best.get("tags", [])))
-            _reject_leaked_tool_call(merged_content, merged_tags)
+            await _reject_leaked_tool_call(merged_content, merged_tags, "auto_store:merge")
             merged_embedding = await embeddings.embed(merged_content)
             await db.update(
                 db_path=req.db_path,
