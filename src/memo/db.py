@@ -99,7 +99,8 @@ def _init_schema(conn: sqlite3.Connection) -> None:
         -- client-side corruption can be diagnosed over time from a growing
         -- corpus of incidents. The corruption is upstream of the server;
         -- this is a passive detector, not a fix. Grep query:
-        --   SELECT ts, matched_fragment, endpoint, content_head, content_tail
+        --   SELECT ts, matched_fragment, endpoint, user_agent, source_ip,
+        --          content_head, content_tail
         --   FROM leak_incidents ORDER BY ts DESC LIMIT 20;
         CREATE TABLE IF NOT EXISTS leak_incidents (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -109,13 +110,21 @@ def _init_schema(conn: sqlite3.Connection) -> None:
             tags_state TEXT NOT NULL,     -- "None" or "empty-list"
             content_len INTEGER NOT NULL,
             content_head TEXT,            -- first 200 chars of content
-            content_tail TEXT             -- last 400 chars of content (contains the fingerprint)
+            content_tail TEXT,            -- last 400 chars of content (contains the fingerprint)
+            user_agent TEXT,              -- HTTP User-Agent (or MCP client indicator) — distinguishes claude-p / claude.ai / Claude Code
+            source_ip TEXT                -- request source IP
         );
     """)
     # Migration: add token_count to existing DBs that predate this column
     cols = {row[1] for row in conn.execute("PRAGMA table_info(documents)")}
     if "token_count" not in cols:
         conn.execute("ALTER TABLE documents ADD COLUMN token_count INTEGER NOT NULL DEFAULT 0")
+    # Migration 2026-07-21: add user_agent + source_ip to leak_incidents
+    leak_cols = {row[1] for row in conn.execute("PRAGMA table_info(leak_incidents)")}
+    if leak_cols and "user_agent" not in leak_cols:
+        conn.execute("ALTER TABLE leak_incidents ADD COLUMN user_agent TEXT")
+    if leak_cols and "source_ip" not in leak_cols:
+        conn.execute("ALTER TABLE leak_incidents ADD COLUMN source_ip TEXT")
     conn.commit()
 
 
@@ -600,15 +609,18 @@ async def access_stats(stale_days: int, limit: int) -> dict:
 
 
 def _sync_log_leak(db_path: str, endpoint: str, matched_fragment: str | None,
-                   tags_state: str, content: str) -> None:
+                   tags_state: str, content: str, user_agent: str | None = None,
+                   source_ip: str | None = None) -> None:
     """Record a malformed-write rejection to leak_incidents. Best-effort — never raises."""
     try:
         conn = _get_or_create_conn(db_path)
         conn.execute(
             "INSERT INTO leak_incidents (ts, endpoint, matched_fragment, tags_state, "
-            "content_len, content_head, content_tail) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "content_len, content_head, content_tail, user_agent, source_ip) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (time(), endpoint, matched_fragment, tags_state,
-             len(content or ""), (content or "")[:200], (content or "")[-400:]),
+             len(content or ""), (content or "")[:200], (content or "")[-400:],
+             user_agent, source_ip),
         )
         conn.commit()
     except Exception:
@@ -616,17 +628,19 @@ def _sync_log_leak(db_path: str, endpoint: str, matched_fragment: str | None,
 
 
 async def log_leak(endpoint: str, matched_fragment: str | None, tags_state: str,
-                    content: str) -> None:
+                    content: str, user_agent: str | None = None,
+                    source_ip: str | None = None) -> None:
     path = _resolve_path(None)
     await asyncio.to_thread(_sync_log_leak, path, endpoint, matched_fragment,
-                             tags_state, content)
+                             tags_state, content, user_agent, source_ip)
 
 
 def _sync_leak_incidents(db_path: str, limit: int) -> list[dict]:
     conn = _get_or_create_conn(db_path)
     rows = conn.execute(
         "SELECT id, ts, endpoint, matched_fragment, tags_state, content_len, "
-        "content_head, content_tail FROM leak_incidents ORDER BY ts DESC LIMIT ?",
+        "content_head, content_tail, user_agent, source_ip "
+        "FROM leak_incidents ORDER BY ts DESC LIMIT ?",
         (limit,),
     ).fetchall()
     return [dict(r) for r in rows]

@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 import uvicorn
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from mcp.server.fastmcp import FastMCP
@@ -74,7 +74,9 @@ _LEAK_FRAGMENTS = ("<parameter name=", "<tags>", "</invoke>")
 
 
 async def _reject_leaked_tool_call(content: str | None, tags: list[str] | None,
-                                    endpoint: str = "unknown") -> None:
+                                    endpoint: str = "unknown",
+                                    user_agent: str | None = None,
+                                    source_ip: str | None = None) -> None:
     """Refuse a write whose content shows the truncated-tool-call fingerprint.
 
     All three conditions must hold to reject:
@@ -97,7 +99,8 @@ async def _reject_leaked_tool_call(content: str | None, tags: list[str] | None,
     tags_state = "None" if tags is None else "empty-list"
     # Log first so we always have the incident on disk even if the caller ignores the raise.
     try:
-        await db.log_leak(endpoint, matched_fragment, tags_state, content)
+        await db.log_leak(endpoint, matched_fragment, tags_state, content,
+                          user_agent=user_agent, source_ip=source_ip)
     except Exception:
         pass  # never let logging break the guard's primary job
     raise ValueError(
@@ -432,9 +435,13 @@ async def health():
 
 
 @app.post("/documents", response_model=StoreResponse)
-async def store_document(req: StoreRequest):
+async def store_document(req: StoreRequest, request: Request):
     try:
-        await _reject_leaked_tool_call(req.content, req.tags, "POST /documents")
+        await _reject_leaked_tool_call(
+            req.content, req.tags, "POST /documents",
+            user_agent=request.headers.get("user-agent"),
+            source_ip=request.client.host if request.client else None,
+        )
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
     embedding = await embeddings.embed(req.content)
@@ -484,9 +491,13 @@ async def get_document(doc_id: str, db_path: str | None = Query(default=None)):
 
 
 @app.patch("/documents/{doc_id}", response_model=Document)
-async def update_document(doc_id: str, req: UpdateRequest):
+async def update_document(doc_id: str, req: UpdateRequest, request: Request):
     try:
-        await _reject_leaked_tool_call(req.content, req.tags, "PATCH /documents/{id}")
+        await _reject_leaked_tool_call(
+            req.content, req.tags, "PATCH /documents/{id}",
+            user_agent=request.headers.get("user-agent"),
+            source_ip=request.client.host if request.client else None,
+        )
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
     embedding = await embeddings.embed(req.content) if req.content is not None else None
