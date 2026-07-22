@@ -44,6 +44,61 @@ mcp_starlette = mcp.streamable_http_app()
 mcp_starlette.router.lifespan_context = lambda app: contextlib.AsyncExitStack()
 
 
+# --- Malformed-write guard (v0.3.1, 2026-07-21) ---
+
+# Observed 2026-07-21: memo_store/memo_update calls arriving with the caller's tool-call syntax
+# leaked into `content` — the body ended with a literal `</content><parameter name="tags">[...]`
+# blob (or a `<tags>[...]</tags></invoke>` variant) — and `tags` arrived empty. The corruption
+# happens UPSTREAM of this server (we do no parsing; we store what we're handed), so we cannot
+# prevent it here. But storing the result silently produces a memo that IS unreachable by
+# tag-filtered search: a silent hole in the knowledge base that nothing reports.
+#
+# Sweep-repair of the corruption is unsafe — a predicate that matches the marker cannot
+# distinguish a memo *about* the bug from a memo *containing* it, and auto-repair through the
+# same write path we're guarding is what damaged alpaca's memo 3fce1547 on 2026-07-21. So this
+# guard REFUSES the write instead of repairing it. Loud failure the caller can retry beats a
+# silent unreachable record.
+#
+# Deliberately NARROW to avoid blocking legitimate writes (including memos that discuss this
+# very bug). All three conditions must hold:
+#   1. `</content>` appears in the LAST 400 chars
+#   2. Any of the associated tool-call fragments (`<parameter name=`, `<tags>`, `</invoke>`)
+#      appears in that same tail window
+#   3. Tags are empty (None or [])
+#
+# Condition 3 is LOAD-BEARING — a memo about tool-call syntax with any tag survives. Do NOT
+# relax it while widening (2) (alpaca 2026-07-21).
+
+_LEAK_MARKER = "</content>"
+_LEAK_FRAGMENTS = ("<parameter name=", "<tags>", "</invoke>")
+
+
+def _reject_leaked_tool_call(content: str | None, tags: list[str] | None) -> None:
+    """Refuse a write whose content shows the truncated-tool-call fingerprint.
+
+    All three conditions must hold to reject:
+      - `</content>` in the last 400 chars
+      - Any of `<parameter name=`, `<tags>`, `</invoke>` in that same tail
+      - Tags is None or empty list (this condition is load-bearing — see comment above)
+    """
+    if not content or tags:
+        return
+    tail = content[-400:]
+    if _LEAK_MARKER not in tail:
+        return
+    matched_fragment = next((f for f in _LEAK_FRAGMENTS if f in tail), None)
+    if matched_fragment is None:
+        return
+    raise ValueError(
+        "memo: refusing a malformed write. The content ends with leaked tool-call syntax "
+        f"({_LEAK_MARKER}...{matched_fragment}...) and `tags` arrived empty, which means the "
+        "call was corrupted in transit and the `tags` argument was absorbed into `content`. "
+        "Storing it would create a memo that is UNREACHABLE by tag-filtered search. "
+        "Re-send the call with `content` and `tags` as separate arguments, then verify with "
+        "memo_get AND a tag-filtered memo_search before trusting the record."
+    )
+
+
 # --- MCP Tools ---
 
 @mcp.tool()
@@ -61,6 +116,7 @@ async def memo_store(
     - directory path (e.g. current working directory): stores in <dir>/.memo.db
     - explicit .db file path: stores in that file
     """
+    _reject_leaked_tool_call(content, tags)
     embedding = await embeddings.embed(content)
     doc_id = await db.store(
         db_path=db_path,
@@ -87,6 +143,7 @@ async def memo_update(
     If content is updated, the embedding and token_count are recomputed automatically.
     Returns the updated memo, or null if the ID was not found.
     """
+    _reject_leaked_tool_call(content, tags)
     embedding = await embeddings.embed(content) if content is not None else None
     result = await db.update(
         db_path=db_path,
@@ -365,6 +422,10 @@ async def health():
 
 @app.post("/documents", response_model=StoreResponse)
 async def store_document(req: StoreRequest):
+    try:
+        _reject_leaked_tool_call(req.content, req.tags)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
     embedding = await embeddings.embed(req.content)
     doc_id = await db.store(
         db_path=req.db_path,
@@ -413,6 +474,10 @@ async def get_document(doc_id: str, db_path: str | None = Query(default=None)):
 
 @app.patch("/documents/{doc_id}", response_model=Document)
 async def update_document(doc_id: str, req: UpdateRequest):
+    try:
+        _reject_leaked_tool_call(req.content, req.tags)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
     embedding = await embeddings.embed(req.content) if req.content is not None else None
     result = await db.update(
         db_path=req.db_path,
@@ -525,6 +590,7 @@ async def auto_store(req: AutoStoreRequest):
     extracted = analysis.get("content") or req.content
     title = analysis.get("title")
     tags = analysis.get("tags") or []
+    _reject_leaked_tool_call(extracted, tags)
 
     # 2. Embed extracted content and look for near-duplicates
     embedding = await embeddings.embed(extracted)
@@ -554,6 +620,7 @@ async def auto_store(req: AutoStoreRequest):
             merged_content = merge.get("merged_content") or extracted
             merged_title = merge.get("title") or title or best.get("title")
             merged_tags = merge.get("tags") or list(dict.fromkeys(tags + best.get("tags", [])))
+            _reject_leaked_tool_call(merged_content, merged_tags)
             merged_embedding = await embeddings.embed(merged_content)
             await db.update(
                 db_path=req.db_path,
