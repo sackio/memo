@@ -207,14 +207,73 @@ def _sync_update(db_path: str, doc_id: str, content: str | None, title: str | No
 def _sync_search(db_path: str, embedding: list[float], limit: int, min_score: float | None,
                  tags: list[str], after: float | None, before: float | None,
                  min_tokens: int | None, max_tokens: int | None) -> list[dict]:
+    """Semantic search with tag scope (v0.3.1+).
+
+    Two paths:
+      A) No tag filter: fetch top-K nearest embeddings, then post-filter dates/tokens.
+      B) Tag filter present: first collect candidate doc_ids matching tags (via json_each),
+         then rank ONLY those candidates by embedding distance.
+
+    Path B fixes a false-negative alpaca surfaced 2026-07-21: previously the tag list was
+    a post-filter over a limit*5 top-K, so a correctly-tagged memo could vanish from
+    results because the query didn't rank it high enough into the candidate window.
+    Tag-scoped queries need a true DB-side scope; that's what this does.
+    """
     conn = _get_or_create_conn(db_path)
-    has_filters = bool(tags) or after or before or min_tokens or max_tokens
+    date_token_filters = bool(after or before or min_tokens or max_tokens)
+
+    if tags:
+        # PATH B — tag-scoped semantic search.
+        # 1) Get doc_ids matching tags (+ any date/token filters), no limit yet.
+        clauses, params = [], []
+        tag_clause = " OR ".join(
+            ["EXISTS (SELECT 1 FROM json_each(documents.tags) WHERE json_each.value = ?)"] * len(tags)
+        )
+        clauses.append(f"({tag_clause})")
+        params.extend(tags)
+        if after is not None: clauses.append("created_at >= ?"); params.append(after)
+        if before is not None: clauses.append("created_at <= ?"); params.append(before)
+        if min_tokens is not None: clauses.append("token_count >= ?"); params.append(min_tokens)
+        if max_tokens is not None: clauses.append("token_count <= ?"); params.append(max_tokens)
+        where = " AND ".join(clauses)
+        candidate_rows = conn.execute(
+            f"SELECT id FROM documents WHERE {where}", params
+        ).fetchall()
+        candidate_ids = [r["id"] for r in candidate_rows]
+        if not candidate_ids:
+            return []
+
+        # 2) Fetch embeddings for the candidates + compute distance manually.
+        # We use sqlite-vec's vec_distance_cosine so scoring is consistent with path A.
+        placeholders = ",".join("?" * len(candidate_ids))
+        rank_rows = conn.execute(
+            f"SELECT doc_id, vec_distance_cosine(embedding, ?) AS distance "
+            f"FROM document_embeddings WHERE doc_id IN ({placeholders}) "
+            f"ORDER BY distance",
+            [_serialize_vector(embedding)] + candidate_ids,
+        ).fetchall()
+
+        results = []
+        for row in rank_rows:
+            doc_id, distance = row["doc_id"], row["distance"]
+            score = 1.0 - distance
+            if min_score is not None and score < min_score:
+                continue
+            doc_row = conn.execute("SELECT * FROM documents WHERE id = ?", (doc_id,)).fetchone()
+            if doc_row is None:
+                continue
+            results.append({"document": _row_to_dict(doc_row), "score": score})
+            if len(results) >= limit:
+                break
+        return results
+
+    # PATH A — no tag filter, use vec MATCH top-K.
     rows = conn.execute(
         "SELECT de.doc_id, de.distance "
         "FROM document_embeddings de "
         "WHERE de.embedding MATCH ? AND k = ? "
         "ORDER BY de.distance",
-        (_serialize_vector(embedding), limit * 5 if has_filters else limit),
+        (_serialize_vector(embedding), limit * 5 if date_token_filters else limit),
     ).fetchall()
 
     results = []
@@ -229,7 +288,7 @@ def _sync_search(db_path: str, embedding: list[float], limit: int, min_score: fl
         if doc_row is None:
             continue
         doc = _row_to_dict(doc_row)
-        if not _matches_filters(doc, tags, after, before, min_tokens, max_tokens):
+        if not _matches_filters(doc, [], after, before, min_tokens, max_tokens):
             continue
         results.append({"document": doc, "score": score})
         if len(results) >= limit:
