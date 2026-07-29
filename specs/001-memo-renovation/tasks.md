@@ -20,9 +20,13 @@ runs `speckit-trace --require-full <FR-list>` to prove it.
 
 Per the speckit session's guidance:
 
-- **Every implementation task**: add a `001/FR-XXX` marker at the OWNING
-  UNIT (module docstring or fn header) in `src/memo/...`. One anchor
-  per owning unit — not every line.
+- **Every implementation task**: add a `001/FR-XXX` marker at the
+  NARROWEST OWNING UNIT — a fn/class header comment or docstring — in
+  `src/memo/...`. Module-level docstring is a FALLBACK only when the FR
+  genuinely spans the whole module. One anchor per owning unit — not
+  every line. (Rationale from speckit review 2026-07-29: an FR anchored
+  at the docstring of a 900-line module tells a reader the file, not
+  the code, and the anchor stops being reviewable.)
 - **Every test task**: add the same marker `001/FR-XXX` at the top of
   the test file. **Path decides gate-ness, not the verb** — anything
   under `tests/` is classified as ENFORCING by `test_path_hints`. So
@@ -35,8 +39,14 @@ Per the speckit session's guidance:
 - **NEVER run `speckit-trace --write-baseline`.** Greenfield rule from
   speckit — freezing zero-anchor as accepted floor defeats the gate.
 - **Phase gate**: at end of each phase, `cd ../memo-v2 && speckit-trace
-  --strict --require-full <FR-list-for-this-phase>` must exit 0. Any
-  PARTIAL/INVISIBLE/unknown FR fails the phase.
+  --require-full <FR-list-for-this-phase>` must exit 0. Any
+  PARTIAL/INVISIBLE/unknown FR fails the phase. **Do NOT combine with
+  `--strict` per-phase** — `--strict` is repo-wide and would fail every
+  phase gate for later-phase FRs that haven't been built yet. Default
+  gating already catches L1 misses + dangling markers, which is what
+  per-phase needs. `--strict` is reserved for the Final Phase T152
+  where "every FR anchored" is finally a true statement. (Verified by
+  speckit review 2026-07-29 with a control experiment.)
 - **Run speckit-trace INSIDE the v2 worktree**, not the main worktree —
   path confinement means it can't reach across, and running it in the
   wrong worktree gives a clean-looking wrong answer (zero anchors when
@@ -81,7 +91,7 @@ Foundational; blocks all user stories.
 **Phase 2 gate**:
 
 ```bash
-cd ../memo-v2 && speckit-trace --strict --require-full \
+cd ../memo-v2 && speckit-trace --require-full \
   001/FR-001,001/FR-002,001/FR-003,001/FR-004,001/FR-005,001/FR-006,001/FR-007,001/FR-008,001/FR-009
 ```
 
@@ -106,7 +116,7 @@ Must exit 0. On PARTIAL/INVISIBLE, fix before proceeding to Phase 3.
 **Phase 3 gate**:
 
 ```bash
-cd ../memo-v2 && speckit-trace --strict --require-full \
+cd ../memo-v2 && speckit-trace --require-full \
   001/FR-010,001/FR-011,001/FR-012,001/FR-013,001/FR-014,001/FR-015,\
 001/FR-015a,001/FR-015b,001/FR-015c,001/FR-015d,001/FR-015e,001/FR-015f,001/FR-015g
 ```
@@ -139,7 +149,7 @@ cd ../memo-v2 && speckit-trace --strict --require-full \
 **Phase 4 gate**:
 
 ```bash
-cd ../memo-v2 && speckit-trace --strict --require-full \
+cd ../memo-v2 && speckit-trace --require-full \
   001/FR-016,001/FR-017,001/FR-018,001/FR-019,001/FR-020,\
 001/FR-033,001/FR-034,001/FR-036
 ```
@@ -163,7 +173,7 @@ cd ../memo-v2 && speckit-trace --strict --require-full \
 **Phase 5 gate**:
 
 ```bash
-cd ../memo-v2 && speckit-trace --strict --require-full \
+cd ../memo-v2 && speckit-trace --require-full \
   001/FR-041,001/FR-042,001/FR-042a,001/FR-043,001/FR-044,001/FR-045,001/FR-046
 ```
 
@@ -186,7 +196,7 @@ cd ../memo-v2 && speckit-trace --strict --require-full \
 **Phase 6 gate**:
 
 ```bash
-cd ../memo-v2 && speckit-trace --strict --require-full \
+cd ../memo-v2 && speckit-trace --require-full \
   001/FR-021,001/FR-022,001/FR-023,001/FR-024,001/FR-025,001/FR-026,\
 001/FR-035,001/FR-037
 ```
@@ -198,7 +208,7 @@ Also cover FR-027..FR-032 (reconciliation FRs — many are implicit in mediator 
 **Phase 6b gate** (reconciliation):
 
 ```bash
-cd ../memo-v2 && speckit-trace --strict --require-full \
+cd ../memo-v2 && speckit-trace --require-full \
   001/FR-027,001/FR-028,001/FR-029,001/FR-030,001/FR-031,001/FR-032
 ```
 
@@ -215,7 +225,7 @@ cd ../memo-v2 && speckit-trace --strict --require-full \
 **Phase 7 gate**:
 
 ```bash
-cd ../memo-v2 && speckit-trace --strict --require-full \
+cd ../memo-v2 && speckit-trace --require-full \
   001/FR-038,001/FR-039,001/FR-040
 ```
 
