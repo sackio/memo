@@ -14,6 +14,7 @@ RUN pip install uv
 
 COPY pyproject.toml .
 COPY src/ src/
+COPY migrations/ migrations/
 
 RUN uv pip install --system --no-cache .
 

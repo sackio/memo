@@ -60,8 +60,54 @@ def _get_or_create_conn(db_path: str) -> sqlite3.Connection:
     conn.execute("PRAGMA busy_timeout=5000")
 
     _init_schema(conn)
+    _apply_migrations(conn)
     _connections[db_path] = conn
     return conn
+
+
+def _apply_migrations(conn: sqlite3.Connection) -> None:
+    """Apply any unapplied migrations from the ``migrations/`` directory. [001/FR-001 001/FR-002]
+
+    Idempotent: tracked via a ``migrations_applied`` table so each file
+    runs exactly once. Skips silently if the migrations dir is absent
+    (allows in-tree unit tests that don't ship with the dir).
+    """
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS migrations_applied ("
+        "  filename TEXT PRIMARY KEY, applied_at REAL NOT NULL)"
+    )
+    conn.commit()
+
+    # Migration dir is copied into the container at /app/migrations.
+    # In tests / dev, fall back to the working tree location.
+    candidates = [Path("/app/migrations"), Path(__file__).resolve().parents[2] / "migrations"]
+    migrations_dir = next((p for p in candidates if p.is_dir()), None)
+    if migrations_dir is None:
+        logger.info("no migrations dir found — skipping migrations")
+        return
+
+    applied = {row["filename"] for row in conn.execute("SELECT filename FROM migrations_applied")}
+    for path in sorted(migrations_dir.glob("*.sql")):
+        if path.name in applied:
+            continue
+        sql = path.read_text()
+        try:
+            conn.executescript(sql)
+        except sqlite3.OperationalError as e:
+            # ALTER TABLE ADD COLUMN fails with "duplicate column" when re-run
+            # against a DB that already had the column added out-of-band.
+            # That's benign; log + mark applied so we don't retry.
+            if "duplicate column" in str(e).lower():
+                logger.warning("migration %s: %s (marking applied)", path.name, e)
+            else:
+                logger.error("migration %s FAILED: %s", path.name, e)
+                raise
+        conn.execute(
+            "INSERT INTO migrations_applied (filename, applied_at) VALUES (?, ?)",
+            (path.name, time()),
+        )
+        conn.commit()
+        logger.info("applied migration %s", path.name)
 
 
 def _init_schema(conn: sqlite3.Connection) -> None:
