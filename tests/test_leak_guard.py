@@ -64,12 +64,22 @@ async def test_discussion_of_bug_mid_body_no_tags():
 
     The 2026-07-21 sweep got this wrong on alpaca's 3fce1547.
     """
+    # The guard only inspects content[-400:], so this fixture must be long
+    # enough that the marker falls OUTSIDE that window. The marker ends at
+    # index ~59, so the body needs to exceed 459 chars; it was 416, which put
+    # the marker back inside the tail and tripped the setup assertion below.
+    # (Latent since the suite could not run at all until 2026-07-29 — no pytest
+    # in the container, and importing main.py fails on the 3.10 host.) Padding
+    # is generous so incidental edits don't silently re-break the arithmetic.
     body = (
         "Root cause analysis: the corruption signature is </content><parameter name='tags'>[...] "
         "in the body with empty tags. Rest of the memo continues with actual conclusions and "
         "shouldn't be trimmed. The last 400 chars are entirely clean prose ending here."
         + " Extra tail content here to push the fingerprint out of the last 400 chars."
         + " Yet more content ensuring no marker or fragment in the tail window at all. "
+        + " The remediation was to scope the predicate to the tail window instead of"
+        + " scanning the whole body, which is why a mid-body quotation like the one"
+        + " above is legitimate prose and must be stored untouched."
         + "Final sentence."
     )
     assert "</content>" not in body[-400:], "test setup: marker leaked into tail"

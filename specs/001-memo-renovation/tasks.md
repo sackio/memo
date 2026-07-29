@@ -144,16 +144,39 @@ markers, 0 L1 misses, exit 0. Unit suite: 73 passed
    had an illustrative `001/FR-XXX`, which the scanner counted as a real anchor
    and reported as dangling → gate FAIL. Reworded to describe the convention
    without spelling a marker.
-7. **Unit tests run on the HOST, not in the container.** The container has no
-   pytest; the host has pytest but its `fastapi`/`starlette` versions are
-   mismatched, so `import memo.main` raises
+7. **Tests run IN THE CONTAINER — `docker build --target test`. RESOLVED.**
+   The host cannot run this suite: the project requires Python >=3.12 (host is
+   3.10), and the host's `fastapi`/`starlette` versions are mismatched badly
+   enough that `import memo.main` raises
    `TypeError: Router.__init__() got an unexpected keyword argument 'on_startup'`
-   inside FastAPI's own constructor. This is **pre-existing** and unrelated to
-   the v2 work (`tests/test_leak_guard.py` cannot collect either). The three
-   Phase 2 test files deliberately avoid importing `main.py` so they run. Any
-   future contract/integration test that needs the app must either fix the host
-   env or install pytest into the container — flagged for Phase 3, which needs
-   `TestClient` for the mediator contract tests.
+   inside FastAPI's own constructor — so `tests/test_leak_guard.py` could not even
+   collect, and the suite had effectively never run. Fixed by adding a `dev`
+   optional-dependency group (pytest, pytest-asyncio, httpx-for-TestClient) and a
+   `test` stage to the Dockerfile:
+
+   ```bash
+   cd ../memo-v2 && docker build --target test -t memo-v2-test . \
+     && docker run --rm memo-v2-test
+   ```
+
+   **89 passed, 0 failed.** This unblocks the Phase 3 mediator contract tests,
+   which need `TestClient`. Two things to know:
+   * The `test` stage is deliberately NOT the last stage in the Dockerfile —
+     docker's default target is the final stage, and `docker compose build` must
+     keep producing the runtime image. Verified: the runtime image has no pytest.
+   * The test stage installs the package, so tests import from
+     `site-packages/memo`, NOT `src/`. **Rebuild the test image after editing
+     `src/`** or you will be testing stale code (this cost a confusing cycle).
+
+   `[tool.pytest.ini_options]` pins `asyncio_mode = "strict"` so the mode cannot
+   drift and silently disable async fixture teardown (see note 9).
+7a. **Pre-existing test-data bug fixed in `tests/test_leak_guard.py`.** Once the
+   suite could actually run, `test_discussion_of_bug_mid_body_no_tags` failed its
+   own setup assertion: the guard only inspects `content[-400:]`, and the fixture
+   was 416 chars with the marker ending at index 59 — i.e. inside the tail window
+   the test intended it to be outside of. Padded the fixture past 459 chars with
+   the arithmetic documented inline. The guard itself was correct; only the
+   fixture was mis-sized.
 8. **`tests/unit/conftest.py` isolation is `autouse` on purpose.**
    `db._resolve_path` ignores its `db_path` argument (single-global refactor),
    so a test that merely passes a temp path would still write the REAL store.
