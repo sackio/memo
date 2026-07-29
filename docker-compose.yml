@@ -1,22 +1,28 @@
 services:
-  memo:
+  memo-v2:
     build: .
-    container_name: memo
+    container_name: memo-v2
     restart: unless-stopped
-    ports:
-      - "${PORT:-8000}:8000"
+    # Use host networking to avoid Docker's network address pool exhaustion.
+    # Container binds directly to the host's network stack on the port set
+    # inside the memo process (default 8000 unless overridden by MEMO_PORT).
+    network_mode: host
     volumes:
-      - memo_data:/data
+      - memo_v2_data:/data
     environment:
       DEFAULT_DB_PATH: /data/memo.db
+      PORT: ${MEMO_V2_PORT:-8091}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-openai/text-embedding-3-small}
       EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-1536}
+      MEMO_CONDUCTOR_PROVIDER: ${MEMO_CONDUCTOR_PROVIDER:-atc}
+      MEMO_AGENT_CONTROLLER_PROVIDER: ${MEMO_AGENT_CONTROLLER_PROVIDER:-agents_supervisor}
+      MEMO_V2_VERSION: 2.0.0-alpha1
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:${MEMO_V2_PORT:-8091}/health')"]
       interval: 300s
       timeout: 10s
       retries: 3
 
 volumes:
-  memo_data:
+  memo_v2_data:
