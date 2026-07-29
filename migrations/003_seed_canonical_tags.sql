@@ -1,0 +1,27 @@
+-- 001/FR-001 — canonical tag vocabulary (retire hard-rule/ben-hard-rule/
+-- behavioral-rule fragmentation per C44). This migration is a marker only;
+-- actual retagging happens during backfill (memo-migrate-backfill script).
+-- Kept here as a versioned artifact so the intent survives the codebase.
+
+-- Canonical tag map (comment for the backfill script to consume):
+--   hard-rule           → behavioral
+--   ben-hard-rule       → behavioral
+--   behavioral-rule     → behavioral
+--   operator-coaching   → behavioral
+--   anti-pattern        → behavioral
+--   constitution        → constitutional
+--   pinned              → verbatim-critical
+--   session-sourced     → episodic
+--   email-sourced       → episodic
+--   sms-sourced         → episodic
+--   voicemail-sourced   → episodic
+--   atc-sourced         → episodic
+--   dm-sourced          → episodic
+--   git-sourced         → episodic
+--   automemory-sourced  → episodic
+--   backfill-checkpoint → episodic
+--   assistant-sourced   → episodic
+--
+-- Retagging is DESTRUCTIVE against the tags array (JSON), so it's done
+-- via the migration script's per-memo pipeline, not a bulk SQL UPDATE.
+SELECT 1;
