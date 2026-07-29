@@ -1,0 +1,52 @@
+# speckit-trace configuration
+# Every key here is optional — speckit-trace carries these same values as
+# built-in defaults. This file exists to document the knobs and to keep the
+# tool drop-in portable: a project changes THIS file, never the tool.
+#
+# Regenerate with `speckit-trace init --force`.
+
+# Where numbered spec directories (001-foo/, 002-bar/) live.
+specs_root = "specs"
+
+# Directories scanned for NNN/FR-XXX markers. Trim this to your layout —
+# scanning a tree you don't own produces dangling markers you can't fix.
+scan_roots = ["src", "tests", "scripts", "migrations"]
+
+# File extensions scanned. Markers live in comments, so any commented language works.
+# Memo is Python + SQL + shell; trim to what's actually present.
+extensions = [".py", ".sh", ".sql", ".toml", ".yaml", ".yml"]
+
+# Directory names never descended into, at any depth.
+skip_dirs = ["target", "node_modules", "archive", "deferred", ".claude-worktrees", "__pycache__", ".git", ".pnpm", "legacy", "dist", "build", ".venv", "venv"]
+
+# An anchor whose path matches any of these substrings (case-insensitive) is
+# classified as an ENFORCING (gate) anchor rather than an implementation
+# anchor. Path-based only: in-module test blocks (Rust #[cfg(test)], Go
+# same-file tests) are NOT seen — a documented limit, not a bug.
+test_path_hints = ["/tests/", "/test/", "test_", "_test.", ".test.", ".spec."]
+
+# Ratchet baseline: frozen debt may only shrink. Written by --write-baseline.
+# Commit this file so the gate is the same for everyone.
+baseline = ".specify/trace-baseline.json"
+
+# Commits to anchored code since a spec last changed, above which `--staleness`
+# flags that spec as possibly drifted. A SIGNAL threshold — drift never gates,
+# because a staleness gate is satisfied by touching the spec, which rewards the
+# one action that defeats the measurement.
+staleness_commits = 10
+
+# Documentation roots, walked SEPARATELY from scan_roots. A marker found here
+# is a DOC anchor, never an implementation — which is what lets the tool answer
+# "what's built and tested but undocumented", usually where the real debt is.
+# These dirs are normally absent from scan_roots and .md absent from extensions,
+# so without this the whole level would be invisible.
+doc_roots = ["docs", "doc", "documentation"]
+doc_extensions = [".md", ".mdx", ".rst", ".txt", ".adoc"]
+
+# Optional path to an LCOV (lcov.info) or Cobertura (coverage.xml) report.
+# When set, the tool stops taking a marker's word for it: it checks whether the
+# code at each requirement's implementation anchor ACTUALLY EXECUTES under test.
+# A requirement can otherwise rate FULL while its implementation never runs —
+# a gate that exists in name only. Leave empty to skip (the default).
+# `--coverage PATH` overrides; `--require-coverage` makes nominal gates fail.
+coverage = ""
