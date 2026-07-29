@@ -232,10 +232,15 @@ def _sync_store(db_path: str, content: str, title: str | None, tags: list[str],
     doc_id = str(uuid.uuid4())
     now = time()
     token_count = _count_tokens(content)
+    # valid_from MUST be set explicitly. Migration 001 adds the column with
+    # `NOT NULL DEFAULT 0` and backfills existing rows once, but an INSERT that
+    # omits the column silently takes the 0 default — which would make every
+    # NEW v1-path write look valid from the epoch and break get_as_of(). (Found
+    # 2026-07-29: the first row written to the fresh v2 DB had valid_from=0.)
     conn.execute(
-        "INSERT INTO documents (id, content, title, tags, metadata, token_count, created_at, updated_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (doc_id, content, title, json.dumps(tags), json.dumps(metadata), token_count, now, now),
+        "INSERT INTO documents (id, content, title, tags, metadata, token_count, created_at, updated_at, valid_from) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (doc_id, content, title, json.dumps(tags), json.dumps(metadata), token_count, now, now, now),
     )
     conn.execute(
         "INSERT INTO document_embeddings (doc_id, embedding) VALUES (?, ?)",
@@ -718,3 +723,258 @@ async def list_docs_multi(
                 merged.append(doc)
     merged.sort(key=lambda x: x["created_at"], reverse=True)
     return merged[:limit]
+
+
+# ==============================================================================
+# v2 bi-temporal helpers (T019)
+#
+# Versioning model, per data-model.md: a supersession does NOT mutate a row's
+# id. Each version is its OWN `documents` row with its own uuid, and the
+# old->new transition is recorded in `supersede_edges`. So "the memo" is a
+# CHAIN of rows, and any id in that chain is a valid handle to the lineage.
+# That is why get_current()/get_as_of() resolve the chain rather than doing a
+# bare `WHERE id = ?` — a caller holding a superseded id still deserves the
+# right answer instead of None.
+# ==============================================================================
+
+# Columns added by migration 001 that hold JSON and therefore need decoding.
+_V2_JSON_COLUMNS = (
+    "scope", "provenance", "time_scope", "reopenability",
+    "derived_from", "constitution_meta",
+)
+
+
+def _row_to_memo(row: sqlite3.Row) -> dict:
+    """Row -> dict with v1 *and* v2 JSON columns decoded.
+
+    ``_row_to_dict`` only knows about the v1 ``tags``/``metadata`` columns; the
+    v2 additions are also JSON-in-TEXT and would otherwise leak raw strings to
+    callers. A column holding non-JSON is downgraded to None with a warning
+    rather than raising — one malformed legacy row must not fail a whole read.
+    """
+    d = _row_to_dict(row)
+    for col in _V2_JSON_COLUMNS:
+        raw = d.get(col)
+        if isinstance(raw, str):
+            try:
+                d[col] = json.loads(raw)
+            except ValueError:
+                logger.warning(
+                    "memo %s: column %s held non-JSON %r — coercing to None",
+                    d.get("id"), col, raw[:120],
+                )
+                d[col] = None
+    return d
+
+
+def _lineage_chain(conn: sqlite3.Connection, doc_id: str) -> list[str]:
+    """Ordered supersede chain (oldest -> newest) containing ``doc_id``.
+
+    Walks ``supersede_edges`` backwards to the lineage root, then forwards to
+    the tip. ``doc_id`` itself is always included even when it has no edges (a
+    never-superseded memo is a one-element chain). Both walks carry a seen-set
+    so a malformed/cyclic edge set terminates instead of spinning forever —
+    edges are an append-only audit log with no FK constraints, so a cycle is
+    possible in principle and must not hang a request.
+    """
+    seen = {doc_id}
+    root = doc_id
+    while True:
+        row = conn.execute(
+            "SELECT old_id FROM supersede_edges WHERE new_id = ? "
+            "ORDER BY superseded_at LIMIT 1",
+            (root,),
+        ).fetchone()
+        if row is None or row["old_id"] in seen:
+            break
+        root = row["old_id"]
+        seen.add(root)
+
+    chain = [root]
+    while True:
+        row = conn.execute(
+            "SELECT new_id FROM supersede_edges WHERE old_id = ? "
+            "ORDER BY superseded_at LIMIT 1",
+            (chain[-1],),
+        ).fetchone()
+        if row is None or row["new_id"] in chain:
+            break
+        chain.append(row["new_id"])
+    return chain
+
+
+def _sync_get_current(db_path: str, doc_id: str) -> dict | None:
+    """Newest currently-valid version of the lineage containing ``doc_id``. [001/FR-002]
+
+    ``valid_until IS NULL`` is the definition of "currently true" (FR-002).
+    Searched tip-first so the freshest current row wins.
+    """
+    conn = _get_or_create_conn(db_path)
+    for candidate in reversed(_lineage_chain(conn, doc_id)):
+        row = conn.execute(
+            "SELECT * FROM documents WHERE id = ? AND valid_until IS NULL",
+            (candidate,),
+        ).fetchone()
+        if row is not None:
+            return _row_to_memo(row)
+    return None
+
+
+def _sync_get_as_of(db_path: str, doc_id: str, t: float) -> dict | None:
+    """Version of the ``doc_id`` lineage that was true at time ``t``. [001/FR-002]
+
+    Window is half-open — ``valid_from <= t < valid_until`` — so the instant of
+    a supersession belongs to the NEW version, never to both. A NULL
+    ``valid_until`` means the window is still open.
+    """
+    conn = _get_or_create_conn(db_path)
+    for candidate in reversed(_lineage_chain(conn, doc_id)):
+        row = conn.execute(
+            "SELECT * FROM documents WHERE id = ? AND valid_from <= ? "
+            "AND (valid_until IS NULL OR valid_until > ?)",
+            (candidate, t, t),
+        ).fetchone()
+        if row is not None:
+            return _row_to_memo(row)
+    return None
+
+
+def _sync_supersede(db_path: str, old_id: str, new_memo: dict,
+                    embedding: list[float], actor: str, reason: str | None,
+                    operator_directive_ref: dict | None) -> dict | None:
+    """Atomically close out ``old_id`` and write its replacement. [001/FR-003]
+
+    Per FR-003 the close and the create are ONE transaction: ``old.valid_until``
+    and ``new.valid_from`` are the same instant, so a reader can never observe a
+    gap (both rows superseded) or an overlap (both rows current). Returns None if
+    ``old_id`` does not exist or is already superseded — the caller turns that
+    into a 404/409 rather than silently forking the lineage.
+    """
+    conn = _get_or_create_conn(db_path)
+    old = conn.execute(
+        "SELECT id, valid_until FROM documents WHERE id = ?", (old_id,)
+    ).fetchone()
+    if old is None:
+        return None
+    if old["valid_until"] is not None:
+        logger.warning("supersede: %s is already superseded — refusing", old_id)
+        return None
+
+    new_id = str(uuid.uuid4())
+    now = time()
+    content = new_memo["content"]
+    token_count = _count_tokens(content)
+
+    try:
+        conn.execute(
+            "UPDATE documents SET valid_until = ?, updated_at = ? WHERE id = ?",
+            (now, now, old_id),
+        )
+        conn.execute(
+            "INSERT INTO documents ("
+            "  id, content, title, tags, metadata, token_count,"
+            "  created_at, updated_at, class, injection_mode, scope, provenance,"
+            "  valid_from, valid_until, expires_at, time_scope, reopenability,"
+            "  derived_from, constitution_meta"
+            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)",
+            (
+                new_id,
+                content,
+                new_memo.get("title"),
+                json.dumps(new_memo.get("tags") or []),
+                json.dumps(new_memo.get("metadata") or {}),
+                token_count,
+                now,
+                now,
+                new_memo.get("class") or "fact",
+                new_memo.get("injection_mode") or "on-recall",
+                json.dumps(new_memo.get("scope") or ["global"]),
+                json.dumps(new_memo["provenance"]) if new_memo.get("provenance") is not None else None,
+                now,
+                new_memo.get("expires_at"),
+                json.dumps(new_memo["time_scope"]) if new_memo.get("time_scope") is not None else None,
+                json.dumps(new_memo["reopenability"]) if new_memo.get("reopenability") is not None else None,
+                json.dumps(new_memo.get("derived_from") or []),
+                json.dumps(new_memo["constitution_meta"]) if new_memo.get("constitution_meta") is not None else None,
+            ),
+        )
+        conn.execute(
+            "INSERT INTO document_embeddings (doc_id, embedding) VALUES (?, ?)",
+            (new_id, _serialize_vector(embedding)),
+        )
+        cur = conn.execute(
+            "INSERT INTO supersede_edges ("
+            "  old_id, new_id, superseded_at, actor, reason, operator_directive_ref"
+            ") VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                old_id, new_id, now, actor, reason,
+                json.dumps(operator_directive_ref) if operator_directive_ref is not None else None,
+            ),
+        )
+        edge_id = cur.lastrowid
+        conn.commit()
+    except Exception:
+        # Roll the close-out back with the create — a half-applied supersede
+        # would leave the lineage with either two current rows or none.
+        conn.rollback()
+        logger.exception("supersede %s -> %s failed; rolled back", old_id, new_id)
+        raise
+
+    return {
+        "old_id": old_id,
+        "new_id": new_id,
+        "superseded_at": now,
+        "edge_id": edge_id,
+    }
+
+
+def _sync_reap_expired(db_path: str, now: float | None = None) -> list[str]:
+    """Hard-delete rows whose ``expires_at`` has passed. [001/FR-007]
+
+    Returns the reaped ids. Embeddings go with the row — leaving them behind
+    would keep reaped content semantically searchable, which is the whole point
+    of a TTL. ``now`` is injectable so tests need not sleep.
+    """
+    conn = _get_or_create_conn(db_path)
+    cutoff = time() if now is None else now
+    rows = conn.execute(
+        "SELECT id FROM documents WHERE expires_at IS NOT NULL AND expires_at <= ?",
+        (cutoff,),
+    ).fetchall()
+    reaped = [r["id"] for r in rows]
+    if not reaped:
+        return []
+    for doc_id in reaped:
+        conn.execute("DELETE FROM document_embeddings WHERE doc_id = ?", (doc_id,))
+        conn.execute("DELETE FROM documents WHERE id = ?", (doc_id,))
+    conn.commit()
+    logger.info("reaper: swept %d expired memo(s)", len(reaped))
+    return reaped
+
+
+# --- Async wrappers for the v2 helpers ---
+
+async def get_current(db_path: str | None, doc_id: str) -> dict | None:
+    path = _resolve_path(db_path)
+    return await asyncio.to_thread(_sync_get_current, path, doc_id)
+
+
+async def get_as_of(db_path: str | None, doc_id: str, t: float) -> dict | None:
+    path = _resolve_path(db_path)
+    return await asyncio.to_thread(_sync_get_as_of, path, doc_id, t)
+
+
+async def supersede(db_path: str | None, old_id: str, new_memo: dict,
+                    embedding: list[float], actor: str,
+                    reason: str | None = None,
+                    operator_directive_ref: dict | None = None) -> dict | None:
+    path = _resolve_path(db_path)
+    return await asyncio.to_thread(
+        _sync_supersede, path, old_id, new_memo, embedding, actor, reason,
+        operator_directive_ref,
+    )
+
+
+async def reap_expired(db_path: str | None = None, now: float | None = None) -> list[str]:
+    path = _resolve_path(db_path)
+    return await asyncio.to_thread(_sync_reap_expired, path, now)

@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 
-from memo import db, embeddings
+from memo import db, embeddings, reaper
 from memo.config import settings
 from memo.db import _count_tokens
 from memo.models import (
@@ -27,8 +27,11 @@ from memo.models import (
     SearchResult,
     StoreRequest,
     StoreResponse,
+    SupersedeRequest,
+    SupersedeResponse,
     UpdateRequest,
 )
+from memo.repositories.documents import documents as documents_repo
 
 # --- MCP server ---
 
@@ -409,7 +412,13 @@ async def memo_context(
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     async with mcp.session_manager.run():
-        yield
+        # TTL reaper runs for the life of the app (FR-007). Stopped on the way
+        # out so a reload doesn't leak a task still holding a DB connection.
+        reaper.start()
+        try:
+            yield
+        finally:
+            await reaper.stop()
 
 
 app = FastAPI(title="memo", lifespan=lifespan)
@@ -454,6 +463,80 @@ async def store_document(req: StoreRequest, request: Request):
         embedding=embedding,
     )
     return StoreResponse(id=doc_id)
+
+
+@app.post("/supersede", response_model=SupersedeResponse)
+async def supersede_document(req: SupersedeRequest, request: Request):
+    """Atomically close out a memo and write its replacement. [001/FR-003]
+
+    Per FR-003 the old memo's ``valid_until`` and the new memo's ``valid_from``
+    are set to the SAME instant inside one transaction, so no reader can catch
+    the lineage with two current versions or none.
+
+    404 when ``old_id`` is unknown; 409 when it is already superseded — both
+    surface as a None from the repository, so they are disambiguated with a
+    follow-up read rather than by guessing.
+    """
+    try:
+        await _reject_leaked_tool_call(
+            req.content, req.tags, "POST /supersede",
+            user_agent=request.headers.get("user-agent"),
+            source_ip=request.client.host if request.client else None,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    new_memo = req.model_dump(
+        by_alias=True,
+        exclude={"old_id", "actor", "reason", "operator_directive_ref"},
+    )
+    embedding = await embeddings.embed(req.content)
+    result = await documents_repo.supersede(
+        req.old_id, new_memo, embedding, req.actor,
+        reason=req.reason,
+        operator_directive_ref=req.operator_directive_ref,
+    )
+    if result is None:
+        existing = await documents_repo.get(req.old_id)
+        if existing is None:
+            raise HTTPException(status_code=404, detail=f"memo {req.old_id} not found")
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"memo {req.old_id} is already superseded "
+                f"(valid_until={existing.get('valid_until')}); "
+                "supersede the current version instead"
+            ),
+        )
+    return SupersedeResponse(**result)
+
+
+@app.get("/documents/{doc_id}/current", response_model=Document)
+async def get_document_current(doc_id: str, db_path: str | None = Query(default=None)):
+    """Currently-valid version of this memo's lineage. [001/FR-002]
+
+    Accepts a superseded id and follows the supersede chain forward, so a
+    caller holding a stale id still gets the current truth.
+    """
+    doc = await documents_repo.get_current(doc_id, db_path=db_path)
+    if doc is None:
+        raise HTTPException(status_code=404, detail=f"no current version for {doc_id}")
+    return doc
+
+
+@app.get("/documents/{doc_id}/as-of", response_model=Document)
+async def get_document_as_of(
+    doc_id: str,
+    t: float = Query(description="Epoch seconds — the instant to read as of"),
+    db_path: str | None = Query(default=None),
+):
+    """Version of this memo's lineage that was true at ``t``. [001/FR-002]"""
+    doc = await documents_repo.get_as_of(doc_id, t, db_path=db_path)
+    if doc is None:
+        raise HTTPException(
+            status_code=404, detail=f"no version of {doc_id} was valid at {t}"
+        )
+    return doc
 
 
 @app.get("/documents", response_model=list[Document])

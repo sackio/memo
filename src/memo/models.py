@@ -10,7 +10,7 @@ the whole module (every entity here maps to one of those FRs).
 """
 from __future__ import annotations
 from typing import Any, Literal
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class Document(BaseModel):
@@ -256,6 +256,42 @@ class Memo(BaseModel):
                 raise ValueError("valid_until must be >= valid_from")
         return v
 
+    @model_validator(mode="after")
+    def _class_special_field_requirements(self) -> "Memo":
+        """Enforce the per-class field requirements from data-model.md.
+
+        These are cross-field rules, so they need ``mode="after"`` — a
+        field_validator cannot see ``class_`` and the special field together.
+
+        Deliberately NOT enforced here:
+          * ``class = fact`` requires provenance. The storage mediator owns that
+            one, because it has the caller context needed to decide between
+            rejecting the write and reclassifying to legacy-unattributed
+            (data-model.md says "else migration -> legacy-unattributed"), and a
+            model-level raise would make legacy backfill impossible.
+          * ``derived_from`` ids must exist. Requires a DB round-trip; done at
+            write time per data-model.md, not in a pure model.
+        """
+        if self.class_ == "constitutional":
+            if self.constitution_meta is None:
+                raise ValueError("class=constitutional requires constitution_meta (C45)")
+            if self.injection_mode != "forcible-constitutional":
+                raise ValueError(
+                    "class=constitutional requires injection_mode="
+                    "forcible-constitutional, got " + self.injection_mode
+                )
+        elif self.constitution_meta is not None:
+            raise ValueError("constitution_meta is only valid on class=constitutional")
+
+        if self.class_ == "time-scoped" and self.time_scope is None:
+            raise ValueError("class=time-scoped requires time_scope")
+
+        if self.class_ == "ephemeral-flush" and self.expires_at is None:
+            raise ValueError("class=ephemeral-flush requires expires_at")
+
+        # decision-in-progress MAY have reopenability — nullable per C-04.
+        return self
+
 
 # InjectionSet + TransclusionResolution (FR-016..020)
 class TransclusionResolution(BaseModel):
@@ -281,6 +317,47 @@ class InjectionSet(BaseModel):
     token_budget_used: int = 0
     token_budget_ceiling: int = 5000  # per C-02
     computed_at: float
+
+
+# Supersede envelopes (FR-003)
+class SupersedeRequest(BaseModel):
+    """Request shape for POST /supersede. See FR-003.
+
+    ``content`` and the v2 fields describe the REPLACEMENT memo; ``old_id`` is
+    the version being closed out. The new memo's ``valid_from`` is assigned
+    server-side to the same instant as the old memo's ``valid_until``, so it is
+    deliberately not a caller-supplied field.
+    """
+    old_id: str
+    content: str
+    title: str | None = None
+    tags: list[str] = []
+    metadata: dict[str, Any] = {}
+    class_: MemoClass = Field(alias="class", default="fact")
+    injection_mode: InjectionMode = "on-recall"
+    scope: list[str] = ["global"]
+    provenance: Provenance | None = None
+    expires_at: float | None = None
+    time_scope: TimeScope | None = None
+    reopenability: Reopenability | None = None
+    derived_from: list[str] = []
+    constitution_meta: ConstitutionMeta | None = None
+
+    # Audit fields for the supersede_edges row.
+    actor: str                       # operator:<name> | auditor:<session-id> | mediator:auto
+    reason: str | None = None
+    operator_directive_ref: dict[str, Any] | None = None
+
+    class Config:
+        populate_by_name = True
+
+
+class SupersedeResponse(BaseModel):
+    """Response shape for POST /supersede."""
+    old_id: str
+    new_id: str
+    superseded_at: float
+    edge_id: int
 
 
 # Mediator request/response envelopes (FR-010 recall + FR-015a store)

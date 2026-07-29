@@ -27,6 +27,12 @@ class Settings(BaseSettings):
     # sampled warning if it becomes noisy.
     ignored_db_path_warning: bool = True
 
+    # v2 TTL reaper (FR-007). 300s == the 5-minute sweep the spec calls for.
+    # memo_reaper_enabled exists so a migration/soak run can hold the sweep
+    # off without editing code.
+    memo_reaper_enabled: bool = True
+    memo_reaper_interval_seconds: int = 300
+
     @property
     def resolved_default_db_path(self) -> str:
         return str(Path(self.default_db_path).expanduser())
