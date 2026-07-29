@@ -616,6 +616,161 @@ Ben's core concern is VALID: agents shouldn't see refuted facts. But that's a RE
 All 6 background agents done, all findings banked. Interview complete through R7.
 Ready to move to spec-kit drafting phase — constitution.md first, then baseline spec.
 
+---
+
+## R8 — Post-draft C-01 refinement (2026-07-29 15:14-15:16 EDT)
+
+Mid-clarification, Ben significantly reshaped the C-01 (constitutional composition) answer:
+
+**Reframe 1 (15:14):** "Constitution" often means an ACTUAL MARKDOWN DOCUMENT (spec-kit `constitution.md` or `CLAUDE.md`) — these on-disk files must be respected. Memo's job is:
+- INJECT on-disk constitutional files into context as needed
+- STORE canonical-pointer memos ("the auth constitution lives at path X")
+- Know how Claude Code auto-reads these
+
+Constitutional layers on disk today:
+- **Global**: user-wide `~/.claude/CLAUDE.md` — may reference memos that thereby become constitutional
+- **Project-wide**: project `CLAUDE.md` and/or `.specify/memory/constitution.md` and/or `.claude/`
+
+**Reframe 2 (15:16):** **TRANSCLUSION pattern** — on-disk files can reference memo IDs; memo auto-parses references + retrieves + injects the memo content. Turns `CLAUDE.md` into an addressable pointer file. Solves Agent F's finding that "search memo first" is redundantly duplicated across 6+ CLAUDE.md files today.
+
+**Directive**: dispatch background agents to:
+- Talk to Claude Code docs (via claude-code-guide agent) — what Claude Code auto-loads
+- DM `agents` supervisor — what the `c` wrapper injects on top
+
+### Agent G findings (Claude Code auto-load behavior)
+
+**AUTO-LOADED at session start** (survives across sessions):
+- System prompt (~4200 tok)
+- Auto memory (`~/.claude/projects/<project>/memory/MEMORY.md`, 200 lines / 25KB)
+- Environment info
+- MCP tool catalog (deferred by default)
+- **Skill descriptions (~450 tok) — BUT NOT re-injected after `/compact`** (`noSurviveCompact: true`)
+- `~/.claude/CLAUDE.md` (user global)
+- Project-root `CLAUDE.md` (walked up directory tree)
+- `.claude/rules/*.md` (unconditional ones, path-scoped ones only when file matches glob)
+- `CLAUDE.local.md` (personal overrides)
+
+**NOT AUTO-LOADED** (this is the memo-should-inject gap):
+- **`.specify/memory/constitution.md`** — spec-kit constitution is NOT auto-loaded; only when explicitly referenced. **Ben expected auto-load; it isn't. Memo's job to fix.**
+- Nested subdirectory CLAUDE.md files (load on demand when Claude reads that subdir)
+- Full skill content (only descriptions preload)
+- Subagent memory doesn't inherit main session's
+
+**POST-COMPACTION survives** (`/compact` cycle):
+- CLAUDE.md chain (re-read from disk on every compact)
+- `.claude/rules/*.md` (unconditional)
+- Auto memory (re-read)
+- Compaction summary
+- Up to 5 recently-read files
+
+**POST-COMPACTION LOST**:
+- Skill descriptions (must re-search after compact)
+- Path-scoped rules from subdirectories
+- Conversation history (replaced by summary)
+- Nested CLAUDE.md files
+
+**Hook lifecycle richer than we knew**:
+- `SessionStart`, `Setup`, `InstructionsLoaded`, `UserPromptSubmit`, `PreToolUse`, `PermissionRequest`, `PostToolUse`, `PostToolUseFailure`, `PostToolBatch`, `Stop`, `StopFailure`, `SessionEnd`, `PreCompact`, **`PostCompact`** (previously only knew SessionStart:compact), `FileChanged`, `CwdChanged`, `ConfigChange`, `WorktreeCreate`, `WorktreeRemove`
+- Multiple hooks support `additionalContext` output → memo can inject at each fire
+- `InstructionsLoaded` hook fires AFTER CLAUDE.md loads — perfect for memo to layer on
+- `PostCompact` hook fires after compaction — perfect for memo re-warm without needing the SessionStart:compact subagent dance
+
+**CLI flags**:
+- `--append-system-prompt STRING` does NOT persist across resume (must re-pass)
+- `--setting-sources` can exclude scopes
+- No CLI flag makes `.specify/memory/constitution.md` auto-load
+
+### Spec constraints derived from Agent G (Round 8 additions)
+
+- **C56**: Spec-kit `.specify/memory/constitution.md` is NOT auto-loaded by Claude Code. Memo MUST detect its presence in the cwd + walked-up directory tree and inject it as `additionalContext` at `SessionStart` / `PostCompact` (both hooks support this now — no subagent dance needed).
+- **C57**: `.claude/rules/*.md` is an underutilized auto-load channel that memo can write to for standing behavioral rules that must ride constitutionally. Path-scoped rules (with `paths:` frontmatter) let memo scope a rule to files matching a glob — powerful.
+- **C58**: The `PostCompact` hook is a NEW cleaner path for memo re-injection than the SessionStart:compact subagent dance in `atc-precompact-beacon.py`. Migrate to `PostCompact` when memo v2 lands.
+- **C59**: Skill descriptions `noSurviveCompact: true` means our `/speckit-*` skills disappear from post-compact context. Not memo's problem to solve but worth noting — the current spec's `/speckit-*` invocations should not rely on skills being pre-loaded post-compact.
+- **C60**: **Transclusion syntax**: memo defines a reference syntax (candidates: `memo:<uuid>` inline, `<!-- memo:<uuid> -->` comment, or a fenced block). Memo's SessionStart / PostCompact / InstructionsLoaded hooks scan the auto-loaded CLAUDE.md + rules for these references + injects the resolved memo content as `additionalContext`. Turns on-disk files into addressable pointer files.
+- **C61**: Subagent CLAUDE.md loading is separate (Explore/Plan agents skip it). Memo's transclusion must handle subagent contexts differently or gracefully skip.
+
+### Agent H findings (`agents` supervisor on `c` wrapper injection) — 15:21 EDT
+
+**LAYER 0 — Claude Code native** (not `c`): global `~/.claude/CLAUDE.md` + project `./CLAUDE.md` + `./.claude/` — auto-loaded every turn. Plus `memory/MEMORY.md` unless `--no-memory` (sets `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`; CLAUDE.md + MCPs unaffected).
+
+**LAYER 1 — what `c` adds**:
+
+1. **`--append-system-prompt-file <guide>`** — THE BIG ONE. Per-session standing-rules markdown appended to system prompt. **ALWAYS-ON every turn, survives compaction, resolved ONCE at exec.** This is the per-agent "guide" — session reads it as constitutional even though it's wrapper-injected, not a user-cwd file.
+   - `c`'s own `GUIDE_FILES` map is nearly empty (2 quantum entries)
+   - **The REAL per-agent guide mapping lives in the `agents`-roster `SESSION_GUIDE` array** — passed as explicit `--guide` when the roster launches `c`
+   - So "which guide" is an **agents-roster fact**, not a `c` fact.
+
+2. **Env vars**:
+   - `ATC_SUBSCRIBER_ID` = session identity (from `--name`)
+   - `ATC_ZONES` = computed `global,<host>,<id>` + `--atc-zones` / `--team`
+   - Team vars
+   - Auto-loads project `.env` (auto-exported)
+   - OAuth/token handling (`--as <acct>` pins billing)
+   - Optional spec-enforcer (`CLAUDE_SPEC_ENFORCER/POLICY/MODEL` from `.env`)
+
+3. **MCP surface**: selects which MCPs load via `--only` / `--disable` / `--no-mcps` — determines the session's tool surface (not constitutional text, but part of the scaffold).
+
+**Per-name / per-role variation**: THIN — `--name` sets ATC id/zones + (via roster) the guide; `.env` is per-project; spec-enforcer is per-project. **The ROLE/personality scaffold is almost entirely the GUIDE FILE + project CLAUDE.md, NOT `c` per-name logic** (which is just identity + plumbing).
+
+**Wrapper-injected "constitutional" text**: only the `--append-system-prompt-file` guide. No hidden standing instructions beyond that. Startup-prompt / cron re-arming is a SessionStart-hook + agents-launcher thing, NOT a `c` system-prompt layer.
+
+**Stay OUT of** (PRIMARY, agents/Ben-owned):
+- **Guide files** (`.claude/guides/<name>.md`) — per-session standing rules, owned by agents-roster + the session itself
+- **Global + project CLAUDE.md**
+- **.env files**
+
+Memo's gap-injection + canonical-pointer role sits **ABOVE** these — augment/point-to, never replace.
+
+**Bonus**: `stale-guide-detector` cron already watches that running sessions actually serve their CURRENT guide (guides resolve once at exec — a session running from a pre-edit guide is stale). This is the exemplar pattern memo's auditor should mirror for its own class.
+
+### Spec constraints derived from Agent H
+
+- **C62**: Memo MUST NOT write to `.claude/guides/<name>.md`, project `CLAUDE.md`, `~/.claude/CLAUDE.md`, or `.env`. These are agents-roster-owned + operator-owned.
+- **C63**: The authoritative "which guide file per agent-family" table lives in the `agents` roster's `SESSION_GUIDE` array, NOT in `c`, NOT in memo. Memo references the roster (via `agents` DM or by parsing the script) when it needs to know which guide applies to a session.
+- **C64**: Constitutional stack for a fresh fleet session (in load order) = Layer 0 (Claude Code native: user CLAUDE.md + project CLAUDE.md + MEMORY.md) → Layer 1 (`c` wrapper: guide file via agents-roster SESSION_GUIDE) → Layer 2 (memo GAP-FILL: `.specify/memory/constitution.md` injection + `memo:<uuid>` transclusion resolution + canonical-pointer memos + fleet-wide behavioral class).
+- **C65**: The `stale-guide-detector` cron is the exemplar for constitutional-artifact liveness monitoring. Memo's auditor should mirror the pattern for MEMO'S CLASS (e.g. "is the injected constitutional-memo set the current one for this session?").
+- **C66**: `--no-memory` support — if a session sets `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`, memo's own injection interfaces must respect a similar opt-out flag (`MEMO_DISABLE_INJECTION=1` or equivalent) so operators can spawn "clean" sessions when needed.
+
+### Agent H follow-up (15:23 EDT) — authoritative SESSION_GUIDE map
+
+30 agents in the roster, guide paths follow multiple conventions:
+- `.claude/guides/<name>.md` — most common (aloha, alpaca, code, dojo, mind, pantry, ollm, most quantum-*, ui-eye, speckit, etc.)
+- `AGENT_GUIDE.md` at project root — buffet-buster, freelance
+- `docs/SESSION_HANDOFF.md` — hi-score, mcc (a handoff doc used AS the standing guide)
+- `.claude/skills/<name>/SKILL.md` — quantum-library-guardian (a SKILL is the guide)
+
+**3 caveats memo's FR MUST NOT assume away:**
+1. **Guide path is NOT uniformly `.claude/guides/<name>.md`.** Don't hardcode.
+2. **Session name ≠ guide filename** in some cases (`quantum-discovery-guardian` → `quantum-sieve-guardian.md`, `quantum-engine` → `quantum-engine-producer.md` — paths kept post-rename). Resolver must go through the roster table, not string-munge the name.
+3. **Ad-hoc `c --name X --guide Y` launches** carry guides not in any roster. cmdline is the only ground truth for those (which is what `stale-guide-detector` reads).
+
+**Auditor pattern wisdom (from agents supervisor)**: pure-code liveness check → routes to a judgment layer → never auto-act on mtime alone. The discriminator is **addressed-to-running vs. addressed-to-successor** — a CONTENT call, not a timestamp call. Memo's auditor should mirror this.
+
+### Spec constraints derived from the SESSION_GUIDE map + caveats
+
+- **C67**: Guide-file location resolver in memo MUST go through the `agents`-roster `SESSION_GUIDE` table (via DM to agents or by parsing the script), NOT string-munge from session name to path.
+- **C68**: Memo MUST handle multiple guide-file conventions: `.claude/guides/<name>.md`, `AGENT_GUIDE.md`, `docs/SESSION_HANDOFF.md`, `.claude/skills/<name>/SKILL.md`. Extensible list, not hardcoded.
+- **C69**: Ad-hoc `c --name X --guide Y` launches are the source-of-truth for non-roster sessions. Memo's transclusion resolver must ingest the actual `--guide` cmdline path (probably via a session-start hook that reads `/proc/self/cmdline` or similar), not assume roster lookup.
+- **C70**: Memo's auditor liveness check for Layer 2 (constitutional-memo set for a session) must be CONTENT-based (does the injected set match what the session's scope currently expects?), not timestamp-based. Mirrors `stale-guide-detector`'s addressed-to-running discriminator.
+
+### Agent H follow-up 2 (15:25 EDT) — MEMORY.md default posture under `c`
+
+**Default**: `--no-memory` is OPT-IN. By default MEMORY.md auto-loads (memo layers ON TOP).
+
+**Caveat**: quantum-* sessions and guardians (e.g. quantum-data-guardian) launch WITH `--no-memory` roster-configured. Real subset of the fleet opts out.
+
+**Per-session mode is knowable** from either the roster OR `/proc/<pid>/environ` (`CLAUDE_CODE_DISABLE_AUTO_MEMORY`).
+
+**Implication for Layer 2**: memo MUST handle BOTH modes per session:
+- **memory-on sessions**: memo augments the native MEMORY.md (layers on top)
+- **memory-off sessions**: memo's injection IS the only memory layer (role expanded, since MEMORY.md is disabled)
+
+### Spec constraint
+
+- **C71**: Memo's Layer-2 injection MUST detect per-session `CLAUDE_CODE_DISABLE_AUTO_MEMORY` posture (via roster lookup or `/proc/<pid>/environ` read) and adapt: augment mode when MEMORY.md is on, take-over mode when MEMORY.md is off. The quantum-* + guardian subset relies on memo carrying the ENTIRE memory layer they receive. Failure to detect = quantum-data-guardian et al. get zero memory context.
+
+---
+
 Cross-cut themes emerging:
 - **Storage classes (brain-inspired taxonomy)** — behavioral, goal, fact, verbatim-critical, decision-in-progress, ephemeral-flush; each with distinct lifecycle + injection mode
 - **Injection mode is a first-class field** — forcible (behavioral, goal, verbatim-critical) vs. on-recall (fact) vs. on-procedure-match (procedural)

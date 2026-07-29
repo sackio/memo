@@ -308,34 +308,52 @@ of test queries against the migrated set.
 
 ---
 
-### User Story 8 — v2 built in a separate worktree with MCP-flip cutover (Priority: P3)
+### User Story 8 — v2 built in a separate worktree; SOAK-TEST FIRST, then MCP-flip when confident (Priority: P3)
 
 Memo v2 (implementing the above stories) is built in a separate git
 worktree with an entirely separate MCP server binding and a separate
-sqlite dataset. The cutover mechanism is switching the MCP configuration
-in `~/.claude.json` (and per-project overrides) to point at v2. Rollback
-is flipping the same configuration back to v1. No shared state, no
-partial-migration risk.
+sqlite dataset. **Before any cutover consideration**, the full v1
+corpus (7339 memos) is ported into v2 via the migration script, and
+v2 is soak-tested by background test agents that exercise the mediator,
+auditor, injection hooks, reconciliation, and recall-corrections loop
+against the ported corpus. Only once the operator (Ben) reviews soak-
+test results and gives explicit confidence approval does the cutover
+proceed. The cutover shape (big-bang / waves / session-by-session) is
+decided at the confidence gate, not committed in this spec. Rollback
+throughout: v1 remains untouched; the MCP-flip is the only production
+change; flip back = same operation reversed.
 
-**Why this priority**: Ben's operational safety requirement. P3 because
-it is the *shape* of the delivery, not a user-visible feature by itself
-— but the shape gates everything else, so it MUST be right.
+**Why this priority**: Ben's operational safety requirement — plus the
+explicit sequencing rule that we don't pick a cutover strategy against
+an unbuilt system. P3 because it is the *shape* of the delivery, not a
+user-visible feature by itself — but the shape gates everything else.
+Soak-test phase gates the cutover phase; cutover shape decision comes
+last, at the confidence gate.
 
 **Independent Test**: Bring up v2 on a scratch port with a scratch DB,
-flip a single non-production session to the v2 MCP config, verify all
-memo operations work end-to-end, flip back to v1, verify the session
-resumes on v1 with no corruption.
+port the v1 corpus into v2, run the soak-test workload (kick-tires
+agents), review the soak-test report, decide whether to cut over.
+Independently: flip a single non-production session to the v2 MCP
+config, verify all memo operations work end-to-end, flip back to v1,
+verify the session resumes on v1 with no corruption.
 
 **Acceptance Scenarios**:
 
 1. **Given** v2 running on a non-conflicting port with its own DB,
    **When** a session is flipped to v2 MCP, **Then** all memo tools
-   (store, get, list, search, context) work identically to v1.
+   (store, get, list, search, context, recall) work identically to v1
+   plus the new mediator surface.
 2. **Given** the same session, **When** it is flipped back to v1,
    **Then** it operates against v1's DB with no cross-contamination.
-3. **Given** a proven v2 deployment, **When** the fleet-wide config flip
-   lands, **Then** all sessions transition to v2 without lost writes
-   (verified against a pre-flip corpus snapshot).
+3. **Given** v2 with the full v1 corpus ported, **When** the soak-test
+   workload runs, **Then** all mediator queries return correct results
+   against a canonical test-query set, all auditor hooks fire, all
+   injection paths deliver the expected InjectionSet, and no data-loss
+   or crash events are logged.
+4. **Given** a passing soak-test report, **When** the operator gives
+   explicit confidence approval, **Then** the cutover strategy (shape
+   TBD at approval time) proceeds without lost writes (verified
+   against a pre-flip corpus snapshot).
 
 ---
 
@@ -725,6 +743,180 @@ resumes on v1 with no corruption.
   v2 corpus, both source-material archives and memo snapshots — this
   is the forever-cold-storage safety net.
 
+## Clarifications
+
+Answers to open questions from the operator, walked interactively via
+Slack DM (2026-07-29). Answered clarifications are struck through in
+the Open Questions section below and their resolutions land here.
+
+- **C-03** (2026-07-29 14:58 EDT) — **Auditor implementation is a
+  HYBRID**: a lean long-running background process subscribed to the
+  Conductor (watches ATC events for its assigned scope) + hook-based
+  triggers on Claude Code SessionStart / SessionStart:compact /
+  PreCompact / SessionStop / SessionEnd. Both mechanisms coexist. Bias
+  toward creating both up front and tuning nosiness/intrusiveness
+  downward rather than starting minimal and expanding. Keep per-agent-
+  family shadow auditors **lean** (small model, narrow prompt, event-
+  driven not poll-driven).
+
+- **C-09** (2026-07-29 15:03 EDT) — **Retrieval mediator is HYBRID
+  (algorithm-primary + LLM fallback)**: option (c) — in-process filter
+  chain in the memo server (dedup + bi-temporal filter + recency-boost
+  + tag-class-boost + scope filter + answer-shaping) handles the hot
+  path with a smart deterministic algorithm; LLM call is invoked
+  selectively when (a) the filter returns a large number of candidate
+  memos and needs to synthesize, or (b) the returned candidates conflict
+  and reconciliation requires judgment. Same hybrid pattern applies to
+  the storage mediator. Framing: this is a working module refined over
+  time; component boundaries designed for tunability.
+
+- **C-04** (2026-07-29 15:05 EDT) — **Reopenability schema kept
+  DELIBERATELY SIMPLE**: two fields on `decision-in-progress` memos —
+  a structured `challenge_if_delays_build_by_days: <int>` trigger plus
+  an optional freetext `operator_tempo_hint: <string>`. No temperature
+  knob, no elaborate trigger struct. The `decision-in-progress` class
+  is expected to be a **small edge-case tier, not first-class**, because
+  memo's core purpose per the operator is to store **actual guiding
+  principles, truths, and ground truth** — things not yet firm truth
+  mostly should not be in memo in the first place; they live in specs,
+  in-flight code, and session context. Auditor uses the trigger field
+  deterministically; falls back to LLM-reading the freetext hint only
+  when the trigger doesn't fit. Don't over-engineer this section.
+
+- **C-02** (2026-07-29 15:11 EDT — default accepted) — **Injection-set
+  token budget = 5k tokens soft ceiling per session, tunable per-agent-
+  family.** Tunable at runtime, not baked in.
+
+- **C-06** (2026-07-29 15:11 EDT — default accepted) — **Duplicate
+  detection = cosine ≥0.90 + title 4-gram overlap ≥60% + LLM escape on
+  borderline candidates.** Tunable.
+
+- **C-07** (2026-07-29 15:11 EDT — default accepted) — **Legacy-orphan
+  provenance = mark `legacy-unattributed`, do NOT LLM-synthesize a
+  best-guess provenance.** Preserves the audit-trail invariant that
+  provenance means something real. Human-review path only.
+
+- **C-10** (2026-07-29 15:11 EDT — TIGHTENED from proposed default) —
+  **Auditor-triggered compaction composite threshold, tightened**:
+  fires when *any* of {transcript > **2.5 MB**, cache-read > **20 M
+  tokens/day**, > **120 turns** since last compact}. Down from
+  originally-proposed {4 MB / 30 M / 200} to catch bloat earlier. Per-
+  agent-class tunable; start aggressive and back off if false-positive
+  compactions become disruptive. All parameter defaults across C-02/06/
+  07/10 must remain runtime-tunable, not baked into code.
+
+- **C-01** (2026-07-29 15:23 EDT) — **Constitutional composition is a
+  THREE-LAYER STACK; memo owns only Layer 2 (gap-fill), never Layer
+  0-1**:
+
+  **Layer 0 — Claude Code native (auto-loaded every session, PRIMARY,
+  memo-untouchable)**: user global `~/.claude/CLAUDE.md` + project
+  `./CLAUDE.md` (walked up dir tree) + `.claude/rules/*.md` +
+  `memory/MEMORY.md` (unless `--no-memory`).
+
+  **Layer 1 — `c` wrapper adds via `--append-system-prompt-file`
+  (PRIMARY, agents-roster-owned, memo-untouchable)**: per-session
+  GUIDE file — always-on every turn, survives compaction, resolved
+  once at exec. Path lookup goes through the `agents`-roster
+  `SESSION_GUIDE` table, NOT string-munged from name. Guide-path
+  conventions vary across 4 shapes (`.claude/guides/<name>.md`,
+  `AGENT_GUIDE.md`, `docs/SESSION_HANDOFF.md`, `.claude/skills/<name>/
+  SKILL.md`) — memo's resolver must handle all four extensibly.
+
+  **Layer 2 — MEMO GAP-FILL (the entire memo constitutional role)**:
+    a) **Inject `.specify/memory/constitution.md`** at SessionStart /
+       PostCompact via hook — Claude Code does NOT auto-load spec-kit
+       constitutions (Agent G confirmed), memo fills the gap.
+    b) **Resolve `memo:<uuid>` transclusion references** — memo scans
+       auto-loaded CLAUDE.md + guide + rules for memo references, auto-
+       retrieves + inlines resolved content as `additionalContext`.
+       Turns on-disk files into addressable pointer files. Eliminates
+       redundant duplication of the same rule text across 6+ project
+       CLAUDE.md files (Agent F finding).
+    c) **Store canonical-pointer memos** ("the auth rule lives at
+       `~/.claude/guides/nav.md:42-56`") so agents can locate on-disk
+       constitutional artifacts.
+    d) **Own the fleet-wide behavioral memo class** — rules that apply
+       across projects + agent-families without a natural CLAUDE.md /
+       guide home.
+
+  **Composition per agent family**: fleet-baseline (Layer 0
+  `~/.claude/CLAUDE.md`) + per-agent-family (Layer 1 guide via
+  SESSION_GUIDE) + per-project (Layer 0 project CLAUDE.md) + memo-gap-
+  fill (Layer 2). This is basically the fleet's current shape today,
+  with Layer 2 newly formalized.
+
+  **Ownership**: operator curates Layer 0 and Layer 1; auditor proposes
+  Layer 2 additions/changes; operator ratifies (Principle V). Auditor
+  never writes to Layer 0/1 files.
+
+  **Liveness monitoring**: memo's auditor mirrors the exemplar
+  `stale-guide-detector` pattern for Layer 2 — a **content-based**
+  check ("is the injected constitutional-memo set the CURRENT one for
+  this session's scope?"), NOT timestamp-based. The discriminator is
+  addressed-to-running vs. addressed-to-successor, per the agents-
+  supervisor's `stale-guide-detector` design.
+
+  **Ad-hoc `c --name X --guide Y`** launches carry guides not in the
+  roster; cmdline is ground truth for those (what stale-guide-detector
+  reads). Memo's Layer-2 hook must ingest the actual `--guide` cmdline
+  path, not assume roster lookup.
+
+  **Opt-out**: if a session sets `MEMO_DISABLE_INJECTION=1` (mirroring
+  Claude Code's `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`), Layer 2 gap-fill
+  does not fire. Layer 0/1 remain unaffected.
+
+  **Per-session MEMORY.md posture detection**: memo MUST detect
+  whether the running session has `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`
+  (via roster lookup or `/proc/<pid>/environ`) and adapt Layer 2:
+    - **memory-on session** (default): memo AUGMENTS native MEMORY.md
+    - **memory-off session** (quantum-* + guardians opt in via
+      roster-configured `--no-memory`): memo's Layer 2 is the ONLY
+      memory layer the session receives — role expanded, injection
+      set larger, monitoring more strict.
+  Failure to detect breaks the quantum guardians (they'd get zero
+  memory context).
+
+- **C-05** (2026-07-29 15:28 EDT) — **Answer-loop learning is HYBRID
+  (immediate finding + threshold-gated promotion)**: when an operator
+  corrects a bad mediator response, the correction is written
+  IMMEDIATELY as an `answer-loop-finding` memo (mediator observability
+  log, per FR-014) and a fresh finding surfaces for the auditor. The
+  ranking-hint update itself is NOT applied immediately; it requires
+  either (i) the auditor approves it within the current cycle
+  (per-session shadow auditor may auto-approve for high-confidence
+  cases), or (ii) N corroborating corrections in the same tag family
+  within a short window (default: 3 corrections in 24h auto-promote
+  the hint). Prevents single-shot thrashing while respecting
+  operator-observable urgency ("Ben corrected the same class of thing
+  3 times today — obviously update"). Tuneable thresholds.
+
+- **C-08** (2026-07-29 15:33 EDT) — **Cutover strategy DEFERRED;
+  SOAK-TEST FIRST is the load-bearing gate.** The renovation is
+  sequenced:
+    1. **Build v2** in a separate worktree with distinct MCP + DB
+       (FR-038).
+    2. **Full-backfill port** of the entire 7339-memo v1 corpus into
+       v2 with the migration script (FR-039) — including all
+       classification, retag, provenance-link, split, merge, redirect
+       operations.
+    3. **Soak-test v2** with synthetic + real query workloads driven
+       by background test agents that "kick the tires" — exercise the
+       mediator, the auditor, the injection hooks, the reconciliation
+       path, the flush cycle, and the recall corrections loop against
+       the ported corpus. Instrument + measure. Fix issues found.
+    4. **Confidence gate**: operator (Ben) reviews soak-test results
+       and only then decides IF and HOW to cut over. The cutover
+       strategy (big-bang vs. waves vs. session-by-session) is a
+       decision made at THIS point, not now.
+    5. **Cutover in waves** is the default assumption if it proceeds
+       (quantum-first, then assistant, then everything else) with
+       one-way v1→v2 replication during the transition window — but
+       nothing about the wave shape is committed until step 4.
+  Rationale: don't pick a cutover strategy against an unbuilt system;
+  the right strategy will be obvious once v2 is proven and any real
+  behavior gaps are known.
+
 ## Open Questions (for `/speckit.clarify`)
 
 The following were surfaced by the interview + research but not
@@ -732,34 +924,55 @@ finalized. Recommended to resolve via `/speckit.clarify` before
 `/speckit.plan`. Anchored with `C-nn` ids so code and tests can cite
 `001/C-nn` later.
 
-- **C-01**: Exact composition of the "constitutional" class for each
+- ~~**C-01**: Exact composition of the "constitutional" class for each
   agent family (nav, mind, dojo, assistant, memo, minders, quantum-*).
-  Requires operator + per-family shadow-auditor input.
-- **C-02**: Injection-set token budget per session — how big before it
-  defeats the compaction goal? Ben said "fine with the cost" but hard
-  cap TBD.
-- **C-03**: Auditor implementation: skill-based (invoked from hook) vs.
-  long-running background process (agent-service). Latter is more
-  capable, former is cheaper. Agent-family scope may argue for a mix.
-- **C-04**: Reopenability semantics for `decision-in-progress` memos —
+  Requires operator + per-family shadow-auditor input.~~ →
+  **RESOLVED**: 3-layer stack (Claude Code native + `c` wrapper GUIDE
+  + memo gap-fill); memo owns only Layer 2; content-based liveness
+  monitoring mirroring stale-guide-detector; operator curates 0-1,
+  auditor proposes Layer 2. See Clarifications.
+- ~~**C-02**: Injection-set token budget per session — how big before
+  it defeats the compaction goal? Ben said "fine with the cost" but
+  hard cap TBD.~~ → **RESOLVED**: 5k soft ceiling, tunable per family.
+- ~~**C-03**: Auditor implementation: skill-based (invoked from hook)
+  vs. long-running background process (agent-service). Latter is more
+  capable, former is cheaper. Agent-family scope may argue for a mix.~~
+  → **RESOLVED**: hybrid (long-running watcher + hook triggers). See
+  Clarifications above.
+- ~~**C-04**: Reopenability semantics for `decision-in-progress` memos —
   is this a boolean, a temperature 0-1, a set of freetext triggers, or
   a structured JSON policy? Mind dividend-matrix event motivates but
-  doesn't specify.
-- **C-05**: Answer-loop audit action — when Ben corrects a bad recall,
-  does the mediator update its ranking immediately (online learning)
-  or wait for the global auditor to promote the correction?
-- **C-06**: Migration duplicate detection threshold — cosine similarity
-  + title-substring, or LLM-judgment, or both?
-- **C-07**: Backfill provenance for legacy memos without a recoverable
-  source — synthesize a best-guess (auditor infers from content) or
-  leave `legacy-unattributed` for operator review?
-- **C-08**: MCP-flip strategy at fleet scale — big-bang (single moment
-  across all hosts) vs. session-by-session as they respawn. Ben
-  suggested MCP config flip but rollout timing not specified.
-- **C-09**: Retrieval-mediator implementation shape — Python skill
+  doesn't specify.~~ → **RESOLVED**: two-field simple schema
+  (`challenge_if_delays_build_by_days` + freetext `operator_tempo_hint`);
+  class expected to be small/edge-case; don't over-engineer. See
+  Clarifications.
+- ~~**C-05**: Answer-loop audit action — when Ben corrects a bad
+  recall, does the mediator update its ranking immediately (online
+  learning) or wait for the global auditor to promote the correction?~~
+  → **RESOLVED**: hybrid — immediate finding-log, ranking-hint
+  promotion gated on auditor approval OR 3 corroborating corrections
+  in 24h. See Clarifications.
+- ~~**C-06**: Migration duplicate detection threshold — cosine
+  similarity + title-substring, or LLM-judgment, or both?~~ →
+  **RESOLVED**: cosine ≥0.90 + title 4-gram overlap ≥60% + LLM escape
+  on borderline.
+- ~~**C-07**: Backfill provenance for legacy memos without a
+  recoverable source — synthesize a best-guess (auditor infers from
+  content) or leave `legacy-unattributed` for operator review?~~ →
+  **RESOLVED**: mark `legacy-unattributed`, do NOT LLM-synthesize.
+- ~~**C-08**: MCP-flip strategy at fleet scale — big-bang (single
+  moment across all hosts) vs. session-by-session as they respawn. Ben
+  suggested MCP config flip but rollout timing not specified.~~ →
+  **RESOLVED**: cutover strategy DEFERRED; soak-test first (build →
+  port → kick-tires → operator confidence gate). Cutover shape decided
+  at gate, not now. See Clarifications.
+- ~~**C-09**: Retrieval-mediator implementation shape — Python skill
   invoked by CLI, subagent dispatched on every call, or an in-process
   filter chain in the memo server itself. Latency + correctness
-  trade-off.
-- **C-10**: Auditor-triggered compaction bloat-threshold policy — token
-  count, turn count, cache-read tokens/day, or a composite. Agents
-  supervisor recommends per-agent-class tuning.
+  trade-off.~~ → **RESOLVED**: hybrid (in-process filter chain primary
+  + LLM fallback on large-result-set or conflict). See Clarifications.
+- ~~**C-10**: Auditor-triggered compaction bloat-threshold policy —
+  token count, turn count, cache-read tokens/day, or a composite. Agents
+  supervisor recommends per-agent-class tuning.~~ → **RESOLVED**:
+  composite {transcript >2.5MB, cache-read >20M/day, >120 turns},
+  tunable per class. Start aggressive.
