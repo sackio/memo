@@ -11,12 +11,46 @@ memo cannot re-derive any of this, which is the whole reason it must be on the o
 | field | why memo needs it |
 |---|---|
 | `content` | the thing itself |
-| `origin` | **who said it** — `operator` \| `agent:<name>` \| `system`. The single most load-bearing field: operator-originated content is far more likely to be behavioral or constitutional, and memo has no way to tell after the fact. |
+| `authored_by` | **who said it** — `operator` \| `agent:<name>` \| `system`. The single most load-bearing field: operator-originated content is far more likely to be behavioral or constitutional, and memo has no way to tell after the fact. **NOT named `origin`** — see the collision note below. |
 | `provenance` | where it came from — session id, message id, timestamp, zone. **Never invented.** Under R-18 an unattributed fact is still stored, tagged `provenance-pending`; but a real locator here is worth more than anything memo can reconstruct later. |
 | `first_seen` / `last_seen` | age and liveness |
-| `reference_count` + window | ATC's actual signal — "this keeps coming up" |
+| `reference_count` + window | raw frequency. Necessary but **not sufficient** — see below. |
+| **gap structure** (reference → silence → reference) | the signal that actually predicts durability. ATC's, computed by ATC. |
 | `referencing_sessions` | scope. Referenced by one session = probably session-local; by five = probably fleet-wide. Feeds memo's `scope` field directly. |
 | `ttl_expired` | whether it outlived its intended lifetime, which is itself evidence of durability |
+
+## ⚠️ `authored_by` vs `origin` — two fields, never one
+
+ATC had already specced `origin` as the **transport trust class** (`mcp` / `http` / `system`,
+server-set), and agentkit will **gate destructive verbs on it** — refusing respawn/kill on a
+caller-asserted HTTP `from`. memo's field is **semantic authorship**. They look like the same
+field and are orthogonal.
+
+The proof case: **an operator directive from Ben arrives via the Slack bridge, which posts over
+HTTP.** Semantically `operator`; transport-wise `http`. Collapse them into one name and either
+Ben's directive reads as untrusted, or an HTTP-injected message reads as operator-authored. One
+of those is an outage; the other is a privilege escalation.
+
+So: `authored_by` = who wrote it (memo's). `origin` = how much the sender field can be trusted
+(ATC's, agentkit gates on it). Neither is derivable from the other.
+
+## The signal: recurrence after dormancy, not frequency
+
+memo's objection to raw reference count — *it measures how often something came UP, not whether
+anyone would go LOOKING for it* — killed the original signal, and ATC's replacement is better:
+
+**Working state is referenced continuously and then never again. A durable fact is referenced,
+goes quiet for days or weeks, and is referenced AGAIN — because someone went looking.**
+
+So the promotable shape is `referenced → silent → referenced`, and **the length of the silence is
+the strength of the signal**. ATC offers both the counts and the gap structure so memo tunes on
+evidence rather than on either side's heuristic.
+
+Worth noting this is the same measurement memo already collects for its own corpus and has never
+used: `doc_access` records every get/search, and `GET /admin/access-stats` computes hot vs cold
+(built ~2026-07-05, zero callers, found in the 2026-07-30 archaeology). Two systems, one idea —
+*does anyone come back for this?* — arrived at independently. That convergence is itself evidence
+the signal is the right one.
 
 ## What memo decides, and on what basis
 
