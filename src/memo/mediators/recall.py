@@ -46,6 +46,10 @@ OVERFETCH_MIN = 24
 # as a conflict worth escalating rather than silently ranking.
 CONFLICT_SIM_DELTA = 0.05
 
+# A runner-up must score at least this fraction of the leader to be treated as
+# part of the answer rather than an unrelated hit that merely ranked next.
+ANSWER_SET_RATIO = 0.85
+
 
 def _conflicting(top: list[Candidate]) -> bool:
     """Do the leading candidates look like disagreement rather than agreement?
@@ -60,12 +64,34 @@ def _conflicting(top: list[Candidate]) -> bool:
     return abs(top[0].semantic - top[1].semantic) <= CONFLICT_SIM_DELTA
 
 
+def _answer_set(cands: list[Candidate]) -> list[Candidate]:
+    """Narrow the ranked list to the memos that actually answer the question.
+
+    `max_results` is a CEILING, not a target. Returning everything under it
+    means a query with one good hit also drags in whatever ranked 2nd and 3rd
+    — observed live: "what UPS is in the office rack?" came back with the UPS
+    memo *plus* an unrelated dentist appointment. That is noise the calling
+    agent then has to reason around, which is exactly the work the mediator
+    exists to do for it.
+
+    So: always keep the leader, then keep a runner-up only while it stays
+    within `ANSWER_SET_RATIO` of the leader's score. A genuinely close second
+    is a competing claim worth showing; a distant one is a different subject.
+    """
+    if not cands:
+        return []
+    top = cands[0]
+    if top.score <= 0:
+        return [top]
+    return [c for c in cands if c.score >= top.score * ANSWER_SET_RATIO]
+
+
 def _compose_answer(cands: list[Candidate], budget_tokens: int) -> str:
     """Deterministic answer from the winning memos — no LLM involved.
 
-    Single clear winner: return its content. Several plausible: stitch them in
-    rank order under the budget, so the caller sees the competing claims rather
-    than one arbitrarily-chosen row.
+    Single clear winner: its content. Several genuinely close: stitched in rank
+    order under the budget, so the caller sees the competing claims rather than
+    one arbitrarily-chosen row.
     """
     parts: list[str] = []
     used = 0
@@ -127,7 +153,9 @@ async def recall(req: RecallRequest, *, provider: LLMProvider | None = None) -> 
         await audit.log_recall(req, resp, ctx)
         return resp
 
-    top = survivors[:req.max_results]
+    ranked = survivors[:req.max_results]
+    top = _answer_set(ranked)
+    ctx.note(f"answer_set: {len(ranked)}→{len(top)}")
 
     # 4. LLM fallback — ONLY when genuinely ambiguous.
     threshold = settings.memo_llm_fallback_candidate_threshold

@@ -12,6 +12,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 
 from memo import db, embeddings, reaper
+from memo.mediators import recall as recall_mediator
 from memo.config import settings
 from memo.db import _count_tokens
 from memo.models import (
@@ -25,6 +26,8 @@ from memo.models import (
     Document,
     SearchRequest,
     SearchResult,
+    RecallRequest,
+    RecallResponse,
     StoreRequest,
     StoreResponse,
     SupersedeRequest,
@@ -463,6 +466,20 @@ async def store_document(req: StoreRequest, request: Request):
         embedding=embedding,
     )
     return StoreResponse(id=doc_id)
+
+
+@app.post("/recall", response_model=RecallResponse)
+async def recall_endpoint(req: RecallRequest):
+    """Retrieval mediator — returns a reconciled answer + citations. [001/FR-010]
+
+    Agents call this instead of raw `POST /search`: they get an ANSWER, not a
+    pile of rows to interpret. See contracts/mediator-recall.md.
+
+    Note what is NOT here: no 503 when the LLM is down. Per R-17 the mediator
+    degrades to a search-only answer and reports it in `anomalies`, so this
+    endpoint's failure modes are only "bad request" and "DB unavailable".
+    """
+    return await recall_mediator.recall(req)
 
 
 @app.post("/supersede", response_model=SupersedeResponse)
