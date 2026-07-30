@@ -86,6 +86,10 @@ class ContextResponse(BaseModel):
     content: str
     token_count: int
     doc_count: int
+    # How many memos MATCHED, vs doc_count = how many were returned. Without
+    # this, doc_count:0 reads as "the corpus has nothing on your query" whether
+    # or not anything matched — the response could not report its own absence.
+    matched_count: int = 0
     truncated: bool
 
 

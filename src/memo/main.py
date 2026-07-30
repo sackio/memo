@@ -22,7 +22,7 @@ from memo.auditor import global_sweep as auditor_sweep
 from memo.auditor import actions as auditor_actions
 from memo.auditor import proposals as constitution
 from memo.config import settings
-from memo.db import _count_tokens
+from memo.db import _count_tokens, _truncate_to_tokens
 from memo.models import (
     AutoStoreRequest,
     AutoStoreResponse,
@@ -419,7 +419,10 @@ async def memo_context(
 
     ranked = sorted(best.values(), key=lambda x: x["score"], reverse=True)
 
-    # Greedily fill token budget
+    # Greedily fill token budget. A doc that doesn't fit is SKIPPED, not
+    # terminal: one oversized top-ranked memo must not starve every smaller
+    # one below it (2026-07-30 — `break` here returned zero docs whenever the
+    # top hit exceeded the budget; ported from v1 0.3.3).
     parts: list[str] = []
     total_tokens = 0
     truncated = False
@@ -432,12 +435,40 @@ async def memo_context(
         section_tokens = _count_tokens(section)
         if total_tokens + section_tokens > token_budget:
             truncated = True
-            break
+            continue
         parts.append(section)
         total_tokens += section_tokens
 
+    # Nothing fit whole, but the corpus DID match: return the top hit excerpted
+    # to the budget rather than "". An empty content string is indistinguishable
+    # from "no memos match your query", and that false negative silently strips
+    # a caller of grounding it was entitled to.
+    if not parts and ranked:
+        top = ranked[0]
+        doc = top["document"]
+        title = doc.get("title") or doc["id"]
+        header = f"## {title} (score: {top['score']:.2f}) [excerpt — truncated to fit token_budget]\n"
+        # Budget the body against the section's real overhead (header + trailing
+        # newline), then re-measure: tokens can merge across a join boundary, so
+        # the assembled section is the only count worth trusting.
+        allowance = token_budget - _count_tokens(header + "\n")
+        section = header + _truncate_to_tokens(doc["content"], allowance) + "\n"
+        overage = _count_tokens(section) - token_budget
+        if overage > 0:
+            section = header + _truncate_to_tokens(doc["content"], allowance - overage) + "\n"
+        if _count_tokens(section) <= token_budget and section.strip() != header.strip():
+            parts.append(section)
+            total_tokens = _count_tokens(section)
+            truncated = True
+
     content = "\n".join(parts)
-    return {"content": content, "token_count": total_tokens, "doc_count": len(parts), "truncated": truncated}
+    return {
+        "content": content,
+        "token_count": total_tokens,
+        "doc_count": len(parts),
+        "matched_count": len(ranked),
+        "truncated": truncated,
+    }
 
 
 # --- FastAPI app ---
