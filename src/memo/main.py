@@ -191,7 +191,11 @@ async def memo_update(
     """Update an existing memo by ID. Only provided fields are changed.
 
     If content is updated, the embedding and token_count are recomputed automatically.
-    Returns the updated memo, or null if the ID was not found.
+    Returns the updated memo with `updated: true`. If the ID matched nothing,
+    returns `{updated: false, reason: "not_found", requested_id: <id>}` — NOT
+    null. A bare null could not distinguish a mistyped id from a memo that has
+    genuinely vanished, and two of those readings are alarming while one is a
+    typo. Check `updated`; false means re-look-up the id, not that it is gone.
     """
     await _reject_leaked_tool_call(content, tags, "memo_update")
     embedding = await embeddings.embed(content) if content is not None else None
@@ -204,7 +208,12 @@ async def memo_update(
         metadata=metadata,
         embedding=embedding,
     )
-    return result
+    if result is None:
+        # Ported from v1 0.3.6. Session-ids and memo-ids are both 36-char
+        # UUIDs, so the wrong KIND of id landed in the same undifferentiated
+        # null as a genuinely absent memo.
+        return {"updated": False, "reason": "not_found", "requested_id": id}
+    return {**result, "updated": True}
 
 
 @mcp.tool()
@@ -279,7 +288,12 @@ async def memo_copy(
     Returns {id: <new_uuid>} for the copy, or null if the source memo was not found.
     """
     new_id = await db.copy(from_db_path=from_db_path, doc_id=id, to_db_path=to_db_path)
-    return {"id": new_id} if new_id else None
+    if not new_id:
+        return {"copied": False, "reason": "not_found", "requested_id": id}
+    # The response carries the truth because the docstring cannot: MCP tool
+    # descriptions are cached per session at startup, so a long-running session
+    # still reads text promising a new uuid for a copy that never happens.
+    return {"id": new_id, "copied": False, "reason": "single_global_db"}
 
 
 @mcp.tool()
@@ -296,7 +310,9 @@ async def memo_move(
     Returns {id: <new_uuid>} in the destination, or null if source memo not found.
     """
     new_id = await db.move(from_db_path=from_db_path, doc_id=id, to_db_path=to_db_path)
-    return {"id": new_id} if new_id else None
+    if not new_id:
+        return {"moved": False, "reason": "not_found", "requested_id": id}
+    return {"id": new_id, "moved": False, "reason": "single_global_db"}
 
 
 @mcp.tool()
