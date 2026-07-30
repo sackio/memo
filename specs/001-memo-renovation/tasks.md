@@ -109,8 +109,8 @@ cd ../memo-v2 && speckit-trace --require-full \
 Must exit 0. On PARTIAL/INVISIBLE, fix before proceeding to Phase 3.
 
 **Phase 2 gate: ✅ PASS (2026-07-29)** — FR-001..FR-009 all FULL, 0 dangling
-markers, 0 L1 misses, exit 0. Unit suite: 73 passed
-(`PYTHONPATH=src python3 -m pytest tests/unit/`).
+markers, 0 L1 misses, exit 0. Full suite: **89 passed**, run in docker —
+`docker compose run --rm test` (see note 7; never run tests on the host).
 
 ### Phase 2 implementation notes / deviations
 
@@ -144,29 +144,46 @@ markers, 0 L1 misses, exit 0. Unit suite: 73 passed
    had an illustrative `001/FR-XXX`, which the scanner counted as a real anchor
    and reported as dangling → gate FAIL. Reworded to describe the convention
    without spelling a marker.
-7. **Tests run IN THE CONTAINER — `docker build --target test`. RESOLVED.**
+7. **Tests run IN DOCKER. NEVER on the host. RESOLVED.**
+
+   ```bash
+   cd ../memo-v2 && docker compose run --rm test        # whole suite
+   cd ../memo-v2 && docker compose run --rm test -q tests/unit/   # subset
+   ```
+
+   **89 passed, 0 failed.** This unblocks the Phase 3 mediator contract tests,
+   which need `TestClient`.
+
    The host cannot run this suite: the project requires Python >=3.12 (host is
    3.10), and the host's `fastapi`/`starlette` versions are mismatched badly
    enough that `import memo.main` raises
    `TypeError: Router.__init__() got an unexpected keyword argument 'on_startup'`
    inside FastAPI's own constructor — so `tests/test_leak_guard.py` could not even
-   collect, and the suite had effectively never run. Fixed by adding a `dev`
-   optional-dependency group (pytest, pytest-asyncio, httpx-for-TestClient) and a
-   `test` stage to the Dockerfile:
+   collect, and the suite had effectively never run.
 
-   ```bash
-   cd ../memo-v2 && docker build --target test -t memo-v2-test . \
-     && docker run --rm memo-v2-test
-   ```
+   ⚠️ **A host run does not fail loudly — it silently reports a SMALLER passing
+   number.** Every test that imports the app is dropped at collection, so the
+   host reported "73 passed" while the real suite is 89. Treat any test count
+   that did not come out of docker as untrustworthy. (Operator correction,
+   2026-07-29: "you should be building all this in docker / docker compose.")
 
-   **89 passed, 0 failed.** This unblocks the Phase 3 mediator contract tests,
-   which need `TestClient`. Two things to know:
+   Implemented as a `dev` optional-dependency group (pytest, pytest-asyncio,
+   httpx-for-TestClient), a `test` stage in the Dockerfile, and a profile-gated
+   `test` service in `docker-compose.yml`. The service uses a throwaway /tmp DB
+   and does NOT mount `memo_v2_data`, so a test run cannot touch the real store.
+   The `test` profile keeps it out of `docker compose up` and out of
+   orphan-cleanup. Things to know:
    * The `test` stage is deliberately NOT the last stage in the Dockerfile —
      docker's default target is the final stage, and `docker compose build` must
      keep producing the runtime image. Verified: the runtime image has no pytest.
    * The test stage installs the package, so tests import from
-     `site-packages/memo`, NOT `src/`. **Rebuild the test image after editing
-     `src/`** or you will be testing stale code (this cost a confusing cycle).
+     `site-packages/memo`, NOT `src/`. `docker compose run` reuses the existing
+     image, so after editing `src/` you MUST rebuild or you will be testing stale
+     code (this cost a confusing cycle):
+
+     ```bash
+     docker compose run --rm --build test
+     ```
 
    `[tool.pytest.ini_options]` pins `asyncio_mode = "strict"` so the mode cannot
    drift and silently disable async fixture teardown (see note 9).

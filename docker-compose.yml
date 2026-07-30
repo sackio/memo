@@ -24,5 +24,32 @@ services:
       timeout: 10s
       retries: 3
 
+  # Test runner. Profile-gated so `docker compose up` never starts it and it is
+  # never treated as an orphan.
+  #
+  #   docker compose run --rm test              # whole suite
+  #   docker compose run --rm test <pytest args>
+  #
+  # Tests MUST run here, never on the host: the project requires Python >=3.12
+  # (server4's host python is 3.10) and the host's fastapi/starlette pair is
+  # mismatched badly enough that `import memo.main` raises inside FastAPI's own
+  # constructor — so a host run silently SKIPS every test that imports the app
+  # and reports a smaller, passing number. That is how a host run reported
+  # "73 passed" while the real suite is 89 (2026-07-29).
+  #
+  # Uses a throwaway /tmp DB inside the container and does NOT mount
+  # memo_v2_data, so a test run can never touch the real store.
+  test:
+    build:
+      context: .
+      target: test
+    profiles: ["test"]
+    network_mode: none
+    environment:
+      # Settings requires this; tests pass dummy embedding vectors and never
+      # make an outbound call, so a placeholder is sufficient.
+      OPENROUTER_API_KEY: test-dummy-key
+      DEFAULT_DB_PATH: /tmp/memo-test.db
+
 volumes:
   memo_v2_data:
