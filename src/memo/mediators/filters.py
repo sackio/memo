@@ -39,9 +39,17 @@ W_TAG_CLASS = 0.2
 # recency leg only — it cannot by itself outrank a much better semantic match.
 RECENCY_HALF_LIFE_S = 30 * 24 * 3600.0
 
-# Near-duplicate threshold for read-path collapse (FR-012).
-DUPLICATE_NGRAM_THRESHOLD = 0.72
-_NGRAM_N = 4
+# Near-duplicate threshold for read-path collapse (FR-012), over CONTENT words.
+DUPLICATE_CONTENT_THRESHOLD = 0.80
+
+# Filler words stripped before comparison. Small and deliberate: the point is
+# to ignore grammatical drift, not to stem or stopword-filter for retrieval.
+_FILLER = frozenset({
+    "a", "an", "the", "is", "are", "was", "were", "be", "been", "being",
+    "he", "she", "it", "they", "him", "her", "them", "his", "its", "their",
+    "and", "or", "but", "in", "on", "at", "to", "for", "of", "with", "from",
+    "by", "as", "that", "this", "these", "those", "s", "t",
+})
 
 
 @dataclass
@@ -130,12 +138,23 @@ class BiTemporalFilter:
         return kept
 
 
-def _ngrams(text: str, n: int = _NGRAM_N) -> set[str]:
-    """Word-level n-gram set, punctuation-insensitive."""
-    words = re.findall(r"\w+", (text or "").lower())
-    if len(words) < n:
-        return {" ".join(words)} if words else set()
-    return {" ".join(words[i:i + n]) for i in range(len(words) - n + 1)}
+def _content_words(text: str) -> set[str]:
+    """Word set with grammatical filler removed, punctuation-insensitive.
+
+    Comparing CONTENT words is what makes read-path dedup work. Measured over
+    the real Matt-Sack cluster and a set of must-not-collapse controls:
+
+        must collapse (wording drift)   0.85 - 1.00
+        must NOT collapse (real diff)   0.00 - 0.60
+
+    n-gram overlap could not separate those — the duplicates D1/D2 scored 0.77
+    unigram while "CP1500 in the rack" vs "CP1500 in the closet" scored 0.75,
+    and on 3-grams the ordering actually INVERTED. The reason is structural:
+    migration duplicates differ only in filler ("he", "and", reach/reachable),
+    whereas genuinely distinct memos differ in a CONTENT word (rack/closet,
+    cyberpower/apc). Dropping filler measures exactly that distinction.
+    """
+    return {w for w in re.findall(r"\w+", (text or "").lower()) if w not in _FILLER}
 
 
 def _jaccard(a: set[str], b: set[str]) -> float:
@@ -152,19 +171,19 @@ class DedupFilter:
     budget on one repeated answer and make a single fact look corroborated by
     three independent sources.
 
-    Similarity is word-4-gram Jaccard over title+content. Note this is NOT
-    R-13's rule: R-13 (cosine >= 0.90 + title 4-gram >= 60%) governs
-    MIGRATION-TIME duplicate detection, where both embeddings are already in
-    hand. On the read path we have each candidate's similarity to the *query*,
-    not to each other, and fetching every pair's embedding to compare them
-    would cost more than the dedup saves. Content overlap is the signal that is
-    actually available here.
+    Similarity is Jaccard over CONTENT words of title+content (see
+    `_content_words` for why filler is stripped and the measurements behind the
+    threshold). Note this is NOT R-13's rule: R-13 (cosine >= 0.90 + title
+    4-gram >= 60%) governs MIGRATION-TIME detection, where both embeddings are
+    already in hand. On the read path we only have each candidate's similarity
+    to the *query*, not to each other, and fetching every pair's embedding
+    would cost more than the dedup saves.
 
     The highest-scoring member wins and records the ids it absorbed, so the
     cluster stays traceable instead of its twins vanishing.
     """
 
-    def __init__(self, threshold: float = DUPLICATE_NGRAM_THRESHOLD) -> None:
+    def __init__(self, threshold: float = DUPLICATE_CONTENT_THRESHOLD) -> None:
         self.threshold = threshold
 
     def __call__(self, cands: list[Candidate], ctx: FilterContext) -> list[Candidate]:
@@ -175,20 +194,24 @@ class DedupFilter:
 
         # Best-first so the survivor of each cluster is its strongest member.
         ordered = sorted(cands, key=lambda c: c.semantic, reverse=True)
-        grams = {c.id: _ngrams(f"{c.memo.get('title') or ''} {c.memo.get('content') or ''}")
+        grams = {c.id: _content_words(
+                     f"{c.memo.get('title') or ''} {c.memo.get('content') or ''}")
                  for c in ordered}
 
         survivors: list[Candidate] = []
         for cand in ordered:
-            twin = next(
-                (s for s in survivors
-                 if _jaccard(grams[s.id], grams[cand.id]) >= self.threshold),
-                None,
-            )
-            if twin is None:
+            # Best-matching survivor, not merely the first over threshold:
+            # cluster members vary in how close they are to each other, and
+            # picking the first would make the outcome depend on rank order.
+            best, best_sim = None, 0.0
+            for surv in survivors:
+                sim = _jaccard(grams[surv.id], grams[cand.id])
+                if sim >= self.threshold and sim > best_sim:
+                    best, best_sim = surv, sim
+            if best is None:
                 survivors.append(cand)
             else:
-                twin.absorbed.append(cand.id)
+                best.absorbed.append(cand.id)
 
         collapsed = sum(len(s.absorbed) for s in survivors)
         ctx.note(f"dedup: {_shrink(before, len(survivors))}"

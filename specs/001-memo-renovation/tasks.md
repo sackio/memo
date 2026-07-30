@@ -253,10 +253,10 @@ entry and store writes-new + flags the auditor. Neither may fail the caller.
 - [X] T034 [US2] Add `POST /recall` endpoint in main.py; delegates to recall mediator. Marker `001/FR-010`.
 - [X] T035 [US2] Refactor existing `POST /store` (and MCP `memo_store` tool) in main.py to route through the storage mediator. Preserve v1 tool name for back-compat. Marker `001/FR-015a`.
 - [X] T036 [US2] [P] Refactor `../memo-v2/src/memo/auto_store.py` to route through storage mediator instead of raw insert. Marker `001/FR-015a`. **ALSO (R-17, operator clarification 2026-07-29): move auto_store's `openai/gpt-4o-mini` dedup call off OpenRouter onto the `LLMProvider`.** This is memo's one pre-existing generative caller and fires on every hook-triggered store, so it is in scope like any other LLM use — the earlier "leave it for now" note is superseded. After this task, NO generative OpenRouter call should remain: verify with a grep for `auto_store_model` / chat-completion usage. Embeddings stay on OpenRouter (R-05) and are unaffected. Note auto_store must tolerate a None completion (degrade to write-new) like every other caller.
-- [ ] T037 [US2] Write `../memo-v2/tests/contract/test_mediator_recall.py` — one test per contract Response section (SUCCESS/NO-RESULTS/ANOMALY/error). Marker `001/FR-010 001/FR-011 001/FR-012 001/FR-013 001/FR-014 001/FR-015`.
+- [X] T037 [US2] Write `../memo-v2/tests/contract/test_mediator_recall.py` — one test per contract Response section (SUCCESS/NO-RESULTS/ANOMALY/error). Marker `001/FR-010 001/FR-011 001/FR-012 001/FR-013 001/FR-014 001/FR-015`.
 - [X] T038 [US2] Write `../memo-v2/tests/contract/test_mediator_store.py` — one test per contract Response section (MERGE/WRITE-NEW/SUPERSEDE/CLARIFY/REJECT/SPLIT). Marker `001/FR-015a 001/FR-015b 001/FR-015c 001/FR-015d 001/FR-015e 001/FR-015f 001/FR-015g`.
-- [ ] T039 [US2] [P] Write `../memo-v2/tests/integration/test_dedup_collapse.py` — reproduce the Matt-Sack `0c55a9a3/c664f4a1/98efbda5` scenario (canonical + 2 duplicates); assert retrieval returns only canonical. Marker `001/FR-012`.
-- [ ] T040 [US2] [P] Write `../memo-v2/tests/integration/test_recall_parking.py` — reproduce 7/26 parking-recall scenario. Assert July memo (when it exists) ranks #1 over May SF memo. Marker `001/FR-013`.
+- [X] T039 [US2] [P] Write `../memo-v2/tests/integration/test_dedup_collapse.py` — reproduce the Matt-Sack `0c55a9a3/c664f4a1/98efbda5` scenario (canonical + 2 duplicates); assert retrieval returns only canonical. Marker `001/FR-012`.
+- [X] T040 [US2] [P] Write `../memo-v2/tests/integration/test_recall_parking.py` — reproduce 7/26 parking-recall scenario. Assert July memo (when it exists) ranks #1 over May SF memo. Marker `001/FR-013`.
 
 **Phase 3 gate**:
 
@@ -265,6 +265,52 @@ cd ../memo-v2 && speckit-trace --require-full \
   001/FR-010,001/FR-011,001/FR-012,001/FR-013,001/FR-014,001/FR-015,\
 001/FR-015a,001/FR-015b,001/FR-015c,001/FR-015d,001/FR-015e,001/FR-015f,001/FR-015g
 ```
+
+**Phase 3 gate: ✅ PASS (2026-07-29)** — all 13 FRs FULL, 0 dangling markers,
+0 L1 misses, exit 0. Full suite **177 passed** (`docker compose run --rm test`).
+
+### Phase 3 implementation notes
+
+1. **R-17 shape.** Mediators built against the `LLMProvider` interface with the
+   `null` adapter, so every LLM-fallback path in the tests exercises the
+   DEGRADED branch — specified behavior, not a stub. `claude_session` lands at
+   T085a.
+2. **Merge is suppressed when a refutation check is undetermined.** Merge only
+   unions TAGS and leaves stored content untouched, so merging a contradicting
+   update silently DISCARDS the new fact. Found by the contract tests.
+3. **...but only for the ambiguous band.** Blanket suppression was too broad:
+   with the null provider every fact-adjacent write is undetermined, which
+   disabled merge entirely and duplicated byte-identical re-stores. Bands are
+   now `>= MERGE_SIM` restatement (merge, no inference needed) /
+   `RECONCILE_SIM..MERGE_SIM` ambiguous (the only band that costs an LLM call
+   and the only one where undetermined suppresses merge) / below, unrelated.
+   Caught live on the mediated `/store` path.
+4. **Read-path dedup keys on CONTENT words, not n-grams.** n-gram overlap could
+   not separate the real Matt-Sack cluster from must-not-collapse controls —
+   duplicates `D1/D2` scored 0.77 unigram while "CP1500 in the rack" vs "in the
+   closet" scored 0.75, and on 3-grams the ordering INVERTED. Structural
+   reason: migration duplicates differ only in filler, distinct memos differ in
+   a content word. Measured content-word Jaccard: must-collapse 0.85–1.00,
+   must-not 0.00–0.60. Threshold 0.80.
+5. **`max_results` is a CEILING.** `_answer_set` admits a runner-up only within
+   85% of the leader's score. Without it the live `/recall` returned an
+   unrelated dentist memo alongside the UPS answer.
+6. **Refutation flow is 409-then-403** per the operator ruling; both spec.md
+   FR-015c and contracts/mediator-store.md amended.
+7. **Test-fixture bugs worth remembering** (all found by these suites, none
+   were code bugs): an all-zeros embedding has undefined cosine → sqlite-vec
+   returns NULL → `1.0 - distance` raises; a stub keyed on `"parking"` does not
+   match the query `"park?"`; `seed()` must move `valid_from` with
+   `created_at` or every historical `as_of` filters the row out; and
+   `"appointment"` is itself a LOGISTICS family tag, so it cannot be used as
+   the un-boosted control.
+8. **FR-013's recency term is universal**, not logistics-only. Only the
+   tag-class term is logistics-specific. A test asserting otherwise was wrong
+   about the spec and was rewritten to hold recency constant.
+9. **Known overlap left explicit**: auto_store still runs its own LLM dedup
+   before the mediator reconciles again. Where they disagree the mediator wins;
+   its merge is weaker (tags-only vs auto_store rewriting content). Collapsing
+   the two is the right cleanup but is beyond T036.
 
 ---
 
