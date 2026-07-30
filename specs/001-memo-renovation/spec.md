@@ -398,11 +398,23 @@ verify the session resumes on v1 with no corruption.
   drawn from: `constitutional`, `behavioral`, `goal`, `verbatim-critical`,
   `fact`, `decision-in-progress`, `episodic`, `ephemeral-flush`,
   `time-scoped`, `legacy-unattributed`.
-- **FR-002**: memo MUST store `valid_from` and `valid_until` timestamps
-  on every memo. `valid_until IS NULL` = current; timestamped = superseded.
-- **FR-003**: memo MUST expose a `POST /supersede` endpoint that atomically
-  sets `valid_until` on the old memo and creates the new memo with
-  matching `valid_from`.
+- **FR-002** *(WITHDRAWN 2026-07-30, operator directive)*: bi-temporal
+  versioning is removed. `valid_from` / `valid_until`, `get_as_of`, the
+  `/documents/{id}/as-of` endpoint and the supersede-chain resolution all go.
+  **Rationale:** they exist to answer "what did the corpus believe on date X",
+  and under the amended Principle II superseded *state* is deleted rather than
+  retained — so there is nothing for an as-of query to find. Point-in-time
+  reconstruction, when genuinely needed, comes from backups (hourly
+  `backup-memo-live`, 4×daily `backup-memo-to-nas`), which is the right tool for
+  a recovery/rescue case rather than a query path carried by every read.
+  Replaced by **FR-028a**'s deletion log with content snapshots — the same
+  recoverability at a fraction of the machinery.
+
+- **FR-003** *(amended 2026-07-30)*: `POST /supersede` survives as the
+  **replace-and-record** primitive: write the new memo, delete the old, and log
+  the old one's content to the deletion log in one transaction. It no longer
+  maintains a version chain — `supersede_edges` is reduced to that audit record.
+
 - **FR-004**: memo MUST store a structured `provenance` block per memo
   supporting the fields: `claude_log_ref`, `git_ref`, `gmail_msg_id`,
   `phony_ref`, `atc_ref`, `url`, `derived_from`.
