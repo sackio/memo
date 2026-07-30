@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 
-from memo import db, embeddings, flush as flush_mod, log_queries, reaper
+from memo import db, embeddings, log_queries, reaper
 from memo.mediators import recall as recall_mediator
 from memo.mediators import store as store_mediator
 from memo.injection import set as injection_set
@@ -808,34 +808,21 @@ async def hook_instructions_loaded(payload: dict[str, Any]):
 
 @app.post("/hooks/pre-compact")
 async def hook_pre_compact(payload: dict[str, Any]):
-    """PreCompact hook — flush session state BEFORE context is dropped. [001/FR-036 001/FR-044]
+    """PreCompact hook. [001/FR-044]
 
-    Repurposes the `~/.claude/hooks/atc-precompact.sh` no-op (FR-036 / C58).
-    **Synchronous on purpose**: the whole point is that the flush completes
-    before compaction discards the context it is distilling. Returning early
-    would race the very thing this exists to prevent.
+    Retained as an endpoint so the wired hook does not 404, but it no longer
+    flushes session state. Distilling working state across a compaction moved
+    to ATC (operator decision 2026-07-30): ATC already does TTL'd
+    hold-and-redeliver, memo's `flush.py` duplicated it, and two mechanisms
+    carrying "what was this session doing" is a place they can disagree.
 
-    Unlike the injecting hooks, a failure here is REPORTED rather than
-    swallowed — a silent flush failure means the session compacts and loses
-    state believing it was saved, which is worse than a visible error.
+    memo's half of the compaction loop is now only the DURABLE layer —
+    constitutional and behavioral rules, served pre-first-turn by
+    `/hooks/post-compact`. Session-specific working state is ATC's, delivered
+    by the coordinator's inject().
     """
-    session_id = payload.get("session_id") or ""
-    slots = payload.get("slots") or {}
-    if not session_id or not slots:
-        return {"flushed": False,
-                "reason": "session_id and slots are both required"}
-    try:
-        result = await flush_mod.flush(
-            session_id=session_id,
-            flush_generation=int(payload.get("flush_generation") or 0),
-            slots=slots,
-            expires_at=payload.get("expires_at"),
-            provenance=payload.get("provenance"),
-        )
-        return {"flushed": True, **result}
-    except Exception as e:
-        logging.getLogger(__name__).exception("pre-compact flush failed for %s", session_id)
-        return {"flushed": False, "error": str(e)}
+    return {"flushed": False, "reason": "session working state moved to ATC"}
+
 
 
 @app.post("/hooks/session-stop")
@@ -899,20 +886,6 @@ async def _hook_injection(payload: dict[str, Any], *, fire_point: str) -> dict:
                       fire_point, session_id)
         return {"additionalContext": "", "fire_point": fire_point, "degraded": True}
 
-
-@app.post("/flush")
-async def flush_endpoint(payload: dict[str, Any]):
-    """Upsert a session's ephemeral-flush slot-set. [001/FR-034]"""
-    try:
-        return await flush_mod.flush(
-            session_id=payload.get("session_id") or "",
-            flush_generation=int(payload.get("flush_generation") or 0),
-            slots=payload.get("slots") or {},
-            expires_at=payload.get("expires_at"),
-            provenance=payload.get("provenance"),
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.post("/log-query")

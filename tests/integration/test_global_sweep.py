@@ -1,22 +1,15 @@
 """Global auditor sweep. [001/FR-024 001/FR-025]"""
 import pytest
 
-from memo import db, flush as flush_mod, main
+from memo import db, main
 from memo.auditor import global_sweep
 from memo.auditor.liveness import LivenessMonitor
 
 
-@pytest.mark.asyncio
-async def test_sweep_reaps_expired_flush_memos(embedding):
-    """(c) — belt-and-braces with the 5-min reaper.
+# test_sweep_reaps_expired_flush_memos was removed 2026-07-30 with flush.py.
+# Session working state moved to ATC; the sweep's TTL reaping is still covered
+# by the generic expired-memo tests, which do not depend on the flush writer.
 
-    Redundant on purpose: if the process was down or the reaper disabled,
-    TTLs silently stopped being honored. A sweep that finds nothing is cheap.
-    """
-    r = await flush_mod.flush(session_id="dojo", flush_generation=1,
-                              slots={"open-tasks": "x"}, expires_at=1.0)
-    out = await global_sweep.sweep()
-    assert r["memo_ids"]["open-tasks"] in out["reaped"]
 
 
 @pytest.mark.asyncio

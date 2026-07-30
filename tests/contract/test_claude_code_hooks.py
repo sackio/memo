@@ -45,15 +45,6 @@ async def test_post_compact_returns_additional_context(embedding):
     assert "MEMO Layer 2 injection" in r["additionalContext"]
 
 
-@pytest.mark.asyncio
-async def test_post_compact_includes_previous_flush_generation(embedding):
-    """C58 replacement: the post-compact session gets its flushed state back."""
-    from memo import flush as flush_mod
-    await flush_mod.flush(session_id="dojo", flush_generation=7,
-                          slots={"open-tasks": "finish the T094 seam"})
-    r = await main.hook_post_compact({"session_id": "dojo", "flush_generation": 7})
-    assert "finish the T094 seam" in r["additionalContext"]
-
 
 @pytest.mark.asyncio
 async def test_hooks_never_raise_on_internal_failure(monkeypatch):
@@ -116,62 +107,28 @@ async def test_session_end_acknowledges_without_context():
 # hook chain) and no task had implemented or anchored it — PreCompact and
 # SessionStop did not exist at all.
 
-@pytest.mark.asyncio
-async def test_pre_compact_flushes_synchronously(embedding):
-    """FR-036: the flush must COMPLETE before compaction drops the context.
-
-    Asserted by reading the memo back immediately after the call returns — if
-    the hook were fire-and-forget this would race.
-    """
-    r = await main.hook_pre_compact({
-        "session_id": "dojo", "flush_generation": 3,
-        "slots": {"open-tasks": "finish the seam"},
-    })
-    assert r["flushed"] is True
-    doc = await db.get_current(None, r["memo_ids"]["open-tasks"])
-    assert doc["content"] == "finish the seam"
 
 
 @pytest.mark.asyncio
-async def test_pre_compact_failure_is_reported_not_swallowed(monkeypatch):
-    """Opposite posture from the injecting hooks, deliberately.
+async def test_pre_compact_no_longer_flushes_but_still_answers():
+    """The endpoint stays so the wired hook does not 404, but session working
+    state moved to ATC (2026-07-30).
 
-    A silent flush failure means the session compacts believing its state was
-    saved — worse than a visible error.
+    Five tests were deleted with flush.py rather than adapted: they asserted
+    synchronous flushing, failure reporting, a pre/post round trip, and
+    stop-checkpointing — all behaviour that no longer exists. Keeping them
+    "passing" against a stub would have been worse than deleting them.
     """
-    async def boom(**kw):
-        raise RuntimeError("db down")
-    monkeypatch.setattr(main.flush_mod, "flush", boom)
-    r = await main.hook_pre_compact({"session_id": "dojo", "flush_generation": 1,
-                                     "slots": {"open-tasks": "x"}})
+    r = await main.hook_pre_compact({"session_id": "s", "slots": {"a": "b"}})
     assert r["flushed"] is False
-    assert "error" in r
+    assert "ATC" in r["reason"]
 
 
-@pytest.mark.asyncio
-async def test_pre_compact_requires_session_and_slots():
+async def _removed_test_pre_compact_requires_session_and_slots():
     assert (await main.hook_pre_compact({"session_id": "dojo"}))["flushed"] is False
     assert (await main.hook_pre_compact({"slots": {"a": "b"}}))["flushed"] is False
 
 
-@pytest.mark.asyncio
-async def test_pre_compact_then_post_compact_round_trip(embedding):
-    """The C58 replacement, end to end through the hook chain."""
-    await main.hook_pre_compact({
-        "session_id": "dojo", "flush_generation": 9,
-        "slots": {"in-flight-work": "background verify job running"},
-    })
-    r = await main.hook_post_compact({"session_id": "dojo", "flush_generation": 9})
-    assert "background verify job running" in r["additionalContext"]
-
-
-@pytest.mark.asyncio
-async def test_session_stop_checkpoints_when_given_slots(embedding):
-    r = await main.hook_session_stop({
-        "session_id": "dojo", "flush_generation": 4,
-        "slots": {"key-decisions": "chose content-word dedup"},
-    })
-    assert r["acknowledged"] is True and r["flushed"] is True
 
 
 @pytest.mark.asyncio
