@@ -120,9 +120,27 @@ phrase appearing only in its final third.
 - **FR-106**: a memo's score MUST be its **best** matching passage, not the mean
   of its passages. A mean re-introduces exactly the dilution this feature
   removes.
-- **FR-107**: a result MUST carry the matching passage (and its offsets)
-  alongside the memo, so callers — the injection builder in particular — can
-  choose to spend the passage rather than the document.
+- **FR-107**: a result MUST return the **whole memo** by default, and MUST carry
+  the matching passage (with its offsets) alongside it as a highlight. Matching
+  narrowly and returning broadly is the point: the passage is evidence that the
+  memo is relevant, not a claim that the rest of it is not. A memo is written as
+  one thing by one author, so the paragraphs around the hit are the most likely
+  place for the caller's *next* question to be answered, and they may simply have
+  phrased that part in words the query did not resemble. Truncating to the hit
+  would trade a retrieval defect for a comprehension one.
+  (Operator directive 2026-07-30: *"when we find a good target passage… we then
+  also retrieve the entire original memo, because part of that memo was relevant
+  and maybe other parts will also be relevant, they just didn't trigger well on
+  the embedding match."*)
+- **FR-107a**: a **budget-constrained** consumer MUST be able to opt into
+  passage-only, and the whole-memo default MUST NOT be silently applied where it
+  would blow a budget. `InjectionSet` is the motivating case: at a 5,000-token
+  ceiling, always spending whole memos rebuilds the very problem this feature
+  fixes — one 3,000-token memo consuming 60% of the budget to deliver one
+  relevant paragraph. The rule is therefore: **whole memo by default; passage on
+  request; never a truncated memo presented as if whole.** When a consumer takes
+  the passage, the result MUST still identify the parent memo so the caller can
+  fetch the rest.
 - **FR-108**: passage vectors MUST NOT silently change dimensionality or model.
   Any move to a higher-dimension model (e.g. `text-embedding-3-large` at 3072)
   is a **separate, separately-measured change** made after this one, and the
