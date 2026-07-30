@@ -3,6 +3,11 @@
 **Feature**: 001-memo-renovation
 **Branch**: `001-memo-renovation`
 **Generated**: 2026-07-29
+**Last audited**: 2026-07-30 (see `specs/STATUS.md`)
+**Status**: **Phases 1–7 COMPLETE and green. Everything still open is either an
+operator/runtime action (Phase 8), blocked behind operator approval (Phase 9
+cutover), or final polish.** 84 done · 16 open · 2 withdrawn.
+
 **Inputs**: `spec.md` (8 user stories US1-US8, 54 FRs, 10 SCs, 10 resolved clarifications), `plan.md` (Phases A-H, ~8-12 h dev time), `research.md` (16 decisions), `data-model.md`, `contracts/` (11 contracts), `quickstart.md`, `.specify/memory/constitution.md` (v1.3.0, 8 principles).
 
 ## Organization note
@@ -255,6 +260,13 @@ entry and store writes-new + flags the auditor. Neither may fail the caller.
 - [X] T036 [US2] [P] Refactor `../memo-v2/src/memo/auto_store.py` to route through storage mediator instead of raw insert. Marker `001/FR-015a`. **ALSO (R-17, operator clarification 2026-07-29): move auto_store's `openai/gpt-4o-mini` dedup call off OpenRouter onto the `LLMProvider`.** This is memo's one pre-existing generative caller and fires on every hook-triggered store, so it is in scope like any other LLM use — the earlier "leave it for now" note is superseded. After this task, NO generative OpenRouter call should remain: verify with a grep for `auto_store_model` / chat-completion usage. Embeddings stay on OpenRouter (R-05) and are unaffected. Note auto_store must tolerate a None completion (degrade to write-new) like every other caller.
 - [X] T037 [US2] Write `../memo-v2/tests/contract/test_mediator_recall.py` — one test per contract Response section (SUCCESS/NO-RESULTS/ANOMALY/error). Marker `001/FR-010 001/FR-011 001/FR-012 001/FR-013 001/FR-014 001/FR-015`.
 - [X] T038 [US2] Write `../memo-v2/tests/contract/test_mediator_store.py` — one test per contract Response section (MERGE/WRITE-NEW/SUPERSEDE/CLARIFY/REJECT/SPLIT). Marker `001/FR-015a 001/FR-015b 001/FR-015c 001/FR-015d 001/FR-015e 001/FR-015f 001/FR-015g`.
+- [X] T039a [US2] **ADDED 2026-07-30 — FR-028a had NO task** (found by the audit of
+  2026-07-30; it was the trace gate's only L1 miss). FR-028a arrived with the operator's
+  deletion ruling *after* Phase 2 was written, and the code shipped without a task naming
+  it — the exact gap T086a closed for FR-044. Deletion snapshots the memo to `deletion_log`
+  before removing it, and `deletion_snapshot()` recovers the most recent one; this is what
+  makes aggressive pruning safe rather than merely regretted. Implemented in
+  `src/memo/db.py`, gated by `tests/unit/test_deletion_log.py`. Marker `001/FR-028a`.
 - [X] T039 [US2] [P] Write `../memo-v2/tests/integration/test_dedup_collapse.py` — reproduce the Matt-Sack `0c55a9a3/c664f4a1/98efbda5` scenario (canonical + 2 duplicates); assert retrieval returns only canonical. Marker `001/FR-012`.
 - [X] T040 [US2] [P] Write `../memo-v2/tests/integration/test_recall_parking.py` — reproduce 7/26 parking-recall scenario. Assert July memo (when it exists) ranks #1 over May SF memo. Marker `001/FR-013`.
 
@@ -327,7 +339,7 @@ cd ../memo-v2 && speckit-trace --require-full \
 - [X] T058 [US1] Write `../memo-v2/src/memo/hooks/instructions_loaded.py` — `POST /hooks/instructions-loaded`. Scans passed instruction_files content for `memo:<uuid>` references and returns resolved additionalContext. Marker `001/FR-017`.
 - [X] T059 [US1] Write `../memo-v2/src/memo/hooks/session_end.py` — `POST /hooks/session-end`. Triggers auditor final-sweep (async — no additionalContext). Marker `001/FR-025`.
 - [X] T060 [US4] [P] Write `../memo-v2/src/memo/log_queries.py` — intelligent Claude Code log query tool per contracts/log-queries.md. `command grep -m<max>` discipline. Marker `001/FR-033`.
-- [X] T061 [US1] Add `POST /flush` endpoint in main.py per contracts/flush.md. Marker `001/FR-034`.
+- [~] T061 [US1] ~~Add `POST /flush` endpoint in main.py per contracts/flush.md.~~ **WITHDRAWN 2026-07-30** with FR-034 — operator decision, session state is ATC's. Removed in `707e714`.
 - [X] T062 [US1] Write `../memo-v2/tests/contract/test_injection_set.py` — request/response shapes; token-budget drop order. Marker `001/FR-016 001/FR-017 001/FR-018 001/FR-019 001/FR-020`.
 - [X] T063 [US1] Write `../memo-v2/tests/contract/test_claude_code_hooks.py` — one test per hook endpoint. Marker `001/FR-017 001/FR-018 001/FR-036`.
 - [X] T064 [US3] [P] Write `../memo-v2/tests/integration/test_time_scoped_autopin.py` — memo with `time_scope: {start, end}` is in injection-set during the window, absent after `end`. Marker `001/FR-005`.
@@ -335,7 +347,7 @@ cd ../memo-v2 && speckit-trace --require-full \
 - [X] T066 [US1] [P] Write `../memo-v2/tests/integration/test_transclusion.py` — CLAUDE.md with `memo:<uuid>` reference gets resolved on InstructionsLoaded. Marker `001/FR-017`.
 - [X] T067 [US1] [P] Write `../memo-v2/tests/integration/test_memory_posture_detection.py` — memory-on session vs. memory-off session receive different-sized injection sets. Marker `001/FR-017`.
 - [X] T068 [US4] [P] Write `../memo-v2/tests/contract/test_log_queries.py`. Marker `001/FR-033`.
-- [X] T069 [US1] [P] Write `../memo-v2/tests/contract/test_flush.py`. Marker `001/FR-034`.
+- [~] T069 [US1] [P] ~~Write `../memo-v2/tests/contract/test_flush.py`.~~ **WITHDRAWN 2026-07-30** with FR-034 and T061.
 
 **Phase 4 gate**:
 

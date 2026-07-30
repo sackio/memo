@@ -1,7 +1,15 @@
 # Tasks: Passage-Level Retrieval
 
 **Spec**: `specs/002-passage-retrieval/spec.md` · **Plan**: `plan.md`
-**Created**: 2026-07-30 · **Status**: Draft — T201–T203 are OPEN CLARIFICATIONS
+**Created**: 2026-07-30 · **Last audited**: 2026-07-30 18:xx EDT
+**Status**: **Phases A–D built; Phase E measured and CORRECTLY BLOCKED on SC-101.**
+T201–T203 remain OPEN CLARIFICATIONS for the operator, and T201 blocks four
+Phase C tasks (T240–T243). 21/38 done.
+
+The passage path is live and measurably better on the band this feature exists
+for (≥2000 tokens: 0/14 → 5/14 rank-1), but **SC-101 requires 80% and we are at
+36%**, so the default has NOT been flipped. Chunking is still at the untuned
+default; T253's sweep is the designed way to close the gap.
 
 Marker discipline: every implementation file carries `[002/FR-1XX]` in a
 comment; every test that proves an FR carries the same marker. Never write a
@@ -134,6 +142,12 @@ repo-wide and will fail on later-phase FRs. Run inside the v2 worktree.
 
 - [x] **T250** — `scripts/memo-retrieval-bench`: own-title set, reported by size
       band. **DONE 2026-07-30** (`31ec402`). `[002/FR-111]`
+      **Extended 2026-07-30**: `--path {document,passages}` drives either
+      retrieval path, and `--both-indexed-only` restricts the sample to memos
+      present in BOTH indexes (backed by `GET /admin/passage-indexed-ids`).
+      The restriction is load-bearing while passage coverage is partial — an
+      unrestricted passage run scores un-indexed memos as `absent` and reports
+      **indexing coverage while looking exactly like a retrieval result**.
 - [x] **T251** — Baseline recorded before any change:
       `specs/002-passage-retrieval/baseline-2026-07-30-v1.json` — v1 @ 7,511
       memos, top band 2/14 rank-1, 9/14 absent. **DONE 2026-07-30.** `[002/FR-111]`
@@ -158,16 +172,31 @@ repo-wide and will fail on later-phase FRs. Run inside the v2 worktree.
 
 ## Phase E — Flip the default — FR-113
 
-- [ ] **T260** — Both query paths live simultaneously, selectable by config.
+- [~] **T260** — Both query paths live simultaneously, selectable by config.
       `[002/FR-113]`
-- [ ] **T261** — Re-run the bench on the passage path; compare against T251's
+      **PARTIAL (2026-07-30):** both paths ARE live and independently callable
+      — `/search` (document) and `/search-passages` (passage) — but selection
+      is *by endpoint*, not by config. That was deliberate at the time (a flag
+      invites flipping the default before the numbers exist), so the remaining
+      work is the config switch that Phase E's flip actually needs. Not
+      complete as written.
+- [x] **T261** — Re-run the bench on the passage path; compare against T251's
       committed baseline. Flip only if SC-101 (≥80% rank-1 for ≥2000 tokens),
       SC-102 (no band regresses) and SC-103 (mid-document ≥75%) all clear.
+      **DONE 2026-07-30 — comparison run, and the flip is CORRECTLY BLOCKED.**
+      SC-102 holds (no band regresses). **SC-101 fails: 36% vs the required
+      80%** for ≥2000 tokens, though that band moves 0/14 → 5/14 rank-1 and
+      3/14 → 11/14 top-5. SC-103 not yet re-run against the passage path. See
+      research.md R-05. The bench gained `--path` and `--both-indexed-only` so
+      this is reproducible rather than a one-off claim.
 - [ ] **T262** — Document path stays behind a flag for one release, so a
       regression is a config change and not a migration. `[002/FR-113]`
-- [ ] **T263** — Record the post-change numbers in `research.md` beside the
+      *(blocked by T260's config switch; nothing to flag until there is a flag)*
+- [x] **T263** — Record the post-change numbers in `research.md` beside the
       baseline. If a criterion is missed, say so and stop — a criterion quietly
       relaxed to fit the result is worse than a failed gate.
+      **DONE 2026-07-30 — research.md R-05.** SC-101 recorded as FAILED at 36%.
+      Bar not moved; T253's chunk-size sweep is the designed way to close it.
 
 **Gate E**: `speckit-trace --require-full 002/FR-113`
 

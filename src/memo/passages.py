@@ -136,6 +136,24 @@ def _sync_unindexed(db_path: str, limit: int) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def _sync_indexed_ids(db_path: str) -> list[str]:
+    conn = db._get_or_create_conn(db_path)
+    rows = conn.execute("SELECT DISTINCT doc_id FROM document_chunks").fetchall()
+    return [r[0] for r in rows]
+
+
+async def indexed_ids() -> list[str]:
+    """Doc ids with at least one passage — the inverse of find_unindexed.
+
+    Exists for the retrieval bench: while passage coverage is partial, a
+    document-vs-passage comparison MUST be restricted to memos present in both
+    indexes, or the passage run scores every un-indexed memo as `absent` and
+    reports indexing coverage while looking exactly like a retrieval result.
+    That error was made and caught on 2026-07-30. [002/FR-111]
+    """
+    return await asyncio.to_thread(_sync_indexed_ids, db.global_path())
+
+
 async def find_unindexed(limit: int = 500) -> list[dict]:
     """Live memos with no passages. [002/FR-110]
 

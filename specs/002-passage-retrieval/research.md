@@ -85,3 +85,48 @@ For a system whose entire purpose is recalling specific facts, that is the findi
 
 Runnable: `memo-retrieval-bench --factset specs/002-passage-retrieval/factset-mid-document.json`.
 SC-103 requires ≥75% rank-1 here after the change.
+
+---
+
+## R-05 — First document-vs-passage comparison, 2026-07-30 (SC-101 does NOT pass yet)
+
+Both retrieval paths are live at once (FR-113), so this is the same corpus, the same
+queries and the same sample scored twice — once through `/search`, once through
+`/search-passages`.
+
+**Restricted to the 408 memos present in BOTH indexes** (`--both-indexed-only`). This
+restriction is load-bearing: passage coverage is currently 408/1655 (24.7%) of the corpus,
+so an unrestricted passage run scores every un-indexed memo as `absent` and reports
+**indexing coverage while looking exactly like a retrieval result**. A first pass at this
+measurement made that mistake and showed the passage path doing *worse*; the number below
+is the corrected one.
+
+Own-title set, `--per-band 14 --seed 7`, n=59:
+
+| band | n | document rank-1 | **passage rank-1** | document top-5 | passage top-5 |
+|---|---|---|---|---|---|
+| 0–200 | 3 | 3 | 3 | 3 | 3 |
+| 200–500 | 14 | 11 | 11 | 11 | 11 |
+| 500–1000 | 14 | 9 | **10** | 11 | 11 |
+| 1000–2000 | 14 | 9 | **10** | 10 | **12** |
+| **2000+** | 14 | **0** | **5** | 3 | **11** |
+| absent from top-10 (all bands) | 59 | **12** | **4** | | |
+
+**The 2000+ band goes from 0/14 to 5/14 rank-1, and from 3/14 to 11/14 in the top 5.** That
+is the defect this feature exists for, moving in the right direction and by a lot. Absent
+-from-top-10 drops 12 → 4 across the board. No band regresses, so **SC-102 holds**.
+
+**SC-101 does NOT pass.** It requires ≥80% rank-1 for memos ≥2000 tokens; this is 36%.
+Reported as measured rather than adjusting the bar.
+
+Chunking is still at the untuned default (384 tokens, 15% overlap). **T253** — the
+{256, 384, 512} × {0, 15, 25}% sweep — is the designed way to close 36% → 80%, and is
+exactly what the spec said to measure rather than guess. The mid-document fact set (R-04,
+SC-103) has not yet been re-run against the passage path.
+
+Reproduce:
+
+```
+memo-retrieval-bench --url http://localhost:8091 --per-band 14 --both-indexed-only --path document
+memo-retrieval-bench --url http://localhost:8091 --per-band 14 --both-indexed-only --path passages
+```

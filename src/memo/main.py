@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 
-from memo import db, embeddings, log_queries, reaper
+from memo import db, embeddings, log_queries, passages, reaper
 from memo.mediators import recall as recall_mediator
 from memo.mediators import store as store_mediator
 from memo.injection import set as injection_set
@@ -1264,6 +1264,17 @@ async def access_stats(
     """
     result = await db.access_stats(stale_days=stale_days, limit=limit)
     return result
+
+
+@app.get("/admin/passage-indexed-ids")
+async def passage_indexed_ids():
+    """Doc ids with at least one passage. [002/FR-111]
+
+    Read-only, for `memo-retrieval-bench --both-indexed-only`. Restricting the
+    sample to memos in BOTH indexes is what makes a document-vs-passage number
+    a comparison rather than a measurement of rollout progress.
+    """
+    return await passages.indexed_ids()
 
 
 @app.get("/admin/leak-incidents")

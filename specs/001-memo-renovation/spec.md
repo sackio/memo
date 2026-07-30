@@ -583,9 +583,14 @@ verify the session resumes on v1 with no corruption.
   (grep-based; embedding-optional). Given `(host, project, session_uuid,
   optional query)`, returns matched line-ranges with structured metadata
   for provenance linking.
-- **FR-034**: memo MUST expose a `POST /flush` endpoint that upserts a
-  slot-set of ephemeral-flush memos in one call, keyed on
-  `(session_id, flush_generation)`.
+- **FR-034** *(withdrawn 2026-07-30)*: **WITHDRAWN.** Was: memo MUST expose a
+  `POST /flush` endpoint upserting a slot-set of ephemeral-flush memos keyed on
+  `(session_id, flush_generation)`. Session working state belongs to ATC, and
+  memo's copy was a *redundant store* rather than redundant delivery — two
+  mechanisms holding the same state can silently diverge with nothing
+  reconciling them. Deleting it did not create a gap; it revealed one that ATC
+  already had, which is the point. Module, tests, endpoint and the pre-compact
+  path removed in `707e714`; T061/T069 are withdrawn with it.
 - **FR-035**: memo MUST expose `GET /answer-loop-audit` returning the
   mediator's query→answer→user-next-turn log for auditor consumption.
 

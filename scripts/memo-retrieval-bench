@@ -38,13 +38,33 @@ def _get(url: str, path: str, timeout: float = 180.0):
         return json.loads(r.read())
 
 
-def _search(url: str, query: str, limit: int = 10, timeout: float = 60.0):
+# Both retrieval paths are live at once (002/FR-113), so the bench must be able
+# to drive either. Comparing them on the SAME corpus with the SAME queries is
+# the whole point; a passage number measured on a different sample than the
+# document number is not a comparison.
+PATHS = {"document": "/search", "passages": "/search-passages"}
+
+
+def _search(url: str, query: str, limit: int = 10, timeout: float = 60.0,
+            path: str = "document"):
     req = urllib.request.Request(
-        url.rstrip("/") + "/search",
+        url.rstrip("/") + PATHS[path],
         data=json.dumps({"query": query, "limit": limit}).encode(),
         headers={"Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return json.loads(r.read())
+
+
+def _passage_indexed_ids(url: str) -> set[str]:
+    """Doc ids with at least one passage.
+
+    LOAD-BEARING for any comparison: the passage index covers only part of the
+    corpus during rollout, so an unrestricted passage run scores every
+    un-indexed memo as `absent` and measures INDEXING COVERAGE while looking
+    exactly like a retrieval result. That mistake was made and caught on
+    2026-07-30; the restriction is why the number means anything.
+    """
+    return set(_get(url, "/admin/passage-indexed-ids", timeout=180.0))
 
 
 def _doc_of(hit: dict) -> dict:
@@ -56,10 +76,16 @@ def band_label(lo: int, hi: int) -> str:
     return f"{lo}-{hi}" if hi < 10**9 else f"{lo}+"
 
 
-def run(url: str, per_band: int, limit: int, seed: int) -> dict:
+def run(url: str, per_band: int, limit: int, seed: int,
+        path: str = "document", both_indexed_only: bool = False) -> dict:
     docs = _get(url, "/documents?limit=20000")
     random.seed(seed)
+    eligible = None
+    if both_indexed_only:
+        eligible = _passage_indexed_ids(url)
+        docs = [d for d in docs if d["id"] in eligible]
     out = {"url": url, "seed": seed, "per_band": per_band, "limit": limit,
+           "path": path, "both_indexed_only": both_indexed_only,
            "corpus": len(docs), "bands": []}
 
     for lo, hi in BANDS:
@@ -72,7 +98,8 @@ def run(url: str, per_band: int, limit: int, seed: int) -> dict:
 
         for d in sample:
             try:
-                hits = _search(url, (d.get("title") or "")[:200], limit=limit)
+                hits = _search(url, (d.get("title") or "")[:200], limit=limit,
+                               path=path)
             except Exception as e:  # a failed query is not a passing query
                 print(f"  query failed for {d['id'][:8]}: {e}", file=sys.stderr)
                 absent += 1
@@ -118,11 +145,21 @@ def main() -> int:
     ap.add_argument("--json", default=None, help="write the raw result here")
     ap.add_argument("--factset", default=None,
                     help="also run a mid-document fact set (JSON: [{query, expect_id}])")
+    ap.add_argument("--path", choices=sorted(PATHS), default="document",
+                    help="which retrieval path to bench (002/FR-113)")
+    ap.add_argument("--both-indexed-only", action="store_true",
+                    help="restrict the sample to memos present in BOTH indexes. "
+                         "Required for a document-vs-passage comparison while "
+                         "passage coverage is partial — otherwise the run "
+                         "measures indexing coverage, not retrieval.")
     args = ap.parse_args()
 
-    res = run(args.url, args.per_band, args.limit, args.seed)
+    res = run(args.url, args.per_band, args.limit, args.seed,
+              path=args.path, both_indexed_only=args.both_indexed_only)
 
-    print(f"corpus: {res['corpus']} memos @ {res['url']}  (seed {res['seed']})")
+    scope = " [both-indexed only]" if res["both_indexed_only"] else ""
+    print(f"corpus: {res['corpus']} memos @ {res['url']}  (seed {res['seed']})"
+          f"  path={res['path']}{scope}")
     print()
     print(f"{'band':>12} {'n':>3} {'rank-1':>7} {'top-5':>6} {'absent':>7} {'median':>7}")
     for b in res["bands"]:
@@ -139,7 +176,8 @@ def main() -> int:
         r1 = t5 = absent = 0
         for c in cases:
             try:
-                hits = _search(args.url, c["query"], limit=args.limit)
+                hits = _search(args.url, c["query"], limit=args.limit,
+                               path=args.path)
             except Exception:
                 absent += 1
                 continue
