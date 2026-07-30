@@ -402,14 +402,61 @@ def _sync_get(db_path: str, doc_id: str) -> dict | None:
     return None
 
 
-def _sync_delete(db_path: str, doc_id: str) -> bool:
+def _sync_delete(db_path: str, doc_id: str, *, actor: str = "unknown",
+                 reason: str = "unspecified", replaced_by: str | None = None) -> bool:
+    """Delete a memo, snapshotting it to `deletion_log` first. [001/FR-028a]
+
+    The snapshot is taken in the SAME transaction as the delete, and the row is
+    read before anything is removed. That ordering is the whole guarantee: a
+    deletion that fails to record its snapshot must not happen at all, because
+    an unrecorded delete is indistinguishable from data loss.
+
+    Content is stored in full, never truncated — a snapshot missing the tail of
+    a long memo cannot restore it, which defeats the purpose.
+    """
     conn = _get_or_create_conn(db_path)
-    cur = conn.execute("DELETE FROM documents WHERE id = ?", (doc_id,))
-    conn.execute("DELETE FROM document_embeddings WHERE doc_id = ?", (doc_id,))
-    conn.commit()
+    row = conn.execute("SELECT * FROM documents WHERE id = ?", (doc_id,)).fetchone()
+    if row is None:
+        return False
+
+    d = dict(row)
+    try:
+        conn.execute("BEGIN")
+        conn.execute(
+            "INSERT INTO deletion_log (doc_id, deleted_at, content, title, tags, "
+            "metadata, memo_class, created_at, actor, reason, replaced_by) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (doc_id, time(), d.get("content") or "", d.get("title"),
+             d.get("tags"), d.get("metadata"), d.get("class"), d.get("created_at"),
+             actor, reason, replaced_by),
+        )
+        cur = conn.execute("DELETE FROM documents WHERE id = ?", (doc_id,))
+        conn.execute("DELETE FROM document_embeddings WHERE doc_id = ?", (doc_id,))
+        conn.execute("DELETE FROM document_chunks WHERE doc_id = ?", (doc_id,))
+        conn.execute("DELETE FROM chunk_embeddings WHERE doc_id = ?", (doc_id,))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        logger.exception("delete of %s failed; rolled back (memo NOT deleted)", doc_id)
+        raise
+
     if cur.rowcount > 0:
         _bump_access(conn, doc_id, "delete")
     return cur.rowcount > 0
+
+
+def _sync_restore(db_path: str, doc_id: str) -> dict | None:
+    """Recover the most recent deletion-log snapshot for a memo. [001/FR-028a]
+
+    Returns the snapshot rather than re-inserting it: restoring needs a fresh
+    embedding, which is an async concern. A caller that wants the memo back
+    re-stores this content.
+    """
+    conn = _get_or_create_conn(db_path)
+    row = conn.execute(
+        "SELECT * FROM deletion_log WHERE doc_id = ? ORDER BY deleted_at DESC LIMIT 1",
+        (doc_id,)).fetchone()
+    return dict(row) if row else None
 
 
 def _sync_copy(src_path: str, doc_id: str, dst_path: str) -> str | None:
@@ -527,9 +574,24 @@ async def update(db_path: str | None, doc_id: str, content: str | None, title: s
     return await asyncio.to_thread(_sync_update, path, doc_id, content, title, tags, metadata, embedding)
 
 
-async def delete(db_path: str | None, doc_id: str) -> bool:
+async def delete(db_path: str | None, doc_id: str, *, actor: str = "unknown",
+                 reason: str = "unspecified", replaced_by: str | None = None) -> bool:
+    """Delete a memo, snapshotting it first. [001/FR-028a]
+
+    `actor` and `reason` default to "unknown"/"unspecified" rather than being
+    required, so no existing caller breaks — but an unattributed deletion is
+    exactly what the log exists to make visible, and those defaults are meant to
+    show up in an audit as work still to do.
+    """
     path = _resolve_path(db_path)
-    return await asyncio.to_thread(_sync_delete, path, doc_id)
+    return await asyncio.to_thread(_sync_delete, path, doc_id, actor=actor,
+                                   reason=reason, replaced_by=replaced_by)
+
+
+async def restore_snapshot(db_path: str | None, doc_id: str) -> dict | None:
+    """The most recent deletion snapshot for a memo, or None. [001/FR-028a]"""
+    path = _resolve_path(db_path)
+    return await asyncio.to_thread(_sync_restore, path, doc_id)
 
 
 async def list_docs(db_path: str | None, tags: list[str], limit: int, after: float | None,
