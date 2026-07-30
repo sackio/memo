@@ -12,7 +12,6 @@ from memo.providers import registry
 from memo.providers.agent_controller.agents_supervisor import AgentsSupervisorController
 from memo.providers.conductor.atc import ATCConductor
 from memo.providers.conductor.base import EVENT_KINDS, Event
-from memo.providers.llm.claude_session import ClaudeSessionLLMProvider
 from memo.providers.llm.null import NullLLMProvider
 from memo.providers.null import NullAgentController, NullConductor
 
@@ -147,106 +146,8 @@ async def test_agent_controller_never_raises_when_unreachable():
     assert r["op"] == "respawn"
 
 
-# --- claude_session LLM adapter (R-17 / T085b) ---
-
-@pytest.mark.asyncio
-async def test_claude_session_returns_none_when_unreachable():
-    """Never raises — callers are built around the degrade path."""
-    p = ClaudeSessionLLMProvider(atc_url="http://127.0.0.1:9")
-    assert await p.complete("hello", timeout_s=0.2) is None
-    assert await p.available() is False
-
-
-@pytest.mark.asyncio
-async def test_supervisor_notified_exactly_once_per_outage(monkeypatch):
-    """The rate-limit that stops a dead session from flooding the supervisor.
-
-    Per-call notification plus fleet-wide memo traffic is the thundering-herd
-    failure CLAUDE.md warns about.
-    """
-    p = ClaudeSessionLLMProvider(atc_url="http://127.0.0.1:9")
-    notifies: list[str] = []
-
-    async def fake_notify(reason, outage_for):
-        notifies.append(reason)
-    monkeypatch.setattr(p, "_notify_supervisor", fake_notify)
-
-    for _ in range(12):
-        assert await p.complete("x", timeout_s=0.05) is None
-    assert len(notifies) == 1, f"expected 1 escalation, got {len(notifies)}"
-
-
-@pytest.mark.asyncio
-async def test_recovery_rearms_the_escalation(monkeypatch):
-    """After a recovery, a NEW outage should page again."""
-    p = ClaudeSessionLLMProvider(atc_url="http://127.0.0.1:9")
-    notifies: list[str] = []
-
-    async def fake_notify(reason, outage_for):
-        notifies.append(reason)
-    monkeypatch.setattr(p, "_notify_supervisor", fake_notify)
-
-    await p.complete("x", timeout_s=0.05)
-    assert len(notifies) == 1
-    await p._on_success()                      # session came back
-    await p.complete("x", timeout_s=0.05)      # ...and went away again
-    assert len(notifies) == 2
-
-
-@pytest.mark.asyncio
-async def test_notify_failure_is_swallowed():
-    """If ATC is down too, there is nobody to tell — and it must not propagate."""
-    p = ClaudeSessionLLMProvider(atc_url="http://127.0.0.1:9")
-    await p._notify_supervisor("test reason", 12.0)   # must not raise
-
-
-def test_adapter_never_shells_out_to_claude_p():
-    """R-17's hard prohibition, asserted structurally.
-
-    `claude -p` bills as API usage; an interactive session rides the
-    subscription. A future maintainer reaching for -p is a regression.
-    """
-    import inspect
-
-    from memo.providers.llm import claude_session as mod
-    src = inspect.getsource(mod)
-    code = "\n".join(line for line in src.splitlines()
-                     if not line.strip().startswith("#"))
-    assert "subprocess" not in code
-    assert "os.system" not in code
-    assert "shell=True" not in code
-
-
-# --- /events pull endpoint (FR-042) ---
-
-@pytest.mark.asyncio
-async def test_events_unknown_kind_is_accepted_not_rejected():
-    """A Conductor that learns a kind before memo does must not collect failures."""
-    r = await main.conductor_pull({"event_kind": "something.new"})
-    assert r["handled"] is False
-    assert "no handler" in r["reason"]
-
-
-@pytest.mark.asyncio
-async def test_events_session_started_warms_the_cache(embedding):
-    r = await main.conductor_pull({"event_kind": "session.started",
-                                   "session_id": "dojo"})
-    assert r["handled"] is True
-    assert r["result"]["warmed"] is True
-
-
-@pytest.mark.asyncio
-async def test_events_handler_failure_is_reported_not_raised(monkeypatch):
-    async def boom(**kw):
-        raise RuntimeError("nope")
-    monkeypatch.setattr(main.injection_set, "build", boom)
-    r = await main.conductor_pull({"event_kind": "session.started",
-                                   "session_id": "dojo"})
-    assert r["handled"] is False
-    assert "error" in r
-
-
-@pytest.mark.asyncio
-async def test_providers_status_endpoint():
-    r = await main.providers_status()
-    assert set(r) == {"conductor", "agent_controller", "llm", "standalone"}
+# The claude_session adapter (R-17) was removed 2026-07-30 along with its
+# tests. It never served a request: `memo_llm_provider` defaulted to "null"
+# from the day it was written, and the `memo-llm` session it dialled was never
+# created on this fleet. ~180 lines of adapter and ~100 of tests exercising an
+# integration that had never run once.

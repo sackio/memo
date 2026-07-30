@@ -34,9 +34,12 @@ def get_llm_provider() -> LLMProvider:
 
     if name == "null":
         _instance = NullLLMProvider()
-    elif name == "claude_session":
-        from memo.providers.llm.claude_session import ClaudeSessionLLMProvider
-        _instance = ClaudeSessionLLMProvider()
+    # `claude_session` (R-17: inference via a standing interactive Claude Code
+    # session over ATC) was REMOVED 2026-07-30. It never served a request —
+    # `memo_llm_provider` has defaulted to "null" since it was written and the
+    # `memo-llm` session was never created on this fleet. Inference now belongs
+    # to session-spawned subagents, which bring their own model and need no
+    # provider here. See specs/003-agentic-memory/.
     else:
         logger.warning(
             "unknown MEMO_LLM_PROVIDER=%r — falling back to null provider", name
