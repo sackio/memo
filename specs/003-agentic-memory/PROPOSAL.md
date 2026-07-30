@@ -129,3 +129,57 @@ two sets of ids, two audit trails, and a window where nobody is sure which is au
 you explicitly wanted to kick the tires, so this is genuinely yours.
 
 Everything else above I will proceed on without asking.
+
+---
+
+## Ecosystem findings (third survey) — what the design must not break
+
+### The precedent already exists and works
+
+**`/recall-context` is already a forked subagent** — `context: fork`, `agent: general-purpose`,
+described as *"Runs as an isolated subagent — all search overhead stays out of the main context
+window."* The architecture under discussion is already in production on one path. That is much
+better evidence than any argument, and it means the remaining work is extending a proven pattern
+rather than proving a new one.
+
+### Six collisions to handle
+
+1. **`SubagentStop → memo-judge.py` fires on EVERY subagent.** The moment `/recall` becomes a
+   subagent, every recall triggers a judge pass over the recall subagent's own transcript —
+   memos about recalling memos, a self-feeding write loop. Harmless *today* only because the
+   judge is inert (`MEMO_JUDGE_ENABLED` is set nowhere; `judge.log` has one line, from May 11).
+   **Must be matcher-gated before the judge is ever enabled.**
+
+2. **Stale skills are shadowing this repo — verified.** `/mnt/nas/data/code/memo/.claude/skills/`
+   holds **March 1** copies of `recall`, `memorize` and `recall-context` that override the global
+   ones whenever cwd is the memo repo — *which is exactly where this design work happens*. They
+   point at `localhost:8000` instead of `server4:8000` and predate `--titles`,
+   `--include-stale` and the stale-tag filter. Delete or replace them, or the new design gets
+   validated against March behaviour.
+
+3. **Fleet boot cost.** `/mnt/nas/data/code/scripts/agents` contains **43 `/recall` references** —
+   nearly every named agent's spawn prompt opens with `/recall-context` plus two or three
+   `/recall`s. At a 15–41k-token subagent floor, converting all of them multiplies fleet boot
+   cost substantially. Mitigated by the fact that `recall-context` already pays it, but the fast
+   tier matters here: boot-time context loads are exactly the "I know what I want" case that
+   should not spawn an agent.
+
+4. **`--titles` is a load-bearing dedup primitive.** `/memorize`'s duplicate check, `/memo-sync`
+   step 3, and memo-minder's dedup all depend on cheap title+id+score output. Preserve it.
+
+5. **Five cleanup processes exist *because* `/memorize` writes raw.** memo-reconciler (SessionEnd,
+   live, 137 log entries through 07-28), memo-minder daily, memo-infra-probe-sweep,
+   memo-pitfall-freshness, memo-tag-fixup. An agent that reconciles *on write* changes their
+   input assumptions — `memo-tag-fixup --apply` backfills `*-sourced` tags on a 3-day window, and
+   the reconciler has a 10-mutation cap. Adjust them deliberately rather than letting them fight.
+
+6. **Do not absorb the rewarm path.** CLAUDE.md rule 10 routes compaction-survival context to ATC
+   beacons, deliberately *not* memo. A "smarter" memorize agent that starts capturing session
+   state would recreate the exact confusion that rule exists to prevent.
+
+### Endpoint inconsistency worth settling while we are here
+
+Global skills use `server4:8000`; the shadowing project skills use `localhost:8000`; both hooks
+default to `localhost:8000`; MCP uses `server4:8000/mcp/`. Moving `/recall` and `/memorize` from
+curl to MCP also changes the permission surface for every session and every cron-driven skill
+(Bash-curl allowlist → `mcp__memo__*` grants).
