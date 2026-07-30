@@ -24,12 +24,12 @@ def temp_db(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "default_db_path", str(path))
 
     # The connection cache is keyed by path, but a stale entry from a previous
-    # test would shadow the new path — clear before AND after.
-    db._connections.clear()
+    # test would shadow the new path — clear before AND after. Connections are
+    # thread-local as of 2026-07-30, so this clears THIS thread's cache; worker
+    # threads hold their own and are torn down with the pool.
+    db._clear_thread_connections()
     yield str(path)
-    for conn in db._connections.values():
-        conn.close()
-    db._connections.clear()
+    db._clear_thread_connections(close=True)
 
 
 @pytest.fixture

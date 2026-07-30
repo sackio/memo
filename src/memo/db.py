@@ -3,6 +3,7 @@ import json
 import logging
 import sqlite3
 import struct
+import threading
 import uuid
 from pathlib import Path
 from time import time
@@ -14,7 +15,16 @@ from memo.config import settings
 
 logger = logging.getLogger(__name__)
 
-_connections: dict[str, sqlite3.Connection] = {}
+# Connections are THREAD-LOCAL. 2026-07-30: a single cached connection was
+# shared across every thread `asyncio.to_thread` handed work to, with
+# check_same_thread=False silencing the guard that would have caught it. Any
+# two concurrent DB operations — a multi-angle memo_context fan-out, or just
+# two sessions calling memo_search at the same instant — used one sqlite3
+# connection from two threads at once, corrupting results. It surfaced as
+# SQLITE_MISUSE, "tuple index out of range", and json.loads(None): three crash
+# sites, one race. Ported from v1 0.3.4.
+_local = threading.local()
+_conn_create_lock = threading.RLock()
 _tokenizer = tiktoken.get_encoding("cl100k_base")
 _ignored_db_path_seen: set[str] = set()  # sampling set so we don't log-spam
 
@@ -54,12 +64,30 @@ def _truncate_to_tokens(text: str, max_tokens: int) -> str:
     return _tokenizer.decode(tokens[:max_tokens])
 
 
+def _clear_thread_connections(close: bool = False) -> None:
+    """Drop this thread's cached connections (test teardown / path switches)."""
+    conns = getattr(_local, "conns", None)
+    if not conns:
+        return
+    if close:
+        for conn in conns.values():
+            conn.close()
+    conns.clear()
+
+
 def _get_or_create_conn(db_path: str) -> sqlite3.Connection:
-    if db_path in _connections:
-        return _connections[db_path]
+    conns = getattr(_local, "conns", None)
+    if conns is None:
+        conns = _local.conns = {}
+    existing = conns.get(db_path)
+    if existing is not None:
+        return existing
 
     Path(db_path).parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(db_path, check_same_thread=False)
+    # check_same_thread=True (the default) is deliberate: connections are now
+    # per-thread, so a connection crossing threads is a bug, and this makes it
+    # raise loudly instead of silently corrupting reads.
+    conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
 
     conn.enable_load_extension(True)
@@ -69,9 +97,12 @@ def _get_or_create_conn(db_path: str) -> sqlite3.Connection:
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA busy_timeout=5000")
 
-    _init_schema(conn)
-    _apply_migrations(conn)
-    _connections[db_path] = conn
+    # Serialized across threads: WAL allows concurrent readers, but two threads
+    # running schema creation / migrations at once is a race worth not having.
+    with _conn_create_lock:
+        _init_schema(conn)
+        _apply_migrations(conn)
+    conns[db_path] = conn
     return conn
 
 
@@ -781,6 +812,17 @@ async def search_multi(
     per_db = await asyncio.gather(*tasks, return_exceptions=True)
     seen: set[str] = set()
     merged: list[dict] = []
+    failures = [r for r in per_db if isinstance(r, Exception)]
+    if failures:
+        # Never swallow the whole fan-out. A query that dies in every DB and
+        # returns [] is indistinguishable from a corpus with no matches — the
+        # silent twin of the loud crash, where the caller reads "nothing here"
+        # and re-grounds blind. Partial failure is logged and survivable; total
+        # failure must raise. (Ported from v1 0.3.4.)
+        for exc in failures:
+            logger.warning("fan-out: a per-DB query failed: %r", exc)
+        if len(failures) == len(per_db):
+            raise failures[0]
     for result in per_db:
         if isinstance(result, Exception):
             continue
@@ -968,6 +1010,17 @@ async def list_docs_multi(
     per_db = await asyncio.gather(*tasks, return_exceptions=True)
     seen: set[str] = set()
     merged: list[dict] = []
+    failures = [r for r in per_db if isinstance(r, Exception)]
+    if failures:
+        # Never swallow the whole fan-out. A query that dies in every DB and
+        # returns [] is indistinguishable from a corpus with no matches — the
+        # silent twin of the loud crash, where the caller reads "nothing here"
+        # and re-grounds blind. Partial failure is logged and survivable; total
+        # failure must raise. (Ported from v1 0.3.4.)
+        for exc in failures:
+            logger.warning("fan-out: a per-DB query failed: %r", exc)
+        if len(failures) == len(per_db):
+            raise failures[0]
     for result in per_db:
         if isinstance(result, Exception):
             continue
