@@ -98,9 +98,31 @@ Mediator needs the calling agent to disambiguate before persisting.
 
 Caller retries the store call including `clarification_response` and the token. Mediator then proceeds with the disambiguated action.
 
+## Refutation flow — 409 THEN 403 (resolved 2026-07-29)
+
+`spec.md` FR-015c and this contract disagreed about what a fact-refutation
+without operator authority returns: FR-015c said **409 + `{action:"clarify"}`
+("who is authorizing the refutation?")**, while this document's REJECT section
+and invariant said **403**. Same case, two answers — and materially different
+for callers, since 409 is recoverable in-band and 403 is a hard stop.
+
+**Operator ruling (2026-07-29): both, in sequence.**
+
+1. **First attempt → 409 CLARIFY.** The mediator asks who is authorizing and
+   issues a single-use `clarification_token` (TTL 300s). The agent can recover
+   in-band by retrying with `operator_directive_ref` set.
+2. **Retry still lacking authority (or an explicit decline) → 403 REJECT**,
+   with `how_to_authorize`.
+
+So FR-015c's 409 is the OPENING response and this contract's 403 is the
+TERMINAL state. An agent that never had authority still ends at 403; an agent
+that simply forgot to attach it gets a chance to comply rather than losing the
+write.
+
 ## Response — REJECT (403)
 
-Mediator refused the write.
+Mediator refused the write. Per the flow above this is the TERMINAL response —
+reached on a retry that still lacks authority, not on first contact.
 
 ```json
 {
@@ -159,7 +181,10 @@ rate-limited to one notify per outage.
 ## Invariants
 
 - Reconcile pass MUST run before persist for every non-`bypass_mediator` call.
-- `class = fact` refutation MUST require `operator_directive_ref` or return 403.
+- `class = fact` refutation MUST require `operator_directive_ref`. Per the
+  "Refutation flow" section above, first contact returns **409 CLARIFY** and
+  only a retry still lacking authority returns **403 REJECT** — 403 remains
+  the mandatory terminal state, it is just not the first response.
 - Canonical tag vocabulary applied per C44 (retire `hard-rule` / `ben-hard-rule` / `behavioral-rule` fragmentation).
 - Every call logged to `mediator_audit_log` per FR-015f.
 - INDEX LAG invariant: caller should NOT immediately `memo_search` for the new memo; use `memo_get(returned_memo_id)` + settle window.

@@ -1,4 +1,4 @@
-"""Shared fixtures for the v2 unit suite.
+"""Shared fixtures for the whole v2 suite (unit + contract + integration).
 
 The critical job here is DB isolation. ``db._resolve_path`` ignores its
 ``db_path`` argument entirely and always returns

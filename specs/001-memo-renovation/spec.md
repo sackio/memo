@@ -457,7 +457,12 @@ verify the session resumes on v1 with no corruption.
   operator-directive reference (session-id + timestamp of Ben's
   authorizing DM, or auditor invocation id). Returns HTTP 409 with a
   clarification body: `{action: "clarify", conflicting_memo_id, prompt:
-  "who is authorizing the refutation?"}`.
+  "who is authorizing the refutation?"}`. **Resolved 2026-07-29**: this 409 is
+  the FIRST response only. A retry that still lacks `operator_directive_ref`
+  (or an explicit decline) returns **403 REJECT**, per the "Refutation flow"
+  section of contracts/mediator-store.md — that contract previously specified
+  403 for this same case, and the two are reconciled as 409-then-403 rather
+  than either alone.
 - **FR-015d**: The storage mediator MUST synchronously issue a
   clarification prompt to the calling agent when the incoming memo is
   ambiguous (missing class, missing provenance, appears to be compound,
