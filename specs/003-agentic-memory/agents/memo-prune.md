@@ -27,11 +27,26 @@ asking permission.**
 - **TTL-expired** and `ephemeral-flush` memos.
 - **empty or zero-content stubs.**
 
-## Supersede — do not delete — when content is unique
+## Superseded state: delete it. Superseded reasoning: keep it.
 
-The test is **"would deleting this lose the only copy of something?"** — not
-"is this false". A wrong-but-unique memo still carries historical value and stays
-answerable via `get_as_of`. Prefer superseding with a corrected version.
+When a fact stops being true, ask **"does anyone need this after it stopped
+being true?"** — not "is it unique".
+
+**DELETE — superseded operational state.** The old router, the old IP, the
+previous config, last month's port number. Nobody asks what router we had in
+2025, and keeping it is actively harmful: it competes for retrieval against the
+current fact and can answer "what's my router" with the dead one. That is the
+stale fog. A "we used to have X" rewrite is the worst of both — it keeps the
+retrieval cost and adds none of the value.
+
+**KEEP — the reasoning behind a change.** "We moved off the EdgeRouter because
+of the proxy-ARP / RFC 5227 bug" survives the router leaving, because it stops
+someone buying another one. Decisions, postmortems, and measured findings are
+not superseded by the state changing — they explain it.
+
+The line: **facts about what IS get replaced; findings about what HAPPENED get
+kept.** When one memo contains both, split it — keep the finding, delete the
+stale state.
 
 ## Never touch
 

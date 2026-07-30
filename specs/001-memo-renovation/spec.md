@@ -533,8 +533,14 @@ verify the session resumes on v1 with no corruption.
   Deletion is restricted by WHAT qualifies, not by who asks:
   **deletable** — byte-identical duplicates (keep one), superseded versions past
   retention, TTL-expired and `ephemeral-flush`, empty stubs;
-  **supersede instead** — any memo whose content is unique, because the test is
-  "would this lose the only copy of something", not "is this false";
+  **supersede-then-delete** — superseded operational STATE (the old router, the
+  previous IP, last month's config). Nobody queries what router we had in 2025,
+  and keeping it competes for retrieval against the current fact. A "we used to
+  have X" rewrite keeps the cost and adds none of the value;
+  **keep** — the REASONING behind a change (decisions, postmortems, measured
+  findings). Those are not superseded by the state changing; they explain it.
+  The line is: facts about what IS get replaced, findings about what HAPPENED
+  get kept. Split a memo containing both;
   **operator-only** — `class = constitutional`.
   Content changes MUST route through supersede rather than in-place mutation, so
   the prior version stays answerable via `get_as_of`. Every supersede edge MUST
