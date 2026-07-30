@@ -62,13 +62,28 @@ def test_behavioral_from_prohibition_language():
     assert cls == "behavioral" and src == "content-heuristic"
 
 
-def test_verbatim_critical_from_uuid_plus_constraint():
-    """A UUID summarized is a UUID destroyed."""
+def test_verbatim_critical_is_tag_only_never_inferred_from_content():
+    """A UUID plus the word "never" is NOT a verbatim-critical fact.
+
+    The old heuristic was `full UUID AND prohibition language`. Measured against
+    the real corpus it fired on 55 of 1,655 migrated memos (85,336 tokens) —
+    including memo-minder's own backfill checkpoints, every halt notice, and
+    every status pin that happens to cite an id. Because the class was
+    force-injected, that put ~90k tokens into a 5,000-token session-start
+    budget.
+
+    The class means "quote this exactly if you use it". Nothing about mentioning
+    an id establishes that, so it must be claimed by tag, never inferred.
+    """
     cls, _ = classify.classify(v1_memo(
         5, tags=["misc"],
         content="Never use a prefix; cite 5d43c4a0-1111-4111-8111-111111111111 in full."),
         now=NOW)
-    assert cls == "verbatim-critical"
+    assert cls != "verbatim-critical"
+
+    tagged, src = classify.classify(
+        v1_memo(6, tags=["verbatim-critical"], content="exact wording matters"), now=NOW)
+    assert tagged == "verbatim-critical" and src == "tag-heuristic"
 
 
 def test_goal_and_episodic_and_decision():

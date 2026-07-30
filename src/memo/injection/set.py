@@ -93,7 +93,7 @@ def _sync_fetch_injectable(db_path: str) -> list[dict]:
     conn = db._get_or_create_conn(db_path)
     rows = conn.execute(
         "SELECT * FROM documents WHERE valid_until IS NULL AND class IN "
-        "('constitutional','behavioral','verbatim-critical','goal','time-scoped') "
+        "('constitutional','behavioral','goal','time-scoped') "
         "ORDER BY created_at DESC"
     ).fetchall()
     return [db._row_to_memo(r) for r in rows]
@@ -190,9 +190,19 @@ async def build(*, session_id: str, agent_family: str | None = None,
     ]
 
     # FR-019 — constitutional set.
+    #
+    # `verbatim-critical` is deliberately NOT here. [audit 2026-07-30]
+    #
+    # The class means "if you use this, quote it exactly — do not paraphrase".
+    # That is a rule about HANDLING, not a claim that everyone must read it at
+    # every session start. Force-injecting it conflated the two and put 85,336
+    # tokens (55 memos) into a 5,000-token budget on the partial corpus alone.
+    #
+    # Its protection lives on the retrieval path instead: when a
+    # verbatim-critical memo IS returned, it is returned whole and never
+    # summarised. A memo nobody asked for does not need protecting.
     constitutional = [_brief(m) for m in in_scope
-                      if m.get("class") in ("constitutional", "behavioral",
-                                            "verbatim-critical")]
+                      if m.get("class") in ("constitutional", "behavioral")]
 
     # FR-020 — current focus. time-scoped memos join only inside their window
     # (T055), which is what makes an expired trip memo stop being injected
@@ -320,6 +330,31 @@ def render(payload: dict) -> str:
         for t in payload["transclusions"]:
             parts.append(f"[{t['referenced_uuid'][:8]} from {t['source_file']}] "
                          f"{t['resolved_content'].strip()}")
+
+    # Re-assert that memo is REACHABLE and when to reach for it. [001/FR-018]
+    #
+    # Skill descriptions carry `noSurviveCompact: true` — they are NOT
+    # re-injected after /compact (spec constraint C59). Explicit `/recall` still
+    # works post-compaction, but AUTOMATIC firing does not: the session no longer
+    # holds the trigger phrasing that would make it reach for memo unprompted.
+    # That is the mechanism behind sessions with 11 and 24 compactions making
+    # zero memo calls of any kind — it was never a discipline problem.
+    #
+    # This block costs ~70 tokens and rides a path that already fires at every
+    # session start and every compaction, so it restores the reflex without
+    # depending on skill descriptions surviving.
+    parts.append(
+        "\n## Reaching for memo\n"
+        "memo is available now and holds facts you will otherwise re-derive or "
+        "ask about. Reach for it WITHOUT being told when you need: an IP, "
+        "hostname or port · where something lives · a credential's location · "
+        "a past decision or its reasoning · a contact · a convention or "
+        "standing rule · anything you are about to guess at.\n"
+        "`/recall <topic>` for specific facts · `/recall-context <topic>` to "
+        "load background · `/memorize <content> #tags` when a durable fact, "
+        "decision or convention comes up.\n"
+        "Do NOT reach for it for ephemeral or current state — that is a live "
+        "probe, not memory.")
 
     posture_note = payload.get("memory_posture", "on")
     suffix = ("memo augments; native MEMORY.md also loads" if posture_note == "on"

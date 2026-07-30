@@ -81,11 +81,23 @@ def classify(memo: dict[str, Any], *, now: float) -> tuple[str, str]:
 
     if tags & VERBATIM_TAGS:
         return ("verbatim-critical", "tag-heuristic")
-    # Full UUIDs plus hard-constraint language is the verbatim-critical
-    # signature: content whose exact wording matters (a UUID summarized is a
-    # UUID destroyed).
-    if _FULL_UUID.search(content) and _PROHIBITION.search(content):
-        return ("verbatim-critical", "content-heuristic")
+    # verbatim-critical is TAG-ONLY. [002-audit 2026-07-30]
+    #
+    # The content heuristic here was `_FULL_UUID and _PROHIBITION` — "contains a
+    # full UUID somewhere AND the word never/don't/avoid". Measured against the
+    # real corpus that fires on almost everything: 55 of 1,655 migrated memos
+    # (85,336 tokens) were classed verbatim-critical, including memo-minder's own
+    # backfill checkpoints at ~3,000 tokens each, every halt notice, and every
+    # status pin that happens to cite an id.
+    #
+    # Because verbatim-critical is force-injected, that put ~90k tokens into
+    # EVERY session start against a 5,000-token budget — and would have been
+    # ~400k on the full corpus, fleet-wide, at every start and every compaction.
+    #
+    # A UUID plus the word "never" is not a fact whose exact wording matters. It
+    # is an ordinary memo that mentions an id. The class means "do not paraphrase
+    # this if you use it", and nothing in that pair establishes it — so there is
+    # no safe content heuristic here, only an explicit tag.
 
     if tags & BEHAVIORAL_TAGS:
         return ("behavioral", "tag-heuristic")

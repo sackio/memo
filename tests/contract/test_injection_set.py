@@ -50,12 +50,24 @@ async def test_constitutional_memos_are_included(embedding):
 
 
 @pytest.mark.asyncio
-async def test_behavioral_and_verbatim_critical_included(embedding):
+async def test_behavioral_injects_but_verbatim_critical_does_not(embedding):
+    """`verbatim-critical` is a rule about HANDLING, not about reach.
+
+    It means "quote this exactly if you use it" — not "everyone must read this
+    at every session start". Conflating the two put 85,336 tokens (55 memos)
+    into a 5,000-token budget on the partial corpus alone, and would have been
+    ~400k fleet-wide on the full one.
+
+    Its protection lives on the retrieval path: when such a memo IS returned it
+    is returned whole and never summarised. A memo nobody asked for does not
+    need protecting.
+    """
     b = await seed("always use docker", cls="behavioral", embedding=embedding)
     v = await seed("exact wording matters here", cls="verbatim-critical",
                    embedding=embedding)
     ids = [m["id"] for m in (await build())["forcible_constitutional"]]
-    assert b in ids and v in ids
+    assert b in ids, "behavioral rules still inject"
+    assert v not in ids, "verbatim-critical must not be force-injected"
 
 
 @pytest.mark.asyncio
@@ -225,3 +237,37 @@ async def test_cache_returns_a_hit_within_the_window(embedding):
                              current_time=NOW, use_cache=True)
     assert first.get("cached") is not True
     assert second.get("cached") is True
+
+
+def test_injection_reasserts_that_memo_is_reachable():
+    """Skill descriptions do not survive /compact (C59), so the injection set
+    must restore the REFLEX to reach for memo.
+
+    Explicit `/recall` still works post-compaction; what is lost is automatic
+    firing, because the session no longer holds the trigger phrasing. Sessions
+    with 11 and 24 compactions made zero memo calls of any kind — this block is
+    the fix, and it rides a path that already fires at every session start and
+    every compaction.
+    """
+    from memo.injection import set as injection_set
+
+    rendered = injection_set.render({
+        "forcible_constitutional": [],
+        "forcible_current_focus": [],
+        "transclusions": [],
+        "memory_posture": "on",
+        "token_budget_used": 0,
+    })
+    assert "Reaching for memo" in rendered
+    assert "/recall" in rendered
+    assert "/memorize" in rendered
+    # The stand-down condition matters as much as the triggers: a high-recall
+    # prompt with no "when not to" turns into noise.
+    assert "ephemeral" in rendered
+
+
+def test_opted_out_sessions_get_no_reachability_block_either():
+    """opt_out must stay total — an opted-out session gets NOTHING, including
+    this. A block that leaked past opt-out would make the flag a lie."""
+    from memo.injection import set as injection_set
+    assert injection_set.render({"opt_out": True}) == ""
