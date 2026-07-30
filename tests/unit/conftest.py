@@ -34,11 +34,18 @@ def temp_db(tmp_path, monkeypatch):
 
 @pytest.fixture
 def embedding():
-    """A dimensionally-valid dummy vector.
+    """A dimensionally-valid, non-degenerate dummy vector.
 
-    ``document_embeddings`` is a vec0 virtual table declared
+    ``document_embeddings`` is a vec0 table declared
     ``FLOAT[embedding_dimensions]``, so a short vector is rejected by sqlite-vec
-    rather than silently padded. Value doesn't matter for these tests; length
-    does.
+    rather than silently padded — length matters.
+
+    So does the VALUE, which is less obvious: an all-zeros vector has undefined
+    cosine distance (zero magnitude ⇒ divide by zero), and sqlite-vec returns
+    NULL for it, which blows up `score = 1.0 - distance` with a TypeError the
+    moment a test actually searches. The earlier `[0.0] * n` fixture only
+    survived because nothing exercised the search path. Use a unit vector.
     """
-    return [0.0] * settings.embedding_dimensions
+    v = [0.0] * settings.embedding_dimensions
+    v[0] = 1.0
+    return v

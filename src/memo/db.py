@@ -333,13 +333,19 @@ def _sync_search(db_path: str, embedding: list[float], limit: int, min_score: fl
         results = []
         for row in rank_rows:
             doc_id, distance = row["doc_id"], row["distance"]
+            if distance is None:
+                # sqlite-vec yields NULL for an undefined cosine — a stored
+                # zero-magnitude vector. Skip rather than crash the whole
+                # search on one bad row.
+                logger.warning("search: NULL distance for doc %s — skipping", doc_id)
+                continue
             score = 1.0 - distance
             if min_score is not None and score < min_score:
                 continue
             doc_row = conn.execute("SELECT * FROM documents WHERE id = ?", (doc_id,)).fetchone()
             if doc_row is None:
                 continue
-            results.append({"document": _row_to_dict(doc_row), "score": score})
+            results.append({"document": _row_to_memo(doc_row), "score": score})
             if len(results) >= limit:
                 break
         return results
@@ -356,6 +362,9 @@ def _sync_search(db_path: str, embedding: list[float], limit: int, min_score: fl
     results = []
     for row in rows:
         doc_id, distance = row["doc_id"], row["distance"]
+        if distance is None:
+            logger.warning("search: NULL distance for doc %s — skipping", doc_id)
+            continue
         score = 1.0 - distance
         if min_score is not None and score < min_score:
             continue
@@ -364,7 +373,7 @@ def _sync_search(db_path: str, embedding: list[float], limit: int, min_score: fl
         ).fetchone()
         if doc_row is None:
             continue
-        doc = _row_to_dict(doc_row)
+        doc = _row_to_memo(doc_row)
         if not _matches_filters(doc, [], after, before, min_tokens, max_tokens):
             continue
         results.append({"document": doc, "score": score})
@@ -378,7 +387,7 @@ def _sync_get(db_path: str, doc_id: str) -> dict | None:
     row = conn.execute("SELECT * FROM documents WHERE id = ?", (doc_id,)).fetchone()
     if row:
         _bump_access(conn, doc_id, "get")
-        return _row_to_dict(row)
+        return _row_to_memo(row)
     return None
 
 
@@ -400,6 +409,10 @@ def _sync_copy(src_path: str, doc_id: str, dst_path: str) -> str | None:
     row = conn_src.execute("SELECT * FROM documents WHERE id = ?", (doc_id,)).fetchone()
     if row is None:
         return None
+    # Deliberately _row_to_dict, NOT _row_to_memo: copy/move re-INSERTS this
+    # row into another DB, so the v2 JSON columns must stay in their stored
+    # string form. Decoding here would hand dicts to an INSERT that expects
+    # TEXT. Read paths use _row_to_memo; this is a transfer path.
     doc = _row_to_dict(row)
 
     emb_row = conn_src.execute(
@@ -471,7 +484,7 @@ def _sync_list(db_path: str, tags: list[str], limit: int, after: float | None,
         f"SELECT * FROM documents {where} ORDER BY created_at DESC LIMIT ?", params
     ).fetchall()
 
-    return [_row_to_dict(row) for row in rows]
+    return [_row_to_memo(row) for row in rows]
 
 
 # --- Async wrappers ---

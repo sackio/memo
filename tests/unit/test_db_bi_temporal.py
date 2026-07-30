@@ -289,3 +289,55 @@ async def test_cyclic_edges_do_not_hang(embedding):
     chain = db._lineage_chain(conn, a)
     assert len(chain) <= 2
     assert await db.get_current(None, a) is not None
+
+
+# --- v2 JSON decoding on the read paths ---
+#
+# Regression guard. `_row_to_dict` only decodes v1's tags/metadata, so a read
+# path still using it hands callers `scope` as the raw string '["global"]'.
+# That fails SILENTLY and destructively: the recall mediator's ScopeFilter
+# iterates the value, so a string makes it compare single CHARACTERS and
+# quietly drop every candidate. Caught 2026-07-29 while wiring the mediator.
+
+@pytest.mark.asyncio
+async def test_search_decodes_v2_json_columns(embedding):
+    await store("the barn k8s control plane lives here", embedding)
+    rows = await db.search(
+        db_path=None, embedding=embedding, limit=10, min_score=None,
+        tags=[], after=None, before=None, min_tokens=None, max_tokens=None,
+    )
+    assert rows, "expected the stored doc back"
+    doc = rows[0]["document"]
+    assert doc["scope"] == ["global"], f"scope not decoded: {doc['scope']!r}"
+    assert isinstance(doc["derived_from"], list)
+    assert isinstance(doc["tags"], list)
+
+
+@pytest.mark.asyncio
+async def test_get_decodes_v2_json_columns(embedding):
+    doc_id = await store("hello", embedding)
+    doc = await db.get(None, doc_id)
+    assert doc["scope"] == ["global"], f"scope not decoded: {doc['scope']!r}"
+    assert isinstance(doc["derived_from"], list)
+
+
+@pytest.mark.asyncio
+async def test_list_decodes_v2_json_columns(embedding):
+    await store("hello", embedding)
+    docs = await db.list_docs(None, [], 10, None, None, None, None)
+    assert docs
+    assert docs[0]["scope"] == ["global"]
+
+
+@pytest.mark.asyncio
+async def test_copy_path_keeps_raw_json(embedding, tmp_path):
+    """copy/move re-INSERT the row, so they must NOT decode.
+
+    Pins the asymmetry so a future 'consistency' cleanup doesn't switch
+    _sync_copy to _row_to_memo and start inserting dicts into TEXT columns.
+    """
+    doc_id = await store("copy me", embedding)
+    conn = db._get_or_create_conn(db.global_path())
+    row = conn.execute("SELECT * FROM documents WHERE id = ?", (doc_id,)).fetchone()
+    raw = db._row_to_dict(row)
+    assert isinstance(raw["scope"], str), "copy path must see the stored TEXT form"
