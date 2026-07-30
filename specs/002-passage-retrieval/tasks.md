@@ -137,7 +137,7 @@ repo-wide and will fail on later-phase FRs. Run inside the v2 worktree.
 - [x] **T251** — Baseline recorded before any change:
       `specs/002-passage-retrieval/baseline-2026-07-30-v1.json` — v1 @ 7,511
       memos, top band 2/14 rank-1, 9/14 absent. **DONE 2026-07-30.** `[002/FR-111]`
-- [ ] **T252** — Mid-document fact set: ~30 facts living in the middle of memos
+- [x] **T252** — Mid-document fact set: ~30 facts living in the middle of memos
       ≥2000 tokens, with known correct answers. **This set must FAIL against the
       current implementation** — if it passes today it is not testing the defect.
       `[002/FR-111]`

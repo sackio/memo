@@ -116,6 +116,8 @@ def main() -> int:
     ap.add_argument("--limit", type=int, default=10)
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--json", default=None, help="write the raw result here")
+    ap.add_argument("--factset", default=None,
+                    help="also run a mid-document fact set (JSON: [{query, expect_id}])")
     args = ap.parse_args()
 
     res = run(args.url, args.per_band, args.limit, args.seed)
@@ -131,6 +133,30 @@ def main() -> int:
         print(f"  memos {k} tokens: {v['memos']} ({v['token_pct']}% of all content)")
     print()
     print("Searching a memo's own exact title: rank 1 is the only correct answer.")
+
+    if args.factset:
+        cases = json.load(open(args.factset))
+        r1 = t5 = absent = 0
+        for c in cases:
+            try:
+                hits = _search(args.url, c["query"], limit=args.limit)
+            except Exception:
+                absent += 1
+                continue
+            ids = [_doc_of(h)["id"] for h in hits]
+            if c["expect_id"] in ids:
+                k = ids.index(c["expect_id"])
+                r1 += k == 0
+                t5 += k < 5
+            else:
+                absent += 1
+        n = len(cases) or 1
+        res["factset"] = {"n": len(cases), "rank1": r1, "top5": t5, "absent": absent,
+                          "rank1_pct": round(100 * r1 / n, 1)}
+        print()
+        print("mid-document fact set (the answer lives inside a long memo):")
+        print(f"  rank-1 {r1}/{len(cases)} ({100*r1/n:.0f}%) · "
+              f"top-5 {t5}/{len(cases)} · absent {absent}/{len(cases)}")
 
     if args.json:
         with open(args.json, "w") as fh:

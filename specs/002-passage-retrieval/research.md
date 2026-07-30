@@ -58,3 +58,30 @@ Phases B and C. R-02 sizes the *cost* of each option; it says nothing about
 which retrieves better. **Do not read R-02 as a recommendation.** The temptation
 is to pick 512 because it produces the fewest rows and the most single-passage
 memos — that is an argument about storage, and storage was never the problem.
+
+## R-04 — Mid-document fact set: 17% rank-1 against the current implementation
+
+Built 2026-07-30 (`factset-mid-document.json`, 30 cases). Method: take memos ≥2000 tokens, pull
+a distinctive prose sentence from the **middle third** (skipping headings, tables, code fences
+and boilerplate), and use ~18 words of it as the query. The correct answer is the memo it came
+from.
+
+These are close to best-case queries — near-verbatim text lifted straight out of the target
+document. Against the current document-level index:
+
+| metric | result |
+|---|---|
+| rank-1 | **5/30 (17%)** |
+| in top-5 | 8/30 (27%) |
+| absent from top-10 | **16/30 (53%)** |
+
+**The set is valid precisely because it fails.** FR-111 requires a set that the pre-change
+implementation cannot pass; one that passed today would be measuring something other than the
+defect. Over half the time, quoting a memo's own middle back at it does not retrieve it.
+
+This is the sharpest statement of the problem so far. The own-title measurement (R-01) shows
+long memos are hard to find *by name*; this shows their **contents are not addressable at all**.
+For a system whose entire purpose is recalling specific facts, that is the finding that matters.
+
+Runnable: `memo-retrieval-bench --factset specs/002-passage-retrieval/factset-mid-document.json`.
+SC-103 requires ≥75% rank-1 here after the change.
