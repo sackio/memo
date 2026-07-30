@@ -67,20 +67,96 @@ memo's criteria, in the order they're applied:
    change; findings about what HAPPENED get kept. A candidate describing current state is
    promotable only if that state is *durable* — "the router is a VyOS box" yes, "the migration is
    at 40%" no.
-3. **Class inference**, which is where `origin` earns its place. Operator-originated + prohibition
+3. **Class inference**, which is where `authored_by` earns its place. Operator-originated + prohibition
    language → behavioral. Operator + standing-rule language → **proposal only, never enacted**
    (Principle V). Agent-originated → fact or episodic.
 4. **Would anyone ask for this?** The test that kills most candidates. Reference count measures
    how often it came *up*, not whether anyone would ever go *looking*. Status chatter scores high
    on the first and zero on the second.
 
+## How much `authored_by` is allowed to buy — the strength ceiling
+
+ATC's V2 spec says out loud that attribution is **sound against confusion, soft against intent**:
+all seats share a uid, so key custody is unachievable and a determined co-resident agent can post
+as a bridge. That is the right call, and memo must not build anything on a stronger reading of it.
+
+So, explicitly: **`authored_by` may influence WORTH and CLASS INFERENCE. It may never, by itself,
+confer PRIVILEGE.**
+
+- ✅ allowed: rank a candidate higher, infer behavioral-vs-episodic class, weight it in recall.
+- ❌ never: create or amend a **constitutional-class** memo, or add anything to the **forcible
+  injection set**, on the strength of `authored_by: operator` alone.
+
+Both prohibitions already hold by construction — Principle V reserves constitutional-class to the
+operator (agents may only PROPOSE), and the injection set carries constitutional class only. This
+section exists so that stays true by intent rather than by accident, because the drift is one
+plausible edit away: the moment a promoted behavioral rule becomes injectable, a spoofed
+authorship becomes a fleet-wide standing rule.
+
+**Residual risk, accepted:** a spoofed `authored_by: operator` can bias ranking and get junk
+stored as behavioral class. That is confusion-grade damage — retrievable noise, not enacted rules
+— and the cure (Q-D's signed-assent lane) costs more than the disease. Revisit only if the threat
+model changes from confusion to malice.
+
 ## What memo returns
 
-`accept` (+ memo id, + action taken: write-new / merge / supersede) · `reject` (+ reason) ·
+`accept` (+ memo id, + action taken: write-new / merge / supersede) · `reject` (+ reason code) ·
 `defer` (+ what would change the answer).
 
 **Rejections carry a reason** so ATC can stop offering that shape, rather than re-offering the
 same candidate forever. A promotion path that silently drops candidates is one nobody can tune.
+
+The reason must come from a **closed set** — free text cannot tune a heuristic, because nothing on
+ATC's side can aggregate it:
+
+| code | meaning | terminal? |
+|---|---|---|
+| `working_state` | true when said, worthless now — the dominant rejection | no |
+| `already_durable` | duplicate of an existing memo (id returned) | **yes** |
+| `merged` | folded into an existing memo rather than stored (id returned) | **yes** |
+| `too_thin` | has no standalone meaning outside its thread | no |
+| `scope_too_narrow` | one session's local detail, not fleet knowledge | no |
+| `previously_deleted` | memo deleted this content deliberately — see below | **yes** |
+| `unverifiable` | a claim memo cannot check and would be storing as fact | no |
+
+**Terminal means ATC must not re-offer that content**, in any later pass, on any new recurrence.
+Non-terminal means the shape was wrong *this time* and stronger evidence may change the answer.
+
+## Deletion is now a first-class rejection reason
+
+Ben's 2026-07-30 ruling changed memo's half of this: **superseded state gets DELETED, not
+rewritten** — the test is *"does anyone need this after it stopped being true?"*, and "we used to
+have X" is the worst option, carrying all of the retrieval cost and none of the value.
+
+That collides with ATC's Q-A if the disk tier is retained indefinitely, which memo thinks it
+should be. **ATC's log will outlive memos memo deliberately deleted** — correctly, because ATC
+records *what was said* and memo records *what is true*. But it means the same content can recur
+in the log and be re-offered forever, and memo's auditor has no memory of having killed it.
+
+Both sides need one thing each:
+
+- **memo:** check the **deletion log** (FR-028a, content snapshots) at candidate *intake*, before
+  reconcile. A hit returns `previously_deleted` — memo must not re-store what it decided to drop.
+- **ATC:** treat terminal rejections as sticky. Re-offering a `previously_deleted` candidate is
+  the promotion path's version of a retry loop.
+
+This is the only place the two retention models genuinely disagree, and it is cheap to settle now
+and expensive to discover as corpus churn later.
+
+## Volume: bounded batches, memo-paced
+
+Each candidate costs memo a full reconcile pass — passage search plus auditor judgment. Measured
+floor for a subagent invocation is **~2s and 15–41k tokens**, so an unbounded offer stream is a
+real cost, not a theoretical one.
+
+So promotion is **memo-paced**: ATC ranks and holds candidates, memo drains a bounded batch when
+its auditor runs. This also keeps FR-020 clean — memo draining its own queue is housekeeping, not
+fleet scheduling — and means an ATC outage cannot push work at memo, nor a memo outage back up
+into ATC.
+
+**Each side publishes a counter the other can read** — ATC: last promotion pass, candidates
+offered, queue depth. memo: last drain, candidates decided. Neither party counts its own absences;
+the coordinator compares the two, per Principle I's corollary.
 
 ## Two constraints from the other rulings
 
