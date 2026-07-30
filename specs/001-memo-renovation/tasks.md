@@ -147,9 +147,17 @@ markers, 0 L1 misses, exit 0. Full suite: **89 passed**, run in docker —
 7. **Tests run IN DOCKER. NEVER on the host. RESOLVED.**
 
    ```bash
-   cd ../memo-v2 && docker compose run --rm test        # whole suite
-   cd ../memo-v2 && docker compose run --rm test -q tests/unit/   # subset
+   cd ../memo-v2 && docker compose run --rm test                       # whole suite
+   cd ../memo-v2 && docker compose run --rm test tests/unit -q         # subset
+   cd ../memo-v2 && docker compose run --rm --build test               # after editing src/
    ```
+
+   The Dockerfile sets `ENTRYPOINT ["python","-m","pytest"]` with
+   `CMD ["tests/","-q"]` precisely so the subset form works. `docker compose
+   run <service> <args>` REPLACES the CMD rather than appending to it, so with a
+   bare CMD any pytest flag is treated as the executable —
+   `exec: "-q": executable file not found`. (My own first draft of these docs
+   had that bug.)
 
    **89 passed, 0 failed.** This unblocks the Phase 3 mediator contract tests,
    which need `TestClient`.
@@ -237,14 +245,14 @@ Everywhere the mediators touch the LLM they must **degrade, never block**:
 on unavailability recall returns its search-only answer with an `anomalies`
 entry and store writes-new + flags the auditor. Neither may fail the caller.
 
-- [ ] T029a [US2] Write `../memo-v2/src/memo/providers/llm/base.py` — abstract `LLMProvider` (`complete(prompt, *, budget_tokens, timeout_s) -> str | None`, returning None on unavailability rather than raising) plus `../memo-v2/src/memo/providers/llm/null.py` — `NullLLMProvider` that always reports unavailable, so every caller exercises the degrade path. Wire `MEMO_LLM_PROVIDER` (default `null` until Phase 5) in config. Marker `001/FR-015` on the base class docstring.
-- [ ] T030 [US2] Write `../memo-v2/src/memo/mediators/filters.py` — filter chain strategy classes: `DedupFilter` (migration-cluster collapse per C-06), `BiTemporalFilter` (`valid_until IS NULL` unless `as_of` set), `RecencyBoost`, `TagClassBoost` (per FR-013), `ScopeFilter`. Each class's docstring has `001/FR-011 001/FR-012 001/FR-013` marker.
+- [X] T029a [US2] Write `../memo-v2/src/memo/providers/llm/base.py` — abstract `LLMProvider` (`complete(prompt, *, budget_tokens, timeout_s) -> str | None`, returning None on unavailability rather than raising) plus `../memo-v2/src/memo/providers/llm/null.py` — `NullLLMProvider` that always reports unavailable, so every caller exercises the degrade path. Wire `MEMO_LLM_PROVIDER` (default `null` until Phase 5) in config. Marker `001/FR-015` on the base class docstring.
+- [X] T030 [US2] Write `../memo-v2/src/memo/mediators/filters.py` — filter chain strategy classes: `DedupFilter` (migration-cluster collapse per C-06), `BiTemporalFilter` (`valid_until IS NULL` unless `as_of` set), `RecencyBoost`, `TagClassBoost` (per FR-013), `ScopeFilter`. Each class's docstring has `001/FR-011 001/FR-012 001/FR-013` marker.
 - [ ] T031 [US2] Write `../memo-v2/src/memo/mediators/recall.py` — retrieval mediator per contracts/mediator-recall.md. Wires filter chain; LLM-fallback trigger on N candidates or conflict (default N=15). Module docstring marker `001/FR-010 001/FR-011 001/FR-012 001/FR-013 001/FR-014 001/FR-015`.
 - [ ] T032 [US2] Write `../memo-v2/src/memo/clarify.py` — synchronous clarification round-trip helper for the storage mediator (FR-015d). Marker `001/FR-015d`.
 - [ ] T033 [US2] Write `../memo-v2/src/memo/mediators/store.py` — storage mediator per contracts/mediator-store.md. Reconcile-before-write (merge/supersede/split/reject/write-new); canonical tag/class inference; clarify round-trip; refute-fact rejection with operator-directive-ref requirement. Module docstring marker `001/FR-015a 001/FR-015b 001/FR-015c 001/FR-015d 001/FR-015e 001/FR-015f 001/FR-015g`.
 - [ ] T034 [US2] Add `POST /recall` endpoint in main.py; delegates to recall mediator. Marker `001/FR-010`.
 - [ ] T035 [US2] Refactor existing `POST /store` (and MCP `memo_store` tool) in main.py to route through the storage mediator. Preserve v1 tool name for back-compat. Marker `001/FR-015a`.
-- [ ] T036 [US2] [P] Refactor `../memo-v2/src/memo/auto_store.py` to route through storage mediator instead of raw insert. Marker `001/FR-015a`.
+- [ ] T036 [US2] [P] Refactor `../memo-v2/src/memo/auto_store.py` to route through storage mediator instead of raw insert. Marker `001/FR-015a`. **ALSO (R-17, operator clarification 2026-07-29): move auto_store's `openai/gpt-4o-mini` dedup call off OpenRouter onto the `LLMProvider`.** This is memo's one pre-existing generative caller and fires on every hook-triggered store, so it is in scope like any other LLM use — the earlier "leave it for now" note is superseded. After this task, NO generative OpenRouter call should remain: verify with a grep for `auto_store_model` / chat-completion usage. Embeddings stay on OpenRouter (R-05) and are unaffected. Note auto_store must tolerate a None completion (degrade to write-new) like every other caller.
 - [ ] T037 [US2] Write `../memo-v2/tests/contract/test_mediator_recall.py` — one test per contract Response section (SUCCESS/NO-RESULTS/ANOMALY/error). Marker `001/FR-010 001/FR-011 001/FR-012 001/FR-013 001/FR-014 001/FR-015`.
 - [ ] T038 [US2] Write `../memo-v2/tests/contract/test_mediator_store.py` — one test per contract Response section (MERGE/WRITE-NEW/SUPERSEDE/CLARIFY/REJECT/SPLIT). Marker `001/FR-015a 001/FR-015b 001/FR-015c 001/FR-015d 001/FR-015e 001/FR-015f 001/FR-015g`.
 - [ ] T039 [US2] [P] Write `../memo-v2/tests/integration/test_dedup_collapse.py` — reproduce the Matt-Sack `0c55a9a3/c664f4a1/98efbda5` scenario (canonical + 2 duplicates); assert retrieval returns only canonical. Marker `001/FR-012`.

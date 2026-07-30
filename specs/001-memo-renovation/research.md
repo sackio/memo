@@ -283,11 +283,35 @@ per-cutover-checkpoint. Rollback = MCP-flip reversal (v2 → v1 in
 **Rationale**: C-08 sequencing + operator's operational-safety
 requirement + C38 forever-backup posture.
 
-## R-17 — LLM inference provider for the mediators
+## R-17 — LLM inference provider (ALL generative LLM use in memo)
 
-**Decision**: The mediators' generative LLM calls are served by an
-**interactive Claude Code session**, reached through an `LLMProvider`
-adapter (`src/memo/providers/llm/`), NOT by a per-token inference API.
+**Decision**: **Every** generative LLM call anywhere in memo is served by
+an **interactive Claude Code session**, reached through a single
+`LLMProvider` adapter (`src/memo/providers/llm/`), NOT by a per-token
+inference API.
+
+**Scope is the whole service, not just the mediators** (operator
+clarification 2026-07-29: *"basically anytime memo is using an llm I want
+it to be able to use an interactive session"*). Known callers:
+
+| Caller | Today | Under R-17 |
+|---|---|---|
+| Retrieval mediator — LLM fallback | (new) | `LLMProvider` |
+| Storage mediator — reconcile judgement | (new) | `LLMProvider` |
+| `auto_store` dedup | `openai/gpt-4o-mini` via OpenRouter | `LLMProvider` (T036) |
+| Auditor (Phase 6) | (new) | `LLMProvider` |
+| Migration duplicate "LLM escape" (R-13) | (new) | `LLMProvider` |
+
+There is to be **no second generative path**. A component that reaches for
+an inference API directly is a bug, regardless of how cheap the model is.
+
+**A paid-API adapter is explicitly OUT OF SCOPE for now.** The operator
+named routing to OpenRouter / a paid LLM API as a possible *future*
+enhancement to be avoided at present. The abstraction makes it a drop-in
+later; until then the only adapters that exist are `null` (Phase 3) and
+`claude_session` (Phase 5), so there is no paid-LLM path to silently fall
+back onto. Do NOT add one "as a fallback" — an unavailable session must
+degrade (below), never escalate to billing.
 
 Specifics:
 
@@ -320,9 +344,13 @@ Specifics:
 - **Embeddings are out of scope for this decision** and stay on
   OpenRouter `text-embedding-3-small` per R-05 — there is no Claude
   embedding endpoint. R-17 governs generative calls only.
-- **`auto_store`'s `openai/gpt-4o-mini`** is left as-is until T036 folds
-  auto_store into the storage-mediator path, at which point it inherits
-  this provider.
+- **`auto_store`'s `openai/gpt-4o-mini` MUST move to the provider.** This
+  is memo's one pre-existing generative caller, and it fires on every
+  hook-triggered store. It was originally scoped as "leave it, T036 picks
+  it up"; the operator's 2026-07-29 clarification makes it in-scope like
+  any other LLM use. T036 performs the switch. Once done, no OpenRouter
+  *generative* call remains in the codebase — grep for
+  `auto_store_model` / chat-completion usage to confirm.
 
 **Rationale**: Operator directive 2026-07-29 ("use an interactive
 Claude Code session for the LLM ... I don't want to use the -p flag ...

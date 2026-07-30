@@ -36,7 +36,15 @@ COPY tests/ tests/
 ENV OPENROUTER_API_KEY=test-dummy-key
 ENV DEFAULT_DB_PATH=/tmp/memo-test.db
 
-CMD ["python", "-m", "pytest", "tests/", "-q"]
+# ENTRYPOINT + CMD, not CMD alone: `docker compose run --rm test <args>`
+# REPLACES the CMD rather than appending to it, so with a bare CMD any attempt
+# to pass pytest flags makes docker try to exec the flag itself
+# ("exec: \"-q\": executable file not found"). With pytest as the entrypoint,
+# args append the way you'd expect:
+#   docker compose run --rm test                          -> tests/ -q
+#   docker compose run --rm test tests/unit -q            -> that subset
+ENTRYPOINT ["python", "-m", "pytest"]
+CMD ["tests/", "-q"]
 
 # Stage 3: Python runtime
 FROM python:3.12-slim

@@ -33,6 +33,17 @@ class Settings(BaseSettings):
     memo_reaper_enabled: bool = True
     memo_reaper_interval_seconds: int = 300
 
+    # v2 mediator LLM provider (research.md R-17). Served by an INTERACTIVE
+    # Claude Code session (`memo-llm`) riding the Max subscription — never a
+    # per-token API, and never `claude -p`, which bills as API usage.
+    # Defaults to `null` (always-unavailable -> mediators degrade) until the
+    # claude_session adapter lands in Phase 5 / T085a.
+    memo_llm_provider: str = "null"
+    memo_llm_timeout_seconds: float = 10.0
+    # Fallback fires when more than this many candidates survive dedup +
+    # bi-temporal filtering, or when top candidates conflict.
+    memo_llm_fallback_candidate_threshold: int = 15
+
     @property
     def resolved_default_db_path(self) -> str:
         return str(Path(self.default_db_path).expanduser())
