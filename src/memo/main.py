@@ -18,6 +18,9 @@ from memo import db, embeddings, flush as flush_mod, log_queries, reaper
 from memo.mediators import recall as recall_mediator
 from memo.mediators import store as store_mediator
 from memo.injection import set as injection_set
+from memo.auditor import global_sweep as auditor_sweep
+from memo.auditor import actions as auditor_actions
+from memo.auditor import proposals as constitution
 from memo.config import settings
 from memo.db import _count_tokens
 from memo.models import (
@@ -507,6 +510,114 @@ _STORE_STATUS = {
 }
 
 
+# --- Phase 6: auditor + constitution proposals ---
+
+
+@app.post("/constitution/propose", status_code=201)
+async def constitution_propose(payload: dict[str, Any]):
+    """Auditor files a constitutional proposal. [001/FR-023]
+
+    Nothing enters `documents` here. Principle V: the operator owns the
+    constitution, so an auditor proposes and waits.
+    """
+    try:
+        return await constitution.propose(
+            proposed_by=payload.get("proposed_by") or "",
+            layer=payload.get("layer") or "constitutional",
+            proposed_content=payload.get("proposed_content") or "",
+            scope=payload.get("scope"),
+            proposed_tags=payload.get("proposed_tags"),
+            evidence=payload.get("evidence"),
+            urgency=payload.get("urgency") or "medium",
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/constitution/proposals")
+async def constitution_list(status: str | None = Query(default="pending"),
+                            limit: int = Query(default=50)):
+    """Pending proposals awaiting the operator. [001/FR-023]"""
+    return {"proposals": await constitution.list_proposals(status, limit)}
+
+
+@app.post("/constitution/resolve")
+async def constitution_resolve(payload: dict[str, Any]):
+    """Operator accepts or rejects a proposal. [001/FR-023]
+
+    On accept the constitutional memo is created here — the single point where
+    auditor-originated content can become constitutional, and only with an
+    explicit operator action.
+    """
+    pid = payload.get("proposal_id")
+    if pid is None:
+        raise HTTPException(status_code=400, detail="proposal_id is required")
+    result = await constitution.resolve(
+        proposal_id=int(pid), accept=bool(payload.get("accept")),
+        resolved_by=payload.get("resolved_by") or "operator",
+        note=payload.get("note"),
+    )
+    if not result.get("ok"):
+        raise HTTPException(status_code=409, detail=result.get("error"))
+    return result
+
+
+@app.get("/answer-loop-audit")
+async def answer_loop_audit(limit: int = Query(default=50),
+                            session_id: str | None = Query(default=None),
+                            since: float | None = Query(default=None)):
+    """Mediator query -> answer -> next-turn log, for the auditor. [001/FR-035]
+
+    Thin delegate; the logic lives in `memo.auditor.answer_loop` so it is
+    testable without FastAPI.
+    """
+    from memo.auditor import answer_loop
+    return await answer_loop.entries(limit=limit, session_id=session_id, since=since)
+
+
+@app.get("/auditor/actions")
+async def auditor_action_log(limit: int = Query(default=50),
+                             auditor_id: str | None = Query(default=None)):
+    """Auditor's action trail for operator review. [001/FR-025]"""
+    return {"actions": await auditor_actions.recent(limit=limit, auditor_id=auditor_id)}
+
+
+@app.post("/auditor/sweep")
+async def auditor_global_sweep(payload: dict[str, Any] | None = None):
+    """Run one global auditor sweep. [001/FR-024]
+
+    Endpoint rather than only a cron so the sweep can be triggered on demand —
+    and so its behavior is testable without waiting a day.
+    """
+    return await auditor_sweep.sweep(
+        auditor_id=(payload or {}).get("auditor_id") or "auditor-global",
+        coalesce=bool((payload or {}).get("coalesce", True)),
+    )
+
+
+@app.post("/reconcile/infra-change")
+async def reconcile_infra_change(payload: dict[str, Any]):
+    """React to an infra change. [001/FR-031 001/FR-032]
+
+    DRY-RUN by default: pass `apply: true` to actually supersede. Rewriting the
+    corpus off a single broadcast — which may be wrong, or a staged change — is
+    not something to do unprompted.
+    """
+    from memo import reconciler
+    required = ("entity", "old_value", "new_value")
+    if not all(payload.get(k) for k in required):
+        raise HTTPException(status_code=400,
+                            detail=f"{', '.join(required)} are required")
+    return await reconciler.on_infra_change(
+        entity=payload["entity"], old_value=payload["old_value"],
+        new_value=payload["new_value"],
+        source=payload.get("source") or "api",
+        actor=payload.get("actor") or "reconciler",
+        apply=bool(payload.get("apply")),
+        max_updates=int(payload.get("max_updates") or 5),
+    )
+
+
 # --- Phase 5: provider-facing endpoints ---
 
 
@@ -555,14 +666,36 @@ async def _ev_session_ended(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 async def _ev_operator_directive(payload: dict[str, Any]) -> dict[str, Any]:
-    """Record an operator directive so a later write can cite it as authority.
+    """Record an operator directive. [001/FR-026 001/FR-029]
 
-    FR-015c wants an `operator_directive_ref` on a fact refutation. This is how
-    such a directive enters memo in the first place.
+    Two jobs. It is how an `operator_directive_ref` enters memo at all
+    (FR-015c wants one on a fact refutation), and it is the FR-026 override
+    channel — "auditor, undo that reinjection".
+
+    An override is captured as a `decision-in-progress` memo, not merely obeyed.
+    FR-026 wants overrides to feed auditor CALIBRATION: an obeyed-and-forgotten
+    correction teaches nothing and the auditor makes the same call next week.
     """
-    return {"recorded": True, "ref": {"kind": "atc",
-                                      "from": payload.get("from"),
-                                      "at": payload.get("event_time")}}
+    content = (payload.get("content") or "").strip()
+    ref = {"kind": "atc", "from": payload.get("from"),
+           "at": payload.get("event_time"), "id": payload.get("event_id")}
+    if not content:
+        return {"recorded": False, "reason": "empty directive", "ref": ref}
+
+    from memo import db, embeddings
+    from memo.auditor import actions as _actions
+    embedding = await embeddings.embed(content)
+    memo_id = await db.store(db_path=None, content=content,
+                             title="[operator directive] " + content[:60],
+                             tags=["operator-directive", "auditor-calibration"],
+                             metadata={"directive_ref": ref}, embedding=embedding)
+    conn = db._get_or_create_conn(db.global_path())
+    conn.execute("UPDATE documents SET class='decision-in-progress' WHERE id=?",
+                 (memo_id,))
+    conn.commit()
+    await _actions.record(action="override-recorded", auditor_id="memo",
+                          target=memo_id, rationale=content[:200], details={"ref": ref})
+    return {"recorded": True, "memo_id": memo_id, "ref": ref}
 
 
 @app.get("/providers")

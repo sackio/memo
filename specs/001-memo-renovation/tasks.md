@@ -456,17 +456,17 @@ Full suite **297 passed**.
 
 ## Phase 6 (== plan Phase E) — Auditor [US6]
 
-- [ ] T100 [US6] Write `../memo-v2/src/memo/auditor/proposals.py` — `constitution-proposal` writer + `POST /constitution/propose` per contracts/constitution-proposals.md. Marker `001/FR-023`.
-- [ ] T101 [US6] Add `POST /constitution/resolve` + `GET /constitution/proposals` in main.py per contracts/constitution-proposals.md. Marker `001/FR-023`.
-- [ ] T102 [US6] Write `../memo-v2/src/memo/auditor/shadow.py` — per-session shadow auditor: long-running Conductor-subscribed watcher scoped to an agent-family. Subscribes to session's zone; observes transcript growth, memo query patterns, incoming DMs; classifies frustration signals; can write proposals + request AgentController ops. Module docstring marker `001/FR-021 001/FR-022`.
-- [ ] T103 [US6] Write `../memo-v2/src/memo/auditor/liveness.py` — content-based liveness monitor mirroring stale-guide-detector (C70). Marker `001/FR-025`.
-- [ ] T104 [US6] Write `../memo-v2/src/memo/auditor/global_sweep.py` — cron-driven global auditor: polices shadow auditors, synthesizes cross-session patterns, reaps `ephemeral-flush` past TTL (belt-and-suspenders with the 5-min reaper), coalesces long supersession chains. Marker `001/FR-024`.
-- [ ] T105 [US6] Wire auditor bootstrap into main.py — starts shadow-auditor tasks for each active agent-family in the SESSION_GUIDE roster; registers global-auditor scheduled trigger with Conductor. Marker `001/FR-021 001/FR-024`.
-- [ ] T106 [US6] Wire operator-override handling — `POST /events` handler for `operator.directive` events routes to auditor for classification (fact-update? override?). Marker `001/FR-026 001/FR-029`.
-- [ ] T107 [US6] Write `../memo-v2/tests/contract/test_constitution_proposals.py`. Marker `001/FR-023`.
-- [ ] T108 [US6] [P] Write `../memo-v2/tests/integration/test_shadow_auditor.py` — spawn a mock session; auditor observes; assert proposal fired for a synthetic anti-pattern violation. Marker `001/FR-021 001/FR-022`.
-- [ ] T109 [US6] [P] Write `../memo-v2/tests/integration/test_auditor_compaction_trigger.py` — auditor detects composite bloat threshold (C-10: transcript >2.5 MB, cache-read >20M/day, >120 turns) and calls `AgentController.compact()`. Marker `001/FR-022 001/FR-037`.
-- [ ] T110 [US6] [P] Write `../memo-v2/tests/integration/test_answer_loop_correction.py` — operator correction → immediate finding log; 3 corroborating in 24h → auto-promote hint. Marker `001/FR-035`.
+- [X] T100 [US6] Write `../memo-v2/src/memo/auditor/proposals.py` — `constitution-proposal` writer + `POST /constitution/propose` per contracts/constitution-proposals.md. Marker `001/FR-023`.
+- [X] T101 [US6] Add `POST /constitution/resolve` + `GET /constitution/proposals` in main.py per contracts/constitution-proposals.md. Marker `001/FR-023`.
+- [X] T102 [US6] Write `../memo-v2/src/memo/auditor/shadow.py` — per-session shadow auditor: long-running Conductor-subscribed watcher scoped to an agent-family. Subscribes to session's zone; observes transcript growth, memo query patterns, incoming DMs; classifies frustration signals; can write proposals + request AgentController ops. Module docstring marker `001/FR-021 001/FR-022`.
+- [X] T103 [US6] Write `../memo-v2/src/memo/auditor/liveness.py` — content-based liveness monitor mirroring stale-guide-detector (C70). Marker `001/FR-025`.
+- [X] T104 [US6] Write `../memo-v2/src/memo/auditor/global_sweep.py` — cron-driven global auditor: polices shadow auditors, synthesizes cross-session patterns, reaps `ephemeral-flush` past TTL (belt-and-suspenders with the 5-min reaper), coalesces long supersession chains. Marker `001/FR-024`.
+- [X] T105 [US6] Wire auditor bootstrap into main.py — starts shadow-auditor tasks for each active agent-family in the SESSION_GUIDE roster; registers global-auditor scheduled trigger with Conductor. Marker `001/FR-021 001/FR-024`.
+- [X] T106 [US6] Wire operator-override handling — `POST /events` handler for `operator.directive` events routes to auditor for classification (fact-update? override?). Marker `001/FR-026 001/FR-029`.
+- [X] T107 [US6] Write `../memo-v2/tests/contract/test_constitution_proposals.py`. Marker `001/FR-023`.
+- [X] T108 [US6] [P] Write `../memo-v2/tests/integration/test_shadow_auditor.py` — spawn a mock session; auditor observes; assert proposal fired for a synthetic anti-pattern violation. Marker `001/FR-021 001/FR-022`.
+- [X] T109 [US6] [P] Write `../memo-v2/tests/integration/test_auditor_compaction_trigger.py` — auditor detects composite bloat threshold (C-10: transcript >2.5 MB, cache-read >20M/day, >120 turns) and calls `AgentController.compact()`. Marker `001/FR-022 001/FR-037`.
+- [X] T110 [US6] [P] Write `../memo-v2/tests/integration/test_answer_loop_correction.py` — operator correction → immediate finding log; 3 corroborating in 24h → auto-promote hint. Marker `001/FR-035`.
 
 **Phase 6 gate**:
 
@@ -477,8 +477,45 @@ cd ../memo-v2 && speckit-trace --require-full \
 ```
 
 Also cover FR-027..FR-032 (reconciliation FRs — many are implicit in mediator + auditor):
-- [ ] T111 Write `../memo-v2/src/memo/reconciler.py` — event-triggered reconciliation on ATC `infra.change` events (FR-031); real-time reconcile hook on `class=fact` write path (FR-030). Marker `001/FR-027 001/FR-028 001/FR-029 001/FR-030 001/FR-031 001/FR-032`.
-- [ ] T112 Write `../memo-v2/tests/contract/test_reconciliation.py`. Marker `001/FR-027 001/FR-028 001/FR-029 001/FR-030 001/FR-031 001/FR-032`.
+- [X] T111 Write `../memo-v2/src/memo/reconciler.py` — event-triggered reconciliation on ATC `infra.change` events (FR-031); real-time reconcile hook on `class=fact` write path (FR-030). Marker `001/FR-027 001/FR-028 001/FR-029 001/FR-030 001/FR-031 001/FR-032`.
+- [X] T112 Write `../memo-v2/tests/contract/test_reconciliation.py`. Marker `001/FR-027 001/FR-028 001/FR-029 001/FR-030 001/FR-031 001/FR-032`.
+
+**Phase 6 gate: ✅ PASS (2026-07-30)** — 8 FRs FULL, 0 dangling, exit 0.
+
+### Phase 6 implementation notes
+
+1. **Principle V is enforced in code, not trusted.** `ShadowAuditor.modify_memo`
+   REFUSES a `class=constitutional` target and logs the refusal. An auditor able
+   to edit constitutional memos could silently rewrite the standing rules
+   force-injected into every session on the fleet, so the boundary is a code
+   path with a test, not a convention.
+2. **Compaction is idle-gated (FR-037), and that is not politeness** —
+   compacting mid-turn discards the work in flight. C-10's composite threshold
+   requires ALL THREE of transcript/turns/cache-read; any one alone false-positives
+   on a long healthy session.
+3. **Reconciliation supersedes, never rewrites in place.** An in-place rewrite
+   would destroy the prior value with no record it was ever believed, which is
+   exactly the history bi-temporality exists to keep. Infra-change is also
+   DRY-RUN by default and blast-radius capped: rewriting the corpus off a single
+   broadcast — which may be wrong or staged — is not something to do unprompted.
+4. **Operator overrides are captured, not merely obeyed** (FR-026). An override
+   becomes a `decision-in-progress` memo so it feeds auditor calibration; obeyed
+   and forgotten teaches nothing and the auditor repeats the call next week.
+5. **The global sweep's TTL reap is deliberately redundant** with the 5-minute
+   reaper. If the process was down or the reaper disabled by config, TTLs
+   silently stopped being honored — a scheduled sweep that finds nothing is cheap.
+6. **Chain coalescing keeps EDGES, compacts BODIES.** The audit trail of who
+   changed what and when is the part worth keeping.
+7. **`GET /answer-loop-audit` (FR-035) had an anchor but no implementation** —
+   only migration 005 mentioned it. Now implemented, and the logic lives in
+   `auditor/answer_loop.py` rather than the endpoint body: calling an endpoint
+   function directly (as these tests do, to avoid the MCP lifespan) leaves
+   FastAPI `Query(default=...)` SENTINEL OBJECTS bound as parameter values,
+   which sqlite rejects. Worth remembering for any future endpoint whose body
+   touches the DB directly.
+8. **Migration 007 has `proposed_class NOT NULL` and `urgency NOT NULL`**, which
+   data-model.md's table does not list. The schema is the source of truth; the
+   insert now supplies both.
 
 **Phase 6b gate** (reconciliation):
 
