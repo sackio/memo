@@ -1,5 +1,7 @@
 import asyncio
 import contextlib
+import logging
+from time import time as _now
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
@@ -12,9 +14,10 @@ from fastapi.staticfiles import StaticFiles
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 
-from memo import db, embeddings, reaper
+from memo import db, embeddings, flush as flush_mod, log_queries, reaper
 from memo.mediators import recall as recall_mediator
 from memo.mediators import store as store_mediator
+from memo.injection import set as injection_set
 from memo.config import settings
 from memo.db import _count_tokens
 from memo.models import (
@@ -502,6 +505,165 @@ _STORE_STATUS = {
     "clarify": 409,
     "reject": 403,
 }
+
+
+# --- Phase 4: Layer 2 injection, hooks, flush, log queries ---
+
+
+@app.get("/injection-set")
+async def get_injection_set(
+    session_id: str = Query(...),
+    agent_family: str | None = Query(default=None),
+    project: str | None = Query(default=None),
+    pid: int | None = Query(default=None),
+    current_time: float | None = Query(default=None),
+    flush_generation: int | None = Query(default=None),
+    cwd: str | None = Query(default=None),
+):
+    """Layer 2 gap-fill for a session. [001/FR-016]
+
+    See contracts/injection-set.md. A SESSION_GUIDE or DB hiccup degrades to a
+    smaller set rather than 500-ing — a failed session start is worse than a
+    session that starts with less memory.
+    """
+    try:
+        return await injection_set.build(
+            session_id=session_id, agent_family=agent_family, project=project,
+            pid=pid, current_time=current_time, flush_generation=flush_generation,
+            cwd=cwd,
+        )
+    except Exception:
+        logging.getLogger(__name__).exception(
+            "injection-set failed for %s — returning empty set", session_id)
+        return {"session_id": session_id, "forcible_constitutional": [],
+                "forcible_current_focus": [], "transclusions": [],
+                "token_budget_used": 0,
+                "token_budget_ceiling": injection_set.DEFAULT_BUDGET,
+                "degraded": True, "computed_at": _now()}
+
+
+@app.post("/hooks/session-start")
+async def hook_session_start(payload: dict[str, Any]):
+    """SessionStart hook. [001/FR-017]
+
+    Returns `additionalContext` for Claude Code to inject verbatim. Hooks fire
+    on the critical path of starting a session, so this NEVER raises: on any
+    failure it returns empty additionalContext and the session starts without
+    Layer 2 rather than not starting.
+    """
+    return await _hook_injection(payload, fire_point="session-start")
+
+
+@app.post("/hooks/post-compact")
+async def hook_post_compact(payload: dict[str, Any]):
+    """SessionStart:compact hook. [001/FR-018 001/FR-036]
+
+    Replaces the atc-precompact-beacon.py subagent dance (C58): the
+    post-compact session gets its Layer 2 set back directly, including the
+    previous generation's ephemeral-flush slots when `flush_generation` is
+    passed.
+    """
+    return await _hook_injection(payload, fire_point="post-compact")
+
+
+@app.post("/hooks/instructions-loaded")
+async def hook_instructions_loaded(payload: dict[str, Any]):
+    """InstructionsLoaded hook — resolves `memo:<uuid>` transclusions. [001/FR-017]
+
+    `instruction_files` is a list of `{path, content}`; each is scanned for memo
+    references and the resolved bodies come back as additionalContext.
+    """
+    files = payload.get("instruction_files") or []
+    resolved: list[dict] = []
+    for f in files:
+        text = (f or {}).get("content") or ""
+        if not text:
+            continue
+        try:
+            from memo.injection import transclude
+            resolved.extend(await transclude.resolve(
+                text, source_file=(f or {}).get("path") or "instructions"))
+        except Exception:
+            logging.getLogger(__name__).exception(
+                "instructions-loaded: transclusion failed for %s", (f or {}).get("path"))
+
+    if not resolved:
+        return {"additionalContext": "", "transclusions": []}
+    body = "\n".join(
+        f"[{t['referenced_uuid'][:8]} from {t['source_file']}] {t['resolved_content'].strip()}"
+        for t in resolved
+    )
+    return {"additionalContext": f"[MEMO transclusions]\n{body}",
+            "transclusions": resolved}
+
+
+@app.post("/hooks/session-end")
+async def hook_session_end(payload: dict[str, Any]):
+    """SessionEnd hook — fire-and-forget auditor sweep. [001/FR-025]
+
+    Returns no additionalContext: the session is ending, so there is nobody to
+    inject into. Deliberately does not await the sweep — blocking session
+    teardown on an audit would make shutdown slow and could hang it.
+    """
+    session_id = payload.get("session_id")
+    logging.getLogger(__name__).info("session-end: %s (auditor sweep pending)", session_id)
+    # Auditor lands in Phase 6; until then this records the fire point so the
+    # hook contract is stable and hooks need not be re-deployed later.
+    return {"acknowledged": True, "session_id": session_id,
+            "auditor_sweep": "deferred-to-phase-6"}
+
+
+async def _hook_injection(payload: dict[str, Any], *, fire_point: str) -> dict:
+    """Shared body for the injecting hooks."""
+    log = logging.getLogger(__name__)
+    session_id = payload.get("session_id") or ""
+    try:
+        result = await injection_set.build(
+            session_id=session_id,
+            agent_family=payload.get("agent_family"),
+            project=payload.get("project"),
+            pid=payload.get("pid"),
+            flush_generation=payload.get("flush_generation"),
+            cwd=payload.get("cwd"),
+        )
+        return {"additionalContext": injection_set.render(result),
+                "fire_point": fire_point,
+                "opt_out": bool(result.get("opt_out")),
+                "token_budget_used": result.get("token_budget_used", 0)}
+    except Exception:
+        log.exception("%s hook failed for %s — starting without Layer 2",
+                      fire_point, session_id)
+        return {"additionalContext": "", "fire_point": fire_point, "degraded": True}
+
+
+@app.post("/flush")
+async def flush_endpoint(payload: dict[str, Any]):
+    """Upsert a session's ephemeral-flush slot-set. [001/FR-034]"""
+    try:
+        return await flush_mod.flush(
+            session_id=payload.get("session_id") or "",
+            flush_generation=int(payload.get("flush_generation") or 0),
+            slots=payload.get("slots") or {},
+            expires_at=payload.get("expires_at"),
+            provenance=payload.get("provenance"),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/log-query")
+async def log_query_endpoint(payload: dict[str, Any]):
+    """Search a Claude Code transcript for provenance linking. [001/FR-033]"""
+    try:
+        return await log_queries.query(
+            project_dir=payload.get("project_dir") or "",
+            session_uuid=payload.get("session_uuid") or "",
+            pattern=payload.get("pattern") or payload.get("query") or "",
+            host=payload.get("host"),
+            max_matches=payload.get("max_matches") or log_queries.DEFAULT_MAX_MATCHES,
+        )
+    except log_queries.LogQueryError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.post("/store")

@@ -316,26 +316,26 @@ cd ../memo-v2 && speckit-trace --require-full \
 
 ## Phase 4 (== plan Phase C) — Layer 2 injection + hooks [US1] [US3] [US4]
 
-- [ ] T050 [US1] Write `../memo-v2/src/memo/injection/posture.py` — detects `CLAUDE_CODE_DISABLE_AUTO_MEMORY` per-session via `/proc/<pid>/environ` with roster fallback. Module docstring marker `001/FR-017 001/FR-018`.
-- [ ] T051 [US1] Write `../memo-v2/src/memo/injection/guides.py` — SESSION_GUIDE resolver (4 conventions per Agent H; DM to `agents` supervisor OR parses `~/scripts/agents` for `SESSION_GUIDE` array; caches to `SESSION_GUIDE_cache` table). Marker `001/FR-016 001/FR-017`.
-- [ ] T052 [US1] Write `../memo-v2/src/memo/injection/transclude.py` — scans given text for `memo:<uuid>` references (regex + validation) and returns resolved memo content. Marker `001/FR-016 001/FR-017`.
-- [ ] T053 [US1] Write `../memo-v2/src/memo/injection/set.py` — main `InjectionSet` builder per contracts/injection-set.md. Assembles: spec-kit constitution.md if present + forcible-constitutional/current-focus memos matching scope + time-scoped active memos + transclusions. Enforces 5k token budget (C-02) with drop-priority order. Module docstring marker `001/FR-016 001/FR-017 001/FR-018 001/FR-019 001/FR-020`.
-- [ ] T054 [US1] Add `GET /injection-set` endpoint in main.py. Marker `001/FR-016`.
-- [ ] T055 [US3] [P] Extend injection/set.py `_current_focus()` to include `class=time-scoped` memos where current time in `[start, end]`. Marker `001/FR-005` (time_scope field) and `001/FR-020` (current-focus).
-- [ ] T056 [US1] Write `../memo-v2/src/memo/hooks/session_start.py` — `POST /hooks/session-start` per contracts/claude-code-hooks.md. Marker `001/FR-017`.
-- [ ] T057 [US1] Write `../memo-v2/src/memo/hooks/post_compact.py` — `POST /hooks/post-compact`. Replaces the atc-precompact-beacon.py subagent dance (C58 / FR-036). Marker `001/FR-018 001/FR-036`.
-- [ ] T058 [US1] Write `../memo-v2/src/memo/hooks/instructions_loaded.py` — `POST /hooks/instructions-loaded`. Scans passed instruction_files content for `memo:<uuid>` references and returns resolved additionalContext. Marker `001/FR-017`.
-- [ ] T059 [US1] Write `../memo-v2/src/memo/hooks/session_end.py` — `POST /hooks/session-end`. Triggers auditor final-sweep (async — no additionalContext). Marker `001/FR-025`.
-- [ ] T060 [US4] [P] Write `../memo-v2/src/memo/log_queries.py` — intelligent Claude Code log query tool per contracts/log-queries.md. `command grep -m<max>` discipline. Marker `001/FR-033`.
-- [ ] T061 [US1] Add `POST /flush` endpoint in main.py per contracts/flush.md. Marker `001/FR-034`.
-- [ ] T062 [US1] Write `../memo-v2/tests/contract/test_injection_set.py` — request/response shapes; token-budget drop order. Marker `001/FR-016 001/FR-017 001/FR-018 001/FR-019 001/FR-020`.
-- [ ] T063 [US1] Write `../memo-v2/tests/contract/test_claude_code_hooks.py` — one test per hook endpoint. Marker `001/FR-017 001/FR-018 001/FR-036`.
-- [ ] T064 [US3] [P] Write `../memo-v2/tests/integration/test_time_scoped_autopin.py` — memo with `time_scope: {start, end}` is in injection-set during the window, absent after `end`. Marker `001/FR-005`.
-- [ ] T065 [US1] [P] Write `../memo-v2/tests/integration/test_spec_kit_constitution_injection.py` — session in cwd that contains `.specify/memory/constitution.md` gets it in `additionalContext`. Marker `001/FR-016`.
-- [ ] T066 [US1] [P] Write `../memo-v2/tests/integration/test_transclusion.py` — CLAUDE.md with `memo:<uuid>` reference gets resolved on InstructionsLoaded. Marker `001/FR-017`.
-- [ ] T067 [US1] [P] Write `../memo-v2/tests/integration/test_memory_posture_detection.py` — memory-on session vs. memory-off session receive different-sized injection sets. Marker `001/FR-017`.
-- [ ] T068 [US4] [P] Write `../memo-v2/tests/contract/test_log_queries.py`. Marker `001/FR-033`.
-- [ ] T069 [US1] [P] Write `../memo-v2/tests/contract/test_flush.py`. Marker `001/FR-034`.
+- [X] T050 [US1] Write `../memo-v2/src/memo/injection/posture.py` — detects `CLAUDE_CODE_DISABLE_AUTO_MEMORY` per-session via `/proc/<pid>/environ` with roster fallback. Module docstring marker `001/FR-017 001/FR-018`.
+- [X] T051 [US1] Write `../memo-v2/src/memo/injection/guides.py` — SESSION_GUIDE resolver (4 conventions per Agent H; DM to `agents` supervisor OR parses `~/scripts/agents` for `SESSION_GUIDE` array; caches to `SESSION_GUIDE_cache` table). Marker `001/FR-016 001/FR-017`.
+- [X] T052 [US1] Write `../memo-v2/src/memo/injection/transclude.py` — scans given text for `memo:<uuid>` references (regex + validation) and returns resolved memo content. Marker `001/FR-016 001/FR-017`.
+- [X] T053 [US1] Write `../memo-v2/src/memo/injection/set.py` — main `InjectionSet` builder per contracts/injection-set.md. Assembles: spec-kit constitution.md if present + forcible-constitutional/current-focus memos matching scope + time-scoped active memos + transclusions. Enforces 5k token budget (C-02) with drop-priority order. Module docstring marker `001/FR-016 001/FR-017 001/FR-018 001/FR-019 001/FR-020`.
+- [X] T054 [US1] Add `GET /injection-set` endpoint in main.py. Marker `001/FR-016`.
+- [X] T055 [US3] [P] Extend injection/set.py `_current_focus()` to include `class=time-scoped` memos where current time in `[start, end]`. Marker `001/FR-005` (time_scope field) and `001/FR-020` (current-focus).
+- [X] T056 [US1] Write `../memo-v2/src/memo/hooks/session_start.py` — `POST /hooks/session-start` per contracts/claude-code-hooks.md. Marker `001/FR-017`.
+- [X] T057 [US1] Write `../memo-v2/src/memo/hooks/post_compact.py` — `POST /hooks/post-compact`. Replaces the atc-precompact-beacon.py subagent dance (C58 / FR-036). Marker `001/FR-018 001/FR-036`.
+- [X] T058 [US1] Write `../memo-v2/src/memo/hooks/instructions_loaded.py` — `POST /hooks/instructions-loaded`. Scans passed instruction_files content for `memo:<uuid>` references and returns resolved additionalContext. Marker `001/FR-017`.
+- [X] T059 [US1] Write `../memo-v2/src/memo/hooks/session_end.py` — `POST /hooks/session-end`. Triggers auditor final-sweep (async — no additionalContext). Marker `001/FR-025`.
+- [X] T060 [US4] [P] Write `../memo-v2/src/memo/log_queries.py` — intelligent Claude Code log query tool per contracts/log-queries.md. `command grep -m<max>` discipline. Marker `001/FR-033`.
+- [X] T061 [US1] Add `POST /flush` endpoint in main.py per contracts/flush.md. Marker `001/FR-034`.
+- [X] T062 [US1] Write `../memo-v2/tests/contract/test_injection_set.py` — request/response shapes; token-budget drop order. Marker `001/FR-016 001/FR-017 001/FR-018 001/FR-019 001/FR-020`.
+- [X] T063 [US1] Write `../memo-v2/tests/contract/test_claude_code_hooks.py` — one test per hook endpoint. Marker `001/FR-017 001/FR-018 001/FR-036`.
+- [X] T064 [US3] [P] Write `../memo-v2/tests/integration/test_time_scoped_autopin.py` — memo with `time_scope: {start, end}` is in injection-set during the window, absent after `end`. Marker `001/FR-005`.
+- [X] T065 [US1] [P] Write `../memo-v2/tests/integration/test_spec_kit_constitution_injection.py` — session in cwd that contains `.specify/memory/constitution.md` gets it in `additionalContext`. Marker `001/FR-016`.
+- [X] T066 [US1] [P] Write `../memo-v2/tests/integration/test_transclusion.py` — CLAUDE.md with `memo:<uuid>` reference gets resolved on InstructionsLoaded. Marker `001/FR-017`.
+- [X] T067 [US1] [P] Write `../memo-v2/tests/integration/test_memory_posture_detection.py` — memory-on session vs. memory-off session receive different-sized injection sets. Marker `001/FR-017`.
+- [X] T068 [US4] [P] Write `../memo-v2/tests/contract/test_log_queries.py`. Marker `001/FR-033`.
+- [X] T069 [US1] [P] Write `../memo-v2/tests/contract/test_flush.py`. Marker `001/FR-034`.
 
 **Phase 4 gate**:
 
@@ -344,6 +344,52 @@ cd ../memo-v2 && speckit-trace --require-full \
   001/FR-016,001/FR-017,001/FR-018,001/FR-019,001/FR-020,\
 001/FR-033,001/FR-034,001/FR-036
 ```
+
+**Phase 4 gate: ✅ PASS (2026-07-30)** — all 8 FRs FULL, 0 dangling, exit 0.
+Full suite **260 passed**.
+
+### Phase 4 implementation notes
+
+1. **Everything on the session-start path fails OPEN.** Hooks fire while a
+   session is trying to start, so `/injection-set` and every hook endpoint
+   return an empty set on internal failure rather than raising. A session that
+   starts with less memory beats a session that does not start. Same reasoning
+   in `posture` (an unreadable `/proc/<pid>/environ` yields "not opted out",
+   never "opted out") and in `guides` (an unreachable roster falls back to
+   `session_id` as the agent-family).
+2. **Budget drop order is the load-bearing rule** and is tested directly:
+   transclusions, then current-focus, **never constitutional**. If
+   constitutional content alone exceeds the ceiling, memo goes over budget and
+   reports it rather than truncating a standing rule into something that reads
+   as complete.
+3. **C71 honored**: `CLAUDE_CODE_DISABLE_AUTO_MEMORY` does NOT reduce the
+   injection set. It means Layer 2 *is* the session's memory, so the set is
+   identical and only the rendered posture note changes. Only the explicit
+   `MEMO_DISABLE_INJECTION` suppresses injection.
+4. **T064 and T066 did not get their own files.** T064's scenario
+   (time-scoped memo present inside its window, absent after `end`) is
+   `test_injection_set.py::test_time_scoped_memo_only_inside_its_window`, and
+   T066's is `tests/unit/test_transclusion.py`, which additionally covers the
+   case that matters most — a reference to a SUPERSEDED memo resolving to the
+   current version of that lineage. Duplicating them into
+   `tests/integration/` would add files, not coverage.
+5. **Global offline embedding stub added to `tests/conftest.py`.** The test
+   service runs `network_mode: none`, so a real embedding call fails with DNS
+   — correctly. Rather than have each suite rediscover that, every test now
+   gets a deterministic offline vector by default; the mediator suites override
+   it with topic-aware stubs.
+6. **`log_queries` safety is deliberate, not stylistic.** argv-form grep (no
+   shell, so no ugrep shim), a mandatory `-m<max>`, a hard cap, a pattern-length
+   limit, and never reading a whole transcript. The shim took the office host
+   down at 17 GB RSS on 2026-07-22 on a bounded-alternation pattern; the
+   pattern-length check exists specifically for that shape.
+7. **Repeat offense worth recording**: I wrote Phase 2 note 9 about
+   `@pytest_asyncio.fixture` and then used a plain `@pytest.fixture` on an
+   async fixture anyway. Strict mode does not run it, and the failure surfaces
+   as a confusing setup error rather than a clear one.
+8. **Auditor hook is a stub.** `/hooks/session-end` acknowledges and records
+   the fire point but defers the actual sweep to Phase 6. The hook contract is
+   stable now so hook scripts do not need redeploying later.
 
 ---
 

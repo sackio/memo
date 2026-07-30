@@ -49,3 +49,32 @@ def embedding():
     v = [0.0] * settings.embedding_dimensions
     v[0] = 1.0
     return v
+
+
+@pytest.fixture(autouse=True)
+def _no_network_embeddings(monkeypatch):
+    """Stub embeddings for EVERY test. Autouse and global on purpose.
+
+    The test service runs with `network_mode: none`, so a real embedding call
+    fails with a DNS error — and it should: no test may depend on a live
+    OpenRouter. Rather than let each suite discover that separately, every test
+    gets a deterministic offline vector by default.
+
+    Suites that need similarity to mean something (the mediator contract tests)
+    override this with their own topic-aware stub; their module-level autouse
+    fixture applies after this one.
+
+    The vector is a UNIT vector, not zeros: an all-zeros embedding has undefined
+    cosine, so sqlite-vec returns NULL and `1.0 - distance` raises.
+    """
+    import hashlib
+
+    from memo import embeddings
+
+    async def fake_embed(text: str) -> list[float]:
+        v = [0.0] * settings.embedding_dimensions
+        h = int(hashlib.sha256((text or "").encode()).hexdigest(), 16)
+        v[h % settings.embedding_dimensions] = 1.0
+        return v
+
+    monkeypatch.setattr(embeddings, "embed", fake_embed)
