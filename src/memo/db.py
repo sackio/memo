@@ -553,6 +553,113 @@ async def store(db_path: str | None, content: str, title: str | None,
     return await asyncio.to_thread(_sync_store, path, content, title, tags, metadata, embedding)
 
 
+def _sync_search_passages(db_path: str, embedding: list[float], limit: int,
+                          min_score: float | None, tags: list[str],
+                          after: float | None, before: float | None,
+                          min_tokens: int | None, max_tokens: int | None,
+                          overfetch: int = 8) -> list[dict]:
+    """Passage-level semantic search. [002/FR-105 002/FR-106 002/FR-107]
+
+    Matches narrowly and returns broadly: the vector search runs over passages,
+    but results are grouped back to memos and the WHOLE memo is returned with
+    its best-matching passage attached as a highlight.
+
+    Three properties, each load-bearing:
+
+    * **A memo scores by its BEST passage, never the mean** (FR-106). A mean
+      would rebuild exactly the dilution this feature removes — the reason a
+      3,000-token memo currently loses to a short one on its own title.
+    * **Grouping happens before ranking** (FR-105), so overlap between adjacent
+      passages cannot let one memo occupy several result slots.
+    * **Tag scope is applied DB-side first**, mirroring `_sync_search` path B.
+      Post-filtering a top-K window silently drops correctly-tagged memos when
+      the query does not rank them into the window — the false negative found
+      2026-07-21. That bug is just as reachable here, so the ordering is kept.
+
+    `overfetch` exists because K passages collapse into fewer memos; fetching
+    `limit` passages would return fewer than `limit` memos.
+    """
+    conn = _get_or_create_conn(db_path)
+    blob = _serialize_vector(embedding)
+
+    scoped_ids: list[str] | None = None
+    if tags or after or before or min_tokens is not None or max_tokens is not None:
+        clauses, params = [], []
+        if tags:
+            tag_clause = " OR ".join(
+                ["EXISTS (SELECT 1 FROM json_each(documents.tags) "
+                 "WHERE json_each.value = ?)"] * len(tags))
+            clauses.append(f"({tag_clause})")
+            params.extend(tags)
+        if after is not None: clauses.append("created_at >= ?"); params.append(after)
+        if before is not None: clauses.append("created_at <= ?"); params.append(before)
+        if min_tokens is not None: clauses.append("token_count >= ?"); params.append(min_tokens)
+        if max_tokens is not None: clauses.append("token_count <= ?"); params.append(max_tokens)
+        rows = conn.execute(
+            f"SELECT id FROM documents WHERE {' AND '.join(clauses)}", params).fetchall()
+        scoped_ids = [r["id"] for r in rows]
+        if not scoped_ids:
+            return []
+
+    if scoped_ids is not None:
+        ph = ",".join("?" * len(scoped_ids))
+        hits = conn.execute(
+            f"SELECT doc_id, chunk_index, vec_distance_cosine(embedding, ?) AS distance "
+            f"FROM chunk_embeddings WHERE doc_id IN ({ph}) ORDER BY distance",
+            [blob] + scoped_ids).fetchall()
+    else:
+        hits = conn.execute(
+            "SELECT doc_id, chunk_index, distance FROM chunk_embeddings "
+            "WHERE embedding MATCH ? AND k = ? ORDER BY distance",
+            (blob, limit * overfetch)).fetchall()
+
+    # Group to memos, keeping each memo's BEST passage.
+    best: dict[str, tuple[float, int]] = {}
+    for h in hits:
+        distance = h["distance"]
+        if distance is None:
+            logger.warning("passage search: NULL distance for %s#%s — skipping",
+                           h["doc_id"], h["chunk_index"])
+            continue
+        score = 1.0 - distance
+        prev = best.get(h["doc_id"])
+        if prev is None or score > prev[0]:
+            best[h["doc_id"]] = (score, h["chunk_index"])
+
+    results: list[dict] = []
+    for doc_id, (score, chunk_index) in sorted(best.items(), key=lambda kv: -kv[1][0]):
+        if min_score is not None and score < min_score:
+            continue
+        doc_row = conn.execute("SELECT * FROM documents WHERE id = ?", (doc_id,)).fetchone()
+        if doc_row is None:
+            continue
+        prow = conn.execute(
+            "SELECT text, token_start, token_end FROM document_chunks "
+            "WHERE doc_id = ? AND chunk_index = ?", (doc_id, chunk_index)).fetchone()
+        results.append({
+            "document": _row_to_memo(doc_row),      # FR-107: the WHOLE memo
+            "score": score,
+            "passage": ({"text": prow["text"], "chunk_index": chunk_index,
+                         "token_start": prow["token_start"],
+                         "token_end": prow["token_end"]} if prow else None),
+        })
+        if len(results) >= limit:
+            break
+    return results
+
+
+async def search_passages(db_path: str | None, embedding: list[float], limit: int,
+                          min_score: float | None = None, tags: list[str] | None = None,
+                          after: float | None = None, before: float | None = None,
+                          min_tokens: int | None = None,
+                          max_tokens: int | None = None) -> list[dict]:
+    """Passage-level search. [002/FR-105]"""
+    path = _resolve_path(db_path)
+    return await asyncio.to_thread(
+        _sync_search_passages, path, embedding, limit, min_score, tags or [],
+        after, before, min_tokens, max_tokens)
+
+
 async def search(db_path: str | None, embedding: list[float], limit: int,
                  min_score: float | None, tags: list[str], after: float | None,
                  before: float | None, min_tokens: int | None, max_tokens: int | None) -> list[dict]:

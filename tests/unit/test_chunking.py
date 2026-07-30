@@ -115,15 +115,35 @@ def test_headings_are_preferred_as_boundaries():
     assert out[1].text.lstrip().startswith("#")
 
 
-def test_does_not_split_inside_a_fenced_code_block_when_avoidable():
-    fence = "```\n" + "\n".join(f"row {i} | value {i}" for i in range(60)) + "\n```"
-    text = "# Intro\n\n" + para("intro", 250) + "\n\n# Table\n\n" + fence
+def test_a_fence_that_fits_is_kept_whole():
+    """The guarantee is "don't split a fence WHEN AVOIDABLE".
+
+    A fence smaller than target must survive intact — splitting it would turn
+    one table or command into two unusable halves.
+    """
+    fence = "```\n" + "\n".join(f"row {i} | value {i}" for i in range(8)) + "\n```"
+    text = "# Intro\n\n" + para("intro", 400) + "\n\n# Table\n\n" + fence
     out = chunk(text, target=300, overlap=0.0)
-    joined = [p.text for p in out]
-    # No passage may begin or end partway through the fence's interior.
-    for p in joined:
-        opens = p.count("```")
-        assert opens % 2 == 0 or p.strip().startswith("```") or p.strip().endswith("```")
+    whole = [p.text for p in out if "```" in p.text]
+    assert whole, "the fence must land in some passage"
+    assert any(p.count("```") == 2 for p in whole), \
+        "a fence that fits must not be split across passages"
+
+
+def test_a_fence_larger_than_target_is_split_rather_than_unbounded():
+    """The unavoidable case, stated explicitly rather than left to luck.
+
+    A fence bigger than the target CANNOT be kept whole without blowing the
+    passage cap. It gets hard-wrapped — the cap wins, because an unbounded
+    passage cannot be embedded at all. Documented here so nobody "fixes" it.
+    """
+    fence = "```\n" + "\n".join(f"row {i} | value {i}" for i in range(60)) + "\n```"
+    text = "# Table\n\n" + fence
+    out = chunk(text, target=300, overlap=0.0)
+    assert len(out) > 1, "an oversized fence must be split, not emitted whole"
+    for p in out:
+        assert count_tokens(p.text) <= MAX_PASSAGE_TOKENS
+    assert reconstruct(out, text) == text, "splitting must not lose any of it"
 
 
 # --- edge cases ---
@@ -150,3 +170,21 @@ def test_passages_are_indexed_in_order():
     text = "# A\n\n" + para("alpha", 500) + "\n\n# B\n\n" + para("beta", 500)
     out = chunk(text, target=200, overlap=0.0)
     assert [p.index for p in out] == list(range(len(out)))
+
+
+def test_a_heading_never_becomes_a_stub_passage_on_its_own():
+    """A passage containing only "# Alpha" can never match anything.
+
+    Regression: a section whose only paragraph break sits immediately after its
+    heading produced a 3-token passage of pure heading, and pushed the section's
+    real content into an unbounded hard-wrap. Found 2026-07-30 by a passage-
+    search test that expected 3 passages and got 9.
+    """
+    text = "# Alpha\n\n" + para("alpha", 250) + "\n\n# Beta\n\n" + para("beta", 250)
+    out = chunk(text, target=200, overlap=0.0)
+    for p in out:
+        stripped = p.text.strip()
+        assert not (stripped.startswith("#") and "\n" not in stripped), \
+            f"stub passage containing only a heading: {stripped!r}"
+        assert count_tokens(p.text) >= 10 or p is out[-1], \
+            f"passage too small to be worth indexing: {p.text!r}"

@@ -102,12 +102,12 @@ repo-wide and will fail on later-phase FRs. Run inside the v2 worktree.
 
 ## Phase C — Retrieval — FR-105, FR-106, FR-107, FR-107a, FR-109
 
-- [ ] **T230** — Passage search returning `(doc_id, chunk_index, score)`, then
+- [x] **T230** — Passage search returning `(doc_id, chunk_index, score)`, then
       group by `doc_id`. `[002/FR-105]`
-- [ ] **T231** — Score each memo by its **best** passage. Test explicitly that a
+- [x] **T231** — Score each memo by its **best** passage. Test explicitly that a
       mean is not used: a memo with one strong and four weak passages must
       outrank a memo with five mediocre ones. `[002/FR-106]`
-- [ ] **T232** — Overlap must not let one memo occupy several result slots —
+- [x] **T232** — Overlap must not let one memo occupy several result slots —
       group before ranking. `[002/FR-105]`
 - [ ] **T240** — *(blocked by T201)* Result assembly per the chosen option;
       whole memo carries the matching passage + offsets as a highlight.

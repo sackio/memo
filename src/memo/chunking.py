@@ -132,7 +132,9 @@ def chunk(text: str, *, target: int = DEFAULT_TARGET,
 
         limit = _char_for_tokens(remaining, target)
         abs_limit = pos + limit
-        cut = _best_boundary(heads, paras, lower=pos + 1, upper=abs_limit)
+        floor = pos + _char_for_tokens(remaining, max(1, int(target * MIN_FILL)))
+        cut = _best_boundary(heads, paras, lower=pos + 1, upper=abs_limit,
+                             floor=floor)
 
         if cut is None:
             # No structural boundary in range: hard-wrap just this span, then
@@ -161,13 +163,28 @@ def _char_for_tokens(text: str, n_tokens: int) -> int:
     return len(_tokenizer.decode(toks[:n_tokens]))
 
 
+# A cut is only worth taking if it fills a reasonable share of the target.
+# Without this, a section whose only paragraph break sits immediately after its
+# heading yields a 3-token passage containing nothing but "# Alpha" — which can
+# never match a query, and pushes the section's real content into an unbounded
+# hard-wrap. Found by test 2026-07-30.
+MIN_FILL = 0.5
+
+
 def _best_boundary(heads: list[int], paras: list[int], *, lower: int,
-                   upper: int) -> int | None:
-    """Latest heading in (lower, upper]; else latest paragraph break; else None."""
-    in_range = [h for h in heads if lower <= h <= upper]
+                   upper: int, floor: int | None = None) -> int | None:
+    """Latest heading in (lower, upper]; else latest paragraph break; else None.
+
+    `floor` rejects boundaries that would produce a passage too small to be
+    worth indexing. Headings are still preferred over paragraph breaks — a
+    heading is a topic boundary, a blank line is only a typographic one — but
+    neither is worth a stub passage.
+    """
+    lo = max(lower, floor) if floor is not None else lower
+    in_range = [h for h in heads if lo <= h <= upper]
     if in_range:
         return in_range[-1]
-    in_range = [p for p in paras if lower <= p <= upper]
+    in_range = [p for p in paras if lo <= p <= upper]
     if in_range:
         return in_range[-1]
     return None
