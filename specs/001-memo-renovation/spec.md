@@ -398,7 +398,7 @@ verify the session resumes on v1 with no corruption.
   drawn from: `constitutional`, `behavioral`, `goal`, `verbatim-critical`,
   `fact`, `decision-in-progress`, `episodic`, `ephemeral-flush`,
   `time-scoped`, `legacy-unattributed`.
-- **FR-002** *(WITHDRAWN 2026-07-30, operator directive)*: bi-temporal
+- **FR-002**: **WITHDRAWN** 2026-07-30, operator directive. Bi-temporal
   versioning is removed. `valid_from` / `valid_until`, `get_as_of`, the
   `/documents/{id}/as-of` endpoint and the supersede-chain resolution all go.
   **Rationale:** they exist to answer "what did the corpus believe on date X",
@@ -407,6 +407,14 @@ verify the session resumes on v1 with no corruption.
   reconstruction, when genuinely needed, comes from backups (hourly
   `backup-memo-live`, 4×daily `backup-memo-to-nas`), which is the right tool for
   a recovery/rescue case rather than a query path carried by every read.
+  ⚠️ **NOT YET EXECUTED (found by the 2026-07-30 audit).** The withdrawal was
+  declared here but no task was created to carry it out, so `get_as_of`, the
+  `GET /documents/{id}/as-of` endpoint, `valid_from`/`valid_until` and the
+  supersede-chain resolution are all still live across 23 files — and because
+  the code still carries `001/FR-002` anchors, the trace gate rates this
+  withdrawn requirement **FULL**. That is the inverse of FR-034's problem: the
+  gate can tell whether code matches a marker, never whether the code should
+  exist. Tracked as **T033a**.
   Replaced by **FR-028a**'s deletion log with content snapshots — the same
   recoverability at a fraction of the machinery.
 
@@ -464,7 +472,7 @@ verify the session resumes on v1 with no corruption.
   overlap + entity match. On match, the mediator chooses one of `merge`,
   `supersede`, `split`, `reject`, `write-new` and returns the chosen
   action + resulting memo id(s) to the caller.
-- **FR-015c** *(amended 2026-07-30, Principle II)*: **WITHDRAWN.** The
+- **FR-015c**: **WITHDRAWN** 2026-07-30, amended under Principle II. The
   operator-directive requirement for refuting a `class = fact` memo, and its
   409-then-403 protocol, are removed. Superseding a wrong fact is ordinary
   corpus maintenance, not a privileged act. Replaced by FR-028's
@@ -561,7 +569,7 @@ verify the session resumes on v1 with no corruption.
   snapshot sufficient to reconstruct the memo. That log — not a prohibition — is
   what makes aggressive pruning safe, and it is what lets a wrong call be undone
   rather than merely regretted.
-- **FR-029** *(amended 2026-07-30)*: **WITHDRAWN.** Refutation no longer
+- **FR-029**: **WITHDRAWN** 2026-07-30, amended. Refutation no longer
   requires an operator directive. The measured failure mode is staleness (44
   duplicate groups / 150 excess copies, 2026-07-30), which an operator gate
   makes worse by making the operator the bottleneck on every correction.
@@ -583,7 +591,7 @@ verify the session resumes on v1 with no corruption.
   (grep-based; embedding-optional). Given `(host, project, session_uuid,
   optional query)`, returns matched line-ranges with structured metadata
   for provenance linking.
-- **FR-034** *(withdrawn 2026-07-30)*: **WITHDRAWN.** Was: memo MUST expose a
+- **FR-034**: **WITHDRAWN** 2026-07-30, operator directive. Was: memo MUST expose a
   `POST /flush` endpoint upserting a slot-set of ephemeral-flush memos keyed on
   `(session_id, flush_generation)`. Session working state belongs to ATC, and
   memo's copy was a *redundant store* rather than redundant delivery — two

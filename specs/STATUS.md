@@ -41,8 +41,16 @@ world the code had left:
 - **FR-028a (deletion log) had no task** — it was the trace gate's only L1 miss. The
   requirement arrived with your deletion ruling *after* Phase 2 was written and the code
   shipped unnamed. Added as **T039a**, marked done with its existing code and test
-  anchors. Same gap T086a closed earlier for FR-044; that's twice now that a
-  mid-build requirement landed without a task, which is worth watching.
+  anchors. Same gap T086a closed earlier for FR-044.
+
+- **`FR-002`'s withdrawal was never executed** — see the trace-gate section below. Added as
+  **T033a**, open, pending your decision.
+
+**That is three times in this feature** that an operator ruling mid-build never became a
+task. tasks.md now carries the habit `speckit` recommended: after any ruling that adds,
+amends or withdraws a requirement, write the task *and* re-run
+`speckit-trace --require-full` for that phase. An addition surfaces as an L1 miss; a
+withdrawal surfaces as nothing at all, which is why it needs the deliberate step.
 
 ---
 
@@ -114,7 +122,24 @@ memo-paced batches).
 - **L1 misses: 0** (was 1 — FR-028a, fixed above). **Dangling markers: 0.**
 - **001 is FULL on every requirement except FR-034**, which is withdrawn. The tool has no
   concept of a withdrawn requirement, so a withdrawn FR with no code reads PARTIAL
-  permanently. Named here rather than papered over.
+  permanently. **Confirmed by the `speckit` session**: retirement exists only at *spec*
+  level (`declared_status()`), never per requirement. The convention — an FR declaring its
+  own withdrawal, still listed and rated, gaps no longer counted as debt — is queued but
+  **cannot ship tonight**: speckit-trace is version-frozen at 0.10.6 under the operator
+  halt and quantum-feed pins the exact version, so a release would move their ratchet
+  mid-measurement. They also tested that the `**WITHDRAWN**` wording used here does **not**
+  accidentally retire the whole spec, and that a `speckit-trace: ignore` workaround would
+  make it strictly worse (INVISIBLE + an L1 miss, with a directive implying it was handled).
+
+- ⚠️ **The inverse case, and the sharper one: `FR-002` is withdrawn and rates FULL.**
+  Bi-temporal versioning was withdrawn by operator directive on 2026-07-30 — the spec says
+  `get_as_of`, `GET /documents/{id}/as-of`, `valid_from`/`valid_until` and supersede-chain
+  resolution "all go". **None of it went.** 23 files still reference the surface, the
+  endpoint is live and tested, and the retained `001/FR-002` anchors make a withdrawn
+  requirement read as fully implemented and gated. **A trace gate can check that code
+  matches a marker; it cannot check that the code should exist.** Now tracked as **T033a**,
+  and it needs an operator decision before removal — it deletes a working, tested read path
+  and touches the migration/verify path.
 - **002 has 5 zero-anchor FRs** — FR-107a, FR-109, FR-112, FR-114 and the gate halves of
   FR-111/FR-113. Every one corresponds to an open task above. This is mid-flight work
   showing up honestly, which is what the gate is for.
