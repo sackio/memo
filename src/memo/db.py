@@ -44,6 +44,16 @@ def _count_tokens(text: str) -> int:
     return len(_tokenizer.encode(text))
 
 
+def _truncate_to_tokens(text: str, max_tokens: int) -> str:
+    """Cut text to at most max_tokens, on a token boundary."""
+    if max_tokens <= 0:
+        return ""
+    tokens = _tokenizer.encode(text)
+    if len(tokens) <= max_tokens:
+        return text
+    return _tokenizer.decode(tokens[:max_tokens])
+
+
 def _get_or_create_conn(db_path: str) -> sqlite3.Connection:
     if db_path in _connections:
         return _connections[db_path]
