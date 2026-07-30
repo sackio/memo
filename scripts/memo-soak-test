@@ -1,0 +1,171 @@
+#!/usr/bin/env python3
+"""memo-soak-test — drive a query/write stream at v2 and measure the SCs. [001/FR-035]
+
+Phase 8 (T130). Runs a mixed workload against a live v2 and reports the success
+criteria that are measurable from the mediator audit log, per quickstart.md
+§"SC measurement methodology".
+
+    memo-soak-test --url http://localhost:8091 --duration 600 --rps 0.5
+
+**Read-mostly by default.** Writes are opt-in (`--write-ratio`) and go to a
+dedicated `soak:<run-id>` session id + tag so everything this produces is
+identifiable and removable — a soak that leaves unattributable junk in the
+corpus has damaged the thing it was measuring. `--cleanup` removes them.
+
+Deliberately NOT self-grading: it reports numbers. The Phase 8 gate is an
+operator confidence decision (C-08 step 4), and a script that printed PASS
+would invite skipping the judgement the gate exists for.
+"""
+from __future__ import annotations
+
+import argparse
+import asyncio
+import json
+import random
+import sys
+import time
+import uuid
+from pathlib import Path
+
+import httpx
+
+DEFAULT_QUERIES = [
+    "where did I park?", "what is the barn control-plane IP?",
+    "how do I run the tests?", "what did we decide about dedup?",
+    "who is Matt Sack?", "what port does memo run on?",
+    "what are the standing rules?", "what is in flight right now?",
+]
+
+
+class Soak:
+    def __init__(self, url: str, *, run_id: str, write_ratio: float) -> None:
+        self.url = url.rstrip("/")
+        self.run_id = run_id
+        self.write_ratio = write_ratio
+        self.session_id = f"soak:{run_id}"
+        self.recalls = 0
+        self.writes = 0
+        self.errors: list[str] = []
+        self.latencies: list[int] = []
+        self.no_answer = 0
+        self.degraded = 0
+        self.anomalies: list[str] = []
+        self.written_ids: list[str] = []
+
+    async def recall(self, client: httpx.AsyncClient, query: str) -> None:
+        try:
+            r = await client.post(f"{self.url}/recall", json={
+                "query": query, "session_id": self.session_id, "max_results": 5})
+            r.raise_for_status()
+            d = r.json()
+        except Exception as e:
+            self.errors.append(f"recall: {type(e).__name__}: {e}")
+            return
+        self.recalls += 1
+        self.latencies.append(int(d.get("latency_ms") or 0))
+        if d.get("answer") is None:
+            self.no_answer += 1
+        for a in d.get("anomalies") or []:
+            self.anomalies.append(a)
+            if a.startswith("degraded"):
+                self.degraded += 1
+
+    async def write(self, client: httpx.AsyncClient, n: int) -> None:
+        try:
+            r = await client.post(f"{self.url}/store", json={
+                "content": f"soak {self.run_id} synthetic memo {n}: "
+                           f"transient content for load measurement",
+                "tags": ["soak-test", f"soak-{self.run_id}"],
+                "session_id": self.session_id,
+                "provenance": {"url": f"https://soak.invalid/{self.run_id}/{n}"},
+            })
+            d = r.json()
+        except Exception as e:
+            self.errors.append(f"store: {type(e).__name__}: {e}")
+            return
+        self.writes += 1
+        if d.get("memo_id"):
+            self.written_ids.append(d["memo_id"])
+
+    def report(self, elapsed: float) -> dict:
+        lat = sorted(self.latencies)
+        def pct(p):
+            return lat[min(len(lat) - 1, int(len(lat) * p))] if lat else 0
+        return {
+            "run_id": self.run_id,
+            "elapsed_s": round(elapsed, 1),
+            "recalls": self.recalls,
+            "writes": self.writes,
+            "errors": len(self.errors),
+            "error_sample": self.errors[:5],
+            "latency_ms": {"p50": pct(0.50), "p95": pct(0.95),
+                           "max": lat[-1] if lat else 0},
+            "no_answer_rate": round(self.no_answer / self.recalls, 3) if self.recalls else 0,
+            "llm_degraded_recalls": self.degraded,
+            "distinct_anomalies": sorted(set(self.anomalies))[:10],
+            "written_ids": len(self.written_ids),
+        }
+
+    async def cleanup(self, client: httpx.AsyncClient) -> int:
+        removed = 0
+        for doc_id in self.written_ids:
+            try:
+                r = await client.delete(f"{self.url}/documents/{doc_id}")
+                if r.status_code < 300:
+                    removed += 1
+            except Exception:
+                pass
+        return removed
+
+
+async def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--url", default="http://localhost:8091")
+    ap.add_argument("--duration", type=int, default=120, help="seconds")
+    ap.add_argument("--rps", type=float, default=0.5, help="requests per second")
+    ap.add_argument("--write-ratio", type=float, default=0.0,
+                    help="fraction of requests that are writes (default 0 = read-only)")
+    ap.add_argument("--queries-file", default=None)
+    ap.add_argument("--report", default=None, help="write the report markdown here")
+    ap.add_argument("--cleanup", action="store_true",
+                    help="delete memos this run created")
+    args = ap.parse_args()
+
+    queries = DEFAULT_QUERIES
+    if args.queries_file:
+        queries = [ln.strip() for ln in Path(args.queries_file).read_text().splitlines()
+                   if ln.strip()]
+
+    run_id = uuid.uuid4().hex[:8]
+    soak = Soak(args.url, run_id=run_id, write_ratio=args.write_ratio)
+    print(f"soak {run_id}: {args.duration}s @ {args.rps} rps "
+          f"(write ratio {args.write_ratio})", file=sys.stderr)
+
+    started = time.time()
+    n = 0
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        while time.time() - started < args.duration:
+            n += 1
+            if args.write_ratio and random.random() < args.write_ratio:
+                await soak.write(client, n)
+            else:
+                await soak.recall(client, random.choice(queries))
+            await asyncio.sleep(max(0.0, 1.0 / args.rps))
+
+        report = soak.report(time.time() - started)
+        if args.cleanup:
+            report["cleaned_up"] = await soak.cleanup(client)
+
+    print(json.dumps(report, indent=2))
+    if args.report:
+        Path(args.report).write_text(
+            f"# memo v2 soak report — {run_id}\n\n"
+            f"```json\n{json.dumps(report, indent=2)}\n```\n\n"
+            "No pass/fail is asserted here: the Phase 8 gate is an operator\n"
+            "confidence decision (C-08 step 4).\n")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(asyncio.run(main()))

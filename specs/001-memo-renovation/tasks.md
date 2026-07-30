@@ -584,13 +584,13 @@ Full suite **376 passed**. (FR-038/FR-040 markers landed in
 
 ## Phase 8 (== plan Phase G) — Soak test (RUNTIME PHASE — not dev)
 
-- [ ] T130 [US8] Author `../memo-v2/scripts/memo-soak-test` — driver script that spawns background test agents via AgentController with a synthetic + real-workload query stream against the ported v2 corpus. Instrumentation captures per-SC metrics per quickstart.md §"SC measurement methodology". Marker `001/FR-035` (uses the mediator-audit-log).
-- [ ] T131 [US7] Run the full backfill: `scripts/memo-migrate-backfill --v1-url http://server4:8000 --v2-url http://server4:8001 --audit-log /mnt/backup/memo/migration-YYYY-MM-DD/audit.jsonl` — 7339 memos processed. Deliverable: SC-005 (dupe clusters → 0) + SC-009 (≥95% classified) measurable.
+- [X] T130 [US8] Author `../memo-v2/scripts/memo-soak-test` — driver script that spawns background test agents via AgentController with a synthetic + real-workload query stream against the ported v2 corpus. Instrumentation captures per-SC metrics per quickstart.md §"SC measurement methodology". Marker `001/FR-035` (uses the mediator-audit-log).
+- [ ] T131 [US7] ⛔ **DO NOT RUN until the SC-009 finding above is decided** — it would produce a corpus that fails its own verification. Run the full backfill: `scripts/memo-migrate-backfill --v1-url http://server4:8000 --v2-url http://server4:8001 --audit-log /mnt/backup/memo/migration-YYYY-MM-DD/audit.jsonl` — 7339 memos processed. Deliverable: SC-005 (dupe clusters → 0) + SC-009 (≥95% classified) measurable.
 - [ ] T132 [US7] Run `scripts/memo-migrate-verify` — must exit 0 or investigate failing checks.
-- [ ] T133 Wire Claude Code hooks on SERVER4 ONLY (edit `~/.claude/settings.json` per contracts/claude-code-hooks.md). DO NOT wire on office/server5 yet.
-- [ ] T134 Flip a single non-production test session to v2 MCP via `scripts/memo-mcp-flip --session <test> --to v2`; round-trip validate (store, recall, injection). Flip back; verify clean resume on v1.
-- [ ] T135 [US8] Kick off soak test: `scripts/memo-soak-test --duration <operator-chosen>` — writes report to `/tmp/memo-soak-report-<date>.md`.
-- [ ] T136 Send soak report to Ben (DM slack:U0NGEHS2J with the report body). Confidence-gate decision belongs to operator; no automated pass/fail here.
+- [ ] T133 ⏸️ (operator/runtime — not run unattended) Wire Claude Code hooks on SERVER4 ONLY (edit `~/.claude/settings.json` per contracts/claude-code-hooks.md). DO NOT wire on office/server5 yet.
+- [ ] T134 ⏸️ (operator/runtime — not run unattended) Flip a single non-production test session to v2 MCP via `scripts/memo-mcp-flip --session <test> --to v2`; round-trip validate (store, recall, injection). Flip back; verify clean resume on v1.
+- [ ] T135 ⏸️ (operator/runtime — not run unattended) [US8] Kick off soak test: `scripts/memo-soak-test --duration <operator-chosen>` — writes report to `/tmp/memo-soak-report-<date>.md`.
+- [ ] T136 ⏸️ (operator/runtime — not run unattended) Send soak report to Ben (DM slack:U0NGEHS2J with the report body). Confidence-gate decision belongs to operator; no automated pass/fail here.
 
 ### ⚠️ BLOCKING FINDING FOR PHASE 8 — SC-009 is unachievable as specified
 
