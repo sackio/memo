@@ -710,6 +710,15 @@ verify the session resumes on v1 with no corruption.
   post-cutover.
 - **SC-009**: Backfill classifies ≥95% of v1 memos into a real class
   (≤5% land in `legacy-unattributed`).
+  **AMENDED 2026-07-30 (operator decision)**: measured against the amended
+  C-07 (see data-model.md). An unattributed fact now stays a `fact` tagged
+  `provenance-pending`, so `legacy-unattributed` means "no usable signal"
+  rather than "unattributed". Measured on the real corpus: **0.0%**
+  legacy-unattributed (was 86.8% under the original rule).
+  **Provenance coverage (6.4%) is now a tracked HEALTH metric, explicitly
+  NOT a gate** — it should rise over time as memos are re-attributed, and
+  gating on it would block a migration on record-keeping debt that
+  predates the requirement.
 - **SC-010**: Operator (Ben) can flip a single session's MCP between v1
   and v2 in under 60 seconds, with no data loss on rollback.
 

@@ -72,10 +72,10 @@ def main() -> int:
         prov, _ = reconstruct_provenance(d)
         if prov:
             prov_yes += 1
-        # C-07: a fact we cannot attribute is legacy-unattributed, not a fact.
+        # C-07 AS AMENDED (operator decision 2026-07-30): an unattributed fact
+        # stays a fact and is tagged provenance-pending, not demoted.
         if prov is None and cls == "fact":
-            demoted += 1
-            cls = "legacy-unattributed"
+            demoted += 1          # now counts "tagged pending", not "demoted"
             if len(unclassified_samples) < args.show_unclassified:
                 unclassified_samples.append(
                     {"id": d.get("id", "")[:8], "tags": d.get("tags"),
@@ -93,7 +93,8 @@ def main() -> int:
         "classifier_sources": dict(sources.most_common()),
         "provenance_reconstructed": prov_yes,
         "provenance_pct": round(100.0 * prov_yes / n, 1),
-        "demoted_fact_to_legacy_by_C07": demoted,
+        "facts_tagged_provenance_pending": demoted,
+        "provenance_coverage_pct": round(100.0 * prov_yes / n, 1),
         "legacy_unattributed_pct": legacy_pct,
         "sc009_budget_pct": MAX_LEGACY_PCT,
         "sc009_would_pass": legacy_pct <= MAX_LEGACY_PCT,

@@ -42,6 +42,10 @@ DUP_TITLE_NGRAM = 0.60
 
 BACKFILL_VERSION = "0.0.0-legacy"
 
+# Marks a fact whose provenance could not be reconstructed, so it can be
+# found and re-attributed later. See the C-07 amendment in migrate_one.
+PROVENANCE_PENDING_TAG = "provenance-pending"
+
 
 def _ngrams(text: str, n: int = 4) -> set[str]:
     w = re.findall(r"\w+", (text or "").lower())
@@ -176,9 +180,23 @@ async def migrate_one(memo: dict[str, Any], *, embedding: list[float],
     tags = canonicalize_tags(memo.get("tags") or [])
     provenance, prov_source = reconstruct_provenance(memo)
 
-    # C-07: a fact we cannot attribute is legacy-unattributed, not a fact.
+    # C-07 AS AMENDED (operator decision 2026-07-30). A fact we cannot attribute
+    # stays a FACT; it is tagged `provenance-pending` instead of demoted.
+    #
+    # The original rule demoted it to legacy-unattributed, which measured 86.8%
+    # of the real v1 corpus — because that corpus records an origin KIND
+    # (`assistant-sourced`, `git-sourced`) but almost never a locator. Operator:
+    # "we should not be heavily penalizing the vast bulk of our corpus which is
+    # actually good facts but don't have a readily known provenance because we
+    # haven't done the record keeping of it yet."
+    #
+    # The TAG is load-bearing, not decoration: the plan is to reprovenance these
+    # as they get proven out, and without a marker "the memos needing
+    # provenance" is unfindable the moment they look like attributed ones.
     if provenance is None and cls == "fact":
-        cls, cls_source = "legacy-unattributed", "legacy-unattributed"
+        cls_source = "fact-provenance-pending"
+        if PROVENANCE_PENDING_TAG not in tags:
+            tags = tags + [PROVENANCE_PENDING_TAG]
 
     # --- dedup / merge against what we have already written (C-06 / R-13) ---
     title_grams = _ngrams(memo.get("title") or content[:120])

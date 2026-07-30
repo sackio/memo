@@ -373,13 +373,20 @@ async def _write_new(req: MediatorStoreRequest, payload: dict, embedding: list[f
                      rounds: int) -> MediatorStoreResponse:
     """Persist as a new memo — the terminal fall-through for every uncertain path."""
     if payload["provenance"] is None and inferred == "fact":
-        # data-model.md: a fact without provenance becomes legacy-unattributed
-        # rather than being rejected. The mediator owns this call precisely
-        # because it can reclassify instead of losing the write.
-        payload["class"] = "legacy-unattributed"
+        # C-07 AS AMENDED (operator decision 2026-07-30): an unattributed fact
+        # stays a FACT and is TAGGED, not demoted. Demoting measured 86.8% of
+        # the real v1 corpus, which is "good facts, poor record-keeping" rather
+        # than junk.
+        #
+        # Applied to live writes too, not just migration, so we don't
+        # re-accumulate the same problem under a different name. The tag is
+        # what makes later reprovenancing a query instead of a guess.
+        from memo.migrate.backfill import PROVENANCE_PENDING_TAG
+        if PROVENANCE_PENDING_TAG not in tags:
+            tags.append(PROVENANCE_PENDING_TAG)
         anomalies.append("no provenance on a class=fact write — "
-                         "reclassified legacy-unattributed")
-        trace.append("provenance: missing -> legacy-unattributed")
+                         "tagged provenance-pending for later attribution")
+        trace.append("provenance: missing -> tagged provenance-pending")
 
     doc_id = await db.store(
         db_path=None, content=req.content, title=req.title, tags=tags,

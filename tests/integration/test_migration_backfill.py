@@ -140,6 +140,45 @@ async def test_migrates_a_200_memo_corpus(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_unattributed_fact_stays_a_fact_and_is_tagged(tmp_path):
+    """C-07 AS AMENDED (operator decision 2026-07-30).
+
+    The original rule demoted these to legacy-unattributed and caught 86.8% of
+    the real corpus — "good facts, poor record-keeping", not junk. The tag is
+    load-bearing: the plan is to reprovenance them later, and without a marker
+    they become unfindable the moment they look like attributed facts.
+    """
+    from memo.migrate.backfill import PROVENANCE_PENDING_TAG
+    corpus = [v1_memo(1, tags=["k8s"], content="the cluster is at 1.2.3.4")]
+    await backfill.migrate_corpus(corpus, dry_run=False, now=NOW, embed=fake_embed)
+
+    row = await db.get(None, corpus[0]["id"])
+    assert row["class"] == "fact", "an unattributed fact must stay a fact"
+    assert row["provenance"] is None
+    assert PROVENANCE_PENDING_TAG in row["tags"], \
+        "without the marker, reprovenancing later is impossible"
+
+
+@pytest.mark.asyncio
+async def test_attributed_fact_is_not_tagged_pending(tmp_path):
+    from memo.migrate.backfill import PROVENANCE_PENDING_TAG
+    corpus = [v1_memo(1, tags=["k8s"], meta={"url": "https://example.invalid/x"})]
+    await backfill.migrate_corpus(corpus, dry_run=False, now=NOW, embed=fake_embed)
+    row = await db.get(None, corpus[0]["id"])
+    assert row["provenance"] is not None
+    assert PROVENANCE_PENDING_TAG not in row["tags"]
+
+
+@pytest.mark.asyncio
+async def test_legacy_unattributed_now_means_genuinely_unclassifiable(tmp_path):
+    """Reserved for no-signal memos, not for unattributed good facts."""
+    corpus = [v1_memo(1, tags=[], content="no tags, no signal at all")]
+    stats, _ = await backfill.migrate_corpus(corpus, dry_run=False, now=NOW,
+                                             embed=fake_embed)
+    assert stats.by_class.get("legacy-unattributed") == 1
+
+
+@pytest.mark.asyncio
 async def test_every_class_is_reachable(tmp_path):
     corpus = [
         v1_memo(1, tags=["constitution"], content="a constitutional rule"),
@@ -260,6 +299,8 @@ async def test_verify_passes_on_a_clean_migration(tmp_path):
 @pytest.mark.asyncio
 async def test_verify_fails_when_legacy_share_is_over_budget(tmp_path):
     """SC-009: at most 5% legacy-unattributed."""
+    # Untagged memos have NO classification signal at all, so they are
+    # genuinely legacy-unattributed even under the amended C-07.
     corpus = [v1_memo(i, tags=[], content=f"untagged {i}") for i in range(20)]
     await backfill.migrate_corpus(corpus, dry_run=False, now=NOW, embed=fake_embed)
     result = await verify.verify()

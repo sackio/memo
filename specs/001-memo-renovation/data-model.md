@@ -288,7 +288,18 @@ SESSION_GUIDE_cache — no FKs (external-system snapshot)
 ## Validation Rules
 
 - `class = constitutional` REQUIRES `constitution_meta` and `injection_mode = forcible-constitutional`.
-- `class = fact` REQUIRES `provenance` (else migration → `legacy-unattributed`).
+- `class = fact` SHOULD have `provenance`. **AMENDED 2026-07-30 (operator
+  decision)**: a fact WITHOUT provenance stays `class = fact` with
+  `provenance: null` and is tagged **`provenance-pending`**. It is NOT demoted
+  to `legacy-unattributed`.
+  *Why*: the original rule caught **86.8%** of the real v1 corpus, which
+  records an origin KIND (`assistant-sourced`, `git-sourced`) but almost never
+  a locator. Operator: *"we should not be heavily penalizing the vast bulk of
+  our corpus which is actually good facts but don't have a readily known
+  provenance because we haven't done the record keeping of it yet."*
+  The tag is load-bearing — the plan is to re-attribute these as they are
+  proven out, and without a marker they are unfindable.
+  `legacy-unattributed` is now reserved for memos with NO usable signal.
 - `class = time-scoped` REQUIRES `time_scope`.
 - `class = decision-in-progress` MAY have `reopenability` (nullable per spec — C04 kept simple).
 - `class = ephemeral-flush` REQUIRES `expires_at`.

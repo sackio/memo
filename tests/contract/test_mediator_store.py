@@ -114,18 +114,30 @@ async def test_canonical_tags_applied():
 
 
 @pytest.mark.asyncio
-async def test_missing_provenance_reclassifies_rather_than_rejecting():
-    """data-model.md: a fact without provenance becomes legacy-unattributed.
+async def test_missing_provenance_tags_rather_than_demoting():
+    """C-07 AS AMENDED (operator decision 2026-07-30).
 
-    Losing the write would be worse — the mediator owns this call precisely
-    because it can reclassify instead.
+    An unattributed fact stays a FACT and is tagged `provenance-pending`.
+    Demoting it measured 86.8% of the real v1 corpus — good facts with poor
+    record-keeping, not junk. Applied to live writes too, so we don't
+    re-accumulate the problem under a different name.
     """
+    from memo.migrate.backfill import PROVENANCE_PENDING_TAG
     r = await store_mod.store(
         MediatorStoreRequest(content="ups with no provenance", session_id="s"),
         provider=StubLLM([]),
     )
     assert r.action == "write-new"
-    assert r.class_inferred == "legacy-unattributed"
+    assert r.class_inferred == "fact"
+    assert PROVENANCE_PENDING_TAG in (r.canonical_tags_applied or [])
+
+
+@pytest.mark.asyncio
+async def test_attributed_write_is_not_tagged_pending():
+    from memo.migrate.backfill import PROVENANCE_PENDING_TAG
+    r = await store_mod.store(req("ups with provenance"), provider=StubLLM([]))
+    assert r.class_inferred == "fact"
+    assert PROVENANCE_PENDING_TAG not in (r.canonical_tags_applied or [])
 
 
 @pytest.mark.asyncio

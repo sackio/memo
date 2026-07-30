@@ -383,3 +383,51 @@ Phase 5 alongside the other provider adapters.
 assumed an in-process API call and are not achievable across a session
 round-trip. Amended there. The happy path is unaffected — it makes no
 LLM call at all.
+
+
+## R-18 — Unattributed facts: tag, don't demote
+
+**Decision**: A `class = fact` memo whose provenance cannot be reconstructed
+stays a **fact**, with `provenance: null` and a **`provenance-pending`** tag.
+It is NOT demoted to `legacy-unattributed`. Applies to BOTH the migration
+backfill and live storage-mediator writes.
+
+**Rationale**: Measured against the real v1 corpus (1000-memo sample,
+2026-07-30), the original C-07 rule sent **86.8%** of memos to
+`legacy-unattributed` — a class that does not inject and "awaits human review".
+That corpus records an origin KIND (`assistant-sourced`, `git-sourced`,
+`host-server5`) but almost never a LOCATOR; only ~3% carry a real
+msg_id/thread_id/session-uuid. Applied literally the migration would file
+~6,000 good memos as needing triage: passing the letter of the spec, failing
+its point.
+
+Operator decision 2026-07-30: *"I'm inclined to loosen the rule for now with
+the expectation that as facts get proven further we will reprovenance them, and
+as memos get outdated they'll fall by the wayside … we should not be heavily
+penalizing the vast bulk of our corpus which is actually good facts but don't
+have a readily known provenance because we haven't done the record keeping of
+it yet."*
+
+**The tag is load-bearing, not cosmetic.** The operator's plan depends on
+coming back to re-attribute these memos; without a marker, "the memos that need
+provenance" becomes unfindable the moment they are indistinguishable from
+attributed ones. `provenance-pending` makes that a query.
+
+**Applied to live writes too**, not only migration, so the same debt is not
+re-accumulated under a different name. Going forward memo v2 *can* capture
+provenance properly (FR-004), so coverage should rise on its own; the tag makes
+the remainder visible either way.
+
+**Measured effect**: legacy-unattributed 86.8% → **0.0%**; 92% of the corpus
+lands as usable `fact`; 868/1000 tagged `provenance-pending`; provenance
+coverage 6.4%, now tracked as a health metric rather than a gate.
+
+**Alternatives rejected**:
+- *Relax SC-009 only* — would have left 86.8% of memos non-injecting, which is
+  the actual harm; the metric was the symptom, not the disease.
+- *Synthesize provenance from origin-kind tags* — fabrication. A provenance
+  block that cannot be followed makes an unsourced memo look verified, which is
+  worse than an honest null.
+- *An origin-only provenance shape* `{origin_kind, host}` — the most faithful
+  option and still worth doing later; deferred because it changes the data
+  model and the tag captures the same recoverability today.

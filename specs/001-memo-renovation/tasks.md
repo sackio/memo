@@ -585,14 +585,14 @@ Full suite **376 passed**. (FR-038/FR-040 markers landed in
 ## Phase 8 (== plan Phase G) — Soak test (RUNTIME PHASE — not dev)
 
 - [X] T130 [US8] Author `../memo-v2/scripts/memo-soak-test` — driver script that spawns background test agents via AgentController with a synthetic + real-workload query stream against the ported v2 corpus. Instrumentation captures per-SC metrics per quickstart.md §"SC measurement methodology". Marker `001/FR-035` (uses the mediator-audit-log).
-- [ ] T131 [US7] ⛔ **DO NOT RUN until the SC-009 finding above is decided** — it would produce a corpus that fails its own verification. Run the full backfill: `scripts/memo-migrate-backfill --v1-url http://server4:8000 --v2-url http://server4:8001 --audit-log /mnt/backup/memo/migration-YYYY-MM-DD/audit.jsonl` — 7339 memos processed. Deliverable: SC-005 (dupe clusters → 0) + SC-009 (≥95% classified) measurable.
+- [ ] T131 [US7] ✅ unblocked (SC-009 finding resolved above) — operator/runtime action, not run unattended. Run the full backfill: `scripts/memo-migrate-backfill --v1-url http://server4:8000 --v2-url http://server4:8001 --audit-log /mnt/backup/memo/migration-YYYY-MM-DD/audit.jsonl` — 7339 memos processed. Deliverable: SC-005 (dupe clusters → 0) + SC-009 (≥95% classified) measurable.
 - [ ] T132 [US7] Run `scripts/memo-migrate-verify` — must exit 0 or investigate failing checks.
 - [ ] T133 ⏸️ (operator/runtime — not run unattended) Wire Claude Code hooks on SERVER4 ONLY (edit `~/.claude/settings.json` per contracts/claude-code-hooks.md). DO NOT wire on office/server5 yet.
 - [ ] T134 ⏸️ (operator/runtime — not run unattended) Flip a single non-production test session to v2 MCP via `scripts/memo-mcp-flip --session <test> --to v2`; round-trip validate (store, recall, injection). Flip back; verify clean resume on v1.
 - [ ] T135 ⏸️ (operator/runtime — not run unattended) [US8] Kick off soak test: `scripts/memo-soak-test --duration <operator-chosen>` — writes report to `/tmp/memo-soak-report-<date>.md`.
 - [ ] T136 ⏸️ (operator/runtime — not run unattended) Send soak report to Ben (DM slack:U0NGEHS2J with the report body). Confidence-gate decision belongs to operator; no automated pass/fail here.
 
-### ⚠️ BLOCKING FINDING FOR PHASE 8 — SC-009 is unachievable as specified
+### ✅ RESOLVED 2026-07-30 — was: SC-009 unachievable as specified
 
 **Measured against the REAL v1 corpus (1000-memo sample, 2026-07-30) with
 `scripts/memo-migrate-preview`:**
@@ -641,8 +641,34 @@ an absent one — it makes an unsourced memo look verified.
    "we know where it came from but not exactly where" is representable.
    Most work, most honest, and probably the right long-term answer.
 
-Until this is decided, **T131 (the real backfill) should not run** — it would
-produce a corpus that fails its own verification.
+**OPERATOR DECISION (2026-07-30): option 2 — loosen the rule.** *"as facts get
+proven further we will reprovenance them, and as memos get outdated they'll fall
+by the wayside … we should not be heavily penalizing the vast bulk of our corpus
+which is actually good facts but don't have a readily known provenance because we
+haven't done the record keeping of it yet."*
+
+**Implemented** (see research.md **R-18**): an unattributed fact stays
+`class = fact` with `provenance: null` and gains a **`provenance-pending`** tag,
+in BOTH the migration backfill and live storage-mediator writes.
+
+The tag was added beyond the literal decision because the operator's plan
+depends on re-attributing these later — without a marker, "the memos that need
+provenance" is unfindable the moment they look like attributed ones.
+
+**Re-measured on the real corpus:**
+
+| | before | after |
+|---|---|---|
+| `legacy-unattributed` | 86.8% | **0.0%** |
+| usable `fact` | ~5% | **92%** |
+| tagged `provenance-pending` | — | 868 / 1000 |
+| provenance coverage | 6.4% | 6.4% (now a HEALTH metric, not a gate) |
+
+SC-009 now passes meaningfully: `legacy-unattributed` means "no usable signal",
+not "we didn't write down where this came from".
+
+**T131 is unblocked**, but still an operator/runtime action — not run
+unattended.
 
 **Phase 8 gate**: OPERATOR CONFIDENCE GATE (C-08 step 4). Not a `speckit-trace` gate — this is a human review of the soak report. No cutover shape is committed until Ben approves.
 
