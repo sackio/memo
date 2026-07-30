@@ -35,26 +35,26 @@ repo-wide and will fail on later-phase FRs. Run inside the v2 worktree.
 
 ## Phase A — The chunker (pure, no I/O) — FR-101, FR-102, FR-103, FR-104
 
-- [ ] **T210** — `src/memo/chunking.py`: `Passage` dataclass (`text`, `index`,
+- [x] **T210** — `src/memo/chunking.py`: `Passage` dataclass (`text`, `index`,
       `token_start`, `token_end`) and `chunk(text, *, target, overlap)`. No
       imports from `db` or `embeddings` — this module must be testable with no
       database, no network, no provider. `[002/FR-101]`
-- [ ] **T211** — Structure-first splitting: markdown headings (`^#{1,6} `), then
+- [x] **T211** — Structure-first splitting: markdown headings (`^#{1,6} `), then
       paragraph boundaries within an over-target section, then bounded hard-wrap.
       `[002/FR-102]`
-- [ ] **T212** — Fenced-code awareness: do not split inside a ``` fence when a
+- [x] **T212** — Fenced-code awareness: do not split inside a ``` fence when a
       legal boundary exists outside it. Half a table or half a command is worse
       than a slightly oversized passage. `[002/FR-102]`
-- [ ] **T213** — Bound every passage below the provider input cap, including the
+- [x] **T213** — Bound every passage below the provider input cap, including the
       hard-wrap fallback. `[002/FR-104]`
-- [ ] **T214** — **Coverage test: the union of passages, minus overlap, must
+- [x] **T214** — **Coverage test: the union of passages, minus overlap, must
       reconstruct the input exactly.** A chunker that silently drops a span is
       the failure mode that matters and is invisible without this assertion.
       `[002/FR-101]`
-- [ ] **T215** — Edge cases, one test each: no headings; a single 8k-token
+- [x] **T215** — Edge cases, one test each: no headings; a single 8k-token
       paragraph; heading with no body; fence larger than target; empty content;
       content of exactly `target` tokens; content one token over. `[002/FR-102]`
-- [ ] **T216** — **Single-passage invariant**: text under `target` yields exactly
+- [x] **T216** — **Single-passage invariant**: text under `target` yields exactly
       one passage whose text is the input, unchanged. Assert there is no
       `if token_count > N` branch anywhere in the module — the threshold is
       emergent, not configured. `[002/FR-103]`
