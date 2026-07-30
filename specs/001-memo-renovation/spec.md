@@ -452,14 +452,13 @@ verify the session resumes on v1 with no corruption.
   overlap + entity match. On match, the mediator chooses one of `merge`,
   `supersede`, `split`, `reject`, `write-new` and returns the chosen
   action + resulting memo id(s) to the caller.
-- **FR-015c**: The storage mediator MUST reject any write that would
-  refute a `class = fact` memo unless the caller supplies an
-  operator-directive reference (session-id + timestamp of Ben's
-  authorizing DM, or auditor invocation id). Returns HTTP 409 with a
-  clarification body: `{action: "clarify", conflicting_memo_id, prompt:
-  "who is authorizing the refutation?"}`. **Resolved 2026-07-29**: this 409 is
-  the FIRST response only. A retry that still lacks `operator_directive_ref`
-  (or an explicit decline) returns **403 REJECT**, per the "Refutation flow"
+- **FR-015c** *(amended 2026-07-30, Principle II)*: **WITHDRAWN.** The
+  operator-directive requirement for refuting a `class = fact` memo, and its
+  409-then-403 protocol, are removed. Superseding a wrong fact is ordinary
+  corpus maintenance, not a privileged act. Replaced by FR-028's
+  supersede-never-delete rule. The `operator_directive_ref` field remains
+  OPTIONAL on `supersede_edges` for the cases where an operator *did* direct
+  the change and it is worth recording — it is no longer a gate
   section of contracts/mediator-store.md — that contract previously specified
   403 for this same case, and the two are reconciled as 409-then-403 rather
   than either alone.
@@ -530,14 +529,30 @@ verify the session resumes on v1 with no corruption.
 ### Functional Requirements — reconciliation
 
 - **FR-027**: An agent MAY create new facts via `memo_store`.
-- **FR-028**: An agent MUST NOT delete, supersede, or edit an existing
-  `class = fact` memo. Attempts return 403.
-- **FR-029**: Fact refutation MUST be initiated by an operator directive
-  (direct edit or invoking the auditor), which the auditor then executes.
-- **FR-030**: Real-time reconciliation MUST fire on the write path for
-  `class = fact` memos: if a new fact contradicts a current fact
-  (semantic + entity match), the write is queued for operator review
-  rather than applied silently.
+- **FR-028** *(amended 2026-07-30)*: An agent MAY supersede AND MAY DELETE.
+  Deletion is restricted by WHAT qualifies, not by who asks:
+  **deletable** — byte-identical duplicates (keep one), superseded versions past
+  retention, TTL-expired and `ephemeral-flush`, empty stubs;
+  **supersede instead** — any memo whose content is unique, because the test is
+  "would this lose the only copy of something", not "is this false";
+  **operator-only** — `class = constitutional`.
+  Content changes MUST route through supersede rather than in-place mutation, so
+  the prior version stays answerable via `get_as_of`. Every supersede edge MUST
+  record `actor` and `reason`.
+- **FR-028a** *(added 2026-07-30)*: Every deletion MUST be logged with a content
+  snapshot sufficient to reconstruct the memo. That log — not a prohibition — is
+  what makes aggressive pruning safe, and it is what lets a wrong call be undone
+  rather than merely regretted.
+- **FR-029** *(amended 2026-07-30)*: **WITHDRAWN.** Refutation no longer
+  requires an operator directive. The measured failure mode is staleness (44
+  duplicate groups / 150 excess copies, 2026-07-30), which an operator gate
+  makes worse by making the operator the bottleneck on every correction.
+- **FR-030** *(amended 2026-07-30)*: Real-time reconciliation MUST fire on the
+  write path for `class = fact` memos: a new fact that contradicts a current
+  one MUST be reconciled — superseded, merged, or both retained with the
+  conflict recorded — rather than written silently alongside it. It is NO
+  LONGER queued for operator review; the reconciling agent decides and the
+  audit log records what it decided.
 - **FR-031**: Event-triggered reconciliation MUST fire on ATC
   infra-change events (existing L3a listener extended) for
   infrastructure-tagged memos.

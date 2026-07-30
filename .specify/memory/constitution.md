@@ -20,18 +20,45 @@ the human path smoother at the cost of the agent path is prohibited.
 *"in practice agents have mostly done all of this and I want agents to be
 responsible for this."*
 
-### II. Facts Are Authoritative — Only Operators Can Refute Them (NON-NEGOTIABLE)
+### II. Deletion Is Earned, Not Forbidden (NON-NEGOTIABLE)
 
-Any agent may WRITE a new fact when one comes to light. No agent may REFUTE
-or overwrite an existing fact. Refutation requires operator input, either
-directly (Ben contradicting a memo in DM) or via an auditor invoked at the
-operator's request. This asymmetry is what makes memo trustworthy as a
-fleet-shared substrate — an agent's session context cannot poison the
-shared truth.
+Agents may write, supersede AND delete. Pruning is core maintenance, not a
+privilege — a knowledge base nobody is allowed to prune decays into the "stale
+fog" that halted the fleet on 2026-07-20.
 
-*Ratified after:* the 2026-07-20 operator halt to nuke "stale fog" — the
-demonstration that agents left to reconcile facts amongst themselves accrue
-contradictions faster than they resolve them.
+The control is not a prohibition. It is that **only specialized, rule-bound
+agents do it, and the rules are specific about what qualifies.**
+
+**Delete only what is provably redundant or provably expired:**
+- byte-identical duplicates (keep exactly one)
+- superseded versions past their retention window
+- TTL-expired and `ephemeral-flush` memos
+- empty / zero-content stubs
+
+**Supersede, do not delete, when the content is unique.** Wrong-but-unique
+still carries historical value and stays answerable via `get_as_of`. The test is
+not "is this false" but "would deleting it lose the only copy of something".
+
+**Operator-only:** `constitutional` memos. Rewriting one force-injects
+fleet-wide, which is privilege escalation rather than maintenance.
+
+**Every deletion is logged with a content snapshot**, so a wrong call is
+recoverable rather than merely regrettable. That log — not a prohibition — is
+what makes aggressive pruning safe.
+
+*Amended 2026-07-30* (operator directive), replacing "only operators can refute
+facts". The original was ratified on a misreading of its own evidence: its note
+cited the 2026-07-20 halt as proof that agents over-reconcile, but the interview
+record says the opposite — C9: *"Corpus rot ('stale fog') is itself an
+operational blocker. Reconciliation must be aggressive enough that Ben doesn't
+have to halt the fleet to purge."* Nothing was reconciling; that was the
+problem. C28 (agents may not refute) is genuinely in the record but stood in
+unresolved tension with C9, and this document had resolved it the wrong way.
+
+The measured failure is staleness, not corruption: the 2026-07-30 audit found 44
+byte-identical duplicate groups / 150 excess copies plus contradictory memos
+left standing. An operator gate on every correction guarantees decay by making
+the operator the bottleneck.
 
 ### III. Provenance Is First-Class (NON-NEGOTIABLE)
 
