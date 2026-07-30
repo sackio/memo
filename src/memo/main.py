@@ -283,11 +283,8 @@ async def memo_list(
     semantic similarity (same engine as memo_search). Without query, returns
     documents in reverse-chronological order via SQL.
 
-    db_path: directory path (uses <dir>/.memo.db), explicit .db file, or None for global DB.
-    scope controls which database(s) to list from:
-    - "local" (default): only the DB specified by db_path (or global if db_path is None)
-    - "global": only the global DB, ignoring db_path
-    - "all": list from both db_path DB and global DB, merged by created_at desc
+    db_path / scope: ACCEPTED AND IGNORED — one global DB since the 2026-06-29
+    single-global refactor. "local", "global" and "all" all list from it.
 
     Filters:
     - tags: only return docs that have at least one of these tags
@@ -342,14 +339,21 @@ async def memo_context(
 
     queries: optional list of additional search angles run alongside query.
              More angles = better recall at the cost of more embedding calls.
-    token_budget: maximum tokens in the returned content string.
-    scope: "local" (default), "global", or "all" (merge local + global DBs).
+    token_budget: maximum tokens in the returned content string. If the
+                  top-ranked memo alone exceeds it, you get that memo excerpted
+                  and marked, never an empty result.
+    db_path / scope: ACCEPTED AND IGNORED — one global DB since the 2026-06-29
+                  single-global refactor. "local", "global" and "all" all
+                  search it.
 
     Returns:
       content: formatted markdown string of results within budget
       token_count: actual token count of content
-      doc_count: number of memos included
-      truncated: true if results were cut off by the budget
+      doc_count: number of memos INCLUDED in content
+      matched_count: number of memos that MATCHED the query. doc_count 0 with
+                     matched_count > 0 means the budget was too small for any
+                     single memo — NOT that the corpus has nothing on the topic.
+      truncated: true if any match was left out or excerpted
     """
     all_queries = [query] + (queries or [])
     search_kwargs = dict(
