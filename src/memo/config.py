@@ -38,11 +38,24 @@ class Settings(BaseSettings):
     memo_reaper_enabled: bool = True
     memo_reaper_interval_seconds: int = 300
 
-    # v2 mediator LLM provider (research.md R-17). Served by an INTERACTIVE
-    # Claude Code session (`memo-llm`) riding the Max subscription — never a
-    # per-token API, and never `claude -p`, which bills as API usage.
-    # Defaults to `null` (always-unavailable -> mediators degrade) until the
-    # claude_session adapter lands in Phase 5 / T085a.
+    # Provider selection (Principle VIII / FR-045). `null` keeps memo working
+    # standalone, with integration features WARN-logging what they would do.
+    memo_conductor_provider: str = "atc"
+    memo_agent_controller_provider: str = "agents_supervisor"
+
+    # v2 generative LLM provider (research.md R-17). ALL generative calls go
+    # through an INTERACTIVE Claude Code session (`memo-llm`) riding the Max
+    # subscription — never a per-token API, and never `claude -p`, which bills
+    # as API usage.
+    #
+    # DEFAULT STAYS `null` even though the claude_session adapter now exists
+    # (T085a deviation, 2026-07-30). Flipping the default would make the v2
+    # container immediately try to reach a `memo-llm` session that HAS NOT BEEN
+    # CREATED on this fleet yet, and — working exactly as designed — DM the
+    # `agents` supervisor about the outage. Shipping a default that pages the
+    # supervisor about missing infrastructure is not a good default.
+    #
+    # To turn it on, once `memo-llm` exists:  MEMO_LLM_PROVIDER=claude_session
     memo_llm_provider: str = "null"
     memo_llm_timeout_seconds: float = 10.0
     # Fallback fires when more than this many candidates survive dedup +

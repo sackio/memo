@@ -395,19 +395,20 @@ Full suite **260 passed**.
 
 ## Phase 5 (== plan Phase D) — Provider abstractions + adapters [US8]
 
-- [ ] T080 [US8] Write `../memo-v2/src/memo/providers/conductor/base.py` — abstract `Conductor` class with push/pull/scheduled/event-trigger/bridge-event method signatures. Marker `001/FR-041 001/FR-042 001/FR-042a 001/FR-046`.
-- [ ] T081 [US8] Write `../memo-v2/src/memo/providers/conductor/atc.py` — concrete ATC adapter using HTTP `POST /messages` + `POST /beacons` + `POST /triggers`. Marker `001/FR-041 001/FR-042`.
-- [ ] T082 [US8] [P] Write `../memo-v2/src/memo/providers/agent_controller/base.py` — abstract `AgentController` with spawn/respawn/clear/change-model/compact/interrupt/inject signatures. Marker `001/FR-043 001/FR-046`.
-- [ ] T083 [US8] Write `../memo-v2/src/memo/providers/agent_controller/agents_supervisor.py` — concrete `agents`-supervisor adapter. Marker `001/FR-043`.
-- [ ] T084 [US8] [P] Write `../memo-v2/src/memo/providers/null.py` — `NullConductor` + `NullAgentController` for standalone mode. Marker `001/FR-045`.
-- [ ] T085 [US8] Wire provider selection in main.py — `MEMO_CONDUCTOR_PROVIDER` + `MEMO_AGENT_CONTROLLER_PROVIDER` env vars, default `atc`/`agents_supervisor`, `null` for standalone. Marker `001/FR-045`.
-- [ ] T085a [US8] Write `../memo-v2/src/memo/providers/llm/claude_session.py` — concrete `LLMProvider` that serves inference from the **interactive `memo-llm` Claude Code session** over ATC (request/response with a correlation id + 10s soft timeout). Per R-17: **MUST NOT shell out to `claude -p`** — that is billed API usage and is the exact thing this design avoids; an interactive session rides the existing Max subscription. On unavailability return None (never raise) so callers degrade, AND DM the `agents` supervisor to respawn `memo-llm` — **rate-limited to one notify per outage, not per failed call**, or a dead session plus fleet-wide memo traffic floods the supervisor (the thundering-herd failure in CLAUDE.md §5). Switch `MEMO_LLM_PROVIDER` default from `null` to `claude_session`. Marker `001/FR-045`.
-- [ ] T085b [US8] Write `../memo-v2/tests/contract/test_llm_provider.py` — null adapter reports unavailable; `claude_session` returns None (never raises) when the session is down; supervisor escalation fires exactly ONCE per outage across N consecutive failures and re-arms only after a recovery. Marker `001/FR-045`.
-- [ ] T086 [US8] Add `POST /events` endpoint per contracts/conductor-pull.md. Routes each event kind to its handler. Marker `001/FR-042 001/FR-042a`.
-- [ ] T087 [US8] Write `../memo-v2/tests/contract/test_conductor_push.py`. Marker `001/FR-041 001/FR-046`.
-- [ ] T088 [US8] Write `../memo-v2/tests/contract/test_conductor_pull.py`. Marker `001/FR-042 001/FR-042a`.
-- [ ] T089 [US8] Write `../memo-v2/tests/contract/test_agent_controller.py`. Marker `001/FR-043`.
-- [ ] T090 [US8] [P] Write `../memo-v2/tests/integration/test_standalone_mode.py` — start memo with both providers set to `null`; verify CRUD + mediators still work; verify integration features WARN-log the "would have fired" note. Marker `001/FR-045`.
+- [X] T080 [US8] Write `../memo-v2/src/memo/providers/conductor/base.py` — abstract `Conductor` class with push/pull/scheduled/event-trigger/bridge-event method signatures. Marker `001/FR-041 001/FR-042 001/FR-042a 001/FR-046`.
+- [X] T081 [US8] Write `../memo-v2/src/memo/providers/conductor/atc.py` — concrete ATC adapter using HTTP `POST /messages` + `POST /beacons` + `POST /triggers`. Marker `001/FR-041 001/FR-042`.
+- [X] T082 [US8] [P] Write `../memo-v2/src/memo/providers/agent_controller/base.py` — abstract `AgentController` with spawn/respawn/clear/change-model/compact/interrupt/inject signatures. Marker `001/FR-043 001/FR-046`.
+- [X] T083 [US8] Write `../memo-v2/src/memo/providers/agent_controller/agents_supervisor.py` — concrete `agents`-supervisor adapter. Marker `001/FR-043`.
+- [X] T084 [US8] [P] Write `../memo-v2/src/memo/providers/null.py` — `NullConductor` + `NullAgentController` for standalone mode. Marker `001/FR-045`.
+- [X] T085 [US8] Wire provider selection in main.py — `MEMO_CONDUCTOR_PROVIDER` + `MEMO_AGENT_CONTROLLER_PROVIDER` env vars, default `atc`/`agents_supervisor`, `null` for standalone. Marker `001/FR-045`.
+- [X] T085a [US8] Write `../memo-v2/src/memo/providers/llm/claude_session.py` — concrete `LLMProvider` that serves inference from the **interactive `memo-llm` Claude Code session** over ATC (request/response with a correlation id + 10s soft timeout). Per R-17: **MUST NOT shell out to `claude -p`** — that is billed API usage and is the exact thing this design avoids; an interactive session rides the existing Max subscription. On unavailability return None (never raise) so callers degrade, AND DM the `agents` supervisor to respawn `memo-llm` — **rate-limited to one notify per outage, not per failed call**, or a dead session plus fleet-wide memo traffic floods the supervisor (the thundering-herd failure in CLAUDE.md §5). ~~Switch `MEMO_LLM_PROVIDER` default from `null` to `claude_session`.~~ **DEVIATION (2026-07-30): default stays `null`.** The adapter is built and selectable, but no `memo-llm` session exists on the fleet yet. Flipping the default would make every v2 boot try to reach a session that isn't there and — working exactly as designed — page the `agents` supervisor about it. Shipping a default that pages the supervisor about missing infrastructure is a bad default. Flip it with `MEMO_LLM_PROVIDER=claude_session` once the session is spawned; that is a one-line change and a Phase 8/9 concern. Marker `001/FR-045`.
+- [X] T085b [US8] Write `../memo-v2/tests/contract/test_llm_provider.py` — null adapter reports unavailable; `claude_session` returns None (never raises) when the session is down; supervisor escalation fires exactly ONCE per outage across N consecutive failures and re-arms only after a recovery. Marker `001/FR-045`.
+- [X] T086a [US8] **ADDED 2026-07-30 — FR-044 had NO task.** The Phase 5 gate requires `001/FR-044` (the Claude Code hook INTERFACE: endpoints for SessionStart, SessionStart:compact, PreCompact, SessionStop, SessionEnd) but no task in any phase implemented or anchored it, so the gate failed it as PARTIAL. Phase 4 built four of the five hooks under FR-017/018/025/036 markers; **PreCompact and SessionStop were missing entirely**. Adds `POST /hooks/pre-compact` (synchronous flush before context is dropped, per FR-036) and `POST /hooks/session-stop` (end-of-turn checkpoint), and anchors `001/FR-044` across the hook chain. Marker `001/FR-044`.
+- [X] T086 [US8] Add `POST /events` endpoint per contracts/conductor-pull.md. Routes each event kind to its handler. Marker `001/FR-042 001/FR-042a`.
+- [X] T087 [US8] Write `../memo-v2/tests/contract/test_conductor_push.py`. Marker `001/FR-041 001/FR-046`.
+- [X] T088 [US8] Write `../memo-v2/tests/contract/test_conductor_pull.py`. Marker `001/FR-042 001/FR-042a`.
+- [X] T089 [US8] Write `../memo-v2/tests/contract/test_agent_controller.py`. Marker `001/FR-043`.
+- [X] T090 [US8] [P] Write `../memo-v2/tests/integration/test_standalone_mode.py` — start memo with both providers set to `null`; verify CRUD + mediators still work; verify integration features WARN-log the "would have fired" note. Marker `001/FR-045`.
 
 **Phase 5 gate**:
 
@@ -415,6 +416,41 @@ Full suite **260 passed**.
 cd ../memo-v2 && speckit-trace --require-full \
   001/FR-041,001/FR-042,001/FR-042a,001/FR-043,001/FR-044,001/FR-045,001/FR-046
 ```
+
+**Phase 5 gate: ✅ PASS (2026-07-30)** — all 7 FRs FULL, 0 dangling, exit 0.
+Full suite **297 passed**.
+
+### Phase 5 implementation notes
+
+1. **FR-044 had no task at all** — see T086a. The gate list required it but no
+   phase implemented or anchored it, and two of its five fire points
+   (PreCompact, SessionStop) did not exist. This is the second time a gate FR
+   turned out to be unowned (FR-004 in Phase 2), so it is worth stating as a
+   pattern: **the `--require-full` list is not derived from the task list, and
+   the two drift.** Worth a sweep before the final phase.
+2. **`MEMO_LLM_PROVIDER` default deliberately stays `null`** despite T085a
+   saying to flip it. The adapter works and is selectable, but no `memo-llm`
+   session exists on the fleet yet, so defaulting to it would make every v2
+   boot page the `agents` supervisor about missing infrastructure — correct
+   behavior, bad default. One env var flips it when the session is spawned.
+3. **PreCompact fails LOUD; the injecting hooks fail QUIET.** Opposite postures
+   on purpose. A SessionStart hook that fails should let the session start
+   without Layer 2. A PreCompact flush that fails must NOT report success —
+   the session would compact believing its state was saved.
+4. **The conductor queue is bounded and drops oldest-first.** An unreachable
+   ATC must not turn into a memory leak inside memo. Events are advisory; the
+   memo itself is already committed to sqlite before any event is emitted, so
+   dropping one loses a notification, not data.
+5. **`claude -p` prohibition is asserted structurally**, not just documented:
+   a test greps the adapter source for `subprocess`/`os.system`/`shell=True`.
+   Documentation alone would not survive a future maintainer optimizing.
+6. **Supervisor escalation is once-per-outage**, tested directly (12 failures →
+   1 notify), with re-arming after a recovery and a 30-minute re-notify ceiling
+   so a permanently dead session is still reported occasionally.
+7. **`httpx` promoted to a runtime dependency.** It was only in the `dev`
+   extra while `claude_session.py` imports it at runtime; it happens to arrive
+   transitively via `openai`, which is exactly how a working image breaks on an
+   unrelated upgrade.
 
 ---
 

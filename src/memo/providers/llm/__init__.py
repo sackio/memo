@@ -35,12 +35,8 @@ def get_llm_provider() -> LLMProvider:
     if name == "null":
         _instance = NullLLMProvider()
     elif name == "claude_session":
-        # Lands in Phase 5 (T085a). Until then, fall back rather than crash.
-        logger.warning(
-            "MEMO_LLM_PROVIDER=claude_session is not implemented until Phase 5 "
-            "(T085a) — falling back to the null provider; mediators will degrade."
-        )
-        _instance = NullLLMProvider()
+        from memo.providers.llm.claude_session import ClaudeSessionLLMProvider
+        _instance = ClaudeSessionLLMProvider()
     else:
         logger.warning(
             "unknown MEMO_LLM_PROVIDER=%r — falling back to null provider", name

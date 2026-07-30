@@ -1,4 +1,8 @@
-"""Claude Code hook endpoints. [001/FR-017 001/FR-018 001/FR-036]
+"""Claude Code hook endpoints. [001/FR-017 001/FR-018 001/FR-036 001/FR-044]
+
+FR-044 (the hook INTERFACE as a whole — all five fire points reachable with a
+documented contract) is anchored here as well as on the endpoints. It had no
+task of its own; see T086a.
 
 Endpoint functions are called directly rather than through TestClient: these
 are plain async functions, and going through the app would spin up the MCP
@@ -104,3 +108,83 @@ async def test_session_end_acknowledges_without_context():
     r = await main.hook_session_end({"session_id": "dojo"})
     assert r["acknowledged"] is True
     assert "additionalContext" not in r
+
+
+# --- FR-044: the hook INTERFACE as a whole ---
+#
+# Added 2026-07-30. The Phase 5 gate requires FR-044 (endpoints for the whole
+# hook chain) and no task had implemented or anchored it — PreCompact and
+# SessionStop did not exist at all.
+
+@pytest.mark.asyncio
+async def test_pre_compact_flushes_synchronously(embedding):
+    """FR-036: the flush must COMPLETE before compaction drops the context.
+
+    Asserted by reading the memo back immediately after the call returns — if
+    the hook were fire-and-forget this would race.
+    """
+    r = await main.hook_pre_compact({
+        "session_id": "dojo", "flush_generation": 3,
+        "slots": {"open-tasks": "finish the seam"},
+    })
+    assert r["flushed"] is True
+    doc = await db.get_current(None, r["memo_ids"]["open-tasks"])
+    assert doc["content"] == "finish the seam"
+
+
+@pytest.mark.asyncio
+async def test_pre_compact_failure_is_reported_not_swallowed(monkeypatch):
+    """Opposite posture from the injecting hooks, deliberately.
+
+    A silent flush failure means the session compacts believing its state was
+    saved — worse than a visible error.
+    """
+    async def boom(**kw):
+        raise RuntimeError("db down")
+    monkeypatch.setattr(main.flush_mod, "flush", boom)
+    r = await main.hook_pre_compact({"session_id": "dojo", "flush_generation": 1,
+                                     "slots": {"open-tasks": "x"}})
+    assert r["flushed"] is False
+    assert "error" in r
+
+
+@pytest.mark.asyncio
+async def test_pre_compact_requires_session_and_slots():
+    assert (await main.hook_pre_compact({"session_id": "dojo"}))["flushed"] is False
+    assert (await main.hook_pre_compact({"slots": {"a": "b"}}))["flushed"] is False
+
+
+@pytest.mark.asyncio
+async def test_pre_compact_then_post_compact_round_trip(embedding):
+    """The C58 replacement, end to end through the hook chain."""
+    await main.hook_pre_compact({
+        "session_id": "dojo", "flush_generation": 9,
+        "slots": {"in-flight-work": "background verify job running"},
+    })
+    r = await main.hook_post_compact({"session_id": "dojo", "flush_generation": 9})
+    assert "background verify job running" in r["additionalContext"]
+
+
+@pytest.mark.asyncio
+async def test_session_stop_checkpoints_when_given_slots(embedding):
+    r = await main.hook_session_stop({
+        "session_id": "dojo", "flush_generation": 4,
+        "slots": {"key-decisions": "chose content-word dedup"},
+    })
+    assert r["acknowledged"] is True and r["flushed"] is True
+
+
+@pytest.mark.asyncio
+async def test_session_stop_without_slots_just_acknowledges():
+    r = await main.hook_session_stop({"session_id": "dojo"})
+    assert r["acknowledged"] is True and r["flushed"] is False
+
+
+@pytest.mark.asyncio
+async def test_every_hook_in_the_chain_has_an_endpoint():
+    """FR-044 names five fire points; all five must be reachable."""
+    paths = {r.path for r in main.app.routes if hasattr(r, "path")}
+    for p in ("/hooks/session-start", "/hooks/post-compact", "/hooks/pre-compact",
+              "/hooks/session-stop", "/hooks/session-end",
+              "/hooks/instructions-loaded"):
+        assert p in paths, f"{p} missing"

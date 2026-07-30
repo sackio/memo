@@ -507,6 +507,82 @@ _STORE_STATUS = {
 }
 
 
+# --- Phase 5: provider-facing endpoints ---
+
+
+@app.post("/events")
+async def conductor_pull(payload: dict[str, Any]):
+    """Inbound Conductor events. [001/FR-042 001/FR-042a]
+
+    The pull half of the Conductor contract: the transport delivers events TO
+    memo here. Unknown kinds are accepted with `handled: false` rather than
+    400'd — a Conductor that learns a new event kind before memo does must not
+    start collecting delivery failures.
+    """
+    kind = (payload or {}).get("event_kind") or (payload or {}).get("kind")
+    handlers = {
+        "session.started": _ev_session_started,
+        "session.ended": _ev_session_ended,
+        "operator.directive": _ev_operator_directive,
+    }
+    handler = handlers.get(kind)
+    if handler is None:
+        logging.getLogger(__name__).info("conductor pull: unhandled event kind %r", kind)
+        return {"handled": False, "event_kind": kind,
+                "reason": "no handler registered for this kind"}
+    try:
+        return {"handled": True, "event_kind": kind,
+                "result": await handler(payload or {})}
+    except Exception as e:
+        logging.getLogger(__name__).exception("conductor pull: %s handler failed", kind)
+        return {"handled": False, "event_kind": kind, "error": str(e)}
+
+
+async def _ev_session_started(payload: dict[str, Any]) -> dict[str, Any]:
+    """Warm the injection-set cache so the session's first hook call is fast."""
+    session_id = payload.get("session_id") or ""
+    if not session_id:
+        return {"warmed": False, "reason": "no session_id"}
+    result = await injection_set.build(session_id=session_id,
+                                       agent_family=payload.get("agent_family"),
+                                       project=payload.get("project"))
+    return {"warmed": True, "token_budget_used": result.get("token_budget_used", 0)}
+
+
+async def _ev_session_ended(payload: dict[str, Any]) -> dict[str, Any]:
+    return {"acknowledged": True, "session_id": payload.get("session_id"),
+            "auditor_sweep": "deferred-to-phase-6"}
+
+
+async def _ev_operator_directive(payload: dict[str, Any]) -> dict[str, Any]:
+    """Record an operator directive so a later write can cite it as authority.
+
+    FR-015c wants an `operator_directive_ref` on a fact refutation. This is how
+    such a directive enters memo in the first place.
+    """
+    return {"recorded": True, "ref": {"kind": "atc",
+                                      "from": payload.get("from"),
+                                      "at": payload.get("event_time")}}
+
+
+@app.get("/providers")
+async def providers_status():
+    """Which providers are active. [001/FR-045]
+
+    Deliberately exposed: "why did nothing get notified" is otherwise a
+    log-diving exercise, and `null` is easy to end up on by accident.
+    """
+    from memo.providers.registry import get_agent_controller, get_conductor
+    from memo.providers.llm import get_llm_provider
+    return {
+        "conductor": get_conductor().name,
+        "agent_controller": get_agent_controller().name,
+        "llm": get_llm_provider().name,
+        "standalone": (get_conductor().name == "null"
+                       and get_agent_controller().name == "null"),
+    }
+
+
 # --- Phase 4: Layer 2 injection, hooks, flush, log queries ---
 
 
@@ -544,7 +620,7 @@ async def get_injection_set(
 
 @app.post("/hooks/session-start")
 async def hook_session_start(payload: dict[str, Any]):
-    """SessionStart hook. [001/FR-017]
+    """SessionStart hook. [001/FR-017 001/FR-044]
 
     Returns `additionalContext` for Claude Code to inject verbatim. Hooks fire
     on the critical path of starting a session, so this NEVER raises: on any
@@ -556,7 +632,7 @@ async def hook_session_start(payload: dict[str, Any]):
 
 @app.post("/hooks/post-compact")
 async def hook_post_compact(payload: dict[str, Any]):
-    """SessionStart:compact hook. [001/FR-018 001/FR-036]
+    """SessionStart:compact hook. [001/FR-018 001/FR-036 001/FR-044]
 
     Replaces the atc-precompact-beacon.py subagent dance (C58): the
     post-compact session gets its Layer 2 set back directly, including the
@@ -568,7 +644,7 @@ async def hook_post_compact(payload: dict[str, Any]):
 
 @app.post("/hooks/instructions-loaded")
 async def hook_instructions_loaded(payload: dict[str, Any]):
-    """InstructionsLoaded hook — resolves `memo:<uuid>` transclusions. [001/FR-017]
+    """InstructionsLoaded hook — resolves `memo:<uuid>` transclusions. [001/FR-017 001/FR-044]
 
     `instruction_files` is a list of `{path, content}`; each is scanned for memo
     references and the resolved bodies come back as additionalContext.
@@ -597,9 +673,64 @@ async def hook_instructions_loaded(payload: dict[str, Any]):
             "transclusions": resolved}
 
 
+@app.post("/hooks/pre-compact")
+async def hook_pre_compact(payload: dict[str, Any]):
+    """PreCompact hook — flush session state BEFORE context is dropped. [001/FR-036 001/FR-044]
+
+    Repurposes the `~/.claude/hooks/atc-precompact.sh` no-op (FR-036 / C58).
+    **Synchronous on purpose**: the whole point is that the flush completes
+    before compaction discards the context it is distilling. Returning early
+    would race the very thing this exists to prevent.
+
+    Unlike the injecting hooks, a failure here is REPORTED rather than
+    swallowed — a silent flush failure means the session compacts and loses
+    state believing it was saved, which is worse than a visible error.
+    """
+    session_id = payload.get("session_id") or ""
+    slots = payload.get("slots") or {}
+    if not session_id or not slots:
+        return {"flushed": False,
+                "reason": "session_id and slots are both required"}
+    try:
+        result = await flush_mod.flush(
+            session_id=session_id,
+            flush_generation=int(payload.get("flush_generation") or 0),
+            slots=slots,
+            expires_at=payload.get("expires_at"),
+            provenance=payload.get("provenance"),
+        )
+        return {"flushed": True, **result}
+    except Exception as e:
+        logging.getLogger(__name__).exception("pre-compact flush failed for %s", session_id)
+        return {"flushed": False, "error": str(e)}
+
+
+@app.post("/hooks/session-stop")
+async def hook_session_stop(payload: dict[str, Any]):
+    """Stop hook — end-of-turn checkpoint. [001/FR-044]
+
+    Distinct from session-end: Stop fires when a turn finishes, SessionEnd when
+    the session terminates. Accepts an optional slot-set so a session can
+    checkpoint without waiting for a compaction.
+    """
+    session_id = payload.get("session_id") or ""
+    slots = payload.get("slots") or {}
+    if slots and session_id:
+        try:
+            result = await flush_mod.flush(
+                session_id=session_id,
+                flush_generation=int(payload.get("flush_generation") or 0),
+                slots=slots, provenance=payload.get("provenance"))
+            return {"acknowledged": True, "flushed": True, **result}
+        except Exception as e:
+            logging.getLogger(__name__).exception("session-stop flush failed")
+            return {"acknowledged": True, "flushed": False, "error": str(e)}
+    return {"acknowledged": True, "flushed": False, "session_id": session_id}
+
+
 @app.post("/hooks/session-end")
 async def hook_session_end(payload: dict[str, Any]):
-    """SessionEnd hook — fire-and-forget auditor sweep. [001/FR-025]
+    """SessionEnd hook — fire-and-forget auditor sweep. [001/FR-025 001/FR-044]
 
     Returns no additionalContext: the session is ending, so there is nobody to
     inject into. Deliberately does not await the sweep — blocking session

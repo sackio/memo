@@ -17,6 +17,11 @@ dependencies = [
     "pydantic>=2.0.0",
     "pydantic-settings>=2.0.0",
     "tiktoken>=0.7.0",
+    # Runtime dep, not just a test one: providers/llm/claude_session.py talks
+    # to ATC over HTTP. It currently arrives transitively via `openai`, but
+    # depending on a transitive is how a working image breaks on an unrelated
+    # upgrade.
+    "httpx>=0.27.0",
 ]
 
 [project.optional-dependencies]
