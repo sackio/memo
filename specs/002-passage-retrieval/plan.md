@@ -118,9 +118,15 @@ flag for one release.
 
 ## Risks
 
-- **Passage count inflation on a corpus of small memos.** Mitigated by FR-103 —
-  most memos yield one passage. Verify against the real distribution before the
-  full re-embed.
+- **Passage count inflation.** ~~Mitigated by FR-103 — most memos yield one
+  passage.~~ **This assumption was wrong and the measurement caught it**
+  (research.md R-02): at the planned 384-token target only **40.7%** of memos
+  stay single-passage, and the corpus expands **2.8×** to 21,155 passages
+  (4.1× at 256; 2.2× at 512). The corpus averages 745 tokens/memo, so the median
+  memo splits. FR-103's promise still holds — a memo short enough yields one
+  passage — but inflation is a real 2–4× and must be justified by retrieval
+  benefit, not dismissed as rare. Cost remains ~$0.13, so this is an argument
+  about index size and query fan-out, not money.
 - **Overlap double-counting a fact** so one memo occupies several result slots.
   Grouping by `doc_id` before ranking handles it; assert it in a test.
 - **Re-embed cost/duration.** ~21k passages, ≈$0.13, single pass. Runs against
