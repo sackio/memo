@@ -125,10 +125,10 @@ async def memo_store(
 ) -> dict:
     """Store a document with automatic embedding and token count.
 
-    db_path controls which database to write to:
-    - None (default): global DB
-    - directory path (e.g. current working directory): stores in <dir>/.memo.db
-    - explicit .db file path: stores in that file
+    db_path: ACCEPTED AND IGNORED. There is one database — the global DB on
+    server4 — and every request routes to it (2026-06-29 single-global
+    refactor). The parameter is kept so existing callers don't break; passing
+    a path does NOT write to a per-directory .memo.db.
     """
     await _reject_leaked_tool_call(content, tags, "memo_store")
     embedding = await embeddings.embed(content)
@@ -186,11 +186,12 @@ async def memo_search(
 ) -> list[dict]:
     """Search documents by semantic similarity with optional filters.
 
-    db_path: directory path (uses <dir>/.memo.db), explicit .db file, or None for global DB.
-    scope controls which database(s) to search:
-    - "local" (default): only the DB specified by db_path (or global if db_path is None)
-    - "global": only the global DB, ignoring db_path
-    - "all": search both db_path DB and global DB, merge results by score
+    db_path / scope: ACCEPTED AND IGNORED. Since the 2026-06-29 single-global
+    refactor there is exactly ONE database, and "local", "global" and "all"
+    all search it — they are the same code path, not three. Both parameters
+    are kept for backward compatibility. If you are choosing a scope to
+    control WHICH memos you see, that choice has no effect; filter on tags
+    instead.
 
     Filters:
     - tags: only return docs that have at least one of these tags
@@ -215,7 +216,7 @@ async def memo_search(
 async def memo_get(id: str, db_path: str | None = None) -> dict | None:
     """Retrieve a document by ID.
 
-    db_path: directory path (uses <dir>/.memo.db), explicit .db file, or None for global DB.
+    db_path: ACCEPTED AND IGNORED — one global DB since 2026-06-29.
     """
     return await db.get(db_path=db_path, doc_id=id)
 
@@ -224,7 +225,7 @@ async def memo_get(id: str, db_path: str | None = None) -> dict | None:
 async def memo_delete(id: str, db_path: str | None = None) -> dict:
     """Delete a document by ID.
 
-    db_path: directory path (uses <dir>/.memo.db), explicit .db file, or None for global DB.
+    db_path: ACCEPTED AND IGNORED — one global DB since 2026-06-29.
     """
     deleted = await db.delete(db_path=db_path, doc_id=id)
     return {"deleted": deleted}

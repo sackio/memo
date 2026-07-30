@@ -4,16 +4,19 @@ build-backend = "hatchling.build"
 
 [project]
 name = "memo"
-version = "0.3.3"
+version = "0.3.4"
 description = "Lightweight HTTP API + MCP server for SQLite vector document storage (single-global on server4 as of 2026-06-29)"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.30.0",
-    # Pinned <2 on 2026-07-30: mcp 2.0.0 removed `mcp.server.fastmcp`, so an
-    # unpinned rebuild produces an image that cannot import main.py at all.
-    # 1.28.1 is what the live container has been serving since 2026-07-22.
-    "mcp>=1.23.0,<2",
+    # Pinned on 2026-07-30. Unpinned, a rebuild resolves mcp 2.0.0, which
+    # removed `mcp.server.fastmcp` — the image cannot import main.py at all,
+    # so any rebuild would have taken memo down fleet-wide. 1.29 does import
+    # and serve correctly here, but memo-v2 pins <1.29 over a fastmcp import
+    # path change; matching that band keeps the two trees on one story and
+    # keeps this service on what it has proven since 2026-07-22.
+    "mcp>=1.23.0,<1.29.0",
     "openai>=1.0.0",
     "sqlite-vec>=0.1.6",
     "python-dotenv>=1.0.0",

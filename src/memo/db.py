@@ -3,6 +3,7 @@ import json
 import logging
 import sqlite3
 import struct
+import threading
 import uuid
 from pathlib import Path
 from time import time
@@ -14,7 +15,17 @@ from memo.config import settings
 
 logger = logging.getLogger(__name__)
 
-_connections: dict[str, sqlite3.Connection] = {}
+# Connections are THREAD-LOCAL. 2026-07-30: a single cached connection was
+# shared across every thread `asyncio.to_thread` handed work to, with
+# check_same_thread=False silencing the guard that would have caught it. Any
+# two concurrent DB operations — a multi-angle memo_context fan-out, or just
+# two sessions calling memo_search at the same instant — used one sqlite3
+# connection from two threads at once. That is not merely unsupported, it
+# corrupts results: it surfaced as SQLITE_MISUSE ("bad parameter or other API
+# misuse"), "tuple index out of range", and json.loads(None) — three crash
+# sites, one race.
+_local = threading.local()
+_conn_create_lock = threading.RLock()
 _tokenizer = tiktoken.get_encoding("cl100k_base")
 _ignored_db_path_seen: set[str] = set()  # sampling set so we don't log-spam
 
@@ -55,11 +66,18 @@ def _truncate_to_tokens(text: str, max_tokens: int) -> str:
 
 
 def _get_or_create_conn(db_path: str) -> sqlite3.Connection:
-    if db_path in _connections:
-        return _connections[db_path]
+    conns = getattr(_local, "conns", None)
+    if conns is None:
+        conns = _local.conns = {}
+    existing = conns.get(db_path)
+    if existing is not None:
+        return existing
 
     Path(db_path).parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(db_path, check_same_thread=False)
+    # check_same_thread=True (the default) is deliberate: connections are now
+    # per-thread, so a connection crossing threads is a bug, and this makes it
+    # raise loudly instead of silently corrupting reads.
+    conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
 
     conn.enable_load_extension(True)
@@ -69,8 +87,12 @@ def _get_or_create_conn(db_path: str) -> sqlite3.Connection:
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA busy_timeout=5000")
 
-    _init_schema(conn)
-    _connections[db_path] = conn
+    # Schema creation is serialized across threads: WAL permits concurrent
+    # readers, but two threads running CREATE TABLE IF NOT EXISTS at once on a
+    # fresh DB is a race worth not having.
+    with _conn_create_lock:
+        _init_schema(conn)
+    conns[db_path] = conn
     return conn
 
 
@@ -315,6 +337,12 @@ def _sync_search(db_path: str, embedding: list[float], limit: int, min_score: fl
     results = []
     for row in rows:
         doc_id, distance = row["doc_id"], row["distance"]
+        if distance is None:
+            # vec0 yields NULL for an undefined cosine distance — e.g. against a
+            # zero-magnitude embedding. Skipping keeps one unusable row from
+            # crashing every search that happens to rank near it.
+            logger.warning("search: NULL distance for doc %s — skipping", doc_id)
+            continue
         score = 1.0 - distance
         if min_score is not None and score < min_score:
             continue
@@ -486,6 +514,17 @@ async def search_multi(
     per_db = await asyncio.gather(*tasks, return_exceptions=True)
     seen: set[str] = set()
     merged: list[dict] = []
+    failures = [r for r in per_db if isinstance(r, Exception)]
+    if failures:
+        # Never swallow the whole fan-out. A query that dies in every DB and
+        # returns [] is indistinguishable from a corpus with no matches — the
+        # silent twin of the loud crash, where the caller reads "nothing here"
+        # and re-grounds blind. Partial failure is logged and survivable; total
+        # failure must raise.
+        for exc in failures:
+            logger.warning("fan-out: a per-DB query failed: %r", exc)
+        if len(failures) == len(per_db):
+            raise failures[0]
     for result in per_db:
         if isinstance(result, Exception):
             continue
@@ -673,6 +712,17 @@ async def list_docs_multi(
     per_db = await asyncio.gather(*tasks, return_exceptions=True)
     seen: set[str] = set()
     merged: list[dict] = []
+    failures = [r for r in per_db if isinstance(r, Exception)]
+    if failures:
+        # Never swallow the whole fan-out. A query that dies in every DB and
+        # returns [] is indistinguishable from a corpus with no matches — the
+        # silent twin of the loud crash, where the caller reads "nothing here"
+        # and re-grounds blind. Partial failure is logged and survivable; total
+        # failure must raise.
+        for exc in failures:
+            logger.warning("fan-out: a per-DB query failed: %r", exc)
+        if len(failures) == len(per_db):
+            raise failures[0]
     for result in per_db:
         if isinstance(result, Exception):
             continue
