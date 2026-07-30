@@ -592,6 +592,58 @@ Full suite **376 passed**. (FR-038/FR-040 markers landed in
 - [ ] T135 [US8] Kick off soak test: `scripts/memo-soak-test --duration <operator-chosen>` — writes report to `/tmp/memo-soak-report-<date>.md`.
 - [ ] T136 Send soak report to Ben (DM slack:U0NGEHS2J with the report body). Confidence-gate decision belongs to operator; no automated pass/fail here.
 
+### ⚠️ BLOCKING FINDING FOR PHASE 8 — SC-009 is unachievable as specified
+
+**Measured against the REAL v1 corpus (1000-memo sample, 2026-07-30) with
+`scripts/memo-migrate-preview`:**
+
+| | value |
+|---|---|
+| would land in `legacy-unattributed` | **86.8%** |
+| SC-009 budget | **≤5%** |
+| provenance reconstructible | **6.0%** |
+| memos with ANY provenance-ish signal | ~23% |
+| memos with a real LOCATOR (msg_id / thread_id / session uuid) | ~3% |
+
+**Why.** Two specified rules collide on this data:
+* **C-07 / data-model.md**: `class = fact` REQUIRES provenance, else
+  → `legacy-unattributed`.
+* **SC-009**: ≤5% may be `legacy-unattributed`.
+
+The v1 corpus simply does not carry provenance. Its tag vocabulary records an
+origin KIND (`assistant-sourced`, `git-sourced`, `host-server5`) but almost
+never a LOCATOR. So ~87% of memos are facts we cannot attribute, and C-07 sends
+every one of them to a class that does not inject and awaits human review.
+Applied literally, the migration would file 6,000+ memos as
+"needs human triage" — a technically-passing migration that is a practical
+failure.
+
+**What was already done** (2026-07-30): `reconstruct_provenance` was broadened
+to recognise the corpus's real locators — `email-sourced` + metadata
+`msg_id`/`thread_id`, bare URLs in content, and `session-<hex>` handles. That
+moved legacy 91.6% → 86.8% and provenance 2.4% → 6.0%. It is an honest
+improvement and nowhere near enough, because the data is not there.
+
+**What was deliberately NOT done**: C-07 was not relaxed to make the number
+pass. Provenance was not synthesised from origin-kind tags. Both would game
+SC-009 rather than satisfy it, and a fabricated provenance block is worse than
+an absent one — it makes an unsourced memo look verified.
+
+**OPERATOR DECISION REQUIRED — three options:**
+1. **Relax SC-009** to match reality (e.g. ≤5% of memos *that have
+   reconstructible provenance*, or a flat "≤90% legacy on first pass, driven
+   down over time"). Cheapest; admits the corpus is what it is.
+2. **Relax C-07** so a fact without provenance stays `class=fact` with
+   `provenance: null`. Keeps memos injectable/recallable, loses the
+   attribution guarantee Principle III wants.
+3. **Add an origin-only provenance shape** to the data model (e.g.
+   `{origin_kind: "assistant-sourced", host: "server5"}` with no locator), so
+   "we know where it came from but not exactly where" is representable.
+   Most work, most honest, and probably the right long-term answer.
+
+Until this is decided, **T131 (the real backfill) should not run** — it would
+produce a corpus that fails its own verification.
+
 **Phase 8 gate**: OPERATOR CONFIDENCE GATE (C-08 step 4). Not a `speckit-trace` gate — this is a human review of the soak report. No cutover shape is committed until Ben approves.
 
 ---

@@ -63,4 +63,8 @@ RUN python -c "import tiktoken; tiktoken.get_encoding('cl100k_base')"
 
 COPY --from=ui-builder /ui/dist /app/ui/dist
 
+# Operational tooling (migration backfill/verify) ships in the runtime image:
+# it has to be runnable against the deployed service, not just from a checkout.
+COPY scripts/ scripts/
+
 CMD ["python", "-m", "memo.main"]

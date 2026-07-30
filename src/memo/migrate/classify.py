@@ -140,11 +140,19 @@ def reconstruct_provenance(memo: dict[str, Any]) -> tuple[dict | None, str | Non
     meta = memo.get("metadata") or {}
     content = memo.get("content") or ""
 
-    if "gmail-sourced" in tags:
+    # Email: the v1 corpus uses `gmail-sourced` AND `email-sourced`, and often
+    # carries the real locator in metadata rather than the body.
+    if tags & {"gmail-sourced", "email-sourced"} or meta.get("msg_id"):
         m = re.search(r"\b(?:msg[-_]?id|message[-_]?id)[:=\s]+([\w.-]+)", content, re.I)
-        msg_id = meta.get("gmail_msg_id") or (m.group(1) if m else None)
+        msg_id = (meta.get("gmail_msg_id") or meta.get("msg_id")
+                  or meta.get("thread_id") or (m.group(1) if m else None))
         if msg_id:
-            return ({"gmail_msg_id": msg_id}, "gmail-sourced-tag-inference")
+            return ({"gmail_msg_id": str(msg_id)}, "gmail-sourced-tag-inference")
+
+    # A bare URL anywhere in the body is a genuine locator.
+    url_m = re.search(r"https?://[^\s)>\]]+", content)
+    if url_m:
+        return ({"url": url_m.group(0)}, "content-url")
 
     if "session-sourced" in tags or any(t.startswith("session-") for t in tags):
         uid = meta.get("session_uuid")
@@ -152,9 +160,14 @@ def reconstruct_provenance(memo: dict[str, Any]) -> tuple[dict | None, str | Non
             m = _FULL_UUID.search(content)
             uid = m.group(0) if m else None
         if not uid:
+            # `session-<hex>` tags carry a real (if short) session handle.
+            # Excludes vocabulary tags like `session-sourced`/`session-resume`,
+            # which name a KIND of origin, not a locator — treating those as a
+            # session uuid would be fabricating provenance.
             for t in tags:
-                if t.startswith("session-") and len(t) > 8:
-                    uid = t[len("session-"):]
+                suffix = t[len("session-"):] if t.startswith("session-") else ""
+                if suffix and re.fullmatch(r"[0-9a-f]{6,}", suffix):
+                    uid = suffix
                     break
         if uid:
             return ({"claude_log_ref": {
