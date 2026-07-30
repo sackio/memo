@@ -1,14 +1,14 @@
 # What memo builds now vs. what waits for a coordinator
 
 Operator directive 2026-07-30: *"focus on building the things that we know memo can do on its
-own, and spec out the things that it's going to need the event coordinator and agent coordinator
+own, and spec out the things that it's going to need the conductor and agent coordinator
 for."*
 
 Two external dependencies, both already abstracted behind providers with null implementations
 (`memo_conductor_provider` defaults to `atc`, `memo_agent_controller_provider` to
 `agents_supervisor`):
 
-- **Event coordinator (ATC)** — inbound events, outbound notifications.
+- **Conductor (ATC)** — inbound events, outbound notifications.
 - **Agent coordinator (`agents`)** — tmux access: spawn, respawn, compact, send into a session.
 
 ## BUILD NOW — memo alone
@@ -39,7 +39,7 @@ Note the agents themselves are **not** a coordinator dependency: they are spawne
 | auto-memorization loop | — | see `DEFERRED-shadow.md` |
 | durable-fact promotion from a live session | — | the real gap; memo-judge's job, never ran |
 
-## SPEC ONLY — needs the EVENT coordinator
+## SPEC ONLY — needs the CONDUCTOR
 
 | capability | module | why |
 |---|---|---|
