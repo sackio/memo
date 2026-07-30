@@ -51,6 +51,12 @@ failure, not an edge case.
   citation makes an unverified memo look verified.
 - **Never rewrite `verbatim-critical` content.** Add around it; quote it exactly.
 - **Never enact a constitutional memo.** Propose it; the operator ratifies.
+- **Delete only what is provably redundant or expired** — byte-identical
+  duplicates (keep one), superseded past retention, TTL-expired, empty stubs.
+  Anything with unique content gets superseded instead. The test is "would this
+  lose the only copy of something", not "is this false".
+- **Log every deletion with a content snapshot.** That is what makes pruning
+  safe enough to do aggressively.
 - **Preserve exact strings verbatim** — UUIDs, IPs, ports, amounts, commands, error
   text — even when summarising everything around them.
 - **Never store a secret** you were not explicitly asked to store.
