@@ -20,16 +20,24 @@ degrades as a memo gets longer, and past roughly 2,000 tokens it collapses
 entirely.
 
 Measured by searching each memo's **own exact title** — the easiest possible
-retrieval task, where rank 1 is the only correct answer. 14 memos sampled per
-band, seed 7, against the live 7,510-memo corpus:
+retrieval task, where rank 1 is the only correct answer. Reproducible via
+`scripts/memo-retrieval-bench` (14 memos/band, seed 7, limit 10). Baseline run
+against v1 at 7,511 memos, 2026-07-30:
 
 | token_count | rank-1 | in top-5 | ABSENT from top-10 | median score |
 |---|---|---|---|---|
-| 0–200 | 10/14 | 14/14 | 0 | 0.745 |
+| 0–200 | 14/14 | 14/14 | 0 | 0.732 |
 | 200–500 | 9/14 | 12/14 | 2 | 0.716 |
-| 500–1000 | 10/14 | 13/14 | 0 | 0.655 |
-| 1000–2000 | 3/14 | 8/14 | 5 | 0.636 |
-| **2000+** | **0/14** | 3/14 | **10/14** | 0.581 |
+| 500–1000 | 10/14 | 13/14 | 0 | 0.668 |
+| 1000–2000 | 5/14 | 8/14 | 5 | 0.650 |
+| **2000+** | **2/14** | 4/14 | **9/14** | 0.596 |
+
+An earlier ad-hoc run on a 7,496-memo snapshot gave 10/14 · 9/14 · 10/14 · 3/14
+· **0/14** with 10/14 absent in the top band. The exact counts move with the
+sample — the corpus is written to continuously — but the shape does not: short
+memos are found, memos past ~1000 tokens degrade, and the top band mostly
+cannot be retrieved by its own name. Treat the committed bench numbers as
+canonical and re-baseline before comparing.
 
 **56.1% of corpus content sits in memos ≥1000 tokens; 24.6% in memos ≥2000.**
 So roughly a quarter of what memo knows cannot be recalled — and it is
@@ -180,7 +188,7 @@ phrase appearing only in its final third.
 ## Success Criteria
 
 - **SC-101**: memos ≥2000 tokens achieve **≥80% rank-1** on the own-title set,
-  up from 0/14 measured 2026-07-30.
+  up from 2/14 (14%) at the 2026-07-30 baseline.
 - **SC-102**: **no** size band regresses against its pre-change rank-1 rate.
 - **SC-103**: mid-document facts in memos ≥2000 tokens are retrieved at rank 1
   in ≥75% of cases.

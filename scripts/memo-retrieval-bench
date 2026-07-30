@@ -1,0 +1,143 @@
+#!/usr/bin/env python3
+"""memo-retrieval-bench — can memo find its own memos? [002/FR-111]
+
+The instrument that should have existed from the start. This defect —
+documents over ~2000 tokens being unretrievable — survived months of daily
+maintenance cycles because every audit read the corpus by `/documents` or by
+tag, where it looks perfectly healthy, and nothing ever asked the one question
+that matters: *does search return the memo you asked for?*
+
+**The own-title set is free.** Every memo is a labelled example whose correct
+answer is unambiguous: searching a memo's exact title must return that memo at
+rank 1. No hand-labelling, no judgement call, no LLM in the loop.
+
+Results are reported **by size band**, because the aggregate hides the defect —
+a corpus that is 77% short memos scores well on average while a quarter of its
+content is unreachable. Banding is what made this legible.
+
+    memo-retrieval-bench --url http://localhost:8091 --per-band 14
+    memo-retrieval-bench --url http://server4:8000 --json baseline.json
+
+Deliberately NOT self-grading. It prints numbers; SC-101/102/103 in
+specs/002-passage-retrieval/spec.md say what they have to clear.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import random
+import statistics
+import sys
+import urllib.request
+
+BANDS = [(0, 200), (200, 500), (500, 1000), (1000, 2000), (2000, 10**9)]
+
+
+def _get(url: str, path: str, timeout: float = 180.0):
+    with urllib.request.urlopen(url.rstrip("/") + path, timeout=timeout) as r:
+        return json.loads(r.read())
+
+
+def _search(url: str, query: str, limit: int = 10, timeout: float = 60.0):
+    req = urllib.request.Request(
+        url.rstrip("/") + "/search",
+        data=json.dumps({"query": query, "limit": limit}).encode(),
+        headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.loads(r.read())
+
+
+def _doc_of(hit: dict) -> dict:
+    # /search returns [{document, score}]; tolerate a bare-document shape too.
+    return hit.get("document", hit)
+
+
+def band_label(lo: int, hi: int) -> str:
+    return f"{lo}-{hi}" if hi < 10**9 else f"{lo}+"
+
+
+def run(url: str, per_band: int, limit: int, seed: int) -> dict:
+    docs = _get(url, "/documents?limit=20000")
+    random.seed(seed)
+    out = {"url": url, "seed": seed, "per_band": per_band, "limit": limit,
+           "corpus": len(docs), "bands": []}
+
+    for lo, hi in BANDS:
+        pool = [d for d in docs
+                if lo <= (d.get("token_count") or 0) < hi
+                and (d.get("title") or "").strip()]
+        sample = random.sample(pool, min(per_band, len(pool)))
+        rank1 = top5 = absent = 0
+        scores: list[float] = []
+
+        for d in sample:
+            try:
+                hits = _search(url, (d.get("title") or "")[:200], limit=limit)
+            except Exception as e:  # a failed query is not a passing query
+                print(f"  query failed for {d['id'][:8]}: {e}", file=sys.stderr)
+                absent += 1
+                continue
+            ids = [_doc_of(h)["id"] for h in hits]
+            if d["id"] in ids:
+                k = ids.index(d["id"])
+                rank1 += k == 0
+                top5 += k < 5
+                scores.append(hits[k].get("score", 0.0))
+            else:
+                absent += 1
+
+        out["bands"].append({
+            "band": band_label(lo, hi),
+            "n": len(sample),
+            "rank1": rank1,
+            "top5": top5,
+            "absent": absent,
+            "rank1_pct": round(100 * rank1 / len(sample), 1) if sample else None,
+            "median_score": round(statistics.median(scores), 3) if scores else None,
+        })
+
+    tokens = sum(d.get("token_count") or 0 for d in docs)
+    out["content_share"] = {
+        f">={t}": {
+            "memos": sum(1 for d in docs if (d.get("token_count") or 0) >= t),
+            "token_pct": round(100 * sum((d.get("token_count") or 0) for d in docs
+                                         if (d.get("token_count") or 0) >= t)
+                               / max(1, tokens), 1),
+        } for t in (1000, 2000)
+    }
+    return out
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--url", default="http://localhost:8091")
+    ap.add_argument("--per-band", type=int, default=14)
+    ap.add_argument("--limit", type=int, default=10)
+    ap.add_argument("--seed", type=int, default=7)
+    ap.add_argument("--json", default=None, help="write the raw result here")
+    args = ap.parse_args()
+
+    res = run(args.url, args.per_band, args.limit, args.seed)
+
+    print(f"corpus: {res['corpus']} memos @ {res['url']}  (seed {res['seed']})")
+    print()
+    print(f"{'band':>12} {'n':>3} {'rank-1':>7} {'top-5':>6} {'absent':>7} {'median':>7}")
+    for b in res["bands"]:
+        print(f"{b['band']:>12} {b['n']:3} {b['rank1']:7} {b['top5']:6} "
+              f"{b['absent']:7} {str(b['median_score']):>7}")
+    print()
+    for k, v in res["content_share"].items():
+        print(f"  memos {k} tokens: {v['memos']} ({v['token_pct']}% of all content)")
+    print()
+    print("Searching a memo's own exact title: rank 1 is the only correct answer.")
+
+    if args.json:
+        with open(args.json, "w") as fh:
+            json.dump(res, fh, indent=2)
+        print(f"wrote {args.json}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
