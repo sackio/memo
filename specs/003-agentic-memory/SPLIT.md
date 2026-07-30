@@ -11,6 +11,20 @@ Two external dependencies, both already abstracted behind providers with null im
 - **Conductor (ATC)** — inbound events, outbound notifications.
 - **Agent coordinator (`agents`)** — tmux access: spawn, respawn, compact, send into a session.
 
+**Naming, because it has already confused one reader:** "Conductor" is *memo's
+internal name for the ATC seam*, not a fourth system. memo has exactly two
+provider seams — `Conductor` → ATC, `AgentController` → `agents`. The three-body
+framing (memo · ATC · agents) and these column headings describe the same three
+things in different vocabularies.
+
+**Who decides what, for session actions:** memo decides whether an action is
+*worth* doing (bloat, context pressure, staleness). The agent coordinator
+decides whether it is *safe* — it owns the single definition of "idle", because
+it has the process-level view and memo only ever had a proxy. memo asks; the
+coordinator may veto. Two definitions of idle would be worse than the usual
+duplicated-constant trap, since the failure mode is destroying a session's
+in-flight work rather than returning a bad result.
+
 ## BUILD NOW — memo alone
 
 | capability | module | state |
