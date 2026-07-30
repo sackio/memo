@@ -128,6 +128,17 @@ def _init_schema(conn: sqlite3.Connection) -> None:
             embedding FLOAT[{settings.embedding_dimensions}] distance_metric=cosine
         );
 
+        -- 002/FR-105 — passage-level vectors. Lives beside the document-level
+        -- table rather than replacing it: both retrieval paths must be live at
+        -- once so the passage path can be measured against the document path
+        -- before it becomes the default, and so a regression is a config change
+        -- rather than a migration (002/FR-113).
+        CREATE VIRTUAL TABLE IF NOT EXISTS chunk_embeddings USING vec0(
+            doc_id TEXT,
+            chunk_index INTEGER,
+            embedding FLOAT[{settings.embedding_dimensions}] distance_metric=cosine
+        );
+
         -- L3c 2026-07-05: per-doc access counters for utility-based reaping.
         -- Incremented on every GET /documents/<id>, PATCH, DELETE. Enables
         -- Phase F to reap memos never fetched in N days.

@@ -65,24 +65,34 @@ repo-wide and will fail on later-phase FRs. Run inside the v2 worktree.
 
 ## Phase B — Storage — FR-110, FR-108
 
-- [ ] **T220** — Migration `migrations/0XX_document_chunks.sql`:
+- [x] **T220** — Migration `migrations/0XX_document_chunks.sql`:
       `document_chunks(doc_id, chunk_index, text, token_start, token_end,
       embedding_model, embedding_route, PRIMARY KEY (doc_id, chunk_index))`
       plus the sqlite-vec passage index. `[002/FR-110]`
-- [ ] **T221** — Record `embedding_model` **and** `embedding_route` on every
+- [x] **T221** — Record `embedding_model` **and** `embedding_route` on every
       passage. A corpus that mixes providers must stay auditable afterwards:
       quantum-data measured the same text via OpenRouter vs OpenAI-direct as 4/5
       bit-identical and one at cosine 0.999580, so one model *label* can cover
       non-identical outputs. `[002/FR-108]`
-- [ ] **T222** — Write path: on store/update, chunk → `embed_batch` the passages
-      → replace that document version's rows **in one transaction**. A partial
-      passage set is a silently under-indexed memo. `[002/FR-110]`
-- [ ] **T223** — Supersede path: the new version gets its own passage set; the
+- [~] **T222** — Write path: chunk → `embed_batch` → replace that document
+      version's rows **in one transaction**. *Mechanism done and tested
+      (`passages.index_document`); CALL-SITE WIRING DEFERRED.* There are 10
+      `db.store`/`db.update` call sites across 5 modules, and a guarantee that
+      rests on all of them remembering is the same shape as every silent defect
+      found on 2026-07-30. `db.store` cannot own it either — it receives a
+      precomputed embedding and must not start making network calls. So the
+      invariant is made checkable instead (`find_unindexed`, T226) and the
+      wiring lands with Phase C, when the read path settles where indexing
+      belongs. `[002/FR-110]`
+- [x] **T226** — `passages.find_unindexed()` + tests: live memos with no
+      passages, biggest first. Makes "every memo is indexed" verifiable rather
+      than trusted. `[002/FR-110]`
+- [x] **T223** — Supersede path: the new version gets its own passage set; the
       superseded version's rows are retained so as-of queries stay answerable.
       `[002/FR-110]`
-- [ ] **T224** — Test: a memo stored, then updated, then superseded has exactly
+- [x] **T224** — Test: a memo stored, then updated, then superseded has exactly
       one live passage set per version and no orphans. `[002/FR-110]`
-- [ ] **T225** — Test: a 9,000-token memo (over the provider cap) stores
+- [x] **T225** — Test: a 9,000-token memo (over the provider cap) stores
       successfully and every passage is under the cap. This is User Story 3 and
       it must fail against the pre-change code. `[002/FR-104]`
 
