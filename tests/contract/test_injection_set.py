@@ -271,3 +271,49 @@ def test_opted_out_sessions_get_no_reachability_block_either():
     this. A block that leaked past opt-out would make the flag a lie."""
     from memo.injection import set as injection_set
     assert injection_set.render({"opt_out": True}) == ""
+
+
+@pytest.mark.asyncio
+async def test_injection_stays_within_budget_on_a_corpus_of_many_injectables(embedding):
+    """The assertion whose absence let a 90k-token blowout ship.
+
+    Every existing budget test uses two or three small fixtures, where the
+    ceiling cannot plausibly be hit. The real corpus had 55 force-injected memos
+    averaging ~1,550 tokens, and NOTHING checked the total — the overrun was
+    found by eye, reading a number in a response during unrelated work.
+
+    This seeds enough injectable content to exceed the ceiling several times
+    over and asserts the set is actually bounded. It fails against the
+    pre-2026-07-30 code.
+    """
+    body = " ".join(["padding"] * 900)          # ~900 tokens each
+    for i in range(12):
+        await seed(f"focus item {i}: {body}", cls="goal", embedding=embedding)
+
+    result = await build()
+    used = result["token_budget_used"]
+    ceiling = result["token_budget_ceiling"]
+
+    assert used <= ceiling, (
+        f"injection set is {used} tokens against a {ceiling} ceiling — this "
+        "fires at every session start and every compaction, fleet-wide")
+    assert result["dropped_for_budget"], "something must be recorded as dropped"
+
+
+@pytest.mark.asyncio
+async def test_going_over_budget_is_only_ever_constitutional(embedding):
+    """The ONE legitimate overrun, and it must be explicit.
+
+    Constitutional content is never truncated or dropped — silently removing a
+    standing rule because a chatty goal memo filled the budget would remove a
+    guardrail exactly when context is tight. So an overrun is allowed, but only
+    from constitutional content, and it must announce itself.
+    """
+    body = " ".join(["rule"] * 6000)
+    await seed(f"a very long standing rule: {body}", cls="constitutional",
+               embedding=embedding)
+
+    result = await build()
+    assert result["token_budget_used"] > result["token_budget_ceiling"]
+    assert "budget-exceeded-by-constitutional" in result["dropped_for_budget"], \
+        "an overrun must name its cause, not happen quietly"
