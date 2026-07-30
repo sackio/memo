@@ -39,7 +39,8 @@ memos are found, memos past ~1000 tokens degrade, and the top band mostly
 cannot be retrieved by its own name. Treat the committed bench numbers as
 canonical and re-baseline before comparing.
 
-**56.1% of corpus content sits in memos ≥1000 tokens; 24.6% in memos ≥2000.**
+**56.4% of corpus content sits in memos ≥1000 tokens (1,730 memos); 25.1% in
+memos ≥2000 (400 memos)** — per the same baseline run.
 So roughly a quarter of what memo knows cannot be recalled — and it is
 disproportionately the considered material (postmortems, contracts,
 architecture notes, incident records), because those are the long ones.
