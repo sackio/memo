@@ -775,6 +775,21 @@ async def hook_post_compact(payload: dict[str, Any]):
     return await _hook_injection(payload, fire_point="post-compact")
 
 
+@app.get("/injection-log")
+async def get_injection_log(since: float | None = Query(default=None),
+                                limit: int = Query(default=500, le=5000)):
+    """What memo delivered, whenever memo's hook fired. [001/FR-044]
+
+    memo reports its own PRESENCE-AND-OUTCOME, not its own absence — it cannot
+    observe the latter, and an earlier draft of this endpoint pretended it
+    could. The agent coordinator counts compactions (it triggers them, so it
+    knows one happened without depending on any hook) and reconciles: a
+    compaction with no row here is memo's hook silently not firing.
+    """
+    rows = await db.injection_log(since=since, limit=limit)
+    return {"count": len(rows), "compactions": rows}
+
+
 @app.post("/hooks/instructions-loaded")
 async def hook_instructions_loaded(payload: dict[str, Any]):
     """InstructionsLoaded hook — resolves `memo:<uuid>` transclusions. [001/FR-017 001/FR-044]
@@ -864,6 +879,32 @@ async def hook_session_end(payload: dict[str, Any]):
             "auditor_sweep": "deferred-to-phase-6"}
 
 
+async def _ledger(session_id: str, fire_point: str, payload: dict[str, Any],
+                  *, ok: bool, tokens: int | None) -> None:
+    """Record a compaction, and NEVER let doing so affect the caller. [001/FR-044]
+
+    Swallows here as well as inside `db.record_injection`, deliberately. The
+    belt-and-braces is not paranoia: the first version called the ledger from
+    BOTH the success path and the failure handler, so a raising ledger meant the
+    error handler re-invoked the thing that had just failed. Caught by its own
+    test.
+
+    This sits on the session-start critical path. An observer that can break the
+    thing it observes is worse than no observer at all.
+    """
+    if fire_point != "post-compact":
+        return                       # ordinary session starts are not compactions
+    try:
+        await db.record_injection(
+            session_id, fire_point=fire_point,
+            agent_family=payload.get("agent_family"),
+            project=payload.get("project"),
+            injected_ok=ok, injected_tokens=tokens)
+    except Exception:
+        logging.getLogger(__name__).exception(
+            "compaction ledger failed for %s — continuing", session_id)
+
+
 async def _hook_injection(payload: dict[str, Any], *, fire_point: str) -> dict:
     """Shared body for the injecting hooks."""
     log = logging.getLogger(__name__)
@@ -877,13 +918,19 @@ async def _hook_injection(payload: dict[str, Any], *, fire_point: str) -> dict:
             flush_generation=payload.get("flush_generation"),
             cwd=payload.get("cwd"),
         )
-        return {"additionalContext": injection_set.render(result),
+        rendered = injection_set.render(result)
+        await _ledger(session_id, fire_point, payload, ok=bool(rendered),
+                      tokens=result.get("token_budget_used", 0))
+        return {"additionalContext": rendered,
                 "fire_point": fire_point,
                 "opt_out": bool(result.get("opt_out")),
                 "token_budget_used": result.get("token_budget_used", 0)}
     except Exception:
         log.exception("%s hook failed for %s — starting without Layer 2",
                       fire_point, session_id)
+        # Record the FAILURE too — memo cannot report its own absence, but it
+        # can report its own presence-and-failure, which is the half it owns.
+        await _ledger(session_id, fire_point, payload, ok=False, tokens=None)
         return {"additionalContext": "", "fire_point": fire_point, "degraded": True}
 
 

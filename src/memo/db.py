@@ -695,6 +695,57 @@ async def delete(db_path: str | None, doc_id: str, *, actor: str = "unknown",
                                    reason=reason, replaced_by=replaced_by)
 
 
+def _sync_record_injection(db_path: str, session_id: str, *, fire_point: str,
+                            agent_family: str | None, project: str | None,
+                            injected_ok: bool, injected_tokens: int | None) -> None:
+    conn = _get_or_create_conn(db_path)
+    conn.execute(
+        "INSERT INTO injection_log (session_id, observed_at, fire_point, "
+        "agent_family, project, injected_ok, injected_tokens) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (session_id, time(), fire_point, agent_family, project,
+         1 if injected_ok else 0, injected_tokens),
+    )
+    conn.commit()
+
+
+def _sync_injection_log(db_path: str, since: float | None, limit: int) -> list[dict]:
+    conn = _get_or_create_conn(db_path)
+    sql = "SELECT * FROM injection_log"
+    params: list = []
+    if since is not None:
+        sql += " WHERE observed_at >= ?"
+        params.append(since)
+    sql += " ORDER BY observed_at DESC LIMIT ?"
+    params.append(limit)
+    return [dict(r) for r in conn.execute(sql, params).fetchall()]
+
+
+async def record_injection(session_id: str, *, fire_point: str,
+                            agent_family: str | None = None,
+                            project: str | None = None,
+                            injected_ok: bool = True,
+                            injected_tokens: int | None = None) -> None:
+    """Record that a session came back from a compaction. [001/FR-044]
+
+    Best-effort and NEVER raises: this rides the session-start critical path,
+    and a ledger write failing must not stop a session from getting its rules.
+    An observer that can break the thing it observes is worse than no observer.
+    """
+    try:
+        await asyncio.to_thread(_sync_record_injection, global_path(), session_id,
+                                fire_point=fire_point, agent_family=agent_family,
+                                project=project, injected_ok=injected_ok,
+                                injected_tokens=injected_tokens)
+    except Exception:
+        logger.exception("compaction ledger write failed for %s — continuing", session_id)
+
+
+async def injection_log(since: float | None = None, limit: int = 500) -> list[dict]:
+    """Read the ledger, for reconciliation against ATC's delivery record."""
+    return await asyncio.to_thread(_sync_injection_log, global_path(), since, limit)
+
+
 async def restore_snapshot(db_path: str | None, doc_id: str) -> dict | None:
     """The most recent deletion snapshot for a memo, or None. [001/FR-028a]"""
     path = _resolve_path(db_path)
