@@ -1,0 +1,99 @@
+#!/usr/bin/env python3
+"""memo-migrate-backfill — walk the v1 corpus and produce the v2 corpus.
+
+Per contracts/migration-cli.md. NON-DESTRUCTIVE ON v1: this script only ever
+issues GETs against the v1 URL, which is what makes FR-040's reversibility
+structural rather than a procedure someone has to follow correctly.
+
+    memo-migrate-backfill --v1-url http://server4:8000 \
+                          --audit-log /mnt/backup/memo/migration-.../audit.jsonl \
+                          --dry-run
+
+`--dry-run` is the DEFAULT. Committing requires `--commit`, explicitly: a
+migration of the fleet's knowledge base should not be one typo away from
+running.
+"""
+from __future__ import annotations
+
+import argparse
+import asyncio
+import json
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+import httpx  # noqa: E402
+
+from memo.migrate import backfill, verify  # noqa: E402
+
+
+async def fetch_v1_corpus(v1_url: str, limit: int, page: int = 500) -> list[dict]:
+    """Page through v1's documents. Read-only."""
+    out: list[dict] = []
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        offset = 0
+        while len(out) < limit:
+            r = await client.get(f"{v1_url.rstrip('/')}/documents",
+                                 params={"limit": min(page, limit - len(out)),
+                                         "offset": offset})
+            r.raise_for_status()
+            batch = r.json()
+            if not batch:
+                break
+            out.extend(batch)
+            offset += len(batch)
+            if len(batch) < page:
+                break
+    return out
+
+
+async def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--v1-url", default="http://localhost:8000")
+    ap.add_argument("--audit-log", default=None,
+                    help="JSONL audit log path (one line per memo)")
+    ap.add_argument("--limit", type=int, default=100_000)
+    ap.add_argument("--dry-run", action="store_true", default=True,
+                    help="rehearse without writing to v2 (DEFAULT)")
+    ap.add_argument("--commit", action="store_true",
+                    help="actually write to v2; overrides --dry-run")
+    ap.add_argument("--rollback", action="store_true",
+                    help="clear the v2 corpus so migration can re-run clean")
+    ap.add_argument("--verify", action="store_true",
+                    help="run post-migration verification and exit")
+    args = ap.parse_args()
+
+    if args.rollback:
+        out = await backfill.rollback()
+        print(json.dumps({"rolled_back": out}, indent=2))
+        return 0
+
+    if args.verify:
+        result = await verify.verify()
+        print(json.dumps(result, indent=2, default=str))
+        return int(result["exit_code"])
+
+    dry_run = not args.commit
+    print(f"fetching v1 corpus from {args.v1_url} …", file=sys.stderr)
+    corpus = await fetch_v1_corpus(args.v1_url, args.limit)
+    print(f"fetched {len(corpus)} memo(s); "
+          f"{'DRY RUN' if dry_run else 'COMMITTING'}", file=sys.stderr)
+
+    if args.audit_log:
+        Path(args.audit_log).parent.mkdir(parents=True, exist_ok=True)
+
+    stats, _lines = await backfill.migrate_corpus(
+        corpus, dry_run=dry_run, audit_path=args.audit_log)
+
+    print(json.dumps({"dry_run": dry_run, "stats": stats.as_dict()}, indent=2))
+    if stats.total and stats.as_dict()["legacy_pct"] > verify.MAX_LEGACY_PCT:
+        print(f"WARNING: legacy-unattributed is "
+              f"{stats.as_dict()['legacy_pct']:.1f}%, over the "
+              f"{verify.MAX_LEGACY_PCT}% SC-009 budget", file=sys.stderr)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(asyncio.run(main()))

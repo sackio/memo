@@ -528,11 +528,11 @@ cd ../memo-v2 && speckit-trace --require-full \
 
 ## Phase 7 (== plan Phase F) — Migration script [US5] [US7]
 
-- [ ] T120 [US7] Write `../memo-v2/scripts/memo-migrate-backfill` per contracts/migration-cli.md — the full per-memo pipeline (fetch/classify/retag/provenance-link/split/merge/redirect/set-bi-temporal/write). Includes per-class rules from migration-cli.md §"Per-class backfill rules". Marker `001/FR-039`.
-- [ ] T121 [US7] Write `../memo-v2/scripts/memo-migrate-verify` — post-check per contracts/migration-cli.md §"Post-migration verification". Marker `001/FR-039`.
-- [ ] T122 [US5] [P] Extend backfill script to preserve v1 bi-temporal semantics — set `valid_from = v1.created_at` and `valid_until = NULL` for every migrated memo. Marker `001/FR-002`.
-- [ ] T123 [US7] Write `../memo-v2/tests/integration/test_migration_backfill.py` — migrate a synthetic 200-memo corpus covering every v2 class; assert all migrated with correct class assignments + provenance where inferrable + duplicates collapsed. Marker `001/FR-039`.
-- [ ] T124 [US7] [P] Write `../memo-v2/tests/integration/test_migration_matt_sack_cluster.py` — reproduce the Matt-Sack duplicate cluster case; verify collapse to single canonical + redirects for the other IDs. Marker `001/FR-012 001/FR-039`.
+- [X] T120 [US7] Write `../memo-v2/scripts/memo-migrate-backfill` per contracts/migration-cli.md — the full per-memo pipeline (fetch/classify/retag/provenance-link/split/merge/redirect/set-bi-temporal/write). Includes per-class rules from migration-cli.md §"Per-class backfill rules". Marker `001/FR-039`.
+- [X] T121 [US7] Write `../memo-v2/scripts/memo-migrate-verify` — post-check per contracts/migration-cli.md §"Post-migration verification". Marker `001/FR-039`.
+- [X] T122 [US5] [P] Extend backfill script to preserve v1 bi-temporal semantics — set `valid_from = v1.created_at` and `valid_until = NULL` for every migrated memo. Marker `001/FR-002`.
+- [X] T123 [US7] Write `../memo-v2/tests/integration/test_migration_backfill.py` — migrate a synthetic 200-memo corpus covering every v2 class; assert all migrated with correct class assignments + provenance where inferrable + duplicates collapsed. Marker `001/FR-039`.
+- [X] T124 [US7] [P] Write `../memo-v2/tests/integration/test_migration_matt_sack_cluster.py` — reproduce the Matt-Sack duplicate cluster case; verify collapse to single canonical + redirects for the other IDs. Marker `001/FR-012 001/FR-039`.
 
 **Phase 7 gate**:
 
@@ -542,6 +542,43 @@ cd ../memo-v2 && speckit-trace --require-full \
 ```
 
 FR-038 (deployable in separate worktree) + FR-040 (reversibility) satisfied by the Phase 1 worktree setup + this phase's audit-log; add markers for those to the migration scripts' module docstrings.
+
+**Phase 7 gate: ✅ PASS (2026-07-30)** — FR-038/039/040 FULL, 0 dangling, exit 0.
+Full suite **376 passed**. (FR-038/FR-040 markers landed in
+`src/memo/migrate/__init__.py` per the note above.)
+
+### Phase 7 implementation notes
+
+1. **v1 is read-only, structurally.** Every v1 access in the migration package
+   is a GET. That is what makes FR-040 reversibility a property rather than a
+   procedure someone has to follow correctly — rollback only ever touches v2.
+2. **`--dry-run` is the DEFAULT; committing needs an explicit `--commit`.** A
+   migration of the fleet's knowledge base should not be one typo away from
+   running.
+3. **Migration does NOT use `db.store`.** That stamps `created_at = now`, and a
+   migration that rewrites every memo's creation date destroys the recency
+   signal the entire FR-013 ranking formula depends on. Rows are inserted with
+   v1's timestamps preserved, `valid_from = v1.created_at` (T122/FR-002).
+4. **Two different dedup rules, on purpose.** Migration uses R-13 (cosine ≥0.90
+   AND title 4-gram ≥60%) because both embeddings are in hand. The read path
+   uses content-word Jaccard because it only has each candidate's similarity to
+   the QUERY, not to the other candidates. Neither rule works in the other's
+   position.
+5. **Retired duplicate ids get redirects.** Collapsing a cluster without them
+   would 404 every reference ever written to the retired ids.
+6. **Classification fails toward `legacy-unattributed`, never toward a guess.**
+   A memo wrongly classed `constitutional` is force-injected into every session
+   on the fleet; one parked in legacy-unattributed just waits for a human. That
+   asymmetry decides every judgement call in `classify.py` — which is why
+   `constitutional` needs an explicit tag, or an operator-authority tag WITH
+   matching content.
+7. **Provenance is never invented.** An invented block is worse than none: it
+   makes an unsourced memo look verified.
+8. **One bad memo cannot strand the run.** Per-memo failures become a `skip`
+   audit line and the corpus continues.
+9. **The deliberate `valid_from=0` specimen is now used as a test fixture** —
+   `test_verify_catches_the_valid_from_zero_specimen` asserts verification
+   notices it, which is what that row was preserved for.
 
 ---
 
