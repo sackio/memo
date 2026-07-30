@@ -787,7 +787,7 @@ async def get_injection_log(since: float | None = Query(default=None),
     compaction with no row here is memo's hook silently not firing.
     """
     rows = await db.injection_log(since=since, limit=limit)
-    return {"count": len(rows), "compactions": rows}
+    return {"count": len(rows), "injections": rows}
 
 
 @app.post("/hooks/instructions-loaded")

@@ -74,5 +74,5 @@ async def test_ledger_is_readable_for_reconciliation():
     await main.hook_post_compact({"session_id": "sess-b"})
     out = await main.get_injection_log(since=None, limit=500)
     assert out["count"] >= 2
-    ids = {r["session_id"] for r in out["compactions"]}
+    ids = {r["session_id"] for r in out["injections"]}
     assert {"sess-a", "sess-b"} <= ids
