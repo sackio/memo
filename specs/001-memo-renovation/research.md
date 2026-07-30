@@ -282,3 +282,76 @@ per-cutover-checkpoint. Rollback = MCP-flip reversal (v2 → v1 in
 
 **Rationale**: C-08 sequencing + operator's operational-safety
 requirement + C38 forever-backup posture.
+
+## R-17 — LLM inference provider for the mediators
+
+**Decision**: The mediators' generative LLM calls are served by an
+**interactive Claude Code session**, reached through an `LLMProvider`
+adapter (`src/memo/providers/llm/`), NOT by a per-token inference API.
+
+Specifics:
+
+- **A dedicated session, `memo-llm`** — deliberately NOT the standing
+  `memo` session, despite that being the obvious candidate. Three
+  reasons: (a) **reentrancy** — the `memo` session has memo hooks, so a
+  mediator call into it can trigger its own `memo_store`/`memo_recall`
+  and loop; (b) **availability** — `memo` compacts at 06:10 and runs
+  memo-minder at 06:17 daily, so it is unavailable in that window;
+  (c) **blast radius** — if `memo` wedges, every mediated write on the
+  fleet would wedge with it.
+- **`claude -p` is PROHIBITED.** Passing a prompt programmatically to
+  `claude` is billed as API usage; an interactive session rides the Max
+  subscription already being paid for. This is the same reason
+  memo-minder was moved off its `claude -p` host cron to an interactive
+  session cron on 2026-07-15. Any future adapter that shells out to
+  `claude -p` is a regression, not an optimization.
+- **Degrade, never block.** If the session is busy, compacting, or down,
+  the mediator does NOT fail the caller: recall returns its search-only
+  answer with an `anomalies` entry, and store writes-new and flags the
+  auditor. A 10s soft timeout bounds the wait.
+- **Escalate to the supervisor on outage.** On unavailability the
+  provider DMs the `agents` supervisor session over ATC to respawn
+  `memo-llm`, so a dead session self-heals rather than silently
+  degrading recall quality indefinitely. **Rate-limited to one notify
+  per outage**, not per failed call — a dead session plus fleet-wide
+  memo traffic would otherwise blast the supervisor with hundreds of
+  DMs, which is precisely the thundering-herd failure the operator's
+  CLAUDE.md §5 warns about.
+- **Embeddings are out of scope for this decision** and stay on
+  OpenRouter `text-embedding-3-small` per R-05 — there is no Claude
+  embedding endpoint. R-17 governs generative calls only.
+- **`auto_store`'s `openai/gpt-4o-mini`** is left as-is until T036 folds
+  auto_store into the storage-mediator path, at which point it inherits
+  this provider.
+
+**Rationale**: Operator directive 2026-07-29 ("use an interactive
+Claude Code session for the LLM ... I don't want to use the -p flag ...
+that's programmatic usage of Claude which can cause extra [cost]").
+Cost is the driver; the subscription is already paid for. The spec had
+never actually named a provider for the mediator inference calls — it
+only ever said "LLM fallback" / "LLM escape" — so this fills an
+unspecified slot rather than replacing a prior decision.
+
+Fits the existing Principle VIII provider pattern from R-08: an
+abstract base + a concrete adapter + a `null` adapter, selected by a
+`MEMO_LLM_PROVIDER` env var.
+
+**Sequencing**: Phase 3 builds the mediators against the `LLMProvider`
+interface with a deterministic **null adapter** (search-only, no
+inference), so the mediators land complete and fully testable without
+the transport existing. The concrete `claude_session` adapter lands in
+Phase 5 alongside the other provider adapters.
+
+**Alternatives considered**:
+- *OpenRouter / direct Anthropic API* — rejected by the operator on
+  cost; duplicates spend we already have via the Max subscription.
+- *`claude -p` per call* — rejected, see above. It is the thing that
+  makes this billable.
+- *Serve from the `memo` session itself* — rejected on reentrancy,
+  availability, and blast radius (above).
+
+**Consequence for the contracts**: the latencies quoted in
+`contracts/mediator-recall.md` (87ms happy path, ~1450ms with fallback)
+assumed an in-process API call and are not achievable across a session
+round-trip. Amended there. The happy path is unaffected — it makes no
+LLM call at all.

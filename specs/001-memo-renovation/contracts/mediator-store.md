@@ -130,6 +130,32 @@ Compound memo written as multiple entries.
 - `429` — rate-limited.
 - `503` — memo DB unavailable.
 
+## Latency + LLM availability (amended 2026-07-29, per R-17)
+
+The `latency_ms` values above assumed an in-process inference API. Per **R-17**
+the LLM is an interactive Claude Code session reached over ATC. The reconcile
+pass is search-first, so only the genuinely ambiguous cases (merge / split /
+clarify judgement) reach the LLM:
+
+| Path | Expected |
+|---|---|
+| Reconcile resolves by search alone (most writes) | **~100-500 ms**, as the examples show |
+| Reconcile needs LLM judgement | **~1-10 s** (session round-trip) |
+| LLM unavailable | soft-timeout at **10 s**, then degrade |
+
+**Degrade, never block.** If the `memo-llm` session is unavailable, the
+storage mediator MUST NOT return 403/503 for want of an LLM. It writes the memo
+(`action: "write-new"`) and flags it for the auditor to reconcile later. Losing
+an agent's memo is strictly worse than deferring a merge decision.
+
+Note this interacts with the `class = fact` refutation invariant below: that
+403 is only correct when a refutation has actually been DETECTED. An
+undetectable-because-degraded case must fall through to write-new + auditor
+flag, never to a spurious 403.
+
+The provider separately DMs the `agents` supervisor to respawn the session,
+rate-limited to one notify per outage.
+
 ## Invariants
 
 - Reconcile pass MUST run before persist for every non-`bypass_mediator` call.

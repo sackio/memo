@@ -95,3 +95,25 @@ Anomalies are also emitted to the auditor via ATC event (FR-015).
 - Every call logged to `mediator_audit_log` per FR-014 (retention ≥30 days).
 - LLM fallback fires when: `>N` candidates after dedup+bi-temporal, OR
   top candidates conflict (semantic sim ≥ threshold on disjoint content).
+
+## Latency expectations (amended 2026-07-29, per R-17)
+
+The `latency_ms` values in the examples above were written assuming an
+in-process inference API. Per **R-17** the LLM is an interactive Claude Code
+session reached over ATC, so the fallback path is **seconds, not milliseconds**.
+
+| Path | Expected | Notes |
+|---|---|---|
+| Happy path (`llm_fallback_used: false`) | **tens of ms** | Unaffected — makes no LLM call at all. The 87ms example stands. |
+| LLM fallback (`llm_fallback_used: true`) | **~1-10 s** | Session round-trip. The ~1450ms example is NOT achievable; treat it as illustrative only. |
+| Fallback unavailable | soft-timeout at **10 s**, then degrade | See below. |
+
+**Degrade, never block.** If the `memo-llm` session is busy, compacting, or
+down, the mediator MUST still return a 200 with its search-only answer plus an
+`anomalies` entry naming the degradation — it MUST NOT fail the caller. The
+provider separately DMs the `agents` supervisor to respawn the session,
+**rate-limited to one notify per outage** (not per failed call), so a dead
+session self-heals without flooding the supervisor.
+
+Because the happy path makes no LLM call, this degradation affects only the
+minority of recalls that trip the fallback trigger.

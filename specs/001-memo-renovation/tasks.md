@@ -221,6 +221,23 @@ markers, 0 L1 misses, exit 0. Full suite: **89 passed**, run in docker —
 
 ## Phase 3 (== plan Phase B) — Both mediators [US2]
 
+**R-17 amendment (operator directive 2026-07-29)**: the mediators' generative
+LLM calls are served by an **interactive Claude Code session** (`memo-llm`),
+never by a per-token API and never via `claude -p` — see research.md R-17 for
+the full decision and rationale.
+
+Phase 3 therefore builds against the `LLMProvider` INTERFACE with a
+deterministic **null adapter** (T029a below), so the mediators land complete
+and fully testable without the transport existing. The concrete
+`claude_session` adapter lands in **Phase 5** (T085a) with the other provider
+adapters. Contract-test note: with the null adapter, LLM-fallback paths assert
+the DEGRADED behavior — that is the correct, specified behavior, not a stub.
+
+Everywhere the mediators touch the LLM they must **degrade, never block**:
+on unavailability recall returns its search-only answer with an `anomalies`
+entry and store writes-new + flags the auditor. Neither may fail the caller.
+
+- [ ] T029a [US2] Write `../memo-v2/src/memo/providers/llm/base.py` — abstract `LLMProvider` (`complete(prompt, *, budget_tokens, timeout_s) -> str | None`, returning None on unavailability rather than raising) plus `../memo-v2/src/memo/providers/llm/null.py` — `NullLLMProvider` that always reports unavailable, so every caller exercises the degrade path. Wire `MEMO_LLM_PROVIDER` (default `null` until Phase 5) in config. Marker `001/FR-015` on the base class docstring.
 - [ ] T030 [US2] Write `../memo-v2/src/memo/mediators/filters.py` — filter chain strategy classes: `DedupFilter` (migration-cluster collapse per C-06), `BiTemporalFilter` (`valid_until IS NULL` unless `as_of` set), `RecencyBoost`, `TagClassBoost` (per FR-013), `ScopeFilter`. Each class's docstring has `001/FR-011 001/FR-012 001/FR-013` marker.
 - [ ] T031 [US2] Write `../memo-v2/src/memo/mediators/recall.py` — retrieval mediator per contracts/mediator-recall.md. Wires filter chain; LLM-fallback trigger on N candidates or conflict (default N=15). Module docstring marker `001/FR-010 001/FR-011 001/FR-012 001/FR-013 001/FR-014 001/FR-015`.
 - [ ] T032 [US2] Write `../memo-v2/src/memo/clarify.py` — synchronous clarification round-trip helper for the storage mediator (FR-015d). Marker `001/FR-015d`.
@@ -284,6 +301,8 @@ cd ../memo-v2 && speckit-trace --require-full \
 - [ ] T083 [US8] Write `../memo-v2/src/memo/providers/agent_controller/agents_supervisor.py` — concrete `agents`-supervisor adapter. Marker `001/FR-043`.
 - [ ] T084 [US8] [P] Write `../memo-v2/src/memo/providers/null.py` — `NullConductor` + `NullAgentController` for standalone mode. Marker `001/FR-045`.
 - [ ] T085 [US8] Wire provider selection in main.py — `MEMO_CONDUCTOR_PROVIDER` + `MEMO_AGENT_CONTROLLER_PROVIDER` env vars, default `atc`/`agents_supervisor`, `null` for standalone. Marker `001/FR-045`.
+- [ ] T085a [US8] Write `../memo-v2/src/memo/providers/llm/claude_session.py` — concrete `LLMProvider` that serves inference from the **interactive `memo-llm` Claude Code session** over ATC (request/response with a correlation id + 10s soft timeout). Per R-17: **MUST NOT shell out to `claude -p`** — that is billed API usage and is the exact thing this design avoids; an interactive session rides the existing Max subscription. On unavailability return None (never raise) so callers degrade, AND DM the `agents` supervisor to respawn `memo-llm` — **rate-limited to one notify per outage, not per failed call**, or a dead session plus fleet-wide memo traffic floods the supervisor (the thundering-herd failure in CLAUDE.md §5). Switch `MEMO_LLM_PROVIDER` default from `null` to `claude_session`. Marker `001/FR-045`.
+- [ ] T085b [US8] Write `../memo-v2/tests/contract/test_llm_provider.py` — null adapter reports unavailable; `claude_session` returns None (never raises) when the session is down; supervisor escalation fires exactly ONCE per outage across N consecutive failures and re-arms only after a recovery. Marker `001/FR-045`.
 - [ ] T086 [US8] Add `POST /events` endpoint per contracts/conductor-pull.md. Routes each event kind to its handler. Marker `001/FR-042 001/FR-042a`.
 - [ ] T087 [US8] Write `../memo-v2/tests/contract/test_conductor_push.py`. Marker `001/FR-041 001/FR-046`.
 - [ ] T088 [US8] Write `../memo-v2/tests/contract/test_conductor_pull.py`. Marker `001/FR-042 001/FR-042a`.
