@@ -26,26 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 import httpx  # noqa: E402
 
 from memo.migrate import backfill, verify  # noqa: E402
-
-
-async def fetch_v1_corpus(v1_url: str, limit: int, page: int = 500) -> list[dict]:
-    """Page through v1's documents. Read-only."""
-    out: list[dict] = []
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        offset = 0
-        while len(out) < limit:
-            r = await client.get(f"{v1_url.rstrip('/')}/documents",
-                                 params={"limit": min(page, limit - len(out)),
-                                         "offset": offset})
-            r.raise_for_status()
-            batch = r.json()
-            if not batch:
-                break
-            out.extend(batch)
-            offset += len(batch)
-            if len(batch) < page:
-                break
-    return out
+from memo.migrate.fetch import CorpusReadError, fetch_v1_corpus  # noqa: E402
 
 
 async def main() -> int:

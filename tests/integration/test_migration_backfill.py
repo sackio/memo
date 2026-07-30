@@ -333,3 +333,80 @@ async def test_verify_catches_the_valid_from_zero_specimen(embedding):
     check = next(c for c in result["checks"] if c["name"] == "bi_temporal_preserved")
     assert check["passed"] is False
     assert check["data"]["bad_valid_from"] == 1
+
+
+@pytest.mark.asyncio
+async def test_a_repeated_v1_id_is_not_merged_into_itself(embedding):
+    """A memo that arrives twice is an idempotent re-encounter, not a duplicate.
+
+    Regression for the 2026-07-30 first-real-backfill defect: the corpus read
+    paged with limit/offset over a v1 that the fleet writes to continuously, so
+    rows drifted between pages and the SAME memo was handed to migrate_corpus
+    twice. The dedup branch matched it against its own already-written row,
+    attached its provenance to itself and wrote a self-redirect `id -> id`.
+    959 memos "processed" for 501 written, 339 self-merges, zero real dedup.
+    """
+    memo = v1_memo(1, content="a memo the corpus read happened to return twice")
+    stats, lines = await backfill.migrate_corpus([memo, memo], dry_run=True)
+
+    assert stats.merged == 0, "a memo must never be a duplicate of itself"
+    actions = [line.action for line in lines]
+    assert actions == ["write-new", "skip-already-migrated"]
+    assert lines[1].merged_into is None
+    assert lines[1].redirect_from is None, "a self-redirect would break id resolution"
+
+
+@pytest.mark.asyncio
+async def test_corpus_read_refuses_a_response_containing_duplicate_ids(monkeypatch):
+    """The read must refuse rather than migrate a corpus it cannot vouch for.
+
+    A response holding the same id twice proves the read was not self-consistent
+    — which also means rows may have been displaced past the read window and
+    silently skipped. Refusing is the only safe answer: a migration that reports
+    success over an incomplete corpus is worse than one that stops.
+    """
+    from memo.migrate import fetch as fetch_mod
+
+    dupe = v1_memo(7)
+
+    class _Resp:
+        def __init__(self, payload): self._p = payload
+        def raise_for_status(self): return None
+        def json(self): return self._p
+
+    class _Client:
+        def __init__(self, *a, **k): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+        async def get(self, url, params=None): return _Resp([dupe, dupe])
+
+    monkeypatch.setattr(fetch_mod.httpx, "AsyncClient", _Client)
+    with pytest.raises(fetch_mod.CorpusReadError, match="duplicate id"):
+        await fetch_mod.fetch_v1_corpus("http://v1.invalid", 100)
+
+
+@pytest.mark.asyncio
+async def test_corpus_read_refuses_a_short_read(monkeypatch):
+    """v1 holding more than we read means we are about to migrate a truncation."""
+    from memo.migrate import fetch as fetch_mod
+
+    small = [v1_memo(i) for i in range(3)]
+    bigger = [v1_memo(i) for i in range(9)]
+
+    class _Resp:
+        def __init__(self, payload): self._p = payload
+        def raise_for_status(self): return None
+        def json(self): return self._p
+
+    class _Client:
+        calls = 0
+        def __init__(self, *a, **k): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+        async def get(self, url, params=None):
+            _Client.calls += 1
+            return _Resp(small if _Client.calls == 1 else bigger)
+
+    monkeypatch.setattr(fetch_mod.httpx, "AsyncClient", _Client)
+    with pytest.raises(fetch_mod.CorpusReadError, match="incomplete corpus"):
+        await fetch_mod.fetch_v1_corpus("http://v1.invalid", 100)

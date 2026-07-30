@@ -201,6 +201,19 @@ async def migrate_one(memo: dict[str, Any], *, embedding: list[float],
     # --- dedup / merge against what we have already written (C-06 / R-13) ---
     title_grams = _ngrams(memo.get("title") or content[:120])
     for prior in migrated:
+        # A memo can never be a duplicate OF ITSELF. If the same v1 id reaches
+        # us twice the corpus read repeated it (see fetch_v1_corpus), and the
+        # merge branch below would attach the memo's provenance to its own row
+        # and write a self-redirect `id -> id`. Report it as an idempotent
+        # re-encounter instead, so the audit log says what actually happened
+        # and the stats stay meaningful.
+        if prior["v2_id"] == v1_id:
+            return AuditLine(v1_id=v1_id, action="skip-already-migrated",
+                             v2_ids=[v1_id], class_assigned=cls,
+                             class_source=cls_source, canonical_tags=tags,
+                             provenance_reconstructed=provenance is not None,
+                             provenance_source=prov_source,
+                             note="duplicate v1 id in the corpus read")
         if _cosine(embedding, prior["embedding"]) < DUP_COSINE:
             continue
         if _jaccard(title_grams, prior["title_grams"]) < DUP_TITLE_NGRAM:
