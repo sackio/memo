@@ -1147,6 +1147,23 @@ async def move_document(doc_id: str, req: CopyMoveRequest):
     return CopyMoveResponse(id=new_id)
 
 
+@app.post("/search-passages")
+async def search_passages_endpoint(req: SearchRequest):
+    """Passage-level search. [002/FR-105 002/FR-113]
+
+    Deliberately a SEPARATE endpoint rather than a flag on /search: both paths
+    must be live at once so the passage path can be measured against the
+    document path on the same corpus, with the same queries, before either
+    becomes the default. A flag would make the comparison a config change and
+    invite flipping it before the numbers exist.
+    """
+    embedding = await embeddings.embed(req.query)
+    results = await db.search_passages(
+        req.db_path, embedding, req.limit, req.min_score, req.tags,
+        req.after, req.before, req.min_tokens, req.max_tokens)
+    return results
+
+
 @app.post("/search", response_model=list[SearchResult])
 async def search_documents(req: SearchRequest):
     embedding = await embeddings.embed(req.query)
