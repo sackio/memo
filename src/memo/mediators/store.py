@@ -198,14 +198,32 @@ async def store(req: MediatorStoreRequest, *,
     candidates = await _reconcile_candidates(req.content, embedding)
     trace.append(f"reconcile: {len(candidates)} current candidate(s)")
 
-    near = [c for c in candidates if c["score"] >= RECONCILE_SIM]
+    # Similarity bands, and why the refutation gate only looks at the middle one:
+    #
+    #   score >= MERGE_SIM      -> a RESTATEMENT. At this similarity the text is
+    #                              near-identical, so there is nothing to
+    #                              contradict; merging needs no inference.
+    #   RECONCILE_SIM..MERGE_SIM -> the ambiguous band. Same subject, different
+    #                              wording — this is where a contradiction can
+    #                              actually hide, so this is what costs an LLM
+    #                              call.
+    #   below RECONCILE_SIM     -> unrelated. Ignored.
+    #
+    # Checking refutation across the whole >=RECONCILE_SIM range was the first
+    # cut and it was wrong: with the null provider every fact-adjacent write
+    # came back undetermined, which suppressed merge universally and turned
+    # even a byte-identical re-store into a duplicate. Caught live on the
+    # mediated /store path.
+    dupes_band = [c for c in candidates if c["score"] >= MERGE_SIM]
+    ambiguous_band = [c for c in candidates
+                      if RECONCILE_SIM <= c["score"] < MERGE_SIM]
 
-    # Set when a refutation check could not be completed. It suppresses the
-    # auto-merge below — see the comment there.
+    # Set when a refutation check in the ambiguous band could not be completed.
+    # Suppresses merge — see the comment there.
     refutation_undetermined = False
 
     # --- FR-015c: refutation gate, only against class=fact memos ---
-    for c in near:
+    for c in ambiguous_band:
         if c["doc"].get("class") != "fact":
             continue
         verdict = await _detect_refutation(req.content, c, provider)
@@ -292,9 +310,7 @@ async def store(req: MediatorStoreRequest, *,
     # an APC" would vanish into the CyberPower memo with no error and no new
     # revision. Writing a second memo is recoverable (the auditor can merge or
     # supersede later); a swallowed update is not.
-    dupes = [] if refutation_undetermined else [
-        c for c in candidates if c["score"] >= MERGE_SIM
-    ]
+    dupes = [] if refutation_undetermined else dupes_band
     if refutation_undetermined:
         trace.append("merge: suppressed (refutation undetermined)")
     if dupes:

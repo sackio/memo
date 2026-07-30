@@ -6,6 +6,7 @@ from typing import Any
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from mcp.server.fastmcp import FastMCP
@@ -13,6 +14,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 
 from memo import db, embeddings, reaper
 from memo.mediators import recall as recall_mediator
+from memo.mediators import store as store_mediator
 from memo.config import settings
 from memo.db import _count_tokens
 from memo.models import (
@@ -26,6 +28,9 @@ from memo.models import (
     Document,
     SearchRequest,
     SearchResult,
+    MediatorStoreRequest,
+    MediatorStoreResponse,
+    Provenance,
     RecallRequest,
     RecallResponse,
     StoreRequest,
@@ -128,25 +133,44 @@ async def memo_store(
     tags: list[str] | None = None,
     metadata: dict[str, Any] | None = None,
     db_path: str | None = None,
+    session_id: str | None = None,
+    provenance: dict[str, Any] | None = None,
+    operator_directive_ref: dict[str, Any] | None = None,
+    clarification_token: str | None = None,
+    bypass_mediator: bool = False,
 ) -> dict:
-    """Store a document with automatic embedding and token count.
+    """Store a memo. Routed through the storage mediator. [001/FR-015a]
 
-    db_path controls which database to write to:
-    - None (default): global DB
-    - directory path (e.g. current working directory): stores in <dir>/.memo.db
-    - explicit .db file path: stores in that file
+    The v1 tool NAME and its `{"id": ...}` response key are preserved, so
+    existing callers keep working (FR-015a). What changed underneath: the write
+    now goes through reconcile-before-write, so it may be merged into an
+    existing memo, supersede one, or come back asking a question.
+
+    IMPORTANT for callers: `id` can be null. Always check `action`.
+      - "write-new"/"merge"/"supersede" -> stored; `id` is the memo to cite.
+      - "clarify"  -> nothing stored yet. Read `prompt`, then call again with
+                      `clarification_token` plus whatever it asked for
+                      (commonly `operator_directive_ref`).
+      - "reject"   -> not stored. `reason` says why; `how_to_authorize` says
+                      what would make it succeed.
+
+    db_path is accepted for backward compatibility and ignored (single-global).
     """
     await _reject_leaked_tool_call(content, tags, "memo_store")
-    embedding = await embeddings.embed(content)
-    doc_id = await db.store(
-        db_path=db_path,
+    result = await store_mediator.store(MediatorStoreRequest(
         content=content,
         title=title,
         tags=tags or [],
-        metadata=metadata or {},
-        embedding=embedding,
-    )
-    return {"id": doc_id}
+        provenance=Provenance(**provenance) if provenance else None,
+        session_id=session_id or "mcp:unknown",
+        operator_directive_ref=operator_directive_ref,
+        clarification_token=clarification_token,
+        bypass_mediator=bypass_mediator,
+    ))
+    payload = result.model_dump(exclude_none=True)
+    # v1 compatibility: callers read ["id"]. Keep it, even when null.
+    payload["id"] = result.memo_id
+    return payload
 
 
 @mcp.tool()
@@ -466,6 +490,46 @@ async def store_document(req: StoreRequest, request: Request):
         embedding=embedding,
     )
     return StoreResponse(id=doc_id)
+
+
+# HTTP status per contracts/mediator-store.md. write-new is the only 201:
+# everything else either touched an existing memo or wrote nothing at all.
+_STORE_STATUS = {
+    "write-new": 201,
+    "merge": 200,
+    "supersede": 200,
+    "split": 200,
+    "clarify": 409,
+    "reject": 403,
+}
+
+
+@app.post("/store")
+async def store_mediated(req: MediatorStoreRequest, request: Request):
+    """Storage mediator — reconcile-before-write. [001/FR-015a]
+
+    The mediated write path. Raw `POST /documents` is left in place for v1
+    clients and for deliberate bypass; agents should use this.
+
+    Non-2xx here are ordinary parts of the protocol, not server faults: 409
+    carries a clarification token the caller answers and retries with, 403 says
+    the write needs operator authority. Both are returned as bodies rather than
+    raised as HTTPException so the caller always gets the full typed response.
+    """
+    try:
+        await _reject_leaked_tool_call(
+            req.content, req.tags, "POST /store",
+            user_agent=request.headers.get("user-agent"),
+            source_ip=request.client.host if request.client else None,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    result = await store_mediator.store(req)
+    return JSONResponse(
+        status_code=_STORE_STATUS.get(result.action, 200),
+        content=result.model_dump(exclude_none=True),
+    )
 
 
 @app.post("/recall", response_model=RecallResponse)

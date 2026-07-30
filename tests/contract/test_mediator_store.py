@@ -4,10 +4,11 @@ One test per Response section of contracts/mediator-store.md — MERGE,
 WRITE-NEW, SUPERSEDE, CLARIFY, REJECT, SPLIT — plus the degrade paths R-17
 requires.
 
-Embeddings are stubbed to orthogonal unit vectors keyed on a topic word, so
-"same topic" scores 1.0 and "different topic" scores ~0.0. That makes the
-similarity thresholds deterministic instead of dependent on a live embedding
-service, and keeps the suite offline.
+Embeddings are stubbed (see `_stub_embeddings`) to a dominant topic axis plus a
+small content-specific component, so identical text scores 1.0, same-topic
+different-wording lands ~0.90, and different topics score ~0.0. That puts each
+case in a known similarity band without depending on a live embedding service,
+and keeps the suite offline.
 """
 import pytest
 
@@ -23,9 +24,20 @@ TOPICS = ["ups", "dentist", "cluster", "parking"]
 def _stub_embeddings(monkeypatch):
     """Deterministic, offline, content-keyed embeddings."""
     async def fake_embed(text: str) -> list[float]:
+        # Topic axis dominates, plus a small content-specific component. So:
+        #   identical text              -> cosine 1.0   (>= MERGE_SIM, a restatement)
+        #   same topic, different words -> cosine ~0.90 (the ambiguous band)
+        #   different topic             -> cosine ~0.0
+        # A pure topic vector would score two CONTRADICTING statements at 1.0,
+        # which is not how real embeddings behave and would hide the very bug
+        # these tests exist to catch.
+        import hashlib
         v = [0.0] * settings.embedding_dimensions
-        idx = next((i for i, t in enumerate(TOPICS) if t in (text or "").lower()), len(TOPICS))
-        v[idx] = 1.0
+        text_l = (text or "").lower()
+        idx = next((i for i, t in enumerate(TOPICS) if t in text_l), len(TOPICS))
+        v[idx] = 0.95
+        h = int(hashlib.sha256(text_l.encode()).hexdigest(), 16)
+        v[len(TOPICS) + 1 + (h % 64)] = 0.3122498999199199  # sqrt(1 - 0.95**2)
         return v
     monkeypatch.setattr(embeddings, "embed", fake_embed)
     monkeypatch.setattr(store_mod.embeddings, "embed", fake_embed)
