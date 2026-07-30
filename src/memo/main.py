@@ -155,7 +155,13 @@ async def memo_update(
     """Update an existing memo by ID. Only provided fields are changed.
 
     If content is updated, the embedding and token_count are recomputed automatically.
-    Returns the updated memo, or null if the ID was not found.
+
+    Returns the updated memo with `updated: true`. If the ID matched nothing,
+    returns `{updated: false, reason: "not_found", requested_id: <id>}` —
+    NOT null. A bare null could not distinguish a mistyped id from a memo that
+    has genuinely vanished, and two of those readings are alarming while one is
+    a typo. Check `updated`; a false means re-look-up the id, not that the memo
+    is gone.
     """
     await _reject_leaked_tool_call(content, tags, "memo_update")
     embedding = await embeddings.embed(content) if content is not None else None
@@ -168,7 +174,13 @@ async def memo_update(
         metadata=metadata,
         embedding=embedding,
     )
-    return result
+    if result is None:
+        # 2026-07-30: was a bare null, which collapsed "bad id", "memo absent"
+        # and (from the caller's seat) "applied, nothing returned" into one
+        # answer. Session-ids and memo-ids are both 36-char UUIDs, so passing
+        # the wrong KIND of id lands here too and looked identical.
+        return {"updated": False, "reason": "not_found", "requested_id": id}
+    return {**result, "updated": True}
 
 
 @mcp.tool()
@@ -237,14 +249,22 @@ async def memo_copy(
     to_db_path: str | None = None,
     from_db_path: str | None = None,
 ) -> dict | None:
-    """Copy a memo to another database without re-embedding.
+    """NO-OP since the 2026-06-29 single-global refactor — there is only one
+    database, so there is nowhere to copy TO.
 
-    from_db_path: source DB (None = global default).
-    to_db_path: destination DB (None = global default).
-    Returns {id: <new_uuid>} for the copy, or null if the source memo was not found.
+    Returns {id: <the same id>, copied: false, reason: "single_global_db"} if
+    the memo exists, or {copied: false, reason: "not_found"} if it doesn't.
+    It does NOT duplicate the memo and never has since June. The id coming back
+    is the ORIGINAL — do not read it as a new copy.
     """
     new_id = await db.copy(from_db_path=from_db_path, doc_id=id, to_db_path=to_db_path)
-    return {"id": new_id} if new_id else None
+    if not new_id:
+        return {"copied": False, "reason": "not_found", "requested_id": id}
+    # The response carries the truth because the docstring can't: MCP tool
+    # descriptions are cached per session at startup, so a long-running session
+    # still reads the pre-2026-07-30 text promising a new uuid. The response is
+    # the only channel that reaches a caller with stale docs.
+    return {"id": new_id, "copied": False, "reason": "single_global_db"}
 
 
 @mcp.tool()
@@ -253,15 +273,17 @@ async def memo_move(
     to_db_path: str | None = None,
     from_db_path: str | None = None,
 ) -> dict | None:
-    """Move a memo to another database without re-embedding.
+    """NO-OP since the 2026-06-29 single-global refactor — there is only one
+    database, so there is nowhere to move TO.
 
-    Copies the memo to to_db_path then deletes it from from_db_path.
-    from_db_path: source DB (None = global default).
-    to_db_path: destination DB (None = global default).
-    Returns {id: <new_uuid>} in the destination, or null if source memo not found.
+    Returns {id: <the same id>, moved: false, reason: "single_global_db"} if the
+    memo exists, or {moved: false, reason: "not_found"} if it doesn't. The memo
+    is not relocated and nothing is deleted.
     """
     new_id = await db.move(from_db_path=from_db_path, doc_id=id, to_db_path=to_db_path)
-    return {"id": new_id} if new_id else None
+    if not new_id:
+        return {"moved": False, "reason": "not_found", "requested_id": id}
+    return {"id": new_id, "moved": False, "reason": "single_global_db"}
 
 
 @mcp.tool()
