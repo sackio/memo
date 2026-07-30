@@ -19,8 +19,13 @@ class Settings(BaseSettings):
 
     # Auto-store settings
     memo_auto_store: bool = True
-    auto_store_model: str = "openai/gpt-4o-mini"
     auto_store_similarity_threshold: float = 0.82
+    # `auto_store_model` (was "openai/gpt-4o-mini") REMOVED 2026-07-29 per R-17.
+    # auto_store's generative calls now go through the shared LLMProvider — an
+    # interactive Claude Code session, not a per-token API. The setting is gone
+    # rather than left unused so nobody re-wires a direct model call to it;
+    # R-17 requires exactly one generative path. Use MEMO_LLM_PROVIDER instead.
+    # (Embeddings are unaffected and still use embedding_model via OpenRouter.)
 
     # Single-global refactor (2026-06-29): db_path is ignored server-side
     # but kept in the schema for backward compat. Toggle to suppress the

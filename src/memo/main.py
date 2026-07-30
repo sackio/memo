@@ -836,16 +836,37 @@ async def auto_store(req: AutoStoreRequest):
             )
         # action == "create" — fall through
 
-    # 4. Create new memo
-    doc_id = await db.store(
-        db_path=req.db_path,
+    # 4. Create new memo — through the storage mediator, not a raw insert. [001/FR-015a]
+    #
+    # FR-015a makes the mediator the single write path, so auto_store gets the
+    # same canonical tags, class inference and provenance handling as any other
+    # caller instead of quietly bypassing all three.
+    #
+    # KNOWN OVERLAP (Phase 3 note): steps 2-3 above run auto_store's own
+    # LLM-driven dedup, and the mediator then reconciles again. Usually
+    # harmless — if auto_store found nothing similar the mediator generally
+    # won't either. But where they disagree the mediator wins, since it is the
+    # write path. Its merge is also weaker than auto_store's: it unions tags
+    # only, where auto_store rewrites merged CONTENT. Collapsing the two into
+    # the mediator is the right cleanup, but it is a behavior change beyond
+    # T036's scope, so it is left explicit rather than done silently.
+    result = await store_mediator.store(MediatorStoreRequest(
         content=extracted,
         title=title,
         tags=tags,
-        metadata={},
-        embedding=embedding,
-    )
-    return AutoStoreResponse(action="created", id=doc_id, title=title, reason=analysis.get("reason"))
+        session_id=req.session_id or "auto_store",
+    ))
+    if result.action in ("clarify", "reject"):
+        # Auto-store is unattended background capture — there is no agent
+        # waiting to answer a clarification, so report it rather than stranding
+        # a token nobody will ever redeem.
+        return AutoStoreResponse(
+            action="skipped",
+            reason=f"storage mediator returned {result.action}: "
+                   f"{result.prompt or result.reason}",
+        )
+    return AutoStoreResponse(action="created", id=result.memo_id, title=title,
+                             reason=analysis.get("reason"))
 
 
 @app.post("/context", response_model=ContextResponse)
