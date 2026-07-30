@@ -82,3 +82,33 @@ Both seams are protocols with swappable implementations. When ATC and agentkit
 ship their v2 shapes, memo adapts with a new adapter file and a config change;
 nothing in memo's core moves. **They should design what is right for their
 systems and not bend to memo's current method names.**
+
+## 6. Redundant DELIVERY is fine; redundant STATE is not
+
+Named by ATC 2026-07-30, and it resolves an apparent contradiction someone will
+eventually raise: memo's `flush.py` was deleted for duplicating ATC's job, yet
+the re-warm design deliberately keeps a beacon backstop alongside
+event-triggered delivery. Those look like the same thing and are not.
+
+- **Two paths DELIVERING the same content cannot disagree.** They are
+  idempotent, and now that `message_id` reaches receivers a duplicate is
+  detectable and discardable.
+- **Two mechanisms STORING session state can silently diverge**, with nothing
+  reconciling them and no way to tell which is right.
+
+`flush.py` was the second kind. The beacon backstop is the first.
+
+The backstop earns its place for a specific reason: **it does not share the
+primary path's dependencies.** Event-triggered re-warm needs the coordinator up
+and the telemetry fresh at the moment of compaction; a redelivering beacon
+eventually reaches its target even when the coordinator is the thing that
+broke. That is the one failure event-triggered delivery cannot cover, which is
+exactly what a backstop is for.
+
+**Correction on the cost that prompted this:** memo reported a rewarm beacon
+costing ~1.5k tokens per redelivery at 85% context, and concluded the cost
+curve was inverted — insurance billed hardest when it is least affordable. The
+principle stands, but **the magnitude was inflated by a bug**: ATC's scheduler
+held a snapshot across delivery and wrote it back afterwards, so an ack landing
+mid-iteration was overwritten and the beacon kept redelivering with no ack able
+to stop it. Fixed 2026-07-30. Do not calibrate anything against that number.
