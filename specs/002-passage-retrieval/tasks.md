@@ -180,15 +180,24 @@ repo-wide and will fail on later-phase FRs. Run inside the v2 worktree.
       annotated in place, not rewritten); and top-5 on that band is **88.9%**,
       so the answer is almost always retrieved and it is *rank-1 ordering* that
       misses — a re-ranking problem, not a chunking one.
-- [ ] **T253a** — Passage-index the 22 fact-set target memos that currently have
-      no passages (~66k tokens), so SC-103 can be judged at n=30 instead of n=8.
-      `[002/FR-111]`
-      Found 2026-07-31: `--both-indexed-only` restricted the own-title sample but
-      never the fact set, so 22 of 30 cases were unreachable by construction and
-      scored `absent` — the fact set read 5/30 (17%) when the honest number among
-      reachable cases is 5/8. The bench now applies the restriction to both sets
-      and prints the excluded count every run. **SC-103 has still never had a
-      fair measurement**, and the fix is coverage, not chunking.
+- [x] **T253a** — Passage-index the fact-set target memos that have no passages,
+      so SC-103 can be judged at full size. `[002/FR-111]`
+      **DONE 2026-07-31 — and the task as originally written described the wrong
+      problem.** It assumed 22 targets needed indexing. In fact **18 of the fact
+      set's 30 memos are not in the v2 corpus at all**: the set was built against
+      v1 (7,511 memos) and v2 currently holds a partially-migrated 1,655. Only 4
+      were present-but-unindexed; those are now indexed (32 passages, coverage
+      gap zero) via `scripts/memo-index-factset-targets`.
+      Result: SC-103 is measurable at **n=12, not n=30**, and 8/12 (67%) against
+      a ≥75% bar — **FAILS**. See R-07.
+      ⚠️ **Raising n is blocked by T202**, not by indexing: the missing 18 cannot
+      be indexed because they were never migrated. T202 was understood to block
+      only T270; it also caps the power at which a Phase-E success criterion can
+      be evaluated, and that belongs in the decision.
+      Origin of the task: `--both-indexed-only` restricted the own-title sample
+      but never the fact set, so unreachable cases scored `absent` and SC-103
+      read 5/30 (17%). The bench now restricts both sets and prints the excluded
+      count on every run.
 - [ ] **T254** — Re-measure duplicate thresholds against passage vectors:
       `DUP_COSINE = 0.90` + title-4gram ≥ 0.60 (migration) and the `>= 0.80`
       read-path bar were calibrated on document vectors. Use known
@@ -221,11 +230,14 @@ repo-wide and will fail on later-phase FRs. Run inside the v2 worktree.
       3/14 → 11/14 top-5. SC-103 not yet re-run against the passage path. See
       research.md R-05. The bench gained `--path` and `--both-indexed-only` so
       this is reproducible rather than a one-off claim.
-      **Superseded in part 2026-07-31 (R-06):** the 36% was a 14-of-63 sample;
-      the whole-band figure is **58.7%**. SC-101 still fails, so the flip stays
-      blocked and this task's verdict stands. SC-103 *has* now been run against
-      the passage path but **not fairly** — 22 of its 30 cases target memos with
-      no passages, leaving n=8. Closing that is T253a.
+      **Superseded 2026-07-31 by R-07**, which re-runs this comparison over whole
+      bands instead of 14-memo samples. The verdict is unchanged — the flip stays
+      blocked — but every magnitude moved, and the feature looks *better*, not
+      worse: 2000+ rank-1 is **10/66 → 38/66** (15.2% → 57.6%) and absent-from-
+      top-10 **36/66 → 8/66**; the 1000–2000 band, read here as a wash, is
+      actually 41.8% → 68.7%. SC-101 fails at 57.6%; SC-102 holds; **SC-103 now
+      measured properly at 8/12 (67%) vs the document path's 1/12 (8%)** — fails
+      a 75% bar, and capped at n=12 by T202. Prefer R-07's numbers to this task's.
 - [ ] **T262** — Document path stays behind a flag for one release, so a
       regression is a config change and not a migration. `[002/FR-113]`
       *(blocked by T260's config switch; nothing to flag until there is a flag)*

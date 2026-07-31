@@ -1,13 +1,14 @@
 # memo v2 — what's done and what isn't
 
-**Audited 2026-07-30** against the tree, the test suite and `speckit-trace`, not against
-memory of what was intended. Where a marker and the code disagreed, the code won and the
-marker was corrected.
+**Audited 2026-07-30, re-measured 2026-07-31** against the tree, the test suite and
+`speckit-trace`, not against memory of what was intended. Where a marker and the code
+disagreed, the code won and the marker was corrected. Where a number and a larger
+sample disagreed, the larger sample won and the old number was annotated, not deleted.
 
 | spec | state | tasks |
 |---|---|---|
 | **001 — memo renovation** | Built and green. Everything open is operator/runtime or blocked. | 84 done · 16 open · 2 withdrawn |
-| **002 — passage retrieval** | Built through Phase D. **Phase E measured and correctly blocked: SC-101 fails.** T253 done — and it ruled out chunk tuning as the fix. | 22 done · 15 open · 2 partial |
+| **002 — passage retrieval** | Built through Phase D. **Phase E measured and correctly blocked: SC-101 and SC-103 both fail.** T253 done — and it ruled out chunk tuning as the fix. | 23 done · 14 open · 2 partial |
 | **003 — agentic memory** | Design only, by intent. No tasks.md yet. | — |
 
 **Tests**: 426 passing in docker (`docker compose run --rm test`). Host runs are not
@@ -56,51 +57,57 @@ withdrawal surfaces as nothing at all, which is why it needs the deliberate step
 
 ## 002 — passage retrieval
 
-**The honest headline: the passage path works and is clearly better on the band this
-feature exists for, but it does not meet its own bar, so the default has not been
-flipped.**
+**The honest headline: the passage path is a large, measured improvement — larger than
+this document claimed yesterday — and it still misses two of its three criteria, so
+the default has not been flipped.**
 
-Same corpus, same queries, same sample, scored twice (research.md **R-05**):
+Every band measured in full, both paths, one sample (research.md **R-07**, 2026-07-31).
+This supersedes the 14-memo samples that R-05 and yesterday's STATUS were built on:
 
-| band | document rank-1 | passage rank-1 |
-|---|---|---|
-| 500–1000 | 9/14 | 10/14 |
-| 1000–2000 | 9/14 | 10/14 |
-| **2000+** | **0/14** | **5/14** |
-| absent from top-10 (all bands) | 12/59 | **4/59** |
+| band | n | document rank-1 | **passage rank-1** | document absent | passage absent |
+|---|---|---|---|---|---|
+| 500–1000 | 67 | 56 (83.6%) | 56 (83.6%) | 3 | 4 |
+| 1000–2000 | 67 | 28 (41.8%) | **46 (68.7%)** | 18 | **3** |
+| **2000+** | 66 | **10 (15.2%)** | **38 (57.6%)** | **36** | **8** |
 
-- **SC-102 holds** — no band regresses.
-- **SC-101 FAILS.** It requires ≥80% rank-1 for memos ≥2000 tokens. Recorded as
-  measured; the bar was not moved.
-- **SC-103** has now been run against the passage path but **not fairly** — see below.
+Mid-document fact set: document **1/12 (8%)** → passages **8/12 (67%)**.
 
-**Updated 2026-07-31 (research.md R-06) — two numbers above are superseded, and the
-route out of this is not the one the plan expected:**
+- **SC-102 holds** — no band regresses on rank-1.
+- **SC-101 FAILS** — 57.6% against ≥80%.
+- **SC-103 FAILS** — 67% against ≥75%, at n=12.
 
-- The **36%** headline was a 14-of-63 sample. Measured over the **whole** 2000+ band
-  it is **37/63 = 58.7%**. Verdict unchanged (still under 80%), magnitude understated
-  by ~23 points. R-05 is annotated in place rather than rewritten.
-- **T253's sweep found no winner.** All nine `{256,384,512} × {0,15,25}%` configs
-  scored 5–6 of 14; re-measured on the full band, the two most different configs score
-  *identically* (37/63 each). **Chunk geometry does not move SC-101** — so the sweep
-  that STATUS previously called "the next piece of real work" is done, and its answer
-  was no. The remaining 21 points are query formulation, re-ranking, or the embedding
-  model (**T203**, still with you).
-- **Top-5 on that band is 88.9%.** The right memo is nearly always retrieved and
-  merely mis-ordered. That reframes this as a **re-ranking** problem and makes
-  **T201** (result shape) the decision that unblocks it.
-- **SC-103 still has no fair measurement.** `--both-indexed-only` restricted the
-  own-title sample but never the fact set, so 22 of 30 cases targeted memos with no
-  passages and scored `absent`: the criterion read 5/30 (17%) when the honest number
-  among reachable cases is 5/8. The bench now restricts both sets and prints the
-  excluded count on every run. Closing the coverage gap is **T253a**.
+**What changed since yesterday, and why it matters to your review:**
 
-**Method note that cost a wrong answer once:** passage coverage is 408/1655 memos (24.7%),
-so any comparison must be restricted to memos in **both** indexes. An unrestricted run
-scores un-indexed memos as `absent` and reports *indexing coverage* while looking exactly
-like a retrieval result — the first pass at this measurement made that mistake and showed
-the passage path doing worse. The bench now takes `--path {document,passages}` and
-`--both-indexed-only`, so this is reproducible instead of a claim.
+- **Yesterday's numbers understated the feature.** The 2000+ band was recorded as
+  0/14 → 5/14; measured in full it is 10/66 → 38/66, and the 1000–2000 band that
+  read as a wash is really 41.8% → 68.7%. Small samples produced two wrong headline
+  figures here; R-05 is annotated in place rather than rewritten so the error stays
+  visible.
+- **T253 is done and its answer was no.** All nine `{256,384,512} × {0,15,25}%`
+  configs scored within one document of each other, and on the full band the two most
+  different configs score *identically*. **Chunk geometry does not move SC-101**, so
+  the work STATUS previously called "the next piece of real work here" is closed off
+  rather than pending. The remaining gap is query formulation, re-ranking, or the
+  embedding model (**T203**, with you).
+- **Top-5 on the gating band is 56/66 (85%).** The right memo is nearly always
+  retrieved and merely mis-ordered — a re-ranking problem, which points at **T201**
+  (result shape).
+- ⚠️ **SC-103 is capped at n=12 by T202, not by indexing.** The fact set names 30
+  memos; only 12 exist in the v2 corpus, because it was built against v1's 7,511
+  while v2 holds a partial 1,655. T253a indexed the 4 that were present-but-unindexed
+  (coverage gap now zero); the other 18 were never migrated. **T202 therefore gates
+  whether a Phase-E criterion can be evaluated at its intended power** — it was
+  previously understood to block only T270.
+
+**Method note that has now cost a wrong answer three times:** passage coverage is
+412/1655 memos (24.9%), so any comparison must be restricted to memos in **both**
+indexes. An unrestricted run scores un-indexed memos as `absent` and reports *indexing
+coverage* while looking exactly like a retrieval result. That mistake was made on the
+first document-vs-passage pass (which showed the passage path doing *worse*), again in
+R-05's fact-set column, and again in the fact set's 5/30. The bench now takes
+`--path {document,passages}` and `--both-indexed-only`, applies the restriction to the
+own-title sample **and** the fact set, and **prints the excluded count on every run** —
+a silently reduced denominator is how a partial index flatters itself.
 
 **Blocked on you — three open clarifications (T201–T203):**
 
@@ -108,7 +115,9 @@ the passage path doing worse. The bench now takes `--path {document,passages}` a
    the matching passage, or both? **This one blocks four tasks** (T240–T243) and is the
    decision the rest of Phase C waits on.
 2. **T202 — disposition of the partial v2 corpus** (1,655 memos, ~25% passage-indexed).
-   Roll back and re-migrate, or backfill in place? Blocks T270.
+   Roll back and re-migrate, or backfill in place? Blocks T270 — **and, newly, caps
+   SC-103 at n=12**: 18 of the fact set's 30 target memos were never migrated, so a
+   Phase-E success criterion cannot be evaluated at full power until this is settled.
 3. **T203 — is `text-embedding-3-large` in scope for this feature or a separate one?**
 
 **T260 is marked PARTIAL, not done.** Both paths are live and independently callable

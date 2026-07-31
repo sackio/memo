@@ -238,3 +238,78 @@ docker compose exec memo-v2 python /tmp/memo-retrieval-bench \
 The sweep re-asserts that the control set is byte-identical between rounds and
 **aborts** if it changed, so a coverage shift can never be reported as a retrieval
 difference. The passage index is left at the documented default, 384/15%.
+
+---
+
+## R-07 — The measurement R-05 should have been: whole bands, both paths (2026-07-31)
+
+R-05 compared the two paths at `--per-band 14`. R-06 showed that sample was too small
+to support the conclusions drawn from it. This is the same comparison run properly —
+**every eligible memo in each band, both paths, one sample** — plus the first SC-103
+number that is not confounded by coverage.
+
+Corpus: the 412 memos with passages (408 + the 4 fact-set targets indexed by T253a).
+Chunking at the documented default, 384/15%.
+
+| band | n | doc rank-1 | **passage rank-1** | doc top-5 | passage top-5 | doc absent | passage absent |
+|---|---|---|---|---|---|---|---|
+| 200–500 | 65 | 54 (83.1%) | 55 (84.6%) | 58 | 58 | 4 | 5 |
+| 500–1000 | 67 | 56 (83.6%) | 56 (83.6%) | 59 | 60 | 3 | 4 |
+| 1000–2000 | 67 | 28 (41.8%) | **46 (68.7%)** | 42 | **62** | 18 | **3** |
+| **2000+** | 66 | **10 (15.2%)** | **38 (57.6%)** | 22 | **56** | **36** | **8** |
+
+**The defect and the fix, both larger than previously recorded.** On the band this
+feature exists for, the document path retrieves the right memo at rank 1 **15% of the
+time** and cannot find it at all in **55%** of cases. The passage path takes that to
+57.6% rank-1 and 12% absent — a 3.8× improvement in rank-1 and a 4.5× reduction in
+outright misses. The 1000–2000 band, which R-05 read as a wash (9/14 → 10/14), is
+actually 41.8% → 68.7%.
+
+### SC-103, measured without the confound
+
+| path | rank-1 | top-5 | absent |
+|---|---|---|---|
+| document | **1/12 (8%)** | 3/12 | 8/12 |
+| passages | **8/12 (67%)** | 11/12 | 1/12 |
+
+Quoting a memo's own middle third back at it retrieves it 8% of the time through the
+document index and 67% through passages. This is the sharpest statement of the
+feature's value in the whole research record — and it is the number R-04 predicted
+would move.
+
+### The criteria, stated as measured
+
+- **SC-102 holds.** No band regresses on rank-1 (500–1000 is exactly equal, 200–500
+  gains one). Worth saying plainly, since it is the one criterion that passes: the
+  `absent` column ticks up by one in each of the two short bands, which is noise at
+  these denominators but is recorded rather than smoothed.
+- **SC-101 FAILS** — 57.6% against ≥80%.
+- **SC-103 FAILS** — 67% against ≥75%, at n=12.
+
+**The default is not flipped.** Two criteria miss; that is the whole point of having
+them.
+
+### ⚠️ SC-103 cannot reach its designed size on this corpus — and that is not a bug
+
+The fact set names **30** memos. Only **12 exist in the v2 corpus at all.** It was
+built against v1 (7,511 memos) while v2 currently holds a partially-migrated 1,655.
+T253a indexed the 4 targets that were present-but-unindexed (32 passages; the coverage
+gap is now zero), but the missing 18 cannot be indexed because they were never
+migrated.
+
+So **SC-103 is capped at n=12 until the v2 corpus is complete**, which makes it
+dependent on **T202** — the open question of what to do with the partial corpus (roll
+back and re-migrate, or backfill in place). T202 was previously understood to block
+only T270. It also gates whether a Phase-E success criterion can be evaluated at its
+intended power, and that should be weighed in the decision.
+
+Reproduce:
+
+```
+docker compose exec memo-v2 python /tmp/memo-retrieval-bench \
+    --path document --both-indexed-only --per-band 67 \
+    --factset /tmp/factset-mid-document.json
+docker compose exec memo-v2 python /tmp/memo-retrieval-bench \
+    --path passages --both-indexed-only --per-band 67 \
+    --factset /tmp/factset-mid-document.json
+```
