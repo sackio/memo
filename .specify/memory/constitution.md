@@ -220,8 +220,18 @@ This constitution supersedes every project-level `CLAUDE.md`, every
 per-agent SKILL.md, and every ATC pin. When they conflict, the constitution
 wins; the conflicting document is corrected in the same amendment cycle.
 
-**Version**: 1.3.0 | **Ratified**: 2026-07-29 | **Last Amended**: 2026-07-29
+**Version**: 2.0.0 | **Ratified**: 2026-07-29 | **Last Amended**: 2026-07-30
 <!-- 1.0.0 → 1.1.0: expanded Principle VII to cover storage-side mediator per Ben 14:22 EDT amendment. -->
 <!-- 1.1.0 → 1.2.0: added Principle VIII (integration-ready, not integration-bound) per Ben 14:30 EDT amendment. -->
 <!-- 1.2.0 → 1.3.0: renamed abstractions to Conductor + AgentController + expanded their scope per Ben 14:38-14:49 EDT amendments. -->
+<!-- 1.3.0 → 2.0.0: Principle II REDEFINED — "deletion is earned, not forbidden"
+     replaces "only operators can refute facts" (operator directive 2026-07-30,
+     commit 1c3e356). MAJOR rather than MINOR because this REMOVES a constraint
+     rather than expanding one: agents that were forbidden to refute may now
+     delete under stated rules, so anything written against the old rule is no
+     longer governed by it. The three prior bumps were expansions and additions,
+     which is why they were MINOR.
+     Footer stamped 2026-07-31 (T151): the amendment landed on 07-30 and said so
+     in Principle II's own body, while this footer still read "Last Amended:
+     2026-07-29" — the version stamp contradicted the document it stamped. -->
 

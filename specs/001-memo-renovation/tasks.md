@@ -723,7 +723,23 @@ unattended.
 ## Final Phase — Polish & cross-cutting
 
 - [ ] T150 [P] Author `~/.claude/skills/trace-driven-tasks/SKILL.md` — reusable skill capturing the marker-discipline + phase-gate authoring pattern this build used (per operator directive; coordinate with speckit session for convention-doc review before publishing).
-- [ ] T151 [P] Update `.specify/memory/constitution.md` version footer if any principle text was tightened during the build.
+- [x] T151 [P] Update `.specify/memory/constitution.md` version footer if any principle text was tightened during the build.
+      **DONE 2026-07-31. The condition was met and the footer was stale.**
+      Principle II was redefined on 2026-07-30 by operator directive (`1c3e356`)
+      — "deletion is earned, not forbidden" replacing "only operators can refute
+      facts" — and said so in its own body, while the footer still read
+      `Version: 1.3.0 | Last Amended: 2026-07-29`. The version stamp contradicted
+      the document it stamped.
+      Bumped to **2.0.0**, not 1.4.0. The three prior bumps were expansions and
+      additions (MINOR); this one REMOVES a constraint — agents formerly
+      forbidden to refute may now delete under stated rules — so anything written
+      against the old rule is no longer governed by it. *If the operator reads
+      that as MINOR it is a one-character change; the reasoning is recorded in
+      the footer comment so the call is reviewable rather than silent.*
+      Also annotated `plan.md`'s Constitution Check, which was gated against
+      v1.3.0: it is deliberately NOT re-run, because the amendment is strictly
+      more permissive and nothing that passed a stricter rule can fail a looser
+      one. A future *tightening* amendment would require re-running it.
 - [ ] T152 Run full `speckit-trace --strict` across the whole feature — no PARTIAL, no INVISIBLE, no dangling markers, no unknown FR references. Whole-feature FULL rating.
 - [ ] T153 Update `~/.claude/CLAUDE.md` `## Memo` section (if applicable) with any operator-facing changes to `/recall` / `/memorize` command semantics.
 - [ ] T154 [P] Retire memo-minder Phase G cross-host sync + Phase A.6.5 reconcile-lite entries — they become no-ops in the single-global + auditor world.
