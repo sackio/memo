@@ -34,12 +34,20 @@ repo-wide and will fail on later-phase FRs. Run inside the v2 worktree.
 
 ## Phase 0 — Clarifications (BLOCKING, operator)
 
-- [ ] **T201** — *Result shape for `memo_search` / `/recall`.* FR-107 says whole
+- [x] **T201** — *Result shape for `memo_search` / `/recall`.* FR-107 says whole
       memo; the open question is what happens when 10 whole memos is 30k tokens.
       Options put to the operator: (A) always whole, (B) whole for top hit +
       passages after, (C) passages + parent id only, (D) whole until a total
-      token cap, then degrade to passages. **Recommendation: D.** Blocks
-      T240–T243.
+      token cap, then degrade to passages.
+      **RESOLVED 2026-07-31: option (D).** Whole memos until a total token
+      budget is reached, then degrade to passages for the remainder. **T240–T243
+      are unblocked.**
+      Note for whoever builds it: the budget-packing bug fixed in v1 0.3.3 is
+      the exact failure mode to avoid here — when the top hit exceeded the
+      budget the loop `break`s and returned an empty result, which reads to a
+      caller as "the corpus has nothing on this topic". Degrading to a passage
+      is precisely the fallback that was missing. Carry `matched_count` so a
+      caller can tell "nothing matched" from "matched but did not fit".
 - [ ] **T202** — *Disposition of the partial v2 corpus* (1,655 memos from the
       stopped 2026-07-30 backfill). Keep as a development fixture (real content,
       real size distribution, useful for the sweep) or roll back now for
@@ -55,9 +63,32 @@ repo-wide and will fail on later-phase FRs. Run inside the v2 worktree.
       distribution, so a must-collapse set cannot be drawn from it (R-08).
       Neither is fatal, but both mean the decision has measurement consequences
       it was not credited with.
-- [ ] **T203** — *Does the operator want `text-embedding-3-large` in scope here?*
-      Spec sequences it after (FR-108). **Recommendation: after**, measured on
-      passage vectors. Blocks nothing unless the answer changes.
+- [x] **T203** — *Does the operator want `text-embedding-3-large` in scope here?*
+      Spec sequences it after (FR-108). Recommendation was "after".
+      **RESOLVED 2026-07-31: IN SCOPE for this feature — operator overrode the
+      recommendation, and was probably right to.** T253 ruled out chunk geometry
+      as a lever on SC-101 the same morning, which leaves the embedding model as
+      one of the few remaining candidates for the 57.6% → 80% gap.
+      Measured facts behind the change (verified live, not assumed):
+      - OpenRouter serves `openai/text-embedding-3-large` at native **3072** and
+        at a truncated **1536**. Both tested.
+      - Neither memo v1 nor v2 is on the large model today; both run
+        `3-small`/1536. This is a real change, not an alignment.
+      - Full re-embed of the whole corpus, both indexes: **~$1.61** (vs $0.25 on
+        small). Vector storage 177 MB → 354 MB. Neither is a constraint.
+      - **Go native 3072, not truncated 1536 — for safety, not quality.** The
+        vec0 tables bake the dimension in and *reject* a wrong-sized vector
+        (tested). At 1536 an old and a new vector are indistinguishable in shape,
+        so a half-finished migration would silently score nonsense; at 3072 it
+        fails loudly. Given this project's failure history, take the option that
+        cannot fail quietly.
+      **Sequencing is the load-bearing part: switch BEFORE the real backfill**
+      (T131/T271), or the corpus is embedded on the small model and immediately
+      re-embedded — the same "embedded twice" waste T271 already calls out for
+      chunking.
+      ⚠️ **Every measurement in R-01…R-08 was taken on `3-small`.** SC-101 and
+      SC-103 must be re-measured after the switch; the current 57.6% / 67% do not
+      carry over.
 
 ---
 

@@ -369,13 +369,29 @@ async def rollback() -> dict[str, int]:
     def _sync() -> dict[str, int]:
         conn = db._get_or_create_conn(db.global_path())
         n = conn.execute("SELECT COUNT(*) FROM documents").fetchone()[0]
+        try:
+            passages_cleared = conn.execute(
+                "SELECT COUNT(*) FROM document_chunks").fetchone()[0]
+        except Exception:
+            passages_cleared = 0
         conn.execute("DELETE FROM document_embeddings")
         conn.execute("DELETE FROM documents")
         conn.execute("DELETE FROM supersede_edges")
+        # The passage index is derived from `documents`, so it MUST go with
+        # them. [002/FR-110] This was missed when 002 added these tables:
+        # rollback predates them, so it left passages behind whose doc_id
+        # pointed at deleted memos. A stale passage does not error — it
+        # RETURNS, carrying a document lookup that finds nothing, which is the
+        # same silent shape as every other defect this feature has produced.
+        for table in ("document_chunks", "chunk_embeddings"):
+            try:
+                conn.execute(f"DELETE FROM {table}")
+            except Exception:
+                pass  # table absent on a pre-002 database
         try:
             conn.execute("DELETE FROM migration_redirects")
         except Exception:
             pass
         conn.commit()
-        return {"deleted": n}
+        return {"deleted": n, "passages_deleted": passages_cleared}
     return await asyncio.to_thread(_sync)

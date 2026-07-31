@@ -398,25 +398,31 @@ verify the session resumes on v1 with no corruption.
   drawn from: `constitutional`, `behavioral`, `goal`, `verbatim-critical`,
   `fact`, `decision-in-progress`, `episodic`, `ephemeral-flush`,
   `time-scoped`, `legacy-unattributed`.
-- **FR-002**: **WITHDRAWN** 2026-07-30, operator directive. Bi-temporal
-  versioning is removed. `valid_from` / `valid_until`, `get_as_of`, the
-  `/documents/{id}/as-of` endpoint and the supersede-chain resolution all go.
-  **Rationale:** they exist to answer "what did the corpus believe on date X",
-  and under the amended Principle II superseded *state* is deleted rather than
-  retained — so there is nothing for an as-of query to find. Point-in-time
-  reconstruction, when genuinely needed, comes from backups (hourly
-  `backup-memo-live`, 4×daily `backup-memo-to-nas`), which is the right tool for
-  a recovery/rescue case rather than a query path carried by every read.
-  ⚠️ **NOT YET EXECUTED (found by the 2026-07-30 audit).** The withdrawal was
-  declared here but no task was created to carry it out, so `get_as_of`, the
-  `GET /documents/{id}/as-of` endpoint, `valid_from`/`valid_until` and the
-  supersede-chain resolution are all still live across 23 files — and because
-  the code still carries `001/FR-002` anchors, the trace gate rates this
-  withdrawn requirement **FULL**. That is the inverse of FR-034's problem: the
-  gate can tell whether code matches a marker, never whether the code should
-  exist. Tracked as **T033a**.
-  Replaced by **FR-028a**'s deletion log with content snapshots — the same
-  recoverability at a fraction of the machinery.
+- **FR-002** *(withdrawn 2026-07-30, **REINSTATED 2026-07-31** by operator
+  directive)*: Bi-temporal versioning **stays**. `valid_from` / `valid_until`,
+  `get_as_of`, `GET /documents/{id}/as-of` and supersede-chain resolution are all
+  retained, live and tested.
+
+  **History, kept deliberately.** On 2026-07-30 this requirement was withdrawn:
+  the argument was that under the amended Principle II superseded *state* is
+  deleted rather than retained, so an as-of query would have nothing to find, and
+  point-in-time reconstruction should come from backups instead. **The withdrawal
+  was never executed** — no task carried it out, the surface stayed live across 23
+  files, and because the code still carried `001/FR-002` anchors the trace gate
+  rated a withdrawn requirement **FULL**. The 2026-07-30 audit caught that and
+  raised **T033a** to force the choice.
+
+  **The choice went the other way (2026-07-31).** Asked to either execute the
+  withdrawal or amend the spec, the operator kept as-of. So the spec is corrected
+  to match the code rather than the code destroyed to match the spec — which also
+  means nothing has to be deleted, and the 23 files stand as they are.
+
+  Two things this leaves true and worth stating, since the withdrawal rationale
+  was not wrong, merely outweighed:
+  - Superseded state under Principle II is deleted rather than retained, so an
+    as-of query answers from what still exists — it is not a general time machine.
+  - **FR-028a**'s deletion log with content snapshots remains the recovery path
+    for anything actually removed. The two are complementary, not redundant.
 
 - **FR-003** *(amended 2026-07-30)*: `POST /supersede` survives as the
   **replace-and-record** primitive: write the new memo, delete the old, and log

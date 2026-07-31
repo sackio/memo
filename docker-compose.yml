@@ -13,8 +13,21 @@ services:
       DEFAULT_DB_PATH: /data/memo.db
       PORT: ${MEMO_V2_PORT:-8091}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
-      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-openai/text-embedding-3-small}
-      EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-1536}
+      # 2026-07-31 (T203): large model at native 3072. v1 on :8000 stays on
+      # 3-small/1536 and is unaffected — separate compose file, separate .env,
+      # separate database. Scores are NOT comparable across the two until cutover.
+      #
+      # HARD-CODED, and the `${EMBEDDING_MODEL:-...}` form was deliberately
+      # REMOVED. This host exports EMBEDDING_MODEL/EMBEDDING_DIMENSIONS in the
+      # shell environment, and `${VAR:-default}` takes the shell's value — so the
+      # default written here was dead text. Editing it changed nothing, the
+      # container came up on 3-small/1536, and the only reason that was caught is
+      # that the dimensions were read back off the live tables instead of assumed.
+      # A config knob that silently ignores the file it is written in is worse
+      # than no knob. Override for a one-off run with an explicit
+      # `EMBEDDING_MODEL=... docker compose up` if ever needed.
+      EMBEDDING_MODEL: openai/text-embedding-3-large
+      EMBEDDING_DIMENSIONS: 3072
       MEMO_CONDUCTOR_PROVIDER: ${MEMO_CONDUCTOR_PROVIDER:-atc}
       MEMO_AGENT_CONTROLLER_PROVIDER: ${MEMO_AGENT_CONTROLLER_PROVIDER:-agents_supervisor}
       MEMO_V2_VERSION: 2.0.0-alpha1

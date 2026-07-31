@@ -7,8 +7,20 @@ class Settings(BaseSettings):
 
     port: int = 8000
     openrouter_api_key: str
-    embedding_model: str = "openai/text-embedding-3-small"
-    embedding_dimensions: int = 1536
+    # Operator directive 2026-07-31 (T203): the large model, at NATIVE 3072.
+    #
+    # The dimension choice is a SAFETY one, not a quality one. `3-large` can be
+    # truncated to 1536, which would avoid rebuilding the vector tables — but
+    # then a small-model vector and a large-model vector are indistinguishable
+    # in shape, so a half-finished re-embed scores nonsense silently. At 3072
+    # sqlite-vec REJECTS the mismatched insert (verified). Given this project's
+    # history, prefer the option that cannot fail quietly.
+    #
+    # Changing either value invalidates every stored vector: cosine between
+    # models is meaningless, not merely noisier. There is no incremental path —
+    # the corpus is re-embedded wholesale or not at all.
+    embedding_model: str = "openai/text-embedding-3-large"
+    embedding_dimensions: int = 3072
     default_db_path: str = "~/.memo/memo.db"
 
     # Which path `/search` serves. [002/FR-113]

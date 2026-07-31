@@ -267,16 +267,23 @@ entry and store writes-new + flags the auditor. Neither may fail the caller.
 - [X] T031 [US2] Write `../memo-v2/src/memo/mediators/recall.py` — retrieval mediator per contracts/mediator-recall.md. Wires filter chain; LLM-fallback trigger on N candidates or conflict (default N=15). Module docstring marker `001/FR-010 001/FR-011 001/FR-012 001/FR-013 001/FR-014 001/FR-015`.
 - [X] T032 [US2] Write `../memo-v2/src/memo/clarify.py` — synchronous clarification round-trip helper for the storage mediator (FR-015d). Marker `001/FR-015d`.
 - [X] T033 [US2] Write `../memo-v2/src/memo/mediators/store.py` — storage mediator per contracts/mediator-store.md. Reconcile-before-write (merge/supersede/split/reject/write-new); canonical tag/class inference; clarify round-trip; refute-fact rejection with operator-directive-ref requirement. Module docstring marker `001/FR-015a 001/FR-015b 001/FR-015c 001/FR-015d 001/FR-015e 001/FR-015f 001/FR-015g`.
-- [ ] T033a [US2] **ADDED 2026-07-30 by audit — FR-002's withdrawal was declared but never
-  executed.** Operator withdrew bi-temporal versioning on 2026-07-30; the spec says
+- [X] T033a [US2] **ADDED 2026-07-30 by audit — FR-002's withdrawal was declared but never
+  executed.** Operator withdrew bi-temporal versioning on 2026-07-30; the spec said
   `valid_from`/`valid_until`, `get_as_of`, `GET /documents/{id}/as-of` and supersede-chain
-  resolution "all go". None of it went. 23 files still reference the surface, the endpoint is
-  live and tested, and the retained `001/FR-002` anchors make the trace gate rate a WITHDRAWN
+  resolution "all go". None of it went. 23 files still referenced the surface, the endpoint was
+  live and tested, and the retained `001/FR-002` anchors made the trace gate rate a WITHDRAWN
   requirement **FULL** — the gate can check that code matches a marker, never that the code
-  should exist. **Operator decision first** (finish the removal vs keep as-of), because this
-  deletes a working, tested read path and touches the migration/verify path. Then: remove the
-  code, its markers, `tests/unit/test_db_bi_temporal.py`, and `BiTemporalFilter`; keep the
-  columns if migration needs them and say so here. Marker `001/FR-002`.
+  should exist. Marker `001/FR-002`.
+  **RESOLVED 2026-07-31 — operator kept as-of. Nothing is deleted.** Asked to either
+  finish the removal or amend the spec, the decision was to keep it. So spec.md is
+  corrected to match the code rather than a working, tested read path across 23 files
+  being destroyed to match a spec line; FR-002 is reinstated there with its withdrawal
+  history preserved. No code, markers, `tests/unit/test_db_bi_temporal.py` or
+  `BiTemporalFilter` are removed.
+  The inconsistency this task existed to fix is gone — resolved by withdrawing the
+  withdrawal rather than by executing it. **The lesson is unchanged by the direction it
+  went:** an operator ruling mid-flight is not done until it has a task, and a withdrawal
+  surfaces to the gate as *nothing at all*, which is why it needs the deliberate step.
 - [X] T034 [US2] Add `POST /recall` endpoint in main.py; delegates to recall mediator. Marker `001/FR-010`.
 - [X] T035 [US2] Refactor existing `POST /store` (and MCP `memo_store` tool) in main.py to route through the storage mediator. Preserve v1 tool name for back-compat. Marker `001/FR-015a`.
 - [X] T036 [US2] [P] Refactor `../memo-v2/src/memo/auto_store.py` to route through storage mediator instead of raw insert. Marker `001/FR-015a`. **ALSO (R-17, operator clarification 2026-07-29): move auto_store's `openai/gpt-4o-mini` dedup call off OpenRouter onto the `LLMProvider`.** This is memo's one pre-existing generative caller and fires on every hook-triggered store, so it is in scope like any other LLM use — the earlier "leave it for now" note is superseded. After this task, NO generative OpenRouter call should remain: verify with a grep for `auto_store_model` / chat-completion usage. Embeddings stay on OpenRouter (R-05) and are unaffected. Note auto_store must tolerate a None completion (degrade to write-new) like every other caller.
