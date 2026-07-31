@@ -1,0 +1,76 @@
+"""memo-dup-threshold-check — is the dedup rule actually deciding anything? [002/FR-114]
+
+T254. `DUP_COSINE = 0.90` AND title-4gram `>= 0.60` (migrate/backfill.py) governs
+migration-time duplicate detection. This samples memos, takes each one's nearest
+neighbour by cosine, and reports how the two halves of the rule divide them.
+
+Measured 2026-07-31 (research.md R-08): of 384 pairs, **zero** clear both halves and
+87 clear the cosine bar alone — so the 4-gram gate is not a tiebreaker, it is the
+whole decision, and the cosine bar is untested on this corpus. Run it before trusting
+either number.
+
+Runs inside the container (needs the vec0 tables):
+
+    docker cp scripts/memo-dup-threshold-check memo-v2:/tmp/ && \
+    docker compose exec memo-v2 python /tmp/memo-dup-threshold-check
+"""
+import sys, json, re, random
+sys.path.insert(0, '/app/src')
+from memo import db
+
+DUP_COSINE, DUP_TITLE_NGRAM = 0.90, 0.60
+
+def ngrams(text, n=4):
+    w = re.findall(r"\w+", (text or "").lower())
+    if len(w) < n:
+        return {" ".join(w)} if w else set()
+    return {" ".join(w[i:i+n]) for i in range(len(w) - n + 1)}
+
+def jac(a, b):
+    return len(a & b) / len(a | b) if a and b else 0.0
+
+conn = db._get_or_create_conn(db.global_path())
+rows = conn.execute(
+    "SELECT id, coalesce(title,''), coalesce(content,'') FROM documents "
+    "WHERE valid_until IS NULL AND length(coalesce(content,'')) > 0").fetchall()
+meta = {r[0]: (r[1], r[2]) for r in rows}
+random.seed(11)
+sample = random.sample(list(meta), min(400, len(meta)))
+
+pairs = {}
+for did in sample:
+    r = conn.execute("SELECT embedding FROM document_embeddings WHERE doc_id = ?",
+                     (did,)).fetchone()
+    if not r:
+        continue
+    vec = r[0]
+    near = conn.execute(
+        "SELECT doc_id, vec_distance_cosine(embedding, ?) AS d FROM document_embeddings "
+        "WHERE doc_id != ? ORDER BY d LIMIT 1", (vec, did)).fetchone()
+    if not near or near[1] is None:
+        continue
+    other, dist = near[0], near[1]
+    if other not in meta:
+        continue
+    cos = 1.0 - dist
+    key = tuple(sorted((did, other)))
+    if key in pairs:
+        continue
+    pairs[key] = {"cosine": round(cos, 4),
+                  "title_ngram": round(jac(ngrams(meta[did][0]), ngrams(meta[other][0])), 4),
+                  "a_title": meta[key[0]][0][:70], "b_title": meta[key[1]][0][:70],
+                  "a": key[0][:8], "b": key[1][:8]}
+
+out = sorted(pairs.values(), key=lambda p: -p["cosine"])
+collapse = [p for p in out if p["cosine"] >= DUP_COSINE and p["title_ngram"] >= DUP_TITLE_NGRAM]
+cos_only = [p for p in out if p["cosine"] >= DUP_COSINE and p["title_ngram"] < DUP_TITLE_NGRAM]
+print(f"sampled {len(sample)} docs -> {len(out)} distinct nearest-neighbour pairs")
+print(f"  cosine >= {DUP_COSINE} AND title-4gram >= {DUP_TITLE_NGRAM}  (WOULD COLLAPSE): {len(collapse)}")
+print(f"  cosine >= {DUP_COSINE} but title-4gram <  {DUP_TITLE_NGRAM}  (gate saves them): {len(cos_only)}")
+print()
+print("top 18 pairs by cosine:")
+for p in out[:18]:
+    verdict = "COLLAPSE" if p in collapse else ("cos-only" if p in cos_only else "keep")
+    print(f"  {p['cosine']:.4f} ng={p['title_ngram']:.2f} [{verdict:8}] {p['a']} {p['a_title']!r}")
+    print(f"{'':>32}{p['b']} {p['b_title']!r}")
+json.dump(out, open('/tmp/t254-pairs.json','w'), indent=1)

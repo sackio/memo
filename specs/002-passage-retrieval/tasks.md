@@ -2,23 +2,24 @@
 
 **Spec**: `specs/002-passage-retrieval/spec.md` · **Plan**: `plan.md`
 **Created**: 2026-07-30 · **Last audited**: 2026-07-31 07:30 EDT
-**Status**: **Phases A–D built; Phase E measured and CORRECTLY BLOCKED on SC-101.**
+**Status**: **Phases A–D built (D now complete); Phase E measured and CORRECTLY BLOCKED on SC-101 and SC-103.**
 T201–T203 remain OPEN CLARIFICATIONS for the operator, and T201 blocks four
-Phase C tasks (T240–T243). 22/39 done.
+Phase C tasks (T240–T243). 24/39 done.
 
-The passage path is live and measurably better on the band this feature exists
-for, but **SC-101 requires 80% rank-1 at ≥2000 tokens and we are at 58.7%**
-(37/63, measured over the whole band 2026-07-31), so the default has NOT been
-flipped.
+The passage path is live and a large measured improvement on the band this
+feature exists for — **10/66 → 38/66 rank-1** at ≥2000 tokens, and absent-from-
+top-10 **36/66 → 8/66** (R-07, whole bands). But **SC-101 requires 80% and we are
+at 57.6%**, and **SC-103 requires 75% and we are at 67%** (n=12), so the default
+has NOT been flipped.
 
 **T253 is done, and it closed off the route the plan expected to take.** The
 {256,384,512} × {0,15,25}% sweep found no configuration better than any other —
-chunk geometry does not move SC-101 at all (R-06). The remaining 21 points are
+chunk geometry does not move SC-101 at all (R-06). The remaining gap is
 elsewhere: query formulation, re-ranking, or the embedding model (T203, with the
 operator). Two things that shifted with it: R-05's 36% was a small-sample
-artifact and is annotated in place, and **top-5 on the gating band is 88.9%** —
-the right memo is nearly always retrieved and merely mis-ordered, which makes
-this a re-ranking problem and points at T201's open result-shape decision.
+artifact and is annotated in place, and **top-5 on the gating band is 56/66
+(85%)** — the right memo is nearly always retrieved and merely mis-ordered, which
+makes this a re-ranking problem and points at T201's open result-shape decision.
 
 Marker discipline: every implementation file carries `[002/FR-1XX]` in a
 comment; every test that proves an FR carries the same marker. Never write a
@@ -43,7 +44,17 @@ repo-wide and will fail on later-phase FRs. Run inside the v2 worktree.
       stopped 2026-07-30 backfill). Keep as a development fixture (real content,
       real size distribution, useful for the sweep) or roll back now for
       cleanliness. **Recommendation: keep**, and roll back immediately before the
-      final clean migration. Blocks nothing; decide before the re-run.
+      final clean migration.
+      ⚠️ **"Blocks nothing" was wrong — corrected 2026-07-31.** This corpus is now
+      known to cap two measurements:
+      (a) **SC-103 at n=12** — 18 of the fact set's 30 target memos were never
+      migrated, so a Phase-E success criterion cannot be evaluated at its
+      intended power (R-07);
+      (b) **the `DUP_COSINE` calibration** — 7.5% of this corpus is
+      machine-generated checkpoint logs, which dominate the near-duplicate
+      distribution, so a must-collapse set cannot be drawn from it (R-08).
+      Neither is fatal, but both mean the decision has measurement consequences
+      it was not credited with.
 - [ ] **T203** — *Does the operator want `text-embedding-3-large` in scope here?*
       Spec sequences it after (FR-108). **Recommendation: after**, measured on
       passage vectors. Blocks nothing unless the answer changes.
@@ -198,11 +209,31 @@ repo-wide and will fail on later-phase FRs. Run inside the v2 worktree.
       but never the fact set, so unreachable cases scored `absent` and SC-103
       read 5/30 (17%). The bench now restricts both sets and prints the excluded
       count on every run.
-- [ ] **T254** — Re-measure duplicate thresholds against passage vectors:
+- [x] **T254** — Re-measure duplicate thresholds against passage vectors:
       `DUP_COSINE = 0.90` + title-4gram ≥ 0.60 (migration) and the `>= 0.80`
       read-path bar were calibrated on document vectors. Use known
       must-collapse and must-not-collapse pairs. Record both numbers even if
       unchanged, so the next reader knows they were checked. `[002/FR-114]`
+      **DONE 2026-07-31 — research.md R-08. Both unchanged, and the task's own
+      premise needed correcting first.**
+      The `>= 0.80` read-path bar is **not a cosine and not vector-based** — it is
+      Jaccard over content words, and `DedupFilter`'s docstring already explains
+      that the read path never holds pairwise embeddings. Passage vectors cannot
+      affect it. The migration rule compares whole-document embeddings, which
+      passage retrieval adds to rather than replaces. So both numbers stand, for
+      structural reasons rather than measured ones.
+      Measured anyway (`scripts/memo-dup-threshold-check`, 400-memo sample, 384
+      nearest-neighbour pairs): **0 pairs would collapse**; 87 (22.7%) clear the
+      cosine bar and are stopped by the 4-gram gate. The gate is the entire
+      decision and **the cosine bar is therefore untested here**.
+      15 of the top 18 pairs are memo-minder's own backfill checkpoints (124 of
+      1,655 live memos), up to cosine 0.9998 — genuinely redundant, since all
+      three hosts proxy to one DB, and kept apart only because their titles
+      differ in the hostname. Upstream fix landed the same day (one checkpoint
+      per cycle, not three); the historical 124 are left alone.
+      ⚠️ Calibrating the cosine bar needs a must-collapse set drawn from content
+      memos, not logs, and **this corpus is not the one to draw it from** —
+      partially migrated and 7.5% machine-generated. Another dependency on T202.
 - [ ] **T255** — Wire the bench into CI against a fixed corpus slice with the
       numbers checked in. An uninstrumented bench rots; that is how the original
       defect survived.

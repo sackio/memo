@@ -313,3 +313,77 @@ docker compose exec memo-v2 python /tmp/memo-retrieval-bench \
     --path passages --both-indexed-only --per-band 67 \
     --factset /tmp/factset-mid-document.json
 ```
+
+---
+
+## R-08 — The duplicate thresholds, checked (2026-07-31) [002/FR-114]
+
+T254 asked whether passage vectors change the dedup calibration. Two answers, and the
+first one narrows the question.
+
+### The read-path "0.80 bar" is not a vector measure at all
+
+The task was written as though `DUPLICATE_CONTENT_THRESHOLD = 0.80` were a cosine bar
+calibrated on document vectors. It is **Jaccard over content words**
+(`mediators/filters.py`), and `DedupFilter`'s own docstring already says why: on the
+read path we have each candidate's similarity to the *query*, never to each other, and
+fetching every pair's embedding "would cost more than the dedup saves." **Passage
+vectors cannot affect it, so there is nothing to recalibrate.**
+
+That leaves only the migration-time rule — `DUP_COSINE = 0.90` **and** title-4gram
+`>= 0.60` (`migrate/backfill.py`) — which compares whole-document embeddings. Passage
+retrieval adds an index; it does not replace those embeddings. So both thresholds are
+**unchanged, and the reason they are unchanged is structural rather than empirical.**
+Recorded here so the next reader knows it was checked rather than skipped.
+
+### What the rule actually does on this corpus
+
+Measured anyway, because "unchanged" is a claim about the rule and not about the data.
+400-memo random sample (seed 11), each memo's single nearest neighbour by cosine, 384
+distinct pairs:
+
+| | pairs |
+|---|---|
+| cosine ≥ 0.90 **and** title-4gram ≥ 0.60 → **would collapse** | **0** |
+| cosine ≥ 0.90 but title-4gram < 0.60 → gate prevents collapse | **87** (22.7%) |
+
+**The rule collapses nothing on this corpus.** Nearly a quarter of memos have a
+near-neighbour above the cosine bar, and the 4-gram gate stops every one of them. The
+gate is not a tiebreaker here; it is the entire decision.
+
+### And the near-duplicates are ours
+
+Fifteen of the top eighteen pairs are **memo-minder's own backfill checkpoints** —
+124 of the 1,655 live memos (7.5%). The extreme case:
+
+```
+0.9998  ng=0.25   'Backfill checkpoint — server5 — 2026-07-30 07:13'
+                  'Backfill checkpoint — server4 — 2026-07-30 07:13'
+```
+
+Cosine 0.9998 is as close to identical as this corpus gets, and these are *genuinely*
+redundant: office/server4/server5 all proxy to one database since the 2026-06-29
+single-global refactor, so three per-host checkpoints were three copies of one fact
+written into one store, daily. The 4-gram gate scores them 0.25 and keeps all three —
+**the titles differ in exactly the token that carries no information** (the hostname),
+which is a weak signal for machine-generated titles built from a template.
+
+Two things follow, and they point in opposite directions, which is why neither was
+acted on here:
+
+- **For the migration rule this is arguably correct behaviour.** Checkpoints carry
+  dedup keys; collapsing them would destroy idempotency state, and a rule that fused
+  operational logs because their prose is similar would be worse than one that fuses
+  nothing.
+- **But it means the cosine bar is untested on this corpus.** Zero collapses is not
+  evidence that 0.90 is well-placed; it is evidence that the gate fires first every
+  time. A must-collapse/must-not-collapse pair set drawn from *content* memos rather
+  than logs would be needed to calibrate the cosine bar itself, and this corpus —
+  partially migrated, 7.5% machine logs — is not the corpus to draw it from. That is
+  another dependency on **T202**.
+
+The source of the duplication was fixed upstream on 2026-07-31: memo-minder now writes
+one checkpoint per cycle instead of three, with the reason recorded in the memo itself.
+The 124 historical ones are left alone.
+
+Reproduce: `scripts/memo-dup-threshold-check`.

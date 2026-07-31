@@ -36,7 +36,18 @@ logger = logging.getLogger(__name__)
 
 # C-06 duplicate detection for the migration path. Unlike the read-path dedup
 # (content-word Jaccard), here we HAVE both embeddings, so R-13's rule applies:
-# cosine >= 0.90 AND title 4-gram overlap >= 60%.
+# cosine >= 0.90 AND title 4-gram overlap >= 60%. [002/FR-114]
+#
+# Checked against the v2 corpus 2026-07-31 (research.md R-08) and left unchanged.
+# Passage retrieval does not touch these: it adds an index over documents rather
+# than replacing the document embeddings this rule compares.
+#
+# What the check did find: of 384 nearest-neighbour pairs, **zero** clear both
+# halves and 87 clear the cosine bar alone. The 4-gram gate is not a tiebreaker
+# here, it is the entire decision — so DUP_COSINE itself is effectively untested
+# on this corpus, and "it collapses nothing" is not evidence that 0.90 is right.
+# Calibrating it needs a must-collapse set drawn from content memos rather than
+# from machine-generated logs, which this partially-migrated corpus cannot supply.
 DUP_COSINE = 0.90
 DUP_TITLE_NGRAM = 0.60
 

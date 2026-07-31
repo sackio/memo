@@ -8,7 +8,7 @@ sample disagreed, the larger sample won and the old number was annotated, not de
 | spec | state | tasks |
 |---|---|---|
 | **001 — memo renovation** | Built and green. Everything open is operator/runtime or blocked. | 84 done · 16 open · 2 withdrawn |
-| **002 — passage retrieval** | Built through Phase D. **Phase E measured and correctly blocked: SC-101 and SC-103 both fail.** T253 done — and it ruled out chunk tuning as the fix. | 23 done · 14 open · 2 partial |
+| **002 — passage retrieval** | Built through Phase D. **Phase E measured and correctly blocked: SC-101 and SC-103 both fail.** T253 done — and it ruled out chunk tuning as the fix. | 24 done · 13 open · 2 partial |
 | **003 — agentic memory** | Design only, by intent. No tasks.md yet. | — |
 
 **Tests**: 426 passing in docker (`docker compose run --rm test`). Host runs are not
