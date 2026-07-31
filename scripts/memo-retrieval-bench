@@ -42,7 +42,14 @@ def _get(url: str, path: str, timeout: float = 180.0):
 # to drive either. Comparing them on the SAME corpus with the SAME queries is
 # the whole point; a passage number measured on a different sample than the
 # document number is not a comparison.
-PATHS = {"document": "/search", "passages": "/search-passages"}
+#
+# These are the EXPLICIT endpoints, never `/search`. Since T260 made `/search`
+# configurable, routing "document" through it would mean a config edit could
+# silently change which index this bench measured while every label in the
+# output still said "document" — the same shape as the coverage confound that
+# has already produced three wrong answers here. The measurement names its own
+# path.
+PATHS = {"document": "/search-documents", "passages": "/search-passages"}
 
 
 def _search(url: str, query: str, limit: int = 10, timeout: float = 60.0,

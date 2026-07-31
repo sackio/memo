@@ -11,6 +11,21 @@ class Settings(BaseSettings):
     embedding_dimensions: int = 1536
     default_db_path: str = "~/.memo/memo.db"
 
+    # Which path `/search` serves. [002/FR-113]
+    #
+    # DEFAULT IS "document", AND CHANGING IT IS AN OPERATOR DECISION, NOT A
+    # TUNING KNOB. As of 2026-07-31 the passage path is a large measured
+    # improvement (research.md R-07: 2000+ rank-1 10/66 -> 38/66) and still
+    # misses two of its three success criteria — SC-101 at 57.6% against 80%,
+    # SC-103 at 67% against 75%. The flip waits on those, not on this flag
+    # existing.
+    #
+    # Both paths stay addressable at their own endpoints regardless of this
+    # setting (`/search-documents`, `/search-passages`) precisely so a config
+    # change can never silently alter what a measurement is measuring — the
+    # bench targets the explicit endpoints for that reason.
+    memo_retrieval_path: str = "document"
+
     # Hook settings (written to ~/.memo/hooks.env during memo-hooks install)
     memo_auto_recall: bool = True
     memo_prework_recall: bool = True

@@ -8,7 +8,7 @@ sample disagreed, the larger sample won and the old number was annotated, not de
 | spec | state | tasks |
 |---|---|---|
 | **001 — memo renovation** | Built and green. Everything open is operator/runtime or blocked. | 84 done · 16 open · 2 withdrawn |
-| **002 — passage retrieval** | **Phase D complete.** **Phase E measured and correctly blocked: SC-101 and SC-103 both fail.** T253 done — and it ruled out chunk tuning as the fix. | 25 done · 12 open · 2 partial |
+| **002 — passage retrieval** | **Phase D complete.** **Phase E measured and correctly blocked: SC-101 and SC-103 both fail.** T253 done — and it ruled out chunk tuning as the fix. | 26 done · 12 open · 1 partial |
 | **003 — agentic memory** | Design only, by intent. No tasks.md yet. | — |
 
 **Tests**: 438 passing in docker (`docker compose run --rm test`). Host runs are not
@@ -124,10 +124,25 @@ a silently reduced denominator is how a partial index flatters itself.
    Phase-E success criterion cannot be evaluated at full power until this is settled.
 3. **T203 — is `text-embedding-3-large` in scope for this feature or a separate one?**
 
-**T260 is marked PARTIAL, not done.** Both paths are live and independently callable
-(`/search`, `/search-passages`), which was deliberate — a config flag invites flipping the
-default before the numbers exist. But "selectable by config" is what the flip actually
-needs, so the switch is still to build.
+**T260 is now DONE (2026-07-31), and the flip is still yours to make.**
+`settings.memo_retrieval_path` selects what `/search` serves. **The default remains
+`document`** — the earlier objection to a flag was that it "invites flipping the default
+before the numbers exist," and the numbers now exist and say don't. Building the switch
+and throwing it are separate acts; only the first is done.
+
+Two properties worth knowing before you review it:
+
+- **A config edit cannot move a measurement.** `/search-documents` and
+  `/search-passages` are both immune to the setting, and the bench targets those.
+  Without this, one config change would have silently altered what `--path document`
+  measured while the output still said "document" — the same confound that has already
+  produced three wrong answers here.
+- **Passage results keep the existing `{document, score}` contract.** The matching
+  passage and its offsets are deliberately not carried through, because that is
+  **T201**'s result-shape decision; implementing an answer would pre-empt you.
+
+That makes the rollback path for **T262** real: reverting is a config change, not a
+migration.
 
 ---
 

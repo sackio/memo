@@ -4,7 +4,7 @@
 **Created**: 2026-07-30 · **Last audited**: 2026-07-31 07:30 EDT
 **Status**: **Phases A–D built (D now complete); Phase E measured and CORRECTLY BLOCKED on SC-101 and SC-103.**
 T201–T203 remain OPEN CLARIFICATIONS for the operator, and T201 blocks four
-Phase C tasks (T240–T243). 25/39 done. **Phase D is complete.**
+Phase C tasks (T240–T243). 26/39 done. **Phases D and E-build are complete; the FLIP is the operator decision that remains.**
 
 The passage path is live and a large measured improvement on the band this
 feature exists for — **10/66 → 38/66 rank-1** at ≥2000 tokens, and absent-from-
@@ -268,14 +268,31 @@ repo-wide and will fail on later-phase FRs. Run inside the v2 worktree.
 
 ## Phase E — Flip the default — FR-113
 
-- [~] **T260** — Both query paths live simultaneously, selectable by config.
+- [x] **T260** — Both query paths live simultaneously, selectable by config.
       `[002/FR-113]`
-      **PARTIAL (2026-07-30):** both paths ARE live and independently callable
-      — `/search` (document) and `/search-passages` (passage) — but selection
-      is *by endpoint*, not by config. That was deliberate at the time (a flag
-      invites flipping the default before the numbers exist), so the remaining
-      work is the config switch that Phase E's flip actually needs. Not
-      complete as written.
+      *(was PARTIAL 2026-07-30: selection was by endpoint, not by config. The
+      reason given was that "a flag invites flipping the default before the
+      numbers exist" — that objection expired when R-07 produced the numbers.)*
+      **DONE 2026-07-31.** `settings.memo_retrieval_path` selects what `/search`
+      serves; **the default stays `document`** and flipping it remains an
+      operator decision gated on SC-101/SC-103, neither of which passes.
+      Building the switch and throwing it are separate acts.
+      **The switch created a new way for this feature's recurring confound to
+      return, so the design forecloses it.** The bench reached the document path
+      through `/search`; once `/search` became configurable, one config edit
+      would have silently changed *what the bench measured* while every label in
+      its output still read "document". So `/search-documents` was added
+      alongside `/search-passages`, both immune to the setting, and the bench
+      now targets those. `/search` is the product surface; the explicit
+      endpoints are the measurement surface.
+      `/search` also returns `X-Memo-Retrieval-Path`, so a caller can tell which
+      index answered instead of inferring it from config it cannot see.
+      Passage results are narrowed to the existing `{document, score}` contract:
+      the matching passage and offsets are deliberately NOT carried through,
+      because that is T201/T240–T241 and answering it by implementation would
+      pre-empt the operator. A test asserts the highlight is absent.
+      Verified by falsification: routing `/search-documents` through the config
+      makes `test_explicit_endpoints_ignore_the_config[passages]` fail.
 - [x] **T261** — Re-run the bench on the passage path; compare against T251's
       committed baseline. Flip only if SC-101 (≥80% rank-1 for ≥2000 tokens),
       SC-102 (no band regresses) and SC-103 (mid-document ≥75%) all clear.
@@ -295,7 +312,11 @@ repo-wide and will fail on later-phase FRs. Run inside the v2 worktree.
       a 75% bar, and capped at n=12 by T202. Prefer R-07's numbers to this task's.
 - [ ] **T262** — Document path stays behind a flag for one release, so a
       regression is a config change and not a migration. `[002/FR-113]`
-      *(blocked by T260's config switch; nothing to flag until there is a flag)*
+      **UNBLOCKED 2026-07-31** — T260's flag exists, so the rollback path is
+      real: `memo_retrieval_path=document` restores today's behaviour without
+      touching data, and `/search-documents` keeps the path addressable
+      regardless. Nothing further to build until the flip itself happens; this
+      task is the *commitment* to keep the flag for one release after it does.
 - [x] **T263** — Record the post-change numbers in `research.md` beside the
       baseline. If a criterion is missed, say so and stop — a criterion quietly
       relaxed to fit the result is worse than a failed gate.

@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import uvicorn
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -1196,13 +1196,14 @@ async def move_document(doc_id: str, req: CopyMoveRequest):
 
 @app.post("/search-passages")
 async def search_passages_endpoint(req: SearchRequest):
-    """Passage-level search. [002/FR-105 002/FR-113]
+    """Passage-level search, ALWAYS — never affected by config. [002/FR-105 002/FR-113]
 
-    Deliberately a SEPARATE endpoint rather than a flag on /search: both paths
-    must be live at once so the passage path can be measured against the
-    document path on the same corpus, with the same queries, before either
-    becomes the default. A flag would make the comparison a config change and
-    invite flipping it before the numbers exist.
+    Both paths stay addressable at their own endpoint so that a measurement
+    always names the path it measured. When `/search` became configurable
+    (T260), routing the bench through it would have meant a config change could
+    silently alter what `--path document` was measuring — which is the same
+    shape as every wrong number this feature has produced. So the explicit
+    endpoints are the measurement surface and `/search` is the product surface.
     """
     embedding = await embeddings.embed(req.query)
     results = await db.search_passages(
@@ -1211,8 +1212,7 @@ async def search_passages_endpoint(req: SearchRequest):
     return results
 
 
-@app.post("/search", response_model=list[SearchResult])
-async def search_documents(req: SearchRequest):
+async def _document_search(req: SearchRequest) -> list[SearchResult]:
     embedding = await embeddings.embed(req.query)
     results = await db.search(
         db_path=req.db_path,
@@ -1226,6 +1226,46 @@ async def search_documents(req: SearchRequest):
         max_tokens=req.max_tokens,
     )
     return [SearchResult(document=Document(**r["document"]), score=r["score"]) for r in results]
+
+
+@app.post("/search-documents", response_model=list[SearchResult])
+async def search_documents_endpoint(req: SearchRequest):
+    """Document-level search, ALWAYS — never affected by config. [002/FR-113]
+
+    The counterpart to `/search-passages`. See that docstring for why both exist
+    independently of what `/search` is configured to serve.
+    """
+    return await _document_search(req)
+
+
+@app.post("/search", response_model=list[SearchResult])
+async def search_documents(req: SearchRequest, response: Response):
+    """The product surface: serves whichever path is configured. [002/FR-113]
+
+    `settings.memo_retrieval_path` selects it; the default is `document` and
+    flipping it is an operator decision gated on SC-101/SC-103, neither of which
+    passes yet (research.md R-07).
+
+    The served path is echoed in the `X-Memo-Retrieval-Path` response header.
+    Without it, a caller cannot tell which index answered — and a system whose
+    behaviour changed silently under a config edit is one nobody can debug from
+    the outside.
+
+    Passage results are narrowed to the `{document, score}` contract here. The
+    matching passage and its offsets are deliberately NOT carried through yet:
+    that is the result-shape question (FR-107/FR-107a, T240–T241) still open with
+    the operator as T201, and inventing an answer would pre-empt it.
+    """
+    path = settings.memo_retrieval_path
+    response.headers["X-Memo-Retrieval-Path"] = path
+    if path == "passages":
+        embedding = await embeddings.embed(req.query)
+        results = await db.search_passages(
+            req.db_path, embedding, req.limit, req.min_score, req.tags,
+            req.after, req.before, req.min_tokens, req.max_tokens)
+        return [SearchResult(document=Document(**r["document"]), score=r["score"])
+                for r in results]
+    return await _document_search(req)
 
 
 @app.get("/index")
