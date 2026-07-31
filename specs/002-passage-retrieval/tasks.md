@@ -1,15 +1,24 @@
 # Tasks: Passage-Level Retrieval
 
 **Spec**: `specs/002-passage-retrieval/spec.md` · **Plan**: `plan.md`
-**Created**: 2026-07-30 · **Last audited**: 2026-07-30 18:xx EDT
+**Created**: 2026-07-30 · **Last audited**: 2026-07-31 07:30 EDT
 **Status**: **Phases A–D built; Phase E measured and CORRECTLY BLOCKED on SC-101.**
 T201–T203 remain OPEN CLARIFICATIONS for the operator, and T201 blocks four
-Phase C tasks (T240–T243). 21/38 done.
+Phase C tasks (T240–T243). 22/39 done.
 
 The passage path is live and measurably better on the band this feature exists
-for (≥2000 tokens: 0/14 → 5/14 rank-1), but **SC-101 requires 80% and we are at
-36%**, so the default has NOT been flipped. Chunking is still at the untuned
-default; T253's sweep is the designed way to close the gap.
+for, but **SC-101 requires 80% rank-1 at ≥2000 tokens and we are at 58.7%**
+(37/63, measured over the whole band 2026-07-31), so the default has NOT been
+flipped.
+
+**T253 is done, and it closed off the route the plan expected to take.** The
+{256,384,512} × {0,15,25}% sweep found no configuration better than any other —
+chunk geometry does not move SC-101 at all (R-06). The remaining 21 points are
+elsewhere: query formulation, re-ranking, or the embedding model (T203, with the
+operator). Two things that shifted with it: R-05's 36% was a small-sample
+artifact and is annotated in place, and **top-5 on the gating band is 88.9%** —
+the right memo is nearly always retrieved and merely mis-ordered, which makes
+this a re-ranking problem and points at T201's open result-shape decision.
 
 Marker discipline: every implementation file carries `[002/FR-1XX]` in a
 comment; every test that proves an FR carries the same marker. Never write a
@@ -155,8 +164,31 @@ repo-wide and will fail on later-phase FRs. Run inside the v2 worktree.
       ≥2000 tokens, with known correct answers. **This set must FAIL against the
       current implementation** — if it passes today it is not testing the defect.
       `[002/FR-111]`
-- [ ] **T253** — Sweep {256, 384, 512} × {0, 15, 25}% overlap against both sets;
+- [x] **T253** — Sweep {256, 384, 512} × {0, 15, 25}% overlap against both sets;
       write the table to `research.md` with the winner and *why*. `[002/FR-112]`
+      **DONE 2026-07-31 — research.md R-06. There is no winner, and that is the
+      result.** All nine configs scored 5 or 6 of 14 on the gating band; the
+      whole spread is one document. Re-measured over the **entire** 63-memo
+      2000+ band instead of sampling it, the two configs furthest apart
+      (512/25% at 3.37 passages/doc, 384/15% at 4.31) score **identically:
+      37/63 = 58.7%**. Chunk geometry does not move SC-101.
+      Driver checked in as `scripts/memo-chunk-sweep`; it re-asserts the control
+      set between rounds and aborts if it changed, so a coverage shift can never
+      be reported as a retrieval difference. Index left at the default 384/15%.
+      **Two corrections fell out of this and are recorded in R-06:**
+      R-05's headline 36% was a 14-of-63 sampling artifact (true value 58.7%,
+      annotated in place, not rewritten); and top-5 on that band is **88.9%**,
+      so the answer is almost always retrieved and it is *rank-1 ordering* that
+      misses — a re-ranking problem, not a chunking one.
+- [ ] **T253a** — Passage-index the 22 fact-set target memos that currently have
+      no passages (~66k tokens), so SC-103 can be judged at n=30 instead of n=8.
+      `[002/FR-111]`
+      Found 2026-07-31: `--both-indexed-only` restricted the own-title sample but
+      never the fact set, so 22 of 30 cases were unreachable by construction and
+      scored `absent` — the fact set read 5/30 (17%) when the honest number among
+      reachable cases is 5/8. The bench now applies the restriction to both sets
+      and prints the excluded count every run. **SC-103 has still never had a
+      fair measurement**, and the fix is coverage, not chunking.
 - [ ] **T254** — Re-measure duplicate thresholds against passage vectors:
       `DUP_COSINE = 0.90` + title-4gram ≥ 0.60 (migration) and the `>= 0.80`
       read-path bar were calibrated on document vectors. Use known
@@ -189,6 +221,11 @@ repo-wide and will fail on later-phase FRs. Run inside the v2 worktree.
       3/14 → 11/14 top-5. SC-103 not yet re-run against the passage path. See
       research.md R-05. The bench gained `--path` and `--both-indexed-only` so
       this is reproducible rather than a one-off claim.
+      **Superseded in part 2026-07-31 (R-06):** the 36% was a 14-of-63 sample;
+      the whole-band figure is **58.7%**. SC-101 still fails, so the flip stays
+      blocked and this task's verdict stands. SC-103 *has* now been run against
+      the passage path but **not fairly** — 22 of its 30 cases target memos with
+      no passages, leaving n=8. Closing that is T253a.
 - [ ] **T262** — Document path stays behind a flag for one release, so a
       regression is a config change and not a migration. `[002/FR-113]`
       *(blocked by T260's config switch; nothing to flag until there is a flag)*

@@ -36,6 +36,18 @@ _tokenizer = tiktoken.get_encoding("cl100k_base")
 # Comfortably under every provider cap we might use (8,192 for
 # text-embedding-3-*), so no single embed call can ever be refused. [002/FR-104]
 MAX_PASSAGE_TOKENS = 1000
+
+# Selected by measurement, not preference. [002/FR-112]
+#
+# The FR-112 sweep ({256,384,512} × {0,15,25}%, research.md R-06) re-indexed the
+# same fixed control set nine times and found **no configuration better than any
+# other**: the whole spread of the gating metric was one document out of 14, and
+# re-measured over the entire 63-memo band the two most different configs scored
+# identically (37/63 each). So these values are not "the winner" — they are the
+# documented default, retained because nothing earned displacing it, and because
+# a changed default would have forced a full re-embed of the corpus for no
+# measured gain. Chunk geometry is not the lever on SC-101; do not re-tune it
+# here expecting movement.
 DEFAULT_TARGET = 384
 DEFAULT_OVERLAP = 0.15
 

@@ -7,7 +7,7 @@ marker was corrected.
 | spec | state | tasks |
 |---|---|---|
 | **001 — memo renovation** | Built and green. Everything open is operator/runtime or blocked. | 84 done · 16 open · 2 withdrawn |
-| **002 — passage retrieval** | Built through Phase D. **Phase E measured and correctly blocked: SC-101 fails.** | 21 done · 15 open · 2 partial |
+| **002 — passage retrieval** | Built through Phase D. **Phase E measured and correctly blocked: SC-101 fails.** T253 done — and it ruled out chunk tuning as the fix. | 22 done · 15 open · 2 partial |
 | **003 — agentic memory** | Design only, by intent. No tasks.md yet. | — |
 
 **Tests**: 426 passing in docker (`docker compose run --rm test`). Host runs are not
@@ -70,13 +70,30 @@ Same corpus, same queries, same sample, scored twice (research.md **R-05**):
 | absent from top-10 (all bands) | 12/59 | **4/59** |
 
 - **SC-102 holds** — no band regresses.
-- **SC-101 FAILS** — it requires ≥80% rank-1 for memos ≥2000 tokens; we are at **36%**.
-  Recorded as measured. The bar was not moved.
-- **SC-103 not yet re-run** against the passage path.
+- **SC-101 FAILS.** It requires ≥80% rank-1 for memos ≥2000 tokens. Recorded as
+  measured; the bar was not moved.
+- **SC-103** has now been run against the passage path but **not fairly** — see below.
 
-Chunking is still at the untuned default (384 tokens / 15% overlap). **T253** — the
-{256, 384, 512} × {0, 15, 25}% sweep — is the designed way to close 36% → 80%, and is the
-next piece of real work here.
+**Updated 2026-07-31 (research.md R-06) — two numbers above are superseded, and the
+route out of this is not the one the plan expected:**
+
+- The **36%** headline was a 14-of-63 sample. Measured over the **whole** 2000+ band
+  it is **37/63 = 58.7%**. Verdict unchanged (still under 80%), magnitude understated
+  by ~23 points. R-05 is annotated in place rather than rewritten.
+- **T253's sweep found no winner.** All nine `{256,384,512} × {0,15,25}%` configs
+  scored 5–6 of 14; re-measured on the full band, the two most different configs score
+  *identically* (37/63 each). **Chunk geometry does not move SC-101** — so the sweep
+  that STATUS previously called "the next piece of real work" is done, and its answer
+  was no. The remaining 21 points are query formulation, re-ranking, or the embedding
+  model (**T203**, still with you).
+- **Top-5 on that band is 88.9%.** The right memo is nearly always retrieved and
+  merely mis-ordered. That reframes this as a **re-ranking** problem and makes
+  **T201** (result shape) the decision that unblocks it.
+- **SC-103 still has no fair measurement.** `--both-indexed-only` restricted the
+  own-title sample but never the fact set, so 22 of 30 cases targeted memos with no
+  passages and scored `absent`: the criterion read 5/30 (17%) when the honest number
+  among reachable cases is 5/8. The bench now restricts both sets and prints the
+  excluded count on every run. Closing the coverage gap is **T253a**.
 
 **Method note that cost a wrong answer once:** passage coverage is 408/1655 memos (24.7%),
 so any comparison must be restricted to memos in **both** indexes. An unrestricted run

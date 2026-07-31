@@ -148,10 +148,11 @@ def main() -> int:
     ap.add_argument("--path", choices=sorted(PATHS), default="document",
                     help="which retrieval path to bench (002/FR-113)")
     ap.add_argument("--both-indexed-only", action="store_true",
-                    help="restrict the sample to memos present in BOTH indexes. "
-                         "Required for a document-vs-passage comparison while "
-                         "passage coverage is partial — otherwise the run "
-                         "measures indexing coverage, not retrieval.")
+                    help="restrict BOTH the own-title sample and the fact set to "
+                         "memos present in BOTH indexes. Required for a "
+                         "document-vs-passage comparison while passage coverage "
+                         "is partial — otherwise the run measures indexing "
+                         "coverage, not retrieval.")
     args = ap.parse_args()
 
     res = run(args.url, args.per_band, args.limit, args.seed,
@@ -173,6 +174,21 @@ def main() -> int:
 
     if args.factset:
         cases = json.load(open(args.factset))
+        skipped = 0
+        if args.both_indexed_only:
+            # The SAME restriction the own-title sample gets, and for the same
+            # reason. Measured 2026-07-31: 22 of the 30 fact cases point at
+            # memos with NO passages, so on the passage path they are
+            # structurally unfindable and score as `absent` — 5/30 (17%) looks
+            # like a catastrophic SC-103 failure when the retrieval number
+            # among cases the path can actually reach is 5/8. The flag existed
+            # and simply was not carried through to the fact set; this is the
+            # third appearance of one confound (coverage wearing retrieval's
+            # clothes), so the fix is here rather than in a caller.
+            eligible = _passage_indexed_ids(args.url)
+            kept = [c for c in cases if c["expect_id"] in eligible]
+            skipped = len(cases) - len(kept)
+            cases = kept
         r1 = t5 = absent = 0
         for c in cases:
             try:
@@ -190,11 +206,17 @@ def main() -> int:
                 absent += 1
         n = len(cases) or 1
         res["factset"] = {"n": len(cases), "rank1": r1, "top5": t5, "absent": absent,
+                          "skipped_unindexed": skipped,
                           "rank1_pct": round(100 * r1 / n, 1)}
         print()
         print("mid-document fact set (the answer lives inside a long memo):")
         print(f"  rank-1 {r1}/{len(cases)} ({100*r1/n:.0f}%) · "
               f"top-5 {t5}/{len(cases)} · absent {absent}/{len(cases)}")
+        if skipped:
+            # Said out loud, every run. A silently reduced denominator is how a
+            # partial index flatters itself.
+            print(f"  ({skipped} case(s) excluded: target memo has no passages "
+                  f"— they would score as absent and measure coverage, not retrieval)")
 
     if args.json:
         with open(args.json, "w") as fh:
