@@ -135,6 +135,40 @@ def run(url: str, per_band: int, limit: int, seed: int,
     return out
 
 
+def eligible_factset(cases: list[dict], indexed: set[str]) -> tuple[list[dict], int]:
+    """Drop fact cases whose target memo has no passages. [002/FR-111]
+
+    Extracted from `main` so it is reachable from a test. It was inline, which is
+    why the defect it now prevents shipped unnoticed: 22 of 30 cases targeted
+    memos with no passages, scored `absent`, and the fact set read 5/30 (17%)
+    when the honest number among reachable cases was 5/8.
+    """
+    kept = [c for c in cases if c["expect_id"] in indexed]
+    return kept, len(cases) - len(kept)
+
+
+def score_factset(url: str, cases: list[dict], *, limit: int, path: str,
+                  skipped: int = 0) -> dict:
+    """Rank-1 / top-5 / absent over an already-filtered fact set."""
+    r1 = t5 = absent = 0
+    for c in cases:
+        try:
+            hits = _search(url, c["query"], limit=limit, path=path)
+        except Exception:  # a failed query is not a passing query
+            absent += 1
+            continue
+        ids = [_doc_of(h)["id"] for h in hits]
+        if c["expect_id"] in ids:
+            k = ids.index(c["expect_id"])
+            r1 += k == 0
+            t5 += k < 5
+        else:
+            absent += 1
+    n = len(cases) or 1
+    return {"n": len(cases), "rank1": r1, "top5": t5, "absent": absent,
+            "skipped_unindexed": skipped, "rank1_pct": round(100 * r1 / n, 1)}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -185,29 +219,13 @@ def main() -> int:
             # and simply was not carried through to the fact set; this is the
             # third appearance of one confound (coverage wearing retrieval's
             # clothes), so the fix is here rather than in a caller.
-            eligible = _passage_indexed_ids(args.url)
-            kept = [c for c in cases if c["expect_id"] in eligible]
-            skipped = len(cases) - len(kept)
-            cases = kept
-        r1 = t5 = absent = 0
-        for c in cases:
-            try:
-                hits = _search(args.url, c["query"], limit=args.limit,
-                               path=args.path)
-            except Exception:
-                absent += 1
-                continue
-            ids = [_doc_of(h)["id"] for h in hits]
-            if c["expect_id"] in ids:
-                k = ids.index(c["expect_id"])
-                r1 += k == 0
-                t5 += k < 5
-            else:
-                absent += 1
+            cases, skipped = eligible_factset(cases, _passage_indexed_ids(args.url))
+        res["factset"] = score_factset(args.url, cases, limit=args.limit,
+                                       path=args.path, skipped=skipped)
+        r1 = res["factset"]["rank1"]
+        t5 = res["factset"]["top5"]
+        absent = res["factset"]["absent"]
         n = len(cases) or 1
-        res["factset"] = {"n": len(cases), "rank1": r1, "top5": t5, "absent": absent,
-                          "skipped_unindexed": skipped,
-                          "rank1_pct": round(100 * r1 / n, 1)}
         print()
         print("mid-document fact set (the answer lives inside a long memo):")
         print(f"  rank-1 {r1}/{len(cases)} ({100*r1/n:.0f}%) · "

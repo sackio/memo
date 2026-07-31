@@ -8,11 +8,15 @@ sample disagreed, the larger sample won and the old number was annotated, not de
 | spec | state | tasks |
 |---|---|---|
 | **001 — memo renovation** | Built and green. Everything open is operator/runtime or blocked. | 84 done · 16 open · 2 withdrawn |
-| **002 — passage retrieval** | Built through Phase D. **Phase E measured and correctly blocked: SC-101 and SC-103 both fail.** T253 done — and it ruled out chunk tuning as the fix. | 24 done · 13 open · 2 partial |
+| **002 — passage retrieval** | **Phase D complete.** **Phase E measured and correctly blocked: SC-101 and SC-103 both fail.** T253 done — and it ruled out chunk tuning as the fix. | 25 done · 12 open · 2 partial |
 | **003 — agentic memory** | Design only, by intent. No tasks.md yet. | — |
 
-**Tests**: 426 passing in docker (`docker compose run --rm test`). Host runs are not
+**Tests**: 438 passing in docker (`docker compose run --rm test`). Host runs are not
 trustworthy here — see the note in `docker-compose.yml`.
+
+The +12 since yesterday are **tests of the measurement code itself** (T255). Every
+defect this feature has produced was in the instrument rather than in retrieval, and
+`scripts/` was not in the test image at all, so none of it was covered.
 
 ---
 

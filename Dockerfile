@@ -30,6 +30,11 @@ RUN uv pip install --system --no-cache ".[dev]"
 RUN python -c "import tiktoken; tiktoken.get_encoding('cl100k_base')"
 
 COPY tests/ tests/
+# The measurement scripts are under test too. Every defect found on 2026-07-30/31
+# was in the INSTRUMENT rather than in retrieval — a fact set that scored
+# unreachable memos as `absent`, a sample too small to support its own
+# conclusions — so the bench's own logic is covered here. [002/FR-111]
+COPY scripts/ scripts/
 
 # OPENROUTER_API_KEY is a required setting; tests never make embedding calls
 # (they pass dummy vectors), so a dummy value is enough to construct Settings.

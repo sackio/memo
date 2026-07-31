@@ -4,7 +4,7 @@
 **Created**: 2026-07-30 · **Last audited**: 2026-07-31 07:30 EDT
 **Status**: **Phases A–D built (D now complete); Phase E measured and CORRECTLY BLOCKED on SC-101 and SC-103.**
 T201–T203 remain OPEN CLARIFICATIONS for the operator, and T201 blocks four
-Phase C tasks (T240–T243). 24/39 done.
+Phase C tasks (T240–T243). 25/39 done. **Phase D is complete.**
 
 The passage path is live and a large measured improvement on the band this
 feature exists for — **10/66 → 38/66 rank-1** at ≥2000 tokens, and absent-from-
@@ -234,9 +234,33 @@ repo-wide and will fail on later-phase FRs. Run inside the v2 worktree.
       ⚠️ Calibrating the cosine bar needs a must-collapse set drawn from content
       memos, not logs, and **this corpus is not the one to draw it from** —
       partially migrated and 7.5% machine-generated. Another dependency on T202.
-- [ ] **T255** — Wire the bench into CI against a fixed corpus slice with the
+- [x] **T255** — Wire the bench into CI against a fixed corpus slice with the
       numbers checked in. An uninstrumented bench rots; that is how the original
       defect survived.
+      **DONE 2026-07-31 — but NOT as written, and the difference matters.**
+      *Checking the numbers into CI is not possible and would be dishonest if
+      faked.* The test container is `network_mode: none` with a throwaway DB —
+      no corpus, no embedding provider. Pinning expected rank-1 counts would mean
+      either committing megabytes of vectors or quietly testing a fixture instead
+      of the corpus, and a green CI would then say nothing about retrieval. The
+      quality numbers stay a deliberate run against :8091, recorded in
+      research.md with their date and sample size.
+      **What IS now covered is the instrument — which is where all three of this
+      feature's defects actually were.** `tests/unit/test_retrieval_bench.py`
+      (12 tests, no network) pins the shape of each wrong answer that once looked
+      plausible: an unrestricted run scoring un-indexed memos as `absent`; the
+      fact set not receiving the same restriction; a failed query counting as
+      anything but absent; rank-1 requiring position 0 rather than presence; and
+      one seed drawing one sample, without which a two-path comparison is not a
+      comparison.
+      Two changes were required rather than optional: `scripts/` was **not in the
+      test image at all**, so the measurement code was wholly uncovered; and the
+      fact-set logic sat inline in `main()` where **nothing could call it**,
+      which is exactly why that defect shipped. Extracted as `eligible_factset()`
+      / `score_factset()`.
+      Verified by falsification: reverting the filter makes
+      `test_factset_restriction_drops_cases_the_path_cannot_reach` fail and the
+      other 11 pass. A test that has never failed is not known to detect anything.
 
 **Gate D**: `speckit-trace --require-full 002/FR-111,002/FR-112,002/FR-114`
 
