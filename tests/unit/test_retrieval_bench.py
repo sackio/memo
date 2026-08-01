@@ -231,3 +231,66 @@ def test_factset_failed_query_is_not_a_pass(stub):
     out = bench.score_factset("http://x", cases, limit=10, path="passages")
 
     assert out["absent"] == 1 and out["rank1"] == 0
+
+
+# --- wiring, asserted separately from behaviour ---------------------------
+#
+# Borrowed from `mind` (2026-08-01): a correct function that nothing CALLS is
+# invisible to every test of that function. The tests above prove
+# `eligible_factset` filters correctly; none of them would notice if `main()`
+# stopped calling it — which is the original defect exactly, re-introduced with
+# a green suite over the top. The filtering lived inline in `main()` before
+# 2026-07-31, where nothing could reach it, and that is why it shipped wrong.
+#
+# So the call site is asserted structurally, by walking the AST rather than by
+# running `main()` (which would need argv, a live server and a corpus).
+
+import ast
+from pathlib import Path
+
+
+def _bench_source() -> str:
+    for candidate in (Path("/app/scripts/memo-retrieval-bench"),
+                      Path(__file__).resolve().parents[2] / "scripts" / "memo-retrieval-bench"):
+        if candidate.exists():
+            return candidate.read_text()
+    pytest.skip("memo-retrieval-bench not present in this image")
+
+
+def _calls_within(func_name: str) -> set[str]:
+    """Every function called inside `func_name`, by name."""
+    tree = ast.parse(_bench_source())
+    fn = next((n for n in ast.walk(tree)
+               if isinstance(n, ast.FunctionDef) and n.name == func_name), None)
+    assert fn is not None, f"{func_name}() not found in the bench"
+    out: set[str] = set()
+    for node in ast.walk(fn):
+        if isinstance(node, ast.Call):
+            f = node.func
+            if isinstance(f, ast.Name):
+                out.add(f.id)
+            elif isinstance(f, ast.Attribute):
+                out.add(f.attr)
+    return out
+
+
+def test_main_actually_applies_the_factset_restriction():
+    calls = _calls_within("main")
+
+    assert "eligible_factset" in calls, (
+        "main() no longer calls eligible_factset — the fact set would silently "
+        "stop being restricted to reachable memos, which is the defect that made "
+        "SC-103 read 17% when the honest figure was 62.5%")
+    assert "score_factset" in calls
+
+
+def test_main_still_consults_the_passage_index():
+    assert "_passage_indexed_ids" in _calls_within("main"), (
+        "without this lookup there is no set to restrict against")
+
+
+def test_run_applies_both_indexed_only_to_the_own_title_sample():
+    assert "_passage_indexed_ids" in _calls_within("run"), (
+        "run() must consult the passage index for --both-indexed-only, or an "
+        "un-indexed memo scores as `absent` and the run reports indexing "
+        "coverage while looking exactly like a retrieval result")
