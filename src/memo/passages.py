@@ -29,6 +29,24 @@ logger = logging.getLogger(__name__)
 # the fact rather than becoming indistinguishable. [002/FR-108]
 EMBEDDING_ROUTE = "openrouter"
 
+# SQLite has exactly ONE writer. Connections are per-thread (db._local), so a
+# concurrent indexing job opens N of them and they fight; measured 2026-08-01,
+# a corpus-wide index at concurrency 10 lost 5% of memos to "database is locked"
+# with a deferred BEGIN and 17% with BEGIN IMMEDIATE — the second number is not
+# a regression, it is the same contention surfacing honestly at the point the
+# lock is taken instead of part-way through the transaction.
+#
+# Raising busy_timeout does not fix this either: under a write queue that deep,
+# waiters simply time out at whatever the bound is. Concurrency on the write is
+# not a thing SQLite offers, so asking for it converts throughput into lock
+# thrash and lost writes.
+#
+# What IS worth parallelising is the embed, which is network-bound and ~99% of
+# the wall clock. So: embed concurrently, write through this lock one at a time.
+# The write is milliseconds; serialising it costs almost nothing and removes the
+# failure mode completely (0 errors over the full 7,336-memo corpus).
+_write_lock = asyncio.Lock()
+
 
 def _sync_replace(db_path: str, doc_id: str, passages: list[Passage],
                   vectors: list[list[float]], *, model: str, route: str) -> int:
@@ -41,7 +59,20 @@ def _sync_replace(db_path: str, doc_id: str, passages: list[Passage],
     conn = db._get_or_create_conn(db_path)
     now = time()
     try:
-        conn.execute("BEGIN")
+        # BEGIN IMMEDIATE, not BEGIN. A deferred transaction takes a READ lock
+        # first and only tries to upgrade at the first write; in WAL mode SQLite
+        # cannot safely wait on that upgrade (it already holds a read snapshot
+        # that a waiting writer could invalidate), so it returns SQLITE_BUSY
+        # AT ONCE and `PRAGMA busy_timeout` never applies. The timeout is set —
+        # it simply does not cover the one case that matters here.
+        #
+        # Invisible under the single-writer load this ran at for weeks. Measured
+        # 2026-08-01 on the first genuinely concurrent write job: a corpus-wide
+        # passage index at concurrency 10 lost 127 of 2,400 memos (5%, and
+        # rising as the WAL grew) to "database is locked". IMMEDIATE takes the
+        # write lock up front, which busy_timeout DOES honour, so contenders
+        # queue for up to 5s instead of failing instantly.
+        conn.execute("BEGIN IMMEDIATE")
         conn.execute("DELETE FROM document_chunks WHERE doc_id = ?", (doc_id,))
         conn.execute("DELETE FROM chunk_embeddings WHERE doc_id = ?", (doc_id,))
         for p, vec in zip(passages, vectors):
@@ -67,7 +98,7 @@ def _sync_replace(db_path: str, doc_id: str, passages: list[Passage],
 def _sync_delete(db_path: str, doc_id: str) -> None:
     conn = db._get_or_create_conn(db_path)
     try:
-        conn.execute("BEGIN")
+        conn.execute("BEGIN IMMEDIATE")  # see _sync_replace
         conn.execute("DELETE FROM document_chunks WHERE doc_id = ?", (doc_id,))
         conn.execute("DELETE FROM chunk_embeddings WHERE doc_id = ?", (doc_id,))
         conn.commit()
@@ -96,7 +127,8 @@ async def index_document(doc_id: str, content: str, *, embed_batch=None,
     """
     passages = chunk(content or "", target=target, overlap=overlap)
     if not passages:
-        await asyncio.to_thread(_sync_delete, db.global_path(), doc_id)
+        async with _write_lock:
+            await asyncio.to_thread(_sync_delete, db.global_path(), doc_id)
         return 0
 
     if embed_batch is None:
@@ -112,13 +144,16 @@ async def index_document(doc_id: str, content: str, *, embed_batch=None,
             f"embed_batch returned {len(vectors)} vectors for {len(passages)} "
             f"passages of {doc_id}")
 
-    return await asyncio.to_thread(
-        _sync_replace, db.global_path(), doc_id, passages, vectors,
-        model=settings.embedding_model, route=EMBEDDING_ROUTE)
+    # The embed above ran concurrently; the write does not. See _write_lock.
+    async with _write_lock:
+        return await asyncio.to_thread(
+            _sync_replace, db.global_path(), doc_id, passages, vectors,
+            model=settings.embedding_model, route=EMBEDDING_ROUTE)
 
 
 async def delete_document(doc_id: str) -> None:
-    await asyncio.to_thread(_sync_delete, db.global_path(), doc_id)
+    async with _write_lock:
+        await asyncio.to_thread(_sync_delete, db.global_path(), doc_id)
 
 
 async def get_passages(doc_id: str) -> list[dict]:

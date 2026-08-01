@@ -462,7 +462,11 @@ def _sync_delete(db_path: str, doc_id: str, *, actor: str = "unknown",
 
     d = dict(row)
     try:
-        conn.execute("BEGIN")
+        # IMMEDIATE for the same reason as passages._sync_replace: a deferred
+        # BEGIN that upgrades to a write returns SQLITE_BUSY instantly in WAL
+        # mode, without honouring busy_timeout. A reap sweep racing a write is
+        # exactly the concurrency this hits.
+        conn.execute("BEGIN IMMEDIATE")
         conn.execute(
             "INSERT INTO deletion_log (doc_id, deleted_at, content, title, tags, "
             "metadata, memo_class, created_at, actor, reason, replaced_by) "
