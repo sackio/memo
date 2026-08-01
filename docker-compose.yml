@@ -13,9 +13,16 @@ services:
       DEFAULT_DB_PATH: /data/memo.db
       PORT: ${MEMO_V2_PORT:-8091}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
-      # 2026-07-31 (T203): large model at native 3072. v1 on :8000 stays on
-      # 3-small/1536 and is unaffected — separate compose file, separate .env,
-      # separate database. Scores are NOT comparable across the two until cutover.
+      # 2026-08-01: SELF-HOSTED qwen3-embedding-4b at native 2560, on the LAN
+      # endpoint (no auth). Supersedes the 2026-07-31 T203 choice of 3-large@3072,
+      # whose measurements survive as research.md R-09 — the comparison baseline.
+      # v1 on :8000 stays on 3-small/1536 and is unaffected — separate compose
+      # file, separate .env, separate database. Scores are NOT comparable across
+      # any two of the three until re-measured.
+      #
+      # ⚠️ The shell on this host STILL exports EMBEDDING_MODEL=...-3-small and
+      # EMBEDDING_DIMENSIONS=1536 (checked again 2026-08-01, still true). That is
+      # precisely why the lines below must stay literal.
       #
       # HARD-CODED, and the `${EMBEDDING_MODEL:-...}` form was deliberately
       # REMOVED. This host exports EMBEDDING_MODEL/EMBEDDING_DIMENSIONS in the
@@ -26,8 +33,10 @@ services:
       # A config knob that silently ignores the file it is written in is worse
       # than no knob. Override for a one-off run with an explicit
       # `EMBEDDING_MODEL=... docker compose up` if ever needed.
-      EMBEDDING_MODEL: openai/text-embedding-3-large
-      EMBEDDING_DIMENSIONS: 3072
+      EMBEDDING_MODEL: qwen3-embedding-4b
+      EMBEDDING_DIMENSIONS: 2560
+      EMBEDDING_BASE_URL: http://192.168.1.5:31536/v1
+      EMBEDDING_API_KEY: not-required-lan-service
       MEMO_CONDUCTOR_PROVIDER: ${MEMO_CONDUCTOR_PROVIDER:-atc}
       MEMO_AGENT_CONTROLLER_PROVIDER: ${MEMO_AGENT_CONTROLLER_PROVIDER:-agents_supervisor}
       MEMO_V2_VERSION: 2.0.0-alpha1

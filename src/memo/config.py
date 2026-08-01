@@ -7,20 +7,38 @@ class Settings(BaseSettings):
 
     port: int = 8000
     openrouter_api_key: str
-    # Operator directive 2026-07-31 (T203): the large model, at NATIVE 3072.
+    # Operator directive 2026-08-01: the SELF-HOSTED model, at its native 2560.
+    # (Supersedes the 2026-07-31 T203 directive for `3-large` @3072, which held
+    # for one day and whose measurements are preserved in research.md R-09 as the
+    # comparison baseline — that is the whole point of keeping them.)
     #
-    # The dimension choice is a SAFETY one, not a quality one. `3-large` can be
-    # truncated to 1536, which would avoid rebuilding the vector tables — but
-    # then a small-model vector and a large-model vector are indistinguishable
-    # in shape, so a half-finished re-embed scores nonsense silently. At 3072
-    # sqlite-vec REJECTS the mismatched insert (verified). Given this project's
-    # history, prefer the option that cannot fail quietly.
+    # The dimension choice is a SAFETY one, not a quality one, and the argument
+    # is unchanged from the 3-large decision — only the numbers move. A model can
+    # often be truncated to some other width, which would avoid rebuilding the
+    # vector tables; but then vectors from two different models are
+    # indistinguishable in SHAPE, so a half-finished re-embed scores nonsense
+    # silently. 2560 collides with neither 1536 (3-small) nor 3072 (3-large), so
+    # sqlite-vec REJECTS a mismatched insert and a partial re-embed CRASHES
+    # instead of quietly returning garbage. Given this project's history, prefer
+    # every time the option that cannot fail quietly.
+    #
+    # Qwen3 additionally refuses a `dimensions` request parameter outright (400,
+    # "does not support Matryoshka embeddings"), so truncation is not even
+    # available here — see embeddings.py.
     #
     # Changing either value invalidates every stored vector: cosine between
     # models is meaningless, not merely noisier. There is no incremental path —
     # the corpus is re-embedded wholesale or not at all.
-    embedding_model: str = "openai/text-embedding-3-large"
-    embedding_dimensions: int = 3072
+    embedding_model: str = "qwen3-embedding-4b"
+    embedding_dimensions: int = 2560
+
+    # The embedding provider is now a LAN service, not OpenRouter. No auth: the
+    # key is a placeholder because the OpenAI SDK requires a non-empty string.
+    # Kept separate from `openrouter_api_key`, which the auto-store/classify LLM
+    # calls still use — the two providers moved apart on 2026-08-01 and folding
+    # them back into one setting would re-couple them.
+    embedding_base_url: str = "http://192.168.1.5:31536/v1"
+    embedding_api_key: str = "not-required-lan-service"
     default_db_path: str = "~/.memo/memo.db"
 
     # Which path `/search` serves. [002/FR-113]
