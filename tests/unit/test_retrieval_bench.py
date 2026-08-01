@@ -233,6 +233,39 @@ def test_factset_failed_query_is_not_a_pass(stub):
     assert out["absent"] == 1 and out["rank1"] == 0
 
 
+def test_factset_reports_query_failures_separately_from_absent(stub):
+    """Counting a failure as `absent` is right; doing it SILENTLY is not.
+
+    A query path broken for every case reports 0% rank-1, which reads as
+    "retrieval is terrible" rather than "retrieval never ran" — and this is the
+    half that produces the SC-103 headline. `groton` served lexical-only results
+    for an entire session behind a bare `except` on 2026-08-01 and nearly used
+    that as a migration baseline; the band loop here already printed on failure,
+    this path did not.
+    """
+    s = stub(_Stub([], fail={"q1", "q2"}))
+    cases = [{"query": "q1", "expect_id": "a"}, {"query": "q2", "expect_id": "b"}]
+
+    out = bench.score_factset("http://x", cases, limit=10, path="passages")
+
+    assert out["query_failures"] == 2, (
+        "a run where every query errored must be distinguishable from a run "
+        "where retrieval genuinely found nothing")
+    assert out["absent"] == 2
+    assert out["rank1_pct"] == 0.0
+
+
+def test_factset_reports_zero_failures_on_a_clean_run(stub):
+    """The counter must not cry wolf — a healthy run reports 0."""
+    s = stub(_Stub([], answers={"q1": ["a"]}))
+    cases = [{"query": "q1", "expect_id": "a"}]
+
+    out = bench.score_factset("http://x", cases, limit=10, path="passages")
+
+    assert out["query_failures"] == 0
+    assert out["rank1"] == 1
+
+
 # --- wiring, asserted separately from behaviour ---------------------------
 #
 # Borrowed from `mind` (2026-08-01): a correct function that nothing CALLS is

@@ -158,10 +158,22 @@ def score_factset(url: str, cases: list[dict], *, limit: int, path: str,
                   skipped: int = 0) -> dict:
     """Rank-1 / top-5 / absent over an already-filtered fact set."""
     r1 = t5 = absent = 0
+    failed = 0
     for c in cases:
         try:
             hits = _search(url, c["query"], limit=limit, path=path)
-        except Exception:  # a failed query is not a passing query
+        except Exception as e:  # a failed query is not a passing query
+            # SAY SO. Counting a failure as `absent` is right — it did not
+            # retrieve the answer — but doing it silently means a query path that
+            # is broken for EVERY case reports 0% rank-1, which reads as
+            # "retrieval is terrible" rather than "retrieval never ran". The band
+            # loop already prints; this one did not, and it is the half that
+            # produces the SC-103 headline. (Hardened 2026-08-01 after `groton`
+            # found a search layer that had silently served lexical-only results
+            # for a whole session behind a bare except.)
+            print(f"  fact-set query FAILED for {c['expect_id'][:8]}: "
+                  f"{type(e).__name__}: {e}", file=sys.stderr)
+            failed += 1
             absent += 1
             continue
         ids = [_doc_of(h)["id"] for h in hits]
@@ -172,8 +184,13 @@ def score_factset(url: str, cases: list[dict], *, limit: int, path: str,
         else:
             absent += 1
     n = len(cases) or 1
+    if failed:
+        # Loud enough that nobody quotes the number without seeing this.
+        print(f"  ⚠️  {failed}/{len(cases)} fact-set queries ERRORED — the figure "
+              f"below is NOT a retrieval result for those cases", file=sys.stderr)
     return {"n": len(cases), "rank1": r1, "top5": t5, "absent": absent,
-            "skipped_unindexed": skipped, "rank1_pct": round(100 * r1 / n, 1)}
+            "skipped_unindexed": skipped, "query_failures": failed,
+            "rank1_pct": round(100 * r1 / n, 1)}
 
 
 def main() -> int:
