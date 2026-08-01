@@ -105,6 +105,13 @@ class MigrationStats:
     merged: int = 0
     redirected: int = 0
     skipped: int = 0
+    # A memo that BLEW UP is not a memo that was deliberately skipped. Counted
+    # separately since 2026-07-31, when a run exited 0 having failed 3,489 of
+    # 7,657 memos: the provider ran out of credits mid-run, every failure was
+    # folded into `skipped`, and the exit code said success. Anything reading
+    # that exit code — a cron, a later phase, me — would have concluded the
+    # corpus was migrated. Same discriminated-response lesson as v1 0.3.6.
+    errored: int = 0
     legacy_unattributed: int = 0
     by_class: dict[str, int] = field(default_factory=dict)
 
@@ -112,6 +119,8 @@ class MigrationStats:
         d = dict(self.__dict__)
         d["legacy_pct"] = (100.0 * self.legacy_unattributed / self.total
                            if self.total else 0.0)
+        d["error_pct"] = (100.0 * self.errored / self.total
+                          if self.total else 0.0)
         return d
 
 
@@ -327,7 +336,7 @@ async def migrate_corpus(memos: Iterable[dict[str, Any]], *, dry_run: bool = Tru
                                          dry_run=dry_run, now=now)
             except Exception as e:
                 logger.exception("migration failed for %s", memo.get("id"))
-                line = AuditLine(v1_id=memo.get("id") or "?", action="skip",
+                line = AuditLine(v1_id=memo.get("id") or "?", action="error",
                                  note=f"error: {e}")
 
             lines.append(line)
@@ -341,6 +350,8 @@ async def migrate_corpus(memos: Iterable[dict[str, Any]], *, dry_run: bool = Tru
                 stats.redirected += 1
             elif line.action == "skip":
                 stats.skipped += 1
+            elif line.action == "error":
+                stats.errored += 1
             if line.class_assigned:
                 stats.by_class[line.class_assigned] = \
                     stats.by_class.get(line.class_assigned, 0) + 1

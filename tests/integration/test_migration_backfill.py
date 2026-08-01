@@ -10,6 +10,7 @@ import json
 import pytest
 
 from memo import db
+from memo.config import settings
 from memo.migrate import backfill, classify, verify
 
 NOW = 1_800_000_000.0
@@ -28,7 +29,9 @@ def v1_memo(i, *, content=None, tags=None, title=None, created=None, meta=None):
     }
 
 
-def unit_vec(seed: int, dim: int = 1536):
+def unit_vec(seed: int, dim: int | None = None):
+    """Width from settings, never a literal — see the note in the cluster test."""
+    dim = dim if dim is not None else settings.embedding_dimensions
     v = [0.0] * dim
     v[seed % dim] = 1.0
     return v
@@ -279,8 +282,14 @@ async def test_a_failing_memo_does_not_abort_the_run(tmp_path):
     stats, lines = await backfill.migrate_corpus(corpus, dry_run=False, now=NOW,
                                                  embed=flaky)
     assert stats.total == 3
-    assert any(ln.action == "skip" and "error" in (ln.note or "") for ln in lines)
+    assert any(ln.action == "error" and "error" in (ln.note or "") for ln in lines)
     assert stats.written == 2
+    # The failure is counted as an ERROR, not folded into `skipped`. Changed
+    # 2026-07-31: a run exited 0 having failed 3,489 of 7,657 memos because a
+    # crash and a deliberate skip shared one counter, so "the corpus migrated"
+    # and "46% of it blew up" were the same reported outcome.
+    assert stats.errored == 1
+    assert stats.skipped == 0
 
 
 # --- rollback (FR-040) ---

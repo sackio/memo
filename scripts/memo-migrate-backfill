@@ -73,6 +73,23 @@ async def main() -> int:
         print(f"WARNING: legacy-unattributed is "
               f"{stats.as_dict()['legacy_pct']:.1f}%, over the "
               f"{verify.MAX_LEGACY_PCT}% SC-009 budget", file=sys.stderr)
+
+    # A partial migration MUST NOT exit 0. On 2026-07-31 this returned success
+    # having failed 3,489 of 7,657 memos — the embedding provider ran out of
+    # credits mid-run, every failure was folded into `skipped`, and the exit
+    # code said the corpus was migrated. A caller that trusts exit codes (a
+    # cron, a later phase, an operator) would have built on a 46%-complete
+    # corpus. The count is now separate and the status reflects it.
+    if stats.errored:
+        pct = stats.as_dict()["error_pct"]
+        print(f"\nMIGRATION INCOMPLETE: {stats.errored} of {stats.total} memos "
+              f"FAILED ({pct:.1f}%). The corpus is partial.\n"
+              f"This backfill is NOT resumable — its duplicate check compares "
+              f"against what THIS run wrote, not the database, so re-running "
+              f"over a partial corpus writes duplicates.\n"
+              f"Recover with: --rollback, then re-run whole.",
+              file=sys.stderr)
+        return 2
     return 0
 
 

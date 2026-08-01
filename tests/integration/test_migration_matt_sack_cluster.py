@@ -13,6 +13,7 @@ similarity to the QUERY, not to the other candidates.
 import pytest
 
 from memo import db
+from memo.config import settings
 from memo.migrate import backfill
 
 NOW = 1_800_000_000.0
@@ -37,8 +38,14 @@ def cluster_member(doc_id, content, created):
 
 
 async def near_identical_embed(text: str):
-    """Cluster members embed near-identically; unrelated memos do not."""
-    v = [0.0] * 1536
+    """Cluster members embed near-identically; unrelated memos do not.
+
+    Width comes from settings, never a literal: the vector tables declare
+    `FLOAT[embedding_dimensions]` and reject a mismatched insert, so a hardcoded
+    1536 here turned the 2026-07-31 switch to text-embedding-3-large/3072 into
+    five failing integration tests that had nothing to do with what changed.
+    """
+    v = [0.0] * settings.embedding_dimensions
     if "matt sack" in (text or "").lower():
         v[0] = 1.0
         v[1] = 0.02 * (len(text) % 5)      # tiny drift, still cosine > 0.99

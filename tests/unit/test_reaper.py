@@ -185,7 +185,13 @@ async def test_loop_survives_a_failing_sweep(monkeypatch, embedding):
     monkeypatch.setattr(db, "reap_expired", flaky)
 
     task = reaper.start()
-    for _ in range(200):
+    # Budget is wall-clock, so it must tolerate a loaded host. At 200×0.01s the
+    # ceiling was 2s, which passes idle and fails while the box is busy — this
+    # went red on 2026-07-31 purely because a 7,657-memo migration was running
+    # alongside it. A test that fails for reasons unrelated to what it tests is
+    # noise that hides real failures, so the budget is now 15s. The assertion
+    # is unchanged: a healthy loop still satisfies it in ~30ms and exits early.
+    for _ in range(1500):
         await asyncio.sleep(0.01)
         if calls["n"] >= 3:
             break
