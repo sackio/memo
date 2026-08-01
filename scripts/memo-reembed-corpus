@@ -97,9 +97,25 @@ async def _run_batch(items, embed_texts, write, *, label: str, batch: int,
                     f"provider returned {len(vectors)} vectors for {len(chunk)} inputs")
             write(chunk, vectors)
             stats["done"] += len(chunk)
-        except Exception as e:
-            stats["errored"] += len(chunk)
-            failures.append(f"{label}[{i}:{i+len(chunk)}]: {type(e).__name__}: {e}")
+        except Exception:
+            # ISOLATE, don't abandon. The provider rejects an over-length input
+            # for the whole request, so one offender fails its 15 healthy
+            # neighbours — measured: 32 documents lost, of which only 17 were
+            # actually over the limit and 15 were merely travelling with them.
+            #
+            # A plain "retry the batch item by item" is NOT enough and was the
+            # first thing tried: it re-raises on the first bad item and throws
+            # away the successes that preceded it, which reproduces the original
+            # loss almost exactly. Each item needs its own try.
+            for one in chunk:
+                try:
+                    v = await embed_texts([one[-1]])
+                    write([one], v)
+                    stats["done"] += 1
+                except Exception as e2:
+                    stats["errored"] += 1
+                    failures.append(
+                        f"{label} {one[0][:8]}: {type(e2).__name__}: {str(e2)[:120]}")
         finished = stats["done"] + stats["errored"]
         if progress_every and finished % progress_every < batch:
             el = max(time.time() - started, 1e-9)
@@ -241,19 +257,56 @@ async def main() -> int:
                       f"query time, not here", file=sys.stderr, flush=True)
                 ok = False
 
-    # A schema that looks right and a query that works are two claims.
-    probe = await embeddings.embed("post-swap read-back probe")
+    # A schema that looks right and a query that works are two claims — and a
+    # query that returns SOMETHING is still a third claim short of correct.
+    #
+    # `mind` proved 2026-08-01 that the width check protects WRITES ONLY: their
+    # reads filtered to zero rows before the distance operator was ever reached,
+    # so a fully-populated, correctly-shaped, correctly-counted migration
+    # returned "no results" for every query with NO error. A schema check and a
+    # row count would both have passed. Only a real query against a KNOWN answer
+    # catches it.
+    #
+    # memo is structurally clear of that specific shape (fixed table names, no
+    # collection predicate — verified: a mismatched-width read raises
+    # "Dimension mismatch for query vector"). The control below does not rely on
+    # that being true.
+    probe_id, probe_title = conn.execute(
+        "SELECT id, title FROM documents "
+        "WHERE valid_until IS NULL AND length(coalesce(title,'')) > 20 "
+        "ORDER BY coalesce(token_count,0) DESC LIMIT 1").fetchone()
+    probe = await embeddings.embed(probe_title)
     if len(probe) != dims:
         print(f"  ✗ provider returned {len(probe)} dims, config says {dims}",
               file=sys.stderr, flush=True)
         ok = False
     else:
-        hits = conn.execute(
-            "SELECT doc_id FROM document_embeddings WHERE embedding MATCH ? AND k=3",
-            (db._serialize_vector(probe),)).fetchall()
-        print(f"  KNN probe returned {len(hits)} hit(s)", flush=True)
-        if not hits:
-            print("  ✗ KNN returned nothing against a populated table",
+        blob = db._serialize_vector(probe)
+        # KNOWN-ANSWER control: a memo's own title must retrieve that memo.
+        doc_hits = [r[0] for r in conn.execute(
+            "SELECT doc_id FROM document_embeddings WHERE embedding MATCH ? AND k=5",
+            (blob,)).fetchall()]
+        print(f"  control query {probe_title[:48]!r}", flush=True)
+        print(f"    document_embeddings → {len(doc_hits)} hit(s), "
+              f"target {'FOUND at ' + str(doc_hits.index(probe_id) + 1) if probe_id in doc_hits else 'ABSENT'}",
+              flush=True)
+        if not doc_hits:
+            print("  ✗ document read returned ZERO rows against a populated "
+                  "table — this is the `mind` failure", file=sys.stderr, flush=True)
+            ok = False
+        elif probe_id not in doc_hits:
+            print("  ✗ a memo's own title did not retrieve it — reads run but "
+                  "return the wrong thing", file=sys.stderr, flush=True)
+            ok = False
+
+        # The passage table needs its own control: it is a SEPARATE index and a
+        # swap can succeed for one and not the other.
+        chunk_hits = conn.execute(
+            "SELECT doc_id FROM chunk_embeddings WHERE embedding MATCH ? AND k=5",
+            (blob,)).fetchall()
+        print(f"    chunk_embeddings    → {len(chunk_hits)} hit(s)", flush=True)
+        if not chunk_hits:
+            print("  ✗ passage read returned ZERO rows against a populated table",
                   file=sys.stderr, flush=True)
             ok = False
 
