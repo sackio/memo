@@ -58,9 +58,21 @@ RESULT=$(curl -sf --max-time 45 -X POST "${MEMO_URL}/auto-store" \
     '{content: $content, session_id: $session_id}')" \
   2>/dev/null)
 
-[ $? -ne 0 ] || [ -z "$RESULT" ] && exit 0
+CURL_RC=$?
 
-ACTION=$(echo "$RESULT" | jq -r '.action // "skipped"' 2>/dev/null)
+# A failed call is NOT a skip. `curl -sf` swallows the body and the old
+# `.action // "skipped"` default rendered a dead server, a malformed reply and a
+# deliberate "not worth storing" identically — so an agent banked nothing and was
+# told nothing. Log it durably; still exit 0 so the hook never fails the turn.
+MEMO_LOG="${MEMO_ERROR_LOG:-$HOME/.memo/auto-store-errors.log}"
+mkdir -p "$(dirname "$MEMO_LOG")" 2>/dev/null
+if [ "$CURL_RC" -ne 0 ] || [ -z "$RESULT" ]; then
+  echo "$(date -Iseconds) session=$SESSION_ID TRANSPORT_FAIL curl_rc=$CURL_RC (nothing was stored)" >> "$MEMO_LOG"
+  echo "[memo] WARNING: auto-store unreachable (curl $CURL_RC) — nothing was stored" >&2
+  exit 0
+fi
+
+ACTION=$(echo "$RESULT" | jq -r '.action // "malformed"' 2>/dev/null)
 TITLE=$(echo "$RESULT" | jq -r '.title // ""' 2>/dev/null)
 
 case "$ACTION" in
@@ -69,5 +81,20 @@ case "$ACTION" in
     ;;
   updated)
     echo "[memo] updated: ${TITLE:-untitled}"
+    ;;
+  error)
+    # Loud on purpose. This is the case that used to be invisible.
+    KIND=$(echo "$RESULT" | jq -r '.error_kind // "provider_error"' 2>/dev/null)
+    REASON=$(echo "$RESULT" | jq -r '.reason // ""' 2>/dev/null)
+    echo "$(date -Iseconds) session=$SESSION_ID PROVIDER_FAIL kind=$KIND (nothing was stored) :: $REASON" >> "$MEMO_LOG"
+    if [ "$KIND" = "payment_required" ]; then
+      echo "[memo] ⛔ NOTHING WAS STORED — OpenRouter credit exhausted (402). Needs a top-up; retrying will not help." >&2
+    else
+      echo "[memo] ⛔ NOTHING WAS STORED — auto-store provider failure ($KIND). See $MEMO_LOG" >&2
+    fi
+    ;;
+  malformed)
+    echo "$(date -Iseconds) session=$SESSION_ID MALFORMED_RESPONSE (nothing was stored)" >> "$MEMO_LOG"
+    echo "[memo] WARNING: auto-store returned an unreadable response — nothing was stored" >&2
     ;;
 esac

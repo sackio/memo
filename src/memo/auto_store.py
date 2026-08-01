@@ -1,15 +1,51 @@
 """LLM-based extraction and deduplication for auto-storing memos from conversation exchanges."""
 
 import json
+import logging
 
 from openai import AsyncOpenAI
 
 from memo.config import settings
 
+logger = logging.getLogger(__name__)
+
 _client = AsyncOpenAI(
     api_key=settings.openrouter_api_key,
     base_url="https://openrouter.ai/api/v1",
 )
+
+
+def _status_of(exc: Exception) -> int | None:
+    """HTTP status from an OpenAI-SDK exception, if it carries one."""
+    for attr in ("status_code", "http_status"):
+        code = getattr(exc, attr, None)
+        if isinstance(code, int):
+            return code
+    resp = getattr(exc, "response", None)
+    code = getattr(resp, "status_code", None)
+    return code if isinstance(code, int) else None
+
+
+def _provider_error(exc: Exception) -> dict:
+    """Describe a provider failure so a caller can tell it from a deliberate skip.
+
+    402 is called out explicitly and separately from 429. OpenRouter signals
+    exhausted credit as **402 Payment Required**, not as a rate limit, so a retry
+    table that only special-cases 429 sails straight past it — quantum-feed's
+    embedder learned this the same way (`news_embcache_prewarm.py`) and notes memo
+    "took 14 of them that morning". 402 is not transient and must not be retried:
+    it needs a human to top up.
+    """
+    status = _status_of(exc)
+    kind = {402: "payment_required", 429: "rate_limited"}.get(status, "provider_error")
+    detail = f"{type(exc).__name__}: {exc}"
+    logger.error("auto-store provider failure (%s, status=%s): %s", kind, status, detail)
+    return {
+        "kind": kind,
+        "status": status,
+        "detail": detail,
+        "retryable": status == 429,
+    }
 
 _EXTRACT_SYSTEM = """\
 You are a memo curator. Analyze a conversation exchange and extract any knowledge worth storing persistently.
@@ -73,7 +109,17 @@ async def analyze_for_store(content: str) -> dict:
         )
         return json.loads(resp.choices[0].message.content)
     except Exception as e:
-        return {"should_store": False, "reason": f"analysis error: {e}"}
+        # NOT `should_store: False`. "The provider refused us" and "this exchange
+        # wasn't worth keeping" are states the caller acts on completely
+        # differently, and folding them together is what made 2026-07-31
+        # invisible: an agent banks state at the end of a turn, gets HTTP 200
+        # action="skipped", and compacts believing the state is durable. It is
+        # not, and nothing is recoverable.
+        #
+        # The reason string always carried the truth ("analysis error: ..."); the
+        # `action` did not, and the hook only reads `action`. So the fix is to put
+        # the distinction where the caller actually looks.
+        return {"error": _provider_error(e)}
 
 
 async def analyze_for_merge(existing_content: str, new_content: str) -> dict:
@@ -95,4 +141,7 @@ async def analyze_for_merge(existing_content: str, new_content: str) -> dict:
         )
         return json.loads(resp.choices[0].message.content)
     except Exception as e:
-        return {"action": "create", "reason": f"merge analysis error: {e}"}
+        # Degrading to "create" on a provider failure is the quieter half of the
+        # same bug: it does not lose the memo, it duplicates one. The caller asked
+        # "merge or not?" and a failure is not an answer.
+        return {"error": _provider_error(e)}

@@ -677,6 +677,15 @@ async def auto_store(req: AutoStoreRequest):
 
     # 1. LLM: is this worth storing?
     analysis = await analyze_for_store(req.content)
+    if analysis.get("error"):
+        # A provider failure is NOT a skip. Nothing was stored and the caller must
+        # be able to tell — an agent that reads this as "skipped" will compact or
+        # respawn believing it banked state it never banked.
+        err = analysis["error"]
+        return AutoStoreResponse(
+            action="error", error_kind=err.get("kind"), retryable=err.get("retryable", False),
+            reason=f"auto-store analysis failed ({err.get('kind')}): {err.get('detail')}",
+        )
     if not analysis.get("should_store"):
         return AutoStoreResponse(action="skipped", reason=analysis.get("reason", "not worth storing"))
 
@@ -704,6 +713,15 @@ async def auto_store(req: AutoStoreRequest):
 
         # 3. LLM: merge into existing, create separate, or skip?
         merge = await analyze_for_merge(best["content"], extracted)
+        if merge.get("error"):
+            # Falling through to "create" here would silently duplicate the memo
+            # we just found. The question "merge or not?" went unanswered, so say
+            # so rather than guessing the more destructive way.
+            err = merge["error"]
+            return AutoStoreResponse(
+                action="error", error_kind=err.get("kind"), retryable=err.get("retryable", False),
+                reason=f"auto-store merge analysis failed ({err.get('kind')}): {err.get('detail')}",
+            )
         action = merge.get("action", "create")
 
         if action == "skip":

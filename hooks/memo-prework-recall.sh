@@ -17,7 +17,16 @@ MARKER="/tmp/.memo-prework-${SESSION_ID}"
 touch "$MARKER"
 
 INDEX=$(curl -sf --max-time 5 "${MEMO_URL}/index" 2>/dev/null)
-[ $? -ne 0 ] || [ -z "$INDEX" ] && exit 0
+CURL_RC=$?
+if [ "$CURL_RC" -ne 0 ] || [ -z "$INDEX" ]; then
+  # Same false-negative hazard as memo-auto-recall.sh: silence here reads as
+  # "the corpus is empty" rather than "memo did not answer".
+  MEMO_LOG="${MEMO_ERROR_LOG:-$HOME/.memo/recall-errors.log}"
+  mkdir -p "$(dirname "$MEMO_LOG")" 2>/dev/null
+  echo "$(date -Iseconds) PREWORK_INDEX_FAIL curl_rc=$CURL_RC (no index injected)" >> "$MEMO_LOG"
+  echo "[memo] WARNING: prework index fetch failed (curl $CURL_RC) — no corpus index injected." >&2
+  exit 0
+fi
 
 COUNT=$(echo "$INDEX" | jq 'length' 2>/dev/null)
 [ -z "$COUNT" ] || [ "$COUNT" -eq 0 ] && exit 0

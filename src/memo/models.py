@@ -102,7 +102,12 @@ class AutoStoreRequest(BaseModel):
 
 
 class AutoStoreResponse(BaseModel):
-    action: str          # "created", "updated", "skipped"
+    # "error" is a distinct action, not a flavour of "skipped": skipped means the
+    # content was judged not worth keeping, error means NOTHING WAS STORED and the
+    # caller should not believe its state is durable. [0.3.7]
+    action: str          # "created", "updated", "skipped", "error"
     id: str | None = None
     title: str | None = None
     reason: str | None = None
+    error_kind: str | None = None   # payment_required | rate_limited | provider_error
+    retryable: bool = False         # 429 yes; 402 no — that one needs a human

@@ -22,7 +22,19 @@ RESULT=$(curl -sf --max-time 5 -X POST "${MEMO_URL}/context" \
     '{query: $q, token_budget: $tb, min_score: $ms, limit_per_query: 5}')" \
   2>/dev/null)
 
-[ $? -ne 0 ] || [ -z "$RESULT" ] && exit 0
+CURL_RC=$?
+
+# A failed recall is a FALSE NEGATIVE, and the more dangerous direction: the
+# session proceeds as though memo simply had nothing on the topic, and the agent
+# acts confidently on an absence it never verified. Still exit 0 (a recall
+# failure must not block the turn), but say so and record it.
+if [ "$CURL_RC" -ne 0 ] || [ -z "$RESULT" ]; then
+  MEMO_LOG="${MEMO_ERROR_LOG:-$HOME/.memo/recall-errors.log}"
+  mkdir -p "$(dirname "$MEMO_LOG")" 2>/dev/null
+  echo "$(date -Iseconds) RECALL_FAIL curl_rc=$CURL_RC (no context injected — absence is NOT evidence)" >> "$MEMO_LOG"
+  echo "[memo] WARNING: recall failed (curl $CURL_RC) — no context injected. Do not read this as 'memo has nothing'." >&2
+  exit 0
+fi
 
 DOC_COUNT=$(echo "$RESULT" | jq -r '.doc_count // 0' 2>/dev/null)
 [ "$DOC_COUNT" -eq 0 ] && exit 0
