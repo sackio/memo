@@ -271,10 +271,27 @@ async def main() -> int:
     # collection predicate — verified: a mismatched-width read raises
     # "Dimension mismatch for query vector"). The control below does not rely on
     # that being true.
+    # The control needs a DISTINCTIVE title, and the first version did not ask
+    # for one. It took "the largest memo with a title over 20 chars", which on
+    # this corpus selects `Backfill checkpoint — server5 — 2026-07-20 06:58
+    # (p3/13)` — one of ~179 near-identical checkpoint memos. Its own title
+    # correctly does NOT retrieve it at rank 1, because 178 siblings outrank it.
+    #
+    # Run inside the swap verification, that would have FAILED A HEALTHY SWAP and
+    # blocked it, and the migration would have taken the blame. A control that
+    # cries wolf on good data is barely better than one that passes on bad data:
+    # both destroy the signal. Found by running it before it mattered.
+    # Grouped, not a correlated subquery — the obvious `WHERE (SELECT COUNT(*)
+    # ...) = 1` form is O(n²) and took over two minutes on 7,336 rows, which is
+    # not a cost worth paying inside a verification step.
     probe_id, probe_title = conn.execute(
-        "SELECT id, title FROM documents "
-        "WHERE valid_until IS NULL AND length(coalesce(title,'')) > 20 "
-        "ORDER BY coalesce(token_count,0) DESC LIMIT 1").fetchone()
+        "WITH uniq AS ("
+        "  SELECT substr(title, 1, 40) AS p FROM documents "
+        "  WHERE valid_until IS NULL AND length(coalesce(title,'')) > 30 "
+        "  GROUP BY p HAVING COUNT(*) = 1) "
+        "SELECT d.id, d.title FROM documents d JOIN uniq ON uniq.p = substr(d.title, 1, 40) "
+        "WHERE d.valid_until IS NULL "
+        "ORDER BY coalesce(d.token_count,0) DESC LIMIT 1").fetchone()
     probe = await embeddings.embed(probe_title)
     if len(probe) != dims:
         print(f"  ✗ provider returned {len(probe)} dims, config says {dims}",
