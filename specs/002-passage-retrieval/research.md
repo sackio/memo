@@ -387,3 +387,112 @@ one checkpoint per cycle instead of three, with the reason recorded in the memo 
 The 124 historical ones are left alone.
 
 Reproduce: `scripts/memo-dup-threshold-check`.
+
+## R-09 — The re-migration onto text-embedding-3-large, and the measurement that follows (2026-08-01) [002/FR-111 002/FR-110]
+
+**Every number in R-01 through R-08 was measured on `text-embedding-3-small` at 1536
+dimensions against a partially-migrated corpus. None of them carry over.** Ben ruled on
+2026-07-31 to use the large model — the one everything else here uses — so the corpus was
+rolled back and re-migrated from scratch. This section replaces those figures. Where it
+contradicts an earlier R-number, this one is current; the earlier one is history.
+
+Reproduce: `scripts/memo-retrieval-bench --path {document,passages} --both-indexed-only
+--per-band 2500 --factset specs/002-passage-retrieval/factset-mid-document.json`.
+Raw output is checked in as `bench-2026-08-01-{document,passages}.{json,txt}`.
+
+### The migration
+
+| | |
+|---|---|
+| v1 memos fetched | 7,661 |
+| written | 7,336 |
+| merged into a canonical (with redirect) | 325 |
+| **skipped** | **0** |
+| **errored** | **0** |
+| legacy-unattributed | 8 (0.10%, budget 5%) |
+| exit code | 0 |
+
+Contrast the 2026-07-31 run, which exited 0 having failed 3,489 of 7,657 memos when the
+provider ran out of credits and every exception was folded into `skipped`. That is why
+`errored` is now a separate counter with its own exit code, and why a zero here means
+something.
+
+Verification (`memo-migrate-verify` over all 7,661 source ids) passes 4 of 5 checks:
+every v1 id resolves (7,661/7,661), 0 unclassified, legacy 0.1% of a 5% budget, 0 bad
+`valid_from`. The failure is `no_duplicate_clusters` — 4 exact-duplicate content groups,
+0.05% of the corpus — and it is **R-08's prediction coming true, not a new defect**: all
+four are pairs whose content is byte-identical and whose titles differ (two
+`Backfill checkpoint — office…`/`— server4…` pairs differing in exactly the hostname
+token, a Storage Taxonomy memo where one copy carries a long inline `[⚠️ STALE …]`
+annotation in its *title*, and one fact stored under two phrasings). R-08 measured that
+the 4-gram title gate fires first every time and named the office/server4 checkpoint pair
+as the extreme case. Content-identical memos are the strongest possible case for a merge
+and the gate blocks them, which says the conjunction is misplaced: an exact content match
+should not need the title's permission. Deliberately **not** changed here — altering a
+dedup rule to make a verifier green, on the day the corpus was rebuilt, produces a corpus
+nobody can reason about.
+
+### The measurement — full census, both paths
+
+Not a sample. Every titled memo in every band, 7,221 queries per path. R-05's headline was
+wrong because n=14 per band could not distinguish a real effect from one document of noise.
+
+| band | n | document rank-1 | passages rank-1 | Δ |
+|---|---|---|---|---|
+| 0–200 | 1216 | 955 (78.5%) | 937 (77.1%) | **−1.5** |
+| 200–500 | 2293 | 1763 (76.9%) | 1651 (72.0%) | **−4.9** |
+| 500–1000 | 2007 | 1538 (76.6%) | 1495 (74.5%) | **−2.1** |
+| 1000–2000 | 1306 | 677 (51.8%) | 895 (68.5%) | **+16.7** |
+| **2000+** | **399** | **75 (18.8%)** | **190 (47.6%)** | **+28.8** |
+
+Mid-document fact set (n=30, all 30 targets reachable — passage coverage is 100%, so the
+`--both-indexed-only` restriction is a no-op here and the confound that produced three
+earlier wrong answers cannot apply):
+
+| | document | passages |
+|---|---|---|
+| rank-1 | 4/30 (13.3%) | **14/30 (46.7%)** |
+| top-5 | 13/30 (43%) | **26/30 (87%)** |
+| absent | 12/30 | **2/30** |
+
+### Verdicts, stated plainly
+
+- **SC-101 — FAIL.** Needs ≥80% rank-1 at ≥2000 tokens. Passages give **47.6%**. Against
+  the 14% baseline in the criterion's own text this is a large gain, and it is not the bar.
+- **SC-102 — FAIL.** Requires that *no* band regress. Three do: −1.5, −4.9, −2.1 points on
+  the short bands. Small, consistent, and real at n=1216–2293 — not noise, which is exactly
+  what a full census buys.
+- **SC-103 — FAIL.** Needs ≥75% rank-1 on mid-document facts. Passages give **46.7%**.
+
+### What the numbers actually say
+
+**The larger embedding model alone did not fix long memos.** The document path at 2000+ is
+18.8%, against R-01's 14% on the small model. Retrieving a 3,000-token memo as one vector
+fails for a structural reason a better encoder does not address: the fact is diluted by
+everything around it. That was the premise of this whole feature and it now has a direct
+measurement rather than an inference.
+
+**The remaining gap is ranking, not retrieval.** Top-5 on the fact set is 26/30 (87%) while
+rank-1 is 14/30 (47%). The correct memo is nearly always *found* and lands at position 2–5.
+No amount of further indexing moves that; a re-ranker over the candidate set does. This is
+the strongest available evidence for T240–T243 being the next work, and it converts them
+from a design preference into the measured bottleneck.
+
+**The short-band regression is the honest cost.** Chunking a 200-token memo splits an
+already-coherent unit, and its best passage matches a title query slightly worse than the
+whole memo does. SC-102 exists to catch exactly this. It argues for routing by size rather
+than replacing one path with the other — the document path is better below ~1000 tokens and
+much worse above ~2000, and both are live (FR-113), so the router already has what it needs.
+
+### T271 was not achieved as written
+
+T271 asks for the corpus to be "chunked once rather than embedded twice". It was not: run 3
+wrote document embeddings only, so the passage index was a **second** full-corpus embed
+(~$0.85). Paid deliberately — a third migration costs more — but the task is recorded as
+done-with-deviation rather than done, and inline chunking is still owed for the next
+migration.
+
+### One measurement caveat
+
+One passage-path query (`ec06fbb6`) timed out at 60s and was scored `absent`, which is the
+conservative direction. 1 of 7,221.

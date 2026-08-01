@@ -8,15 +8,19 @@ sample disagreed, the larger sample won and the old number was annotated, not de
 | spec | state | tasks |
 |---|---|---|
 | **001 — memo renovation** | Built and green. Everything open is operator/runtime or blocked. | 84 done · 16 open · 2 withdrawn |
-| **002 — passage retrieval** | **Phase D complete.** **Phase E measured and correctly blocked: SC-101 and SC-103 both fail.** T253 done — and it ruled out chunk tuning as the fix. | 26 done · 12 open · 1 partial |
+| **002 — passage retrieval** | **Corpus re-migrated onto 3-large and fully passage-indexed (7,336/7,336, 0 errors).** Measured by full census, no sampling: **SC-101, SC-102 and SC-103 all FAIL** — and top-5 at 87% vs rank-1 at 47% says the remainder is a **ranking** problem, so T240–T243 is now the measured bottleneck rather than a design preference. See R-09. | 29 done · 9 open · 1 partial |
 | **003 — agentic memory** | Design only, by intent. No tasks.md yet. | — |
 
-**Tests**: 438 passing in docker (`docker compose run --rm test`). Host runs are not
-trustworthy here — see the note in `docker-compose.yml`.
+**Tests**: 466 passing in docker (`docker compose --profile test run --rm test`). Host runs
+are not trustworthy here — see the note in `docker-compose.yml`. (This line read 438 for two
+days after the count had moved; a stale number does not look stale, it looks authoritative.)
 
-The +12 since yesterday are **tests of the measurement code itself** (T255). Every
-defect this feature has produced was in the instrument rather than in retrieval, and
-`scripts/` was not in the test image at all, so none of it was covered.
+The +15 on 2026-08-01 cover **the corpus indexer's accounting** and **write-lock
+contention**. On the latter, said plainly because it would otherwise be assumed: reverting
+the fix leaves the three concurrency tests GREEN — the test container is a handful of rows on
+a throwaway file and cannot reproduce real contention. What catches the regression is a
+source scan asserting no write path uses a bare `BEGIN`, plus a test counting concurrent
+writers inside the write body and requiring the answer to be 1.
 
 ---
 
