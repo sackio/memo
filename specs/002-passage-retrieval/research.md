@@ -618,6 +618,17 @@ indexes, merges by document id, and gives each document the score from the path 
 its own token count — deliberately not a hybrid score, but still a **cross-path re-sort**. It
 is **not active** and no measurement here covers it.
 
+⚠️ **`size-routed` also has a suspected defect that has nothing to do with the prefix.** Short
+documents keep a whole-document cosine; long ones keep a chunk-level cosine; the merged list
+is then **ranked across both**. Those two scores come from different indexes with different
+score distributions — a short passage tends to score higher against a query than a long
+document does, for reasons of length rather than relevance — so the ordering would be biased
+toward whichever path produces larger numbers, systematically, before any prefix exists.
+"Scores unmodified" is the property that makes this wrong rather than the safeguard it reads
+as: a fusion would at least rank-normalise, a merge preserves the incomparability. **Suspected,
+not measured** — the two distributions have not been compared here, and that comparison is
+owed before the mode is enabled. (Raised by the `embeddings` seat, 2026-08-02.)
+
 That mode is worth measuring before it is ever switched on, because a sibling service
 measured a query prefix at **+7.5 points rank-1 vector-only and −8.0 points through RRF
 fusion** on one corpus: a post-embedding ranking layer reversed the sign rather than shrinking
