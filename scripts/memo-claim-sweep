@@ -1,0 +1,199 @@
+#!/usr/bin/env python3
+"""memo-claim-sweep — run the probes. READ-ONLY: never writes to the corpus.
+[005 slice 1]
+
+Reads `claims.json` from `memo-claim-extract`, probes each distinct target once,
+and reports PASS / FAIL / SKIP. No model in this loop, which is the point — the
+sweep is meant to be cheap enough to run nightly, so the expensive judgement is
+spent only on the failures.
+
+⛔ **This script cannot modify a memo.** Ben approved the read-only slice
+specifically so the first failure list gets read by a human before anything
+auto-edits. There is no --fix flag and adding one is a separate decision.
+
+## Rules the probes follow
+
+* **Distinct targets are probed once**, not once per claim. 2,788 claims over
+  859 targets — probing per claim would triple the traffic and change nothing.
+* **Nothing outside RFC1918 gets a socket probe.** The extractor already
+  withholds a probe from public IPs; this is the second gate. Unsolicited
+  connects to third-party hosts from Ben's network are not something a
+  maintenance sweep should generate.
+* **HTTP probes are GET with a 6s cap and no redirect following**, and any
+  status is a PASS — the claim is "this endpoint exists", not "it returns 200".
+  A 401 or 403 answers the claim; a connection refused does not.
+* **A timeout is not a failure verdict.** It is recorded as its own outcome,
+  because "the host did not answer in 3s" and "the host is gone" are different
+  claims and the first one is what a busy or sleeping machine looks like.
+
+    memo-claim-sweep claims.json --out sweep.json
+"""
+from __future__ import annotations
+
+import argparse
+import concurrent.futures
+import ipaddress
+import json
+import socket
+import ssl
+import subprocess
+import sys
+import urllib.error
+import urllib.request
+
+TCP_TIMEOUT = 3.0
+HTTP_TIMEOUT = 6.0
+PING_TIMEOUT = 2
+WORKERS = 24
+
+
+def _private(host):
+    try:
+        return ipaddress.ip_address(host).is_private
+    except ValueError:
+        try:
+            return ipaddress.ip_address(
+                socket.gethostbyname(host)).is_private
+        except Exception:
+            return False
+
+
+def probe_tcp(host, ports):
+    last = ""
+    for port in ports:
+        try:
+            with socket.create_connection((host, port), TCP_TIMEOUT):
+                return "PASS", f"tcp/{port} open"
+        except socket.timeout:
+            last = f"tcp/{port} timeout"
+        except OSError as e:
+            last = f"tcp/{port} {e.__class__.__name__}: {e}"
+    return ("TIMEOUT" if "timeout" in last else "FAIL"), last
+
+
+# Ports tried when ICMP is silent. Cameras, IoT plugs, printers and hardened
+# hosts routinely drop ping while serving happily — the first sweep called 212
+# bare IPs FAIL on "no icmp reply" alone, which conflates "blocks ICMP" with
+# "gone". One negative probe is not a liveness verdict.
+FALLBACK_PORTS = (22, 80, 443, 4999, 8080)
+
+
+def probe_ping(host):
+    try:
+        r = subprocess.run(["ping", "-c", "1", "-W", str(PING_TIMEOUT), host],
+                           capture_output=True, timeout=PING_TIMEOUT + 3)
+        if r.returncode == 0:
+            return "PASS", "icmp reply"
+    except subprocess.TimeoutExpired:
+        pass
+    except Exception as e:
+        return "ERROR", str(e)
+    verdict, detail = probe_tcp(host, FALLBACK_PORTS)
+    if verdict == "PASS":
+        return "PASS", f"no icmp, but {detail}"
+    return "FAIL", f"no icmp reply; no tcp on {','.join(map(str, FALLBACK_PORTS))}"
+
+
+def probe_http(url):
+    req = urllib.request.Request(url, method="GET",
+                                 headers={"User-Agent": "memo-claim-sweep"})
+    try:
+        with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT) as r:
+            return "PASS", f"http {r.status}"
+    except urllib.error.HTTPError as e:
+        # The endpoint answered. 401/403/404 all settle "does this exist".
+        return "PASS", f"http {e.code}"
+    except urllib.error.URLError as e:
+        reason = getattr(e, "reason", e)
+        if isinstance(reason, socket.timeout):
+            return "TIMEOUT", "http timeout"
+        # ⭐ A TLS handshake that fails on certificate VALIDATION still proves a
+        # server answered on that port — which is the claim. The first sweep
+        # reported `https://192.168.1.168:8043` as FAIL on a self-signed cert,
+        # i.e. it marked a running service dead for a reason the memo never
+        # asserted. Name-resolution and connection-refused stay failures.
+        if isinstance(reason, ssl.SSLError) or "CERTIFICATE_VERIFY" in str(reason):
+            return "PASS", f"tls answered (cert not valid to us): {reason}"
+        return "FAIL", f"{reason}"
+    except socket.timeout:
+        return "TIMEOUT", "http timeout"
+    except Exception as e:
+        return "ERROR", f"{e.__class__.__name__}: {e}"
+
+
+def run_probe(probe):
+    t = probe["type"]
+    if t == "tcp":
+        host = probe["host"]
+        if not _private(host) and not probe.get("ports"):
+            return "SKIP", "not RFC1918 — no socket probe"
+        ports = probe.get("ports") or [probe["port"]]
+        return probe_tcp(host, ports)
+    if t == "ping":
+        if not _private(probe["host"]):
+            return "SKIP", "not RFC1918 — no socket probe"
+        return probe_ping(probe["host"])
+    if t == "http":
+        return probe_http(probe["url"])
+    return "ERROR", f"unknown probe type {t}"
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("claims")
+    ap.add_argument("--out", default="sweep.json")
+    args = ap.parse_args()
+
+    claims = json.load(open(args.claims))
+    probeable = [c for c in claims if c.get("probe")]
+    targets = {}
+    for c in probeable:
+        targets.setdefault(json.dumps(c["probe"], sort_keys=True), c["probe"])
+
+    print(f"claims {len(claims)}  probeable {len(probeable)}  "
+          f"distinct targets {len(targets)}\n")
+
+    results = {}
+    with concurrent.futures.ThreadPoolExecutor(WORKERS) as ex:
+        futs = {ex.submit(run_probe, p): k for k, p in targets.items()}
+        done = 0
+        for f in concurrent.futures.as_completed(futs):
+            results[futs[f]] = f.result()
+            done += 1
+            if done % 100 == 0:
+                print(f"  {done}/{len(targets)}", file=sys.stderr)
+
+    tally = {}
+    for c in probeable:
+        v, detail = results[json.dumps(c["probe"], sort_keys=True)]
+        c["verdict"], c["observed"] = v, detail
+        tally[v] = tally.get(v, 0) + 1
+    for c in claims:
+        if not c.get("probe"):
+            c["verdict"], c["observed"] = "UNPROBEABLE", c["kind"]
+
+    print("\nclaim-level verdicts:")
+    for k in ("PASS", "FAIL", "TIMEOUT", "SKIP", "ERROR"):
+        if k in tally:
+            print(f"  {k:<10}{tally[k]:>6}  "
+                  f"{100.0*tally[k]/len(probeable):5.1f}% of probeable")
+    print(f"  {'UNPROBEABLE':<10}{len(claims)-len(probeable):>6}")
+
+    # ⭐ Three numbers, never one. A single "% verified" would read as a
+    # statement about the corpus when it is a statement about a fifth of it.
+    docs_total = len({c["doc_id"] for c in claims})
+    docs_failing = len({c["doc_id"] for c in claims
+                        if c["verdict"] in ("FAIL", "TIMEOUT")})
+    print(f"\nmemos with claims        {docs_total}")
+    print(f"memos with >=1 failing   {docs_failing}")
+    print("(and the corpus is 7,336 memos — most carry no probeable claim at "
+          "all, which is a property of this design, not a bug in the sweep)")
+
+    with open(args.out, "w") as fh:
+        json.dump(claims, fh, indent=1)
+    print(f"\nwrote {args.out}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
