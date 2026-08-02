@@ -1,0 +1,236 @@
+#!/usr/bin/env python3
+"""memo-calibrate-drift — measure what the 0.999 provenance threshold must clear.
+
+`memo-verify-provenance` compares a freshly-embedded chunk against the vector on
+disk and passes above 0.999. That threshold is only defensible if someone has
+measured how far apart those two can drift when NOTHING is wrong. This measures
+it, on this corpus against this endpoint.
+
+⭐ **Re-run this after any GPU, driver, vLLM, or model-serving change.** The floor
+is set by how much the serving environment has changed since the vectors were
+written, and that grows on its own with no event to mark it — a provenance
+threshold decays exactly like a provenance record does. Nothing will fail loudly
+when the margin erodes; the first symptom is a false PROVENANCE MISMATCH on a
+healthy corpus.
+
+Four quantities, one of which is a control:
+
+  A. composition  cos(singleton_i, batch16_i)   — does call shape move a vector?
+  B. drift-now    cos(singleton_i, stored_i)    — how far has NOW moved from WRITE?
+  C. drift-batch  cos(batch16_i,   stored_i)    — same, at production call shape
+  N. control      cos(singleton_0, singleton_k) — two UNRELATED chunks. Must land
+                                                  far from 1.0. If it does not,
+                                                  the comparison is broken and
+                                                  A/B/C are all meaningless.
+
+**A and C exist to separate two things that get conflated.** If B is large you
+cannot tell, from B alone, whether the fresh vector differs because it was
+computed as a singleton (call shape) or because the serving environment moved
+(write-time drift). C holds call shape fixed at what the corpus was actually
+written with, so C-vs-B isolates it.
+
+⭐ **WHY IT REPEATS, AND WHY YOU MUST NOT READ ONE RUN.** These quantities are not
+stable at n=16. Two back-to-back runs on 2026-08-02 (same corpus, same endpoint,
+minutes apart) disagreed on *which* rows deviate and on whether call shape
+mattered at all:
+
+    run 1   A 8.66e-05   B 1.15e-04   C 1.15e-04    B == C on every row
+    run 2   A 1.71e-04   B 1.59e-04   C 1.15e-04    B != C; A was the LARGEST
+
+Most rows return exactly 1.0 in all three columns; the rest deviate at ~1e-4, and
+part of which ones move is a lottery. **So a single run can report A = 0.000000
+and conclude "call shape does nothing" — and a second run refutes it.** That is
+almost certainly how two careful seats measured this quantity on the same class of
+stack and got answers three orders of magnitude apart. Hence `--repeat`: the
+reported floor is the WORST across repeats, and the per-round line plus the moved
+rows are printed so instability is visible rather than averaged away — it is the
+repetition, not the sample size, that separates stable drift from per-call noise.
+
+== BASELINE MEASURED 2026-08-02 02:55–03:10 EDT ==
+qwen3-embedding-4b @2560, self-hosted vLLM at 192.168.1.5:31536, n=16 stride 1222
+over 19,554 chunks, under GPU contention (a concurrent 7,221-query census plus
+another seat's long run). Worst across 3 rounds × 16 chunks:
+
+    A composition   1.18e-04
+    B drift-now     1.18e-04
+    C drift-batch   1.15e-04
+    control         0.3468 – 0.3473
+
+**0.999 clears the worst by 8.5×.** With three rounds the per-row detail separates
+two components that a single round conflates:
+
+  · **STABLE** — 4 of the 16 chunks differed from stored in EVERY round, at
+    byte-identical values each time (0.99994138, 0.99990418, 0.99988527,
+    0.99990468), and identically whether re-embedded singleton or batched. Nothing
+    about the call moves these: the endpoint simply does not reproduce today what
+    it wrote for those chunks. This is write-time-vs-now drift, and it is the
+    component that grows silently.
+  · **SPORADIC** — which *additional* row moves varies per round (5, then 7, then
+    4 rows of 16). On these, A ≠ 1 while C = 1.0: the singleton call differed and
+    the batched one happened to land exactly on the stored value. Per-call
+    nondeterminism, not a property of call shape.
+
+Both components sit at ~1e-4. **What cannot be claimed from this data is that
+call shape does nothing** — round 1 alone suggested exactly that, and round 2
+refuted it.
+
+⚠️ **That is a property of THIS inference stack, not of embeddings in general.**
+The same quantity measured ~1.2e-3 on OpenRouter/text-embedding-3-large — ~10×
+larger, and large enough to matter. A constant measured on one serving stack does
+not transfer to another; that is the whole reason this script exists rather than a
+number written into a comment. (Corrected 2026-08-02 after I had done exactly
+that: `memo-verify-provenance` briefly carried the OpenRouter figure as though it
+described this endpoint.)
+
+⚑ Singleton re-embedding remains the verifier's deliberate choice: it is the
+worst-case call shape against a batched writer, so a pass is conservative rather
+than flattering.
+
+    docker compose exec -T memo-v2 python3 /app/scripts/memo-calibrate-drift
+"""
+from __future__ import annotations
+
+import argparse
+import asyncio
+import math
+import struct
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, "/app/src")
+
+from memo import db, embeddings  # noqa: E402
+from memo.config import settings  # noqa: E402
+
+# Matches the batch size the corpus was WRITTEN with. Changing this measures a
+# different question than the one the verifier faces.
+WRITE_BATCH = 16
+CONTROL_MAX = 0.999
+
+
+def cos(a, b) -> float:
+    dot = sum(x * y for x, y in zip(a, b))
+    na = math.sqrt(sum(x * x for x in a))
+    nb = math.sqrt(sum(y * y for y in b))
+    return dot / (na * nb) if na and nb else 0.0
+
+
+async def main() -> int:
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--sample", type=int, default=WRITE_BATCH,
+                    help="chunks to draw; also the batch size used for A and C")
+    # Not a confidence knob — a REFUTATION knob. One run of a nondeterministic
+    # quantity can legitimately return 0.000000 and support the wrong conclusion.
+    ap.add_argument("--repeat", type=int, default=3,
+                    help="independent measurement rounds; the floor reported is "
+                         "the worst across all of them")
+    args = ap.parse_args()
+
+    conn = db._get_or_create_conn(db.global_path())
+    rows = conn.execute(
+        "SELECT doc_id, chunk_index, text FROM document_chunks ORDER BY created_at"
+    ).fetchall()
+    if len(rows) < 2:
+        print("need at least 2 indexed chunks to calibrate (the control needs a "
+              "second, unrelated chunk)", file=sys.stderr)
+        return 2
+
+    total = len(rows)
+    step = max(1, total // args.sample)
+    rows = rows[::step][:args.sample]
+
+    print(f"model      : {settings.embedding_model} @ {settings.embedding_dimensions}")
+    print(f"sampled    : {len(rows)} of {total} chunks, stride {step} "
+          f"(stratified by created_at)")
+    print(f"batch size : {len(rows)}")
+
+    print(f"repeats    : {args.repeat} (floor reported is the worst across all)")
+    texts = [r[2] for r in rows]
+
+    stored = []
+    for doc_id, idx, _ in rows:
+        blob = conn.execute(
+            "SELECT embedding FROM chunk_embeddings WHERE doc_id=? AND chunk_index=?",
+            (doc_id, idx)).fetchone()
+        if not blob:
+            print(f"{doc_id[:8]}#{idx}: chunk row with no vector — the index is "
+                  f"inconsistent", file=sys.stderr)
+            return 2
+        stored.append(struct.unpack(f"{len(blob[0]) // 4}f", blob[0]))
+
+    comp: list[float] = []
+    dnow: list[float] = []
+    dbat: list[float] = []
+    control_worst = 0.0
+
+    for r in range(args.repeat):
+        # Serially, one request each — this IS the call shape the verifier uses.
+        singles = [await embeddings.embed(t) for t in texts]
+
+        batched = await embeddings.embed_batch(texts)
+        if len(batched) != len(texts):
+            # A short or reordered batch response pairs vectors to the WRONG chunks
+            # and manufactures a drift figure out of its own plumbing. Refuse rather
+            # than report.
+            print(f"batch returned {len(batched)} vectors for {len(texts)} inputs — "
+                  f"cannot pair; refusing to report a number", file=sys.stderr)
+            return 2
+
+        ra, rb, rc = [], [], []
+        moved = []
+        for i, (doc_id, idx, _) in enumerate(rows):
+            a, b, c = (cos(singles[i], batched[i]),
+                       cos(singles[i], stored[i]),
+                       cos(batched[i], stored[i]))
+            ra.append(a); rb.append(b); rc.append(c)
+            if min(a, b, c) < 1.0 - 1e-9:
+                moved.append(f"{doc_id[:8]}#{idx} "
+                             f"A={a:.8f} B={b:.8f} C={c:.8f}")
+
+        comp += ra; dnow += rb; dbat += rc
+
+        # THE CONTROL, every round. Without it a stack that returns ~1.0 to
+        # everything produces a full column of clean ticks and reads as a tight,
+        # healthy floor.
+        control = cos(singles[0], singles[-1])
+        control_worst = max(control_worst, control)
+
+        print(f"\nround {r + 1}/{args.repeat}: "
+              f"A {1 - min(ra):.2e}  B {1 - min(rb):.2e}  C {1 - min(rc):.2e}   "
+              f"control {control:.6f}   ({len(moved)} of {len(rows)} rows moved)")
+        for line in moved:
+            print(f"    {line}")
+
+    if control_worst >= CONTROL_MAX:
+        print("CONTROL FAILED — the comparison returns ~1.0 to unrelated text, so "
+              "every figure above is meaningless. The instrument is broken, not "
+              "the corpus.", file=sys.stderr)
+        return 2
+
+    def rep(name, xs):
+        worst = min(xs)
+        print(f"  {name:<15} worst {worst:.8f}   (1 - worst = {1 - worst:.2e})")
+
+    print(f"\nacross {args.repeat} rounds × {len(rows)} chunks:")
+    rep("A composition", comp)
+    rep("B drift-now", dnow)
+    rep("C drift-batch", dbat)
+
+    floor = min(min(dnow), min(dbat))
+    margin = (1 - CONTROL_MAX) / max(1 - floor, 1e-12)
+    print(f"\nThe threshold must clear the worst of B and C — those are what the "
+          f"verifier actually computes.\n0.999 clears {floor:.8f} by {margin:.1f}×.")
+    if margin < 2:
+        print("MARGIN TOO THIN — a healthy corpus is within 2× of tripping the "
+              "provenance check. Raise the threshold or investigate what moved in "
+              "the serving environment.", file=sys.stderr)
+        return 2
+    return 0
+
+
+if __name__ == "__main__":
+    rc = asyncio.run(main())
+    print(f"EXIT={rc}", flush=True)
+    raise SystemExit(rc)

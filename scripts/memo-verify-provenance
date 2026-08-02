@@ -25,13 +25,37 @@ migrations shared the GPU — and a hash comparison would flag that as a mismatc
 it isn't. Validate under load, not on an idle box. (Technique from the
 `embeddings` seat's endpoint identity canary, pointed at a corpus instead.)
 
-⚠️ **THE THRESHOLD ALSO ABSORBS BATCH-COMPOSITION DRIFT, AND THAT IS DELIBERATE.**
-A vector's value depends on what it was batched with — `mind` measured the same
-text at exactly 1.000000 as a singleton and 0.9988–1.0 inside a 100-item batch,
-which is ~1.2e-3 and comfortably larger than the ~1e-4 drift attributed to load.
-This corpus was WRITTEN in batches of 16; this verifier re-embeds each sample as
-a SINGLETON. So every cosine below carries a composition component on top of any
-genuine nondeterminism, and 0.999 has to clear both.
+⚠️ **WHAT THE THRESHOLD ACTUALLY HAS TO CLEAR — MEASURED HERE, 2026-08-02.**
+Run `memo-calibrate-drift` for the current figures; as of 03:10 EDT that day, on
+this corpus against this endpoint (worst across 3 rounds × 16 chunks, under GPU
+contention):
+
+    singleton vs stored   1.18e-04
+    batch-16  vs stored   1.15e-04
+    singleton vs batch-16 1.18e-04
+
+**0.999 clears the worst by 8.5×.** Four of the sixteen chunks differ from stored
+in every round at byte-identical values, singleton and batched alike — the
+endpoint does not reproduce today what it wrote for those chunks. That is the
+component this threshold really has to survive.
+
+⚠️ **Do not read one round.** Round 1 alone showed singleton-vs-batch at exactly
+1.0 on 15 of 16 rows and would have supported "call shape contributes nothing";
+round 2 refuted it. Which rows move is partly a lottery, so a single run of this
+measurement can land anywhere from 0.000000 to ~1.7e-04.
+
+⛔ **An earlier version of this comment claimed batch composition contributed
+~1.2e-3 and that 0.999 had to absorb it. That figure was measured on
+OpenRouter/text-embedding-3-large — a different inference stack — and is ~14×
+larger than anything this endpoint produces.** I imported another service's
+constant and wrote it here as though it described ours. It does not. (The
+conclusion below was unaffected; only the stated reason was wrong.)
+
+⇒ **The consequence that outlives the correction:** the floor is set by how much
+the serving environment has changed since the vectors were written, and that grows
+on its own with no event to mark it. Re-run `memo-calibrate-drift` after any GPU,
+driver, or serving change — an eroding margin produces no symptom until it
+produces a false PROVENANCE MISMATCH on a healthy corpus.
 
 Singleton re-embedding is the deliberate choice, for two reasons:
   - it is the WORST-CASE composition mismatch against a batched writer, so a pass
