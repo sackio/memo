@@ -49,7 +49,8 @@ def routed(monkeypatch):
     async def _search_passages(*_a, **_k):
         return state["passages"]
 
-    monkeypatch.setattr(main.embeddings, "embed", _embed)
+    monkeypatch.setattr(main.embeddings, "embed_query", _embed)
+    monkeypatch.setattr(main.embeddings, "embed_document", _embed)
     monkeypatch.setattr(main.db, "search", _search)
     monkeypatch.setattr(main.db, "search_passages", _search_passages)
     monkeypatch.setattr(settings, "memo_size_route_threshold", 1000)

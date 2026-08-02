@@ -37,7 +37,8 @@ def no_such_memo(monkeypatch):
         return [0.0] * 8
 
     monkeypatch.setattr(main.db, "update", _none)
-    monkeypatch.setattr(main.embeddings, "embed", _no_embed)
+    monkeypatch.setattr(main.embeddings, "embed_query", _no_embed)
+    monkeypatch.setattr(main.embeddings, "embed_document", _no_embed)
 
 
 @pytest.fixture
@@ -49,7 +50,8 @@ def existing_memo(monkeypatch):
         return [0.0] * 8
 
     monkeypatch.setattr(main.db, "update", _doc)
-    monkeypatch.setattr(main.embeddings, "embed", _no_embed)
+    monkeypatch.setattr(main.embeddings, "embed_query", _no_embed)
+    monkeypatch.setattr(main.embeddings, "embed_document", _no_embed)
 
 
 def test_update_miss_is_not_a_bare_null(no_such_memo):

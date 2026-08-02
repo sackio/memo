@@ -35,8 +35,10 @@ def _stub_embeddings(monkeypatch):
         h = int(hashlib.sha256(t.encode()).hexdigest(), 16)
         v[10 + (h % 32)] = 0.24310871685131  # sqrt(1 - 0.97**2)
         return v
-    monkeypatch.setattr(embeddings, "embed", fake_embed)
-    monkeypatch.setattr(recall_mod.embeddings, "embed", fake_embed)
+    monkeypatch.setattr(embeddings, "embed_query", fake_embed)
+    monkeypatch.setattr(embeddings, "embed_document", fake_embed)
+    monkeypatch.setattr(recall_mod.embeddings, "embed_query", fake_embed)
+    monkeypatch.setattr(recall_mod.embeddings, "embed_document", fake_embed)
 
 
 class NoLLM:
@@ -48,7 +50,7 @@ class NoLLM:
 
 
 async def seed(content):
-    emb = await embeddings.embed(content)
+    emb = await embeddings.embed_document(content)
     return await db.store(None, content, None, ["family"], {}, emb)
 
 

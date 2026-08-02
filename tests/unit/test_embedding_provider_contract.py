@@ -49,10 +49,22 @@ def _embed_calls() -> list[ast.Call]:
 
 
 def test_both_embed_call_sites_are_found():
-    """Guard the guard: if this drops to 0 the checks below pass vacuously."""
-    assert len(_embed_calls()) == 2, (
-        "expected exactly two provider calls (embed, embed_batch) — if the module "
-        "was restructured, update this test rather than deleting it")
+    """Guard the guard: if this drops to 0 the checks below pass vacuously.
+
+    Was 2 (`embed`, `embed_batch`) until 2026-08-02. The ambiguous `embed()` was
+    DELETED and replaced by `embed_query` / `embed_document`, so the provider is now
+    called from three places. [002/FR-111]
+
+    ⚠️ Raise this number only when a real new provider call is added. If it ever
+    needs *lowering*, ask why a call site disappeared — the last time these
+    functions were restructured it was because one of them was silently serving two
+    incompatible purposes.
+    """
+    calls = _embed_calls()
+    assert len(calls) == 3, (
+        "expected exactly three provider calls (embed_query, embed_document, "
+        "embed_batch) — if the module was restructured, update this test rather "
+        f"than deleting it; found {len(calls)}")
 
 
 def test_no_call_site_passes_a_dimensions_parameter():

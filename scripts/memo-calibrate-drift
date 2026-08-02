@@ -167,7 +167,7 @@ async def main() -> int:
 
     for r in range(args.repeat):
         # Serially, one request each — this IS the call shape the verifier uses.
-        singles = [await embeddings.embed(t) for t in texts]
+        singles = [await embeddings.embed_document(t) for t in texts]
 
         batched = await embeddings.embed_batch(texts)
         if len(batched) != len(texts):

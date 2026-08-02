@@ -284,7 +284,7 @@ async def _verify_document_embeddings(conn, args) -> tuple[int, int, float]:
         # ⛔ BARE, for the same reason as the chunk pass above — see that comment.
         # A document wrongly routed through a future embed_query() would store a
         # PREFIXED vector, and only a bare re-embed here disagrees with it.
-        fresh = await embeddings.embed(content)
+        fresh = await embeddings.embed_document(content)
         if len(stored) != len(fresh):
             print(f"  {doc_id[:8]}: width {len(stored)} stored vs {len(fresh)} fresh",
                   file=sys.stderr)
@@ -305,7 +305,7 @@ async def _verify_document_embeddings(conn, args) -> tuple[int, int, float]:
             (rows[0][0],)).fetchone()
         if blob:
             stored_a = struct.unpack(f"{len(blob[0]) // 4}f", blob[0])
-            control = _cosine(stored_a, await embeddings.embed(rows[-1][1]))
+            control = _cosine(stored_a, await embeddings.embed_document(rows[-1][1]))
             print(f"negative control (mismatched pair): cosine={control:.4f}")
             if control >= args.threshold:
                 print("NEGATIVE CONTROL FAILED on document_embeddings — the "
@@ -405,7 +405,7 @@ async def main() -> int:
         # ⇒ Prefixing here would make the detector agree with exactly the defect it
         # exists to detect. (`embeddings` seat, 2026-08-02, raised while reviewing
         # the instruct-prefix regression.)
-        fresh = await embeddings.embed(text)
+        fresh = await embeddings.embed_document(text)
         if len(stored) != len(fresh):
             print(f"  {doc_id[:8]}#{idx}: width {len(stored)} stored vs "
                   f"{len(fresh)} fresh", file=sys.stderr)
@@ -429,7 +429,7 @@ async def main() -> int:
             "SELECT embedding FROM chunk_embeddings WHERE doc_id=? AND chunk_index=?",
             (rows[0][0], rows[0][1])).fetchone()
         stored_a = struct.unpack(f"{len(blob[0]) // 4}f", blob[0])
-        fresh_b = await embeddings.embed(rows[-1][2])
+        fresh_b = await embeddings.embed_document(rows[-1][2])
         control = _cosine(stored_a, fresh_b)
         print(f"\nnegative control (mismatched pair): cosine={control:.4f}")
         if control >= args.threshold:

@@ -186,7 +186,7 @@ async def store(req: MediatorStoreRequest, *,
         "reopenability": req.reopenability.model_dump() if req.reopenability else None,
     }
 
-    embedding = await embeddings.embed(req.content)
+    embedding = await embeddings.embed_document(req.content)
 
     # bypass_mediator skips reconcile entirely (operator-authorized escape
     # hatch, e.g. bulk migration).

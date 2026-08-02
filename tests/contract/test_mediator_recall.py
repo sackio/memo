@@ -32,8 +32,10 @@ def _stub_embeddings(monkeypatch):
         h = int(hashlib.sha256(t.encode()).hexdigest(), 16)
         v[len(TOPICS) + 1 + (h % 64)] = 0.3122498999199199
         return v
-    monkeypatch.setattr(embeddings, "embed", fake_embed)
-    monkeypatch.setattr(recall_mod.embeddings, "embed", fake_embed)
+    monkeypatch.setattr(embeddings, "embed_query", fake_embed)
+    monkeypatch.setattr(embeddings, "embed_document", fake_embed)
+    monkeypatch.setattr(recall_mod.embeddings, "embed_query", fake_embed)
+    monkeypatch.setattr(recall_mod.embeddings, "embed_document", fake_embed)
 
 
 class StubLLM:
@@ -51,7 +53,7 @@ class StubLLM:
 
 
 async def seed(content, *, tags=None, created_at=None, valid_until=None, cls="fact"):
-    emb = await embeddings.embed(content)
+    emb = await embeddings.embed_document(content)
     doc_id = await db.store(None, content, None, tags or [], {}, emb)
     conn = db._get_or_create_conn(db.global_path())
     sets, params = ["class = ?"], [cls]

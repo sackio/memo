@@ -123,7 +123,7 @@ async def recall(req: RecallRequest, *, provider: LLMProvider | None = None) -> 
     )
 
     # 1. Semantic retrieval.
-    embedding = await embeddings.embed(req.query)
+    embedding = await embeddings.embed_query(req.query)
     limit = max(OVERFETCH_MIN, req.max_results * OVERFETCH_FACTOR)
     rows = await db.search(
         db_path=None, embedding=embedding, limit=limit, min_score=None,

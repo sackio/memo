@@ -47,8 +47,10 @@ def _stub_embeddings(monkeypatch):
         h = int(hashlib.sha256(t.encode()).hexdigest(), 16)
         v[20 + (h % 32)] = 0.19
         return v
-    monkeypatch.setattr(embeddings, "embed", fake_embed)
-    monkeypatch.setattr(recall_mod.embeddings, "embed", fake_embed)
+    monkeypatch.setattr(embeddings, "embed_query", fake_embed)
+    monkeypatch.setattr(embeddings, "embed_document", fake_embed)
+    monkeypatch.setattr(recall_mod.embeddings, "embed_query", fake_embed)
+    monkeypatch.setattr(recall_mod.embeddings, "embed_document", fake_embed)
 
 
 class NoLLM:
@@ -60,7 +62,7 @@ class NoLLM:
 
 
 async def seed(content, tags, created_at):
-    emb = await embeddings.embed(content)
+    emb = await embeddings.embed_document(content)
     doc_id = await db.store(None, content, None, tags, {}, emb)
     conn = db._get_or_create_conn(db.global_path())
     conn.execute("UPDATE documents SET created_at = ?, valid_from = ? WHERE id = ?",

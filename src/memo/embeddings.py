@@ -65,7 +65,76 @@ _client = AsyncOpenAI(
 MAX_INPUT_TOKENS = 8192
 
 
-async def embed(text: str) -> list[float]:
+# ⛔ THERE IS DELIBERATELY NO `embed()`. Call `embed_query` or `embed_document`.
+#
+# Until 2026-08-02 both callers shared one `embed()`, and the query/document
+# distinction existed only in the local variable name at each of 25 call sites.
+# That is not a stylistic problem: qwen3-embedding is trained for ASYMMETRIC
+# retrieval and wants an instruction prefix on the QUERY side only. memo sent bare
+# queries everywhere, which cost 20 rank-1 points across the whole corpus (R-10),
+# and nothing anywhere errored — a bare query is a perfectly valid embedding of the
+# wrong thing.
+#
+# Both directions of a wrong choice fail SILENTLY:
+#   a document routed through embed_query  -> stores a prefixed vector, corrupting
+#                                             a corpus row that will never match
+#   a query routed through embed_document  -> reproduces the R-10 regression
+#
+# So the ambiguous function is GONE rather than deprecated. A missing name is a
+# NameError at import; a deprecated one is a warning nobody reads. Removing the
+# default is what converts ~21 silent misclassifications into ~21 decisions someone
+# had to make on purpose. [002/FR-111]
+
+# The form Qwen3-Embedding's own documentation uses for retrieval queries. Held as
+# one constant because it is a live variable, not a formality: a sibling measured a
+# domain-specific task string at 7/10 against a generic one at 5/10 — with a worse
+# tail. Changing this string invalidates R-11's numbers, which were all measured on
+# exactly this text.
+QUERY_INSTRUCTION = (
+    "Instruct: Given a search query, retrieve relevant documents that match the "
+    "query\nQuery: {query}"
+)
+
+
+def _needs_query_instruction() -> bool:
+    """Only qwen3-family encoders want the prefix.
+
+    ⚠️ Model-conditional, because this is NOT universally correct. Sending an
+    instruction prefix to `text-embedding-3-*` just embeds the literal word
+    "Instruct:" along with the query and degrades it. v1 runs 3-small and must
+    never receive this. Keyed on the configured model rather than on a flag, so
+    switching encoders cannot leave the prefix on by accident.
+    """
+    return "qwen" in (settings.embedding_model or "").lower()
+
+
+async def embed_query(text: str) -> list[float]:
+    """Embed a SEARCH QUERY. Applies the encoder's query-side instruction.
+
+    Use this for anything a caller is searching WITH. If you are embedding
+    something being stored, you want `embed_document`.
+    """
+    if _needs_query_instruction():
+        text = QUERY_INSTRUCTION.format(query=text)
+    response = await _client.embeddings.create(
+        model=settings.embedding_model,
+        input=text,
+    )
+    return response.data[0].embedding
+
+
+async def embed_document(text: str) -> list[float]:
+    """Embed CONTENT BEING STORED. Never prefixed.
+
+    ⛔ Do not "make this consistent" with `embed_query`. Documents are bare on
+    purpose — that is what the model expects, and prefixing them would require
+    re-embedding the entire corpus to no benefit.
+
+    It is also load-bearing for detection: `memo-verify-provenance` re-embeds
+    stored text through this path and compares it to the stored vector, so a
+    document that was wrongly sent through `embed_query` fails loudly here. Make
+    the two agree about the prefix and both halves of that guard go blind at once.
+    """
     response = await _client.embeddings.create(
         model=settings.embedding_model,
         input=text,

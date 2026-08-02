@@ -77,4 +77,16 @@ def _no_network_embeddings(monkeypatch):
         v[h % settings.embedding_dimensions] = 1.0
         return v
 
-    monkeypatch.setattr(embeddings, "embed", fake_embed)
+    # BOTH sides, and deliberately the SAME stub. [002/FR-111]
+    #
+    # The real `embed_query` prepends qwen3's instruction and `embed_document` does
+    # not, so a test double that differed between them would make every stored
+    # vector and every query vector land in different places and nothing would
+    # retrieve anything. The distinction under test here is the ROUTING — which
+    # function each call site chose — not the prefix text.
+    #
+    # ⚠️ Patch both or neither. Patching one leaves the other making real network
+    # calls from a suite that runs with `network_mode: none`, which surfaces as a
+    # connection error far from its cause.
+    monkeypatch.setattr(embeddings, "embed_query", fake_embed)
+    monkeypatch.setattr(embeddings, "embed_document", fake_embed)

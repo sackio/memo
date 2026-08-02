@@ -98,7 +98,7 @@ async def on_infra_change(*, entity: str, old_value: str, new_value: str,
         new_content = (m.get("content") or "").replace(old_value, new_value)
         if new_content == m.get("content"):
             continue
-        embedding = await embeddings.embed(new_content)
+        embedding = await embeddings.embed_document(new_content)
         payload = {"content": new_content, "title": m.get("title"),
                    "tags": m.get("tags") or [], "metadata": m.get("metadata") or {},
                    "class": m.get("class"), "scope": m.get("scope") or ["global"],

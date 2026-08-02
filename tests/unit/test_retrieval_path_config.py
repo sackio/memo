@@ -34,7 +34,8 @@ def client(monkeypatch):
                  "passage": {"text": "p", "chunk_index": 0,
                              "token_start": 0, "token_end": 5}}]
 
-    monkeypatch.setattr(embeddings, "embed", _embed)
+    monkeypatch.setattr(embeddings, "embed_query", _embed)
+    monkeypatch.setattr(embeddings, "embed_document", _embed)
     monkeypatch.setattr(db, "search", _doc_search)
     monkeypatch.setattr(db, "search_passages", _passage_search)
     return TestClient(main.app)

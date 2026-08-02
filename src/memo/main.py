@@ -198,7 +198,7 @@ async def memo_update(
     typo. Check `updated`; false means re-look-up the id, not that it is gone.
     """
     await _reject_leaked_tool_call(content, tags, "memo_update")
-    embedding = await embeddings.embed(content) if content is not None else None
+    embedding = await embeddings.embed_document(content) if content is not None else None
     result = await db.update(
         db_path=db_path,
         doc_id=id,
@@ -242,7 +242,7 @@ async def memo_search(
     - after/before: Unix timestamps bounding created_at
     - min_tokens/max_tokens: bound by stored token_count of content
     """
-    embedding = await embeddings.embed(query)
+    embedding = await embeddings.embed_query(query)
     kwargs = dict(embedding=embedding, limit=limit, min_score=min_score, tags=tags or [],
                   after=after, before=before, min_tokens=min_tokens, max_tokens=max_tokens)
 
@@ -347,7 +347,7 @@ async def memo_list(
     - min_score: minimum cosine similarity (only applies when query is provided)
     """
     if query is not None:
-        embedding = await embeddings.embed(query)
+        embedding = await embeddings.embed_query(query)
         kwargs = dict(embedding=embedding, limit=limit, min_score=min_score, tags=tags or [],
                       after=after, before=before, min_tokens=min_tokens, max_tokens=max_tokens)
         if scope == "global" or (scope == "local" and db_path is None):
@@ -409,7 +409,7 @@ async def memo_context(
     )
 
     # Embed all queries concurrently
-    embedding_list = await asyncio.gather(*[embeddings.embed(q) for q in all_queries])
+    embedding_list = await asyncio.gather(*[embeddings.embed_query(q) for q in all_queries])
 
     # Determine search function based on scope
     if scope == "global" or db_path is None:
@@ -533,7 +533,7 @@ async def store_document(req: StoreRequest, request: Request):
         )
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
-    embedding = await embeddings.embed(req.content)
+    embedding = await embeddings.embed_document(req.content)
     doc_id = await db.store(
         db_path=req.db_path,
         content=req.content,
@@ -731,7 +731,7 @@ async def _ev_operator_directive(payload: dict[str, Any]) -> dict[str, Any]:
 
     from memo import db, embeddings
     from memo.auditor import actions as _actions
-    embedding = await embeddings.embed(content)
+    embedding = await embeddings.embed_document(content)
     memo_id = await db.store(db_path=None, content=content,
                              title="[operator directive] " + content[:60],
                              tags=["operator-directive", "auditor-calibration"],
@@ -1064,7 +1064,7 @@ async def supersede_document(req: SupersedeRequest, request: Request):
         by_alias=True,
         exclude={"old_id", "actor", "reason", "operator_directive_ref"},
     )
-    embedding = await embeddings.embed(req.content)
+    embedding = await embeddings.embed_document(req.content)
     result = await documents_repo.supersede(
         req.old_id, new_memo, embedding, req.actor,
         reason=req.reason,
@@ -1126,7 +1126,7 @@ async def list_documents(
     db_path: str | None = Query(default=None),
 ):
     if query is not None:
-        embedding = await embeddings.embed(query)
+        embedding = await embeddings.embed_query(query)
         results = await db.search(
             db_path=db_path, embedding=embedding, limit=limit, min_score=min_score,
             tags=tags, after=after, before=before, min_tokens=min_tokens, max_tokens=max_tokens,
@@ -1157,7 +1157,7 @@ async def update_document(doc_id: str, req: UpdateRequest, request: Request):
         )
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
-    embedding = await embeddings.embed(req.content) if req.content is not None else None
+    embedding = await embeddings.embed_document(req.content) if req.content is not None else None
     result = await db.update(
         db_path=req.db_path,
         doc_id=doc_id,
@@ -1205,7 +1205,7 @@ async def search_passages_endpoint(req: SearchRequest):
     shape as every wrong number this feature has produced. So the explicit
     endpoints are the measurement surface and `/search` is the product surface.
     """
-    embedding = await embeddings.embed(req.query)
+    embedding = await embeddings.embed_query(req.query)
     results = await db.search_passages(
         req.db_path, embedding, req.limit, req.min_score, req.tags,
         req.after, req.before, req.min_tokens, req.max_tokens)
@@ -1213,7 +1213,7 @@ async def search_passages_endpoint(req: SearchRequest):
 
 
 async def _document_search(req: SearchRequest) -> list[SearchResult]:
-    embedding = await embeddings.embed(req.query)
+    embedding = await embeddings.embed_query(req.query)
     results = await db.search(
         db_path=req.db_path,
         embedding=embedding,
@@ -1261,7 +1261,7 @@ async def search_documents(req: SearchRequest, response: Response):
     if path == "size-routed":
         return await _size_routed_search(req)
     if path == "passages":
-        embedding = await embeddings.embed(req.query)
+        embedding = await embeddings.embed_query(req.query)
         results = await db.search_passages(
             req.db_path, embedding, req.limit, req.min_score, req.tags,
             req.after, req.before, req.min_tokens, req.max_tokens)
@@ -1299,7 +1299,7 @@ async def _size_routed_search(req: SearchRequest) -> list[SearchResult]:
     between paths cannot be compared or thresholded. Each document keeps one
     path's score, unmodified.
     """
-    embedding = await embeddings.embed(req.query)
+    embedding = await embeddings.embed_query(req.query)
     over = max(req.limit * 3, 30)  # overfetch: the merge discards duplicates
 
     doc_hits = await db.search(
@@ -1415,7 +1415,18 @@ async def auto_store(req: AutoStoreRequest):
     await _reject_leaked_tool_call(extracted, tags, "auto_store:extracted")
 
     # 2. Embed extracted content and look for near-duplicates
-    embedding = await embeddings.embed(extracted)
+    #
+    # ⚠️ DOCUMENT, even though the very next call is a search. This is the one site
+    # where the split needed a judgment rather than a reading, so the reasoning is
+    # here: qwen3's query instruction means "find documents matching this QUERY".
+    # What happens below is document-to-document similarity — content about to be
+    # stored, compared against stored document vectors. Prefixing it would put a
+    # query-shaped vector against document-shaped ones, which is the exact
+    # asymmetry mismatch that caused R-10, arrived at from the other direction.
+    #
+    # "It is passed to db.search" is the wrong test. The test is what the vector is
+    # being compared WITH. [002/FR-111]
+    embedding = await embeddings.embed_document(extracted)
     similar = await db.search(
         db_path=req.db_path,
         embedding=embedding,
@@ -1443,7 +1454,7 @@ async def auto_store(req: AutoStoreRequest):
             merged_title = merge.get("title") or title or best.get("title")
             merged_tags = merge.get("tags") or list(dict.fromkeys(tags + best.get("tags", [])))
             await _reject_leaked_tool_call(merged_content, merged_tags, "auto_store:merge")
-            merged_embedding = await embeddings.embed(merged_content)
+            merged_embedding = await embeddings.embed_document(merged_content)
             await db.update(
                 db_path=req.db_path,
                 doc_id=best["id"],

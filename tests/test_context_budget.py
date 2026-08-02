@@ -34,7 +34,8 @@ def fake_corpus(monkeypatch):
         async def _fake_search(**_kwargs):
             return results
 
-        monkeypatch.setattr(main.embeddings, "embed", _fake_embed)
+        monkeypatch.setattr(main.embeddings, "embed_query", _fake_embed)
+        monkeypatch.setattr(main.embeddings, "embed_document", _fake_embed)
         monkeypatch.setattr(main.db, "search", _fake_search)
 
     return _install

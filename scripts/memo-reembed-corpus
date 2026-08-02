@@ -292,7 +292,7 @@ async def main() -> int:
         "SELECT d.id, d.title FROM documents d JOIN uniq ON uniq.p = substr(d.title, 1, 40) "
         "WHERE d.valid_until IS NULL "
         "ORDER BY coalesce(d.token_count,0) DESC LIMIT 1").fetchone()
-    probe = await embeddings.embed(probe_title)
+    probe = await embeddings.embed_query(probe_title)
     if len(probe) != dims:
         print(f"  ✗ provider returned {len(probe)} dims, config says {dims}",
               file=sys.stderr, flush=True)

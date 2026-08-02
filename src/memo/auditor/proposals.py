@@ -145,7 +145,7 @@ async def resolve(*, proposal_id: int, accept: bool, resolved_by: str,
         content = proposal["proposed_content"]
         layer = proposal.get("proposed_class") or proposal["layer"]
         tags = list(proposal.get("proposed_tags") or [])
-        embedding = await embeddings.embed(content)
+        embedding = await embeddings.embed_document(content)
         memo_id = await db.store(db_path=None, content=content,
                                  title=f"[{layer}] {content[:60]}",
                                  tags=tags, metadata={}, embedding=embedding)

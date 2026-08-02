@@ -348,7 +348,9 @@ async def migrate_corpus(memos: Iterable[dict[str, Any]], *, dry_run: bool = Tru
     `embed` is injectable so a rehearsal can reuse v1's stored embeddings
     instead of paying to recompute 7,000 of them.
     """
-    embed = embed or embeddings.embed
+    # DOCUMENT side: this embeds `memo["content"]` for storage, so it must never
+    # carry the query instruction. [002/FR-111]
+    embed = embed or embeddings.embed_document
     stats = MigrationStats()
     lines: list[AuditLine] = []
     migrated: list[dict] = []

@@ -39,8 +39,10 @@ def _stub_embeddings(monkeypatch):
         h = int(hashlib.sha256(text_l.encode()).hexdigest(), 16)
         v[len(TOPICS) + 1 + (h % 64)] = 0.3122498999199199  # sqrt(1 - 0.95**2)
         return v
-    monkeypatch.setattr(embeddings, "embed", fake_embed)
-    monkeypatch.setattr(store_mod.embeddings, "embed", fake_embed)
+    monkeypatch.setattr(embeddings, "embed_query", fake_embed)
+    monkeypatch.setattr(embeddings, "embed_document", fake_embed)
+    monkeypatch.setattr(store_mod.embeddings, "embed_query", fake_embed)
+    monkeypatch.setattr(store_mod.embeddings, "embed_document", fake_embed)
 
 
 @pytest.fixture(autouse=True)
@@ -76,7 +78,7 @@ def req(content, **kw):
 
 async def seed(content, *, cls="fact", tags=None):
     """Put an existing memo in the corpus with a chosen class."""
-    emb = await embeddings.embed(content)
+    emb = await embeddings.embed_document(content)
     doc_id = await db.store(None, content, None, tags or [], {}, emb)
     conn = db._get_or_create_conn(db.global_path())
     conn.execute("UPDATE documents SET class=? WHERE id=?", (cls, doc_id))

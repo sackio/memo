@@ -179,7 +179,7 @@ class ShadowAuditor:
                     "use": "POST /constitution/propose"}
 
         from memo import db, embeddings
-        embedding = await embeddings.embed(content)
+        embedding = await embeddings.embed_document(content)
         await db.update(db_path=None, doc_id=memo_id, content=content, title=None,
                         tags=None, metadata=None, embedding=embedding)
         await actions.record(action="modify", auditor_id=self.auditor_id,
