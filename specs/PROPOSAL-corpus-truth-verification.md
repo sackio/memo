@@ -92,7 +92,25 @@ An agent is spawned **only** for a FAIL, and its job is narrow: decide between
 - **historical** — the memo was true when written and must be left alone
   (tagged so the probe is never re-run against it);
 - **retire** — the subject no longer exists; supersede the memo;
+- **conflict** — ⭐ the corpus and the operator disagree. Added 2026-08-02 after
+  the first sweep produced exactly this and the original four verdicts had
+  nowhere to put it. Told the container registry at `192.168.1.42:32000` was
+  refusing connections, Ben said server4 was the real registry and should be
+  that for every host — a directive a patching agent could act on immediately.
+  The corpus already held three mutually consistent memos recording a
+  deliberate June migration of the barn cluster registry to `nas:5050`, for HA,
+  across 51 nodes and 140 manifest refs. **The probe was right that the address
+  was dead and said nothing whatever about which live address replaces it.**
+  A failing probe never can: the operator's answer may express intent rather
+  than describe the world, and no observation separates those two. Escalate,
+  and quote the memos back;
 - **unclear** — escalate to Ben rather than guess.
+
+⛔ **Before any repoint, verify the replacement contains the thing being
+repointed to.** Here that was literal — 2 of the 26 affected memos cite images
+that exist ONLY on the registry being migrated away from, so the "obvious" edit
+would have been wrong on its face. A correction that is not itself verified is
+just a differently-wrong memo written with more confidence.
 
 ### 2.3 Nothing is hard-deleted
 
