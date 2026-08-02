@@ -484,3 +484,68 @@ rewritten memos whose value is precisely that they record what changed.
 
 ⇒ Report-only was the right call, and the next slice should be a better
   EXTRACTOR (protocol awareness, endpoint-vs-identifier) rather than an agent.
+
+==============================================================================
+FOLLOW-UP, SAME EVENING — the top residual finding was not what it looked like
+==============================================================================
+
+The residual list above names `192.168.1.42:32000` as the single most-cited
+failing target and calls it "genuinely worth acting on", with 26 memos
+depending on it. The address is indeed dead. Everything implied about what to
+DO with it was wrong, and the way it was wrong is the most useful thing in this
+report.
+
+WHAT HAPPENED
+
+Ben, told the registry was refusing connections, replied that server4 is the
+real registry and "should be that for all the hosts". That is an instruction a
+patching agent could act on directly: rewrite 26 memos to say
+`192.168.1.168:32000`. Probing first showed two live registries with different
+catalogs — server4:32000 with 27 repos, nas:5050 with 58, overlapping on 20 —
+which was reported as drift between two stores that should have been one.
+
+Then the corpus was asked, and it already held the answer:
+
+  4866412a (2026-04-07)  3-server crane sync. server4:32000 is "Primary — push
+                         here"; server5 and server3 are MIRRORS. Hourly cron.
+  a4c0c234 (2026-06-19)  The barn cluster registry MIGRATED off .42:32000 to
+                         Synology nas:5050, 2026-06-02/03, deliberately, for
+                         HA — server1's hostPath took the registry down on
+                         every k8s leave/rejoin. 111 GB, 9,745 files,
+                         containerd hosts.toml deployed to all 51 nodes,
+                         67 yaml files and 140 refs updated in commit e63e5cb.
+  b7581785 (2026-06-09)  "Registry is nas:5050, NOT .42:32000", with live probe
+                         evidence from three separate hosts.
+
+⇒ The two catalogs are not drift. They are two ROLES: nas serves the k8s fleet
+  (the qf-* images), server4 serves the docker services it runs itself
+  (blender-agent, curator-render, moondream, ollama). "Neither is proxying the
+  other" was a correct observation carrying a wrong implication.
+
+WHAT THE EDIT WOULD HAVE DONE
+
+Of the 26 memos citing the dead address, 10 are k8s deployment guides —
+kokoro-tts on barn, quantum-reactor, quantum-dojo, blender-agent. Per the June
+migration those belong on nas:5050. Repointing them to server4 would have
+contradicted the operator's own migration record and aimed manifests at a
+registry missing 38 of the images. Two of them — qf-ticker-universe and
+qf-py-tools — exist ONLY on nas, so that edit would have been flatly wrong on
+its face.
+
+⭐ THE GENERAL LESSON, WHICH IS WHY THIS IS IN THE REPORT
+
+A failing probe proves the address is dead. It proves NOTHING about which live
+address should replace it, and the operator's answer to "which one is real" can
+be an expression of intent rather than a description of the world. No probe
+distinguishes those two. Neither does an agent.
+
+  · The memos here are not stale. They DISAGREE with the operator.
+  · Disagreement between the corpus and the operator is a fourth verdict, and
+    the design's four (correct / historical / retire / escalate) collapse it
+    into "escalate" — which is right, but only if the agent thinks to look at
+    the corpus before acting on the instruction. Nothing forced that here
+    except choosing to.
+
+⇒ Add CONFLICT as an explicit outcome, and require that before any repoint the
+  candidate replacement is checked for the thing being repointed to — here,
+  literally: does the image exist in the registry you are about to name?
