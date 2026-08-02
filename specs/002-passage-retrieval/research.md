@@ -497,6 +497,62 @@ migration.
 One passage-path query (`ec06fbb6`) timed out at 60s and was scored `absent`, which is the
 conservative direction. 1 of 7,221.
 
+## R-12 — the duplicate cutoffs are calibrated against an encoder the corpus no longer uses (2026-08-02) [002/FR-114]
+
+R-08 chose duplicate thresholds by measurement — against `text-embedding-3-*`. The corpus is
+now `qwen3-embedding-4b`. **A cosine compared to a literal is only stable if both texts are
+the same text.** A same-text comparison measures determinism and reads ~1.0 in any space; a
+**cross-text** comparison measures semantic scale, which is a property of the encoder. Every
+duplicate and relevance cutoff is cross-text.
+
+Measured here, zero endpoint calls — 400 random document pairs, whole-document vectors on
+both sides, so the shape confound that invalidated the `size-routed` probe cannot apply:
+
+| qwen3 random-pair similarity | |
+|---|---|
+| median | 0.3293 |
+| p90 | 0.5115 |
+| p99 | 0.6216 |
+| p99.9 / max | 0.8252 |
+
+| live cross-text cutoff | value | random pairs clearing it |
+|---|---|---|
+| `DUP_COSINE` (`backfill.py:51`) | 0.90 | 0 / 400 |
+| `auto_store_similarity_threshold` (`main.py:1423`) | 0.82 | 1 / 400 |
+| `memo_recall_min_score` — **dead, see below** | 0.50 | 40 / 400 |
+
+Both live cutoffs now sit **past the 99.9th percentile of unrelated pairs**, i.e. they are
+behaving as very strict rules. **Whether that is where they were chosen to sit is not answered
+here** — that needs the same pairs scored in both spaces.
+
+⚠️ **v2's own re-embed overwrote its 3-large vectors, so v2 holds one space only. But memo v1
+(`:8000`) is still running `text-embedding-3-small` @1536 over substantially the same memos**,
+and R-08 — which chose these cutoffs — was measured in the 3-small era. So a paired substrate
+for the *original* calibration plausibly still exists, in the service least likely to be
+touched. **Not confirmed:** v1's vectors live in a `vec0` virtual table that a plain read-only
+`sqlite3` connection cannot open without the extension, and v1 is live fleet infrastructure
+that is out of scope for changes, so this was not pursued further. Recorded as *available,
+unverified* rather than *gone* — an earlier draft of this section asserted the substrate was
+destroyed, which was a guess.
+
+A sibling service that retained both encodings measured its own random-pair median falling
+0.416 → 0.303 across a comparable model change; the *direction* is expected to transfer, the
+magnitude is theirs and not adoptable.
+
+⇒ Practical reading: a fixed cutoff against a compressed distribution merges **less**, so the
+failure mode is under-deduplication — silent, and consistent with R-09's `no_duplicate_clusters`
+result. Recalibrating means re-deriving the cutoffs on qwen3 from labelled pairs, not
+translating the old numbers.
+
+**`memo_recall_min_score = 0.5` is dead configuration.** It is defined in `config.py:76` and
+read nowhere in the tree. It looks like the relevance floor and governs nothing, so an
+operator tuning it would see no effect and no error. Recorded rather than removed: deleting a
+setting someone may be setting in an env file is its own change.
+
+**The census is not affected by any of this.** The harness sends no `min_score`, and every
+filter is guarded by `if min_score is not None`. Confirmed independently by measurement: a
+direct vec0 KNN with no floor at all reproduces the census rank-1 rate (49.3% against 49.4%).
+
 ## R-11 — qwen3 needs a query instruct prefix, and memo never sent one (2026-08-02) [002/FR-111]
 
 **Read this before R-10.** R-10's qwen3 numbers were measured against a client that was
