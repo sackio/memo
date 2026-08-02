@@ -559,9 +559,21 @@ and the "265 missed" it appears to show is an artifact of asserting membership r
 verifying it. ⇒ **Same error as the `size-routed` probe, one level along: the reference
 population was assumed rather than checked.**
 
-⇒ So: recalibration needs a set of *verified* duplicate pairs, which this corpus can supply
-but does not yet have labelled. Until then the cutoffs' current adequacy is **unmeasured in
-both directions**.
+⇒ So: recalibration needs a set of *verified* duplicate pairs. Until then the cutoffs' current
+adequacy is **unmeasured in both directions**.
+
+**The way to get one is to construct it, not to find it.** Identifying natural near-duplicates
+requires a similarity judgement, which is the thing being calibrated — the question begs
+itself, and answering it by title prefix is what failed above. Instead take N memos and apply
+realistic perturbations (whitespace, sentence reorder, a paragraph added, a date changed),
+embed both copies, and measure `cosine(original, perturbed)`. **Membership is then true by
+construction.** Cost is ~N embeddings; N=50 is minutes.
+
+⚠️ **Its limit, which belongs next to the number it produces:** synthetic perturbations need
+not match the natural near-duplicate distribution, so this yields a **detectability bound** —
+*the cutoff can/cannot catch a duplicate of this severity* — not the rate at which real
+duplicates are missed. **A bound from a known population is still worth more than a rate from
+an assumed one.** (Method from the `embeddings` seat.)
 
 ⚖️ **What the direction of failure would be, which is worth knowing before anyone panics.** Both
 live cutoffs are **floors** — merge/flag *if* cosine exceeds X. A downward shift in semantic
