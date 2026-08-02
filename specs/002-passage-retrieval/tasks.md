@@ -488,4 +488,19 @@ the prefix question is settled, not before.
       stored-vector probe is confounded, because query shape is one of the two variables
       (R-12). [002/FR-113]
 
+- [ ] **T286** — Retain `usage.prompt_tokens` from every embedding response, on both
+      `embed_query` and `embed_document`. Today both discard it: the call returns
+      `response.data[0].embedding` and the token count dies with the response object.
+      ⭐ **The cost is not the missing metric, it is that nothing in the system can
+      contradict an estimate.** On 2026-08-02 I told the `embeddings` seat this corpus
+      averages "10-25 tokens per query"; it is **53.0 measured** (n=60, same pool,
+      reading `usage.prompt_tokens` off the endpoint). Wrong by 2-5x, from a
+      chars/token ratio I never measured — and the figure stood for a day because no
+      instrument existed to challenge it. `quantum-data` spent three rounds trying to
+      explain the resulting "unexplained background" on the shared endpoint, which was
+      entirely memo.
+      ⚠️ Note the second cause when re-deriving: the qwen3 instruct prefix is **17.9 of
+      those 53 tokens**, so a bare-query measurement reads ~34% low and any token figure
+      predating 2026-08-02 17:33 EDT is a bare-query figure. [002/FR-111]
+
 **Final gate**: `speckit-trace --strict` (repo-wide, all of 001 + 002)
