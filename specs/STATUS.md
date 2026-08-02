@@ -110,8 +110,11 @@ query/document distinction lives only in local variable names.
 never moved through two encoder changes** — `DUP_COSINE = 0.90` and
 `auto_store_similarity_threshold = 0.82`. Their current adequacy is **unmeasured in both
 directions**; an attempt to show they are now too strict used an assumed reference
-population and was withdrawn. Also `memo_recall_min_score = 0.5` is dead configuration:
-defined, read nowhere, and shaped exactly like the relevance floor.
+population and was withdrawn. `memo_recall_min_score = 0.5` belongs to the same family and
+is now **wired** (T284, 2026-08-02) — it was never "read nowhere" as an earlier version of
+this line claimed; the shell hook read the env var while `hooks.py` wrote a hard-coded
+literal, so the Python setting could not reach it. Reachable now, but `0.5` is still a
+3-small-era cutoff and still unmeasured on qwen3.
 
 **What changed since yesterday, and why it matters to your review:**
 

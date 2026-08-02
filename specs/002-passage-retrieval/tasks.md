@@ -461,10 +461,27 @@ the prefix question is settled, not before.
       calibrated, and doing it by title prefix already produced one withdrawn result.
       Record an **admit rate** alongside the raw cutoff: the rate is invariant to the
       encoder, which is the thing that keeps changing. [002/FR-114]
-- [ ] **T284** — Decide the fate of `memo_recall_min_score`. It is defined in `config.py`
-      and read nowhere, so it looks like the relevance floor and governs nothing. Either
-      wire it or remove it; leaving a setting that silently does nothing is the
-      configuration-shaped version of a provenance column that lies. [002/FR-111]
+      → **Instrument written 2026-08-02: `scripts/memo-dup-threshold-construct`.** Seven
+      classes, each a deterministic transformation of a real memo, so the transformation
+      IS the label and no similarity judgement enters the calibration. `identical` is a
+      determinism control; `numbers` (every digit run changed) is the class that decides
+      `auto_store_similarity_threshold`, being the exact shape of a memo re-stored with an
+      updated value. ⚠️ It also reports the corpus's own nearest-neighbour band as an
+      **unlabelled** diagnostic — a cutoff below that band collapses memos the corpus
+      already treats as distinct, and no constructed class can reveal that. Not yet run:
+      it competes with the T282 census for the embedding endpoint.
+- [x] **T284** — Decide the fate of `memo_recall_min_score`. **WIRED** 2026-08-02.
+      ⚠️ The premise of this task was wrong: it was NOT "read nowhere".
+      `hooks/memo-auto-recall.sh` reads `$MEMO_RECALL_MIN_SCORE` and sends it as
+      `min_score` on every `/context` call. The break was that `hooks.py` wrote
+      `~/.memo/hooks.env` from five hard-coded literals, so the config field could never
+      reach its own consumer. `cmd_install` now interpolates `settings`; covered by
+      `tests/unit/test_hooks_env.py` with non-default values throughout.
+      ⭐ The original diagnosis came from grepping the Python identifier when the consumer
+      is a shell script — a setting is dead only if nothing reads the file it is written
+      to, in *any* language present. See the correction block in research.md R-12.
+      ⚠️ Wiring made `0.5` reachable, not correct — it stays on T283's list as a
+      3-small-era cutoff unmeasured on qwen3. [002/FR-111]
 - [ ] **T285** — Before `size-routed` is ever enabled, measure whether document-level and
       chunk-level cosines share a scale — it ranks documents against each other using
       scores drawn from two indexes. Needs **real short-query vectors**; the zero-cost

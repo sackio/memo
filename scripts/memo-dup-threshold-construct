@@ -1,0 +1,302 @@
+"""memo-dup-threshold-construct — calibrate the two cross-text cutoffs on a
+population whose answers are KNOWN, by building it rather than finding it.
+[002/FR-114, T283]
+
+`DUP_COSINE = 0.90` (migrate/backfill.py) and `auto_store_similarity_threshold =
+0.82` (config.py) were both chosen in the 3-small era and have survived two
+encoder changes untouched. R-12 records that their adequacy is unmeasured **in
+both directions** — nobody has shown they are too strict *or* too loose on
+qwen3.
+
+**Why this script exists instead of another nearest-neighbour survey.** The
+previous attempt (R-08, `memo-dup-threshold-check`) sampled real memos, took each
+one's nearest neighbour, and asked how the rule divided them. That measures the
+cutoff against *whatever the corpus happens to contain*, and the corpus does not
+come labelled: deciding whether a given pair "should" have been called a
+duplicate is the very judgement being calibrated. A second attempt tried to
+identify natural near-duplicates by title prefix and was withdrawn — the
+reference population was assumed, which is the failure this repo has now hit
+three times.
+
+⭐ **So: construct the pairs.** Every pair below is a real memo and a
+deterministic transformation of it, and the transformation IS the label. No
+similarity judgement is needed to know that a memo and the same memo with its
+whitespace normalised should be called the same thing, or that a memo and an
+unrelated memo should not. The cutoff is then read off where the classes
+separate, not off where the corpus clusters.
+
+**The classes, and what each one is asking of the threshold:**
+
+| class | construction | the right answer |
+|---|---|---|
+| `identical` | the text unchanged | SAME — and a CONTROL: anything below 0.999 here means the encoder is not deterministic and every other row is suspect |
+| `whitespace` | collapse runs of space, normalise bullet chars, strip trailing space | SAME — pure formatting churn, the cheapest thing a re-store can differ by |
+| `reorder` | paragraphs shuffled with a fixed seed | SAME — same facts, different order |
+| `numbers` | every digit run replaced with a different one | ⭐ **SAME, and this is the class that matters** — it is exactly the shape of a memo re-stored with an updated value, which is the case `auto_store_similarity_threshold` exists to catch. A cutoff that misses this makes a duplicate memo every time a number changes. |
+| `truncate_50` | first half, cut at a word boundary | SAME — a partial re-store |
+| `append_noise` | original + ~20% of an unrelated memo | SAME — the original is fully present; contamination is additive |
+| `different` | an unrelated memo | ⭐ **DIFFERENT — the negative control.** A cutoff that admits this class is worthless no matter how well it does elsewhere. |
+
+**Report the admit rate, not just the cutoff.** Per R-12: a rate survives an
+encoder change and a raw cosine does not. Each candidate cutoff below is scored
+by how many SAME-class pairs it admits and how many `different` pairs it lets
+through, which is the only pair of numbers that transfers.
+
+⚠️ **Both cutoffs compare stored text to stored text, so every vector here is
+built with `embed_document`.** No query instruction anywhere in this script. If
+that ever changes, these numbers do not survive it — the prefix moves a vector by
+roughly cosine 0.74 against its bare self (measured 2026-08-02), which is far
+larger than the effect being calibrated.
+
+⚠️ **Sample is capped at 6,000 tokens.** The provider hard-rejects over 8,192,
+and `append_noise` adds ~20%. Rejections are counted and printed per class rather
+than dropped — a class that silently lost its longest members would report a
+cosine distribution for a different population than its label claims.
+
+Runs inside the container (needs the vec0 tables and the LAN embedding endpoint):
+
+    docker cp scripts/memo-dup-threshold-construct memo-v2:/tmp/ && \
+    docker compose exec memo-v2 python /tmp/memo-dup-threshold-construct
+
+    --n 150        pairs per class (default 150)
+    --seed 11      sample + shuffle seed
+    --json PATH    write the raw per-pair cosines here
+"""
+import argparse
+import asyncio
+import json
+import math
+import random
+import re
+import sys
+
+sys.path.insert(0, "/app/src")
+
+from memo import db  # noqa: E402
+from memo import embeddings  # noqa: E402
+
+MAX_TOKENS = 6000
+CANDIDATE_CUTOFFS = [0.70, 0.75, 0.80, 0.82, 0.85, 0.88, 0.90, 0.92, 0.95]
+SAME_CLASSES = ("identical", "whitespace", "reorder", "numbers",
+                "truncate_50", "append_noise")
+
+
+def cosine(a, b):
+    dot = sum(x * y for x, y in zip(a, b))
+    na = math.sqrt(sum(x * x for x in a))
+    nb = math.sqrt(sum(x * x for x in b))
+    return dot / (na * nb) if na and nb else 0.0
+
+
+# ---- the transformations. Deterministic, and each one is its own label. ----
+
+def t_identical(text, rng, other):
+    return text
+
+
+def t_whitespace(text, rng, other):
+    out = re.sub(r"[ \t]+", " ", text)
+    out = re.sub(r"\n{3,}", "\n\n", out)
+    out = re.sub(r"(?m)^[-*•]\s+", "* ", out)
+    return "\n".join(line.rstrip() for line in out.splitlines())
+
+
+def t_reorder(text, rng, other):
+    paras = [p for p in re.split(r"\n\s*\n", text) if p.strip()]
+    if len(paras) < 2:
+        # Fall back to sentences so short memos are not silently returned
+        # unchanged — an unchanged text in this class would be an `identical`
+        # pair wearing a `reorder` label.
+        paras = [s for s in re.split(r"(?<=[.!?])\s+", text) if s.strip()]
+    if len(paras) < 2:
+        return None
+    rng.shuffle(paras)
+    return "\n\n".join(paras)
+
+
+def t_numbers(text, rng, other):
+    if not re.search(r"\d", text):
+        return None  # nothing to change; not this class's population
+
+    def bump(m):
+        return "".join(str((int(c) + 3) % 10) for c in m.group(0))
+
+    return re.sub(r"\d+", bump, text)
+
+
+def t_truncate_50(text, rng, other):
+    words = text.split()
+    if len(words) < 20:
+        return None
+    return " ".join(words[: len(words) // 2])
+
+
+def t_append_noise(text, rng, other):
+    words = other.split()
+    take = max(20, int(len(text.split()) * 0.20))
+    if not words:
+        return None
+    return text + "\n\n" + " ".join(words[:take])
+
+
+def t_different(text, rng, other):
+    return other
+
+
+TRANSFORMS = {
+    "identical": t_identical,
+    "whitespace": t_whitespace,
+    "reorder": t_reorder,
+    "numbers": t_numbers,
+    "truncate_50": t_truncate_50,
+    "append_noise": t_append_noise,
+    "different": t_different,
+}
+
+
+def pct(x, n):
+    return f"{100.0 * x / n:5.1f}%" if n else "    —"
+
+
+async def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--n", type=int, default=150)
+    ap.add_argument("--seed", type=int, default=11)
+    ap.add_argument("--json", default=None)
+    args = ap.parse_args()
+
+    conn = db._get_or_create_conn(db.global_path())
+    rows = conn.execute(
+        "SELECT id, coalesce(content,'') FROM documents "
+        "WHERE valid_until IS NULL AND length(coalesce(content,'')) > 200"
+    ).fetchall()
+    # Rough token proxy; the point is only to stay clear of the 8,192 ceiling.
+    rows = [r for r in rows if len(r[1]) < MAX_TOKENS * 4]
+    if len(rows) < args.n * 2:
+        print(f"only {len(rows)} eligible memos — need {args.n * 2}", file=sys.stderr)
+        return 1
+
+    rng = random.Random(args.seed)
+    sample = rng.sample(rows, args.n)
+    donors = rng.sample(rows, args.n)  # the `other` text for noise/negative
+
+    print(f"pairs per class: {args.n}   seed: {args.seed}   "
+          f"model: {embeddings.settings.embedding_model}\n")
+
+    results = {}
+    errors = {}
+    skipped = {}
+    for name, fn in TRANSFORMS.items():
+        cosines = []
+        errs = 0
+        skips = 0
+        for (did, text), (odid, otext) in zip(sample, donors):
+            if odid == did:
+                skips += 1
+                continue
+            variant = fn(text, random.Random(args.seed), otext)
+            if variant is None:
+                skips += 1
+                continue
+            try:
+                a, b = await asyncio.gather(
+                    embeddings.embed_document(text),
+                    embeddings.embed_document(variant),
+                )
+            except Exception as e:  # never silently drop — see docstring
+                errs += 1
+                if errs <= 2:
+                    print(f"  {name}: embed failed for {did[:8]}: {e}",
+                          file=sys.stderr)
+                continue
+            cosines.append(cosine(a, b))
+        results[name] = sorted(cosines)
+        errors[name] = errs
+        skipped[name] = skips
+
+    print(f"{'class':<14}{'n':>5}{'min':>9}{'p05':>9}{'median':>9}"
+          f"{'p95':>9}{'max':>9}   {'skip':>5}{'err':>5}")
+    for name in TRANSFORMS:
+        c = results[name]
+        if not c:
+            print(f"{name:<14}{0:>5}      —        —        —        —        —"
+                  f"   {skipped[name]:>5}{errors[name]:>5}")
+            continue
+        q = lambda p: c[min(len(c) - 1, int(p * len(c)))]  # noqa: E731
+        print(f"{name:<14}{len(c):>5}{c[0]:>9.4f}{q(0.05):>9.4f}"
+              f"{c[len(c)//2]:>9.4f}{q(0.95):>9.4f}{c[-1]:>9.4f}"
+              f"   {skipped[name]:>5}{errors[name]:>5}")
+
+    ctrl = results["identical"]
+    if ctrl and ctrl[0] < 0.999:
+        print(f"\n⛔ CONTROL FAILED: `identical` min is {ctrl[0]:.6f}, not ~1.0. "
+              f"The encoder is not returning the same vector for the same text, "
+              f"so every row above is measuring that instead of the transform.")
+
+    print("\nadmit rate by cutoff — SAME classes should be admitted, "
+          "`different` should not:")
+    header = "cutoff" + "".join(f"{n[:9]:>11}" for n in TRANSFORMS)
+    print(header)
+    for cut in CANDIDATE_CUTOFFS:
+        cells = ""
+        for name in TRANSFORMS:
+            c = results[name]
+            cells += f"{pct(sum(1 for x in c if x >= cut), len(c)):>11}"
+        flag = ""
+        if cut == 0.82:
+            flag = "   <- auto_store_similarity_threshold"
+        if cut == 0.90:
+            flag = "   <- DUP_COSINE"
+        print(f"{cut:<6.2f}{cells}{flag}")
+
+    # ---- hard negatives, and why the easy ones are not enough ----
+    #
+    # `different` is a RANDOM other memo, which on this corpus is trivially far
+    # away — so a cutoff can score perfectly against it and still be useless.
+    # The negatives that actually cost something are the corpus's own nearest
+    # neighbours: topically adjacent memos that are not the same memo. Those are
+    # UNLABELLED (some genuinely are duplicates — that is R-08's finding), so
+    # this block is a diagnostic, not a scored class. It answers one question:
+    # does the chosen cutoff sit above or below the pairs the corpus already
+    # contains? A cutoff below them silently collapses real distinct memos.
+    near = []
+    for did, _text in sample:
+        r = conn.execute("SELECT embedding FROM document_embeddings "
+                         "WHERE doc_id = ?", (did,)).fetchone()
+        if not r:
+            continue
+        hit = conn.execute(
+            "SELECT doc_id, vec_distance_cosine(embedding, ?) AS d "
+            "FROM document_embeddings WHERE doc_id != ? ORDER BY d LIMIT 1",
+            (r[0], did)).fetchone()
+        if hit and hit[1] is not None:
+            near.append(1.0 - hit[1])
+    near.sort()
+    if near:
+        q = lambda p: near[min(len(near) - 1, int(p * len(near)))]  # noqa: E731
+        print(f"\nnearest real neighbour (UNLABELLED diagnostic, n={len(near)}): "
+              f"median {near[len(near)//2]:.4f}  p95 {q(0.95):.4f}  "
+              f"max {near[-1]:.4f}")
+        for cut in (0.82, 0.90):
+            n_over = sum(1 for x in near if x >= cut)
+            print(f"  {n_over} of {len(near)} real memo pairs "
+                  f"({pct(n_over, len(near)).strip()}) already sit at or above "
+                  f"{cut:.2f}")
+
+    print("\nThe cutoff to prefer is the highest one that still admits the SAME "
+          "classes\n(especially `numbers`) while excluding `different` — and it "
+          "must also sit\nabove the nearest-neighbour band above, or it collapses "
+          "memos the corpus\nalready treats as distinct. Read all three, not one.")
+
+    if args.json:
+        with open(args.json, "w") as fh:
+            json.dump({"n": args.n, "seed": args.seed,
+                       "model": embeddings.settings.embedding_model,
+                       "cosines": results, "errors": errors,
+                       "skipped": skipped}, fh, indent=2)
+        print(f"\nwrote {args.json}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(asyncio.run(main()))

@@ -702,10 +702,37 @@ clothes of a policy decision. The admit rate is invariant to the encoder, which 
 the thing that keeps changing here — and it is not portable between corpora, so each seat
 records its own.
 
-**`memo_recall_min_score = 0.5` is dead configuration.** It is defined in `config.py:76` and
-read nowhere in the tree. It looks like the relevance floor and governs nothing, so an
-operator tuning it would see no effect and no error. Recorded rather than removed: deleting a
-setting someone may be setting in an env file is its own change.
+**`memo_recall_min_score = 0.5` is dead configuration** — ⚠️ **and "dead" was the wrong
+diagnosis; see the correction below.** It is defined in `config.py:76`. It looks like the
+relevance floor, and an operator tuning it sees no effect and no error. Recorded rather than
+removed: deleting a setting someone may be setting in an env file is its own change.
+
+> **CORRECTED 2026-08-02 (T284), and the correction is the useful part.** The claim above
+> said the setting was "read nowhere in the tree". **That is false.** The floor *is* read and
+> *does* reach the server: `hooks/memo-auto-recall.sh:6` reads `$MEMO_RECALL_MIN_SCORE` and
+> sends it as `min_score` on every `/context` call, which honours it. So the value was live
+> the whole time — just not *this* value.
+>
+> The real defect is one link earlier. `hooks.py` generated `~/.memo/hooks.env` from **five
+> hard-coded literals**, so the only writer of the env var was a constant, and
+> `MEMO_RECALL_MIN_SCORE=0.35 memo-hooks install` reproduced `0.5`. The Python field and the
+> shell consumer had the same name, the same default, and no connection.
+>
+> ⭐ **Why the first answer came out wrong: the grep was for the Python identifier, and the
+> consumer is a shell script.** The method was fine and the population could not contain the
+> answer — the same shape as three earlier failures in this file. A setting is dead when
+> **nothing reads the file it is written to**, which is a question about consumers in every
+> language present, not about one `grep --include=*.py`.
+>
+> **Resolution: WIRED, not deleted.** `cmd_install` now interpolates the five `settings`
+> fields, so `MEMO_RECALL_MIN_SCORE=0.35 memo-hooks install` writes `0.35`. Covered by
+> `tests/unit/test_hooks_env.py`, whose assertions deliberately use non-default values —
+> written with defaults, every one of them would have passed against the bug.
+>
+> ⚠️ **Still open, and NOT fixed by wiring it:** `0.5` is a 3-small-era cutoff on a cosine
+> scale that has since changed twice. It belongs to the same unmeasured family as
+> `DUP_COSINE` and `auto_store_similarity_threshold` (R-12) — wiring made it *reachable*,
+> not *correct*.
 
 **The census is not affected by any of this.** The harness sends no `min_score`, and every
 filter is guarded by `if min_score is not None`. Confirmed independently by measurement: a

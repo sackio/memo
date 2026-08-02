@@ -14,13 +14,24 @@ system contradicted either fact, because:
   · `docker-compose.yml` uses `build: .` with **no source mount** — only
     `memo_v2_data:/data`. The code is baked into the image, so `docker compose
     restart` re-runs the SAME code. It needs `up -d --build`.
-  · `docker compose run --rm test` **builds from source**. So the test container
-    ran the new code while the server ran the old one. Both signals were honest.
-    Green tests and an unprotected read path, simultaneously.
+  · `docker compose run --rm test` runs whatever is in the CACHED `test` image.
+    Compose builds that image only when it does not already exist, so a test run
+    started after a commit can execute code from before it.
 
-⇒ **"Tested" and "deployed" are different claims**, and this compose setup is
-specifically designed to isolate them — correctly, for its purpose. That is
-exactly why the drift needs its own check rather than a habit of remembering.
+    ⛔ **This line previously read "builds from source" — that was FALSE, and it
+    was the load-bearing sentence of this whole paragraph.** Measured
+    2026-08-02: `docker compose run --rm test ls /app/tests/unit/
+    test_provenance_verdict.py` → *No such file or directory*, while that file
+    sat on disk in the working tree. **Always `docker compose build test` first.**
+
+⇒ **"Tested" and "deployed" are different claims** — and the correction above
+makes that WORSE, not better, which is why it is worth stating loudly. The old
+text said one container was fresh and one was stale. The truth is that **both
+images go stale independently, and the test container's staleness is the
+invisible one**: a stale server eventually contradicts itself in production,
+whereas a stale test run reports a pass count that looks exactly like a real
+one. A green suite is not evidence that your change passes; it is evidence that
+*some* revision passed. Build, then test, then check this.
 
 ⚖️ **Scope: long-running processes only.** CLI-invoked scripts
 (`memo-verify-provenance`, `memo-calibrate-drift`, the migration tools) start
