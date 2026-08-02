@@ -539,10 +539,38 @@ A sibling service that retained both encodings measured its own random-pair medi
 0.416 → 0.303 across a comparable model change; the *direction* is expected to transfer, the
 magnitude is theirs and not adoptable.
 
-⇒ Practical reading: a fixed cutoff against a compressed distribution merges **less**, so the
-failure mode is under-deduplication — silent, and consistent with R-09's `no_duplicate_clusters`
-result. Recalibrating means re-deriving the cutoffs on qwen3 from labelled pairs, not
-translating the old numbers.
+⛔ **"The failure mode is under-deduplication" is NOT established, and one attempt to establish
+it failed.** Random pairs bound the *false*-positive rate; whether a cutoff is too strict
+depends on the *true*-positive rate, and a random-pair sample contains no positives. Scoring
+the corpus's actual duplicates in qwen space:
+
+| positive set | n | result |
+|---|---|---|
+| byte-identical content groups (R-09) | 4 | cosine **1.000000**, all clear 0.90 |
+| `Backfill checkpoint — …` family (R-08) | 300 pairs | median 0.6797, only 11.7% clear 0.90 |
+
+The first row is a **determinism** check and reads ~1.0 in any space, so it says nothing about
+semantic scale — but it does confirm that genuine duplicates are still merged. **The second row
+is not usable as stated:** the family is 125 memos selected *by title prefix*, spanning
+different hosts and different dates, so most of its 300 pairs are **not duplicates of each
+other** — a `server4` checkpoint from July and an `office` one from June are different
+content. A median of 0.68 across that set measures family resemblance, not missed duplicates,
+and the "265 missed" it appears to show is an artifact of asserting membership rather than
+verifying it. ⇒ **Same error as the `size-routed` probe, one level along: the reference
+population was assumed rather than checked.**
+
+⇒ So: recalibration needs a set of *verified* duplicate pairs, which this corpus can supply
+but does not yet have labelled. Until then the cutoffs' current adequacy is **unmeasured in
+both directions**.
+
+⚖️ **What the direction of failure would be, which is worth knowing before anyone panics.** Both
+live cutoffs are **floors** — merge/flag *if* cosine exceeds X. A downward shift in semantic
+scale makes a floor **stricter**, so it fails toward doing *less*: fewer merges, fewer
+flagged similarities. That is the noisy failure mode; it eventually surfaces as duplicates
+accumulating. The dangerous shape is a cross-text **ceiling** — pass *if* cosine is *below* X —
+which the same shift makes **looser**, so it fails toward a green check and is visible as
+nothing, ever. **memo has no cross-text ceiling.** Worth re-checking whenever a new guard is
+added, because a ceiling is exactly the shape a safety check naturally takes.
 
 ⛔ **And this table cannot tell you what to change `DUP_COSINE` to. Read the 0/400 as a blind
 spot, not as a verdict.** A random-pair sample contains **no near-duplicates**, so it holds no
