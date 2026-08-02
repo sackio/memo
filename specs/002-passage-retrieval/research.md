@@ -496,3 +496,136 @@ migration.
 
 One passage-path query (`ec06fbb6`) timed out at 60s and was scored `absent`, which is the
 conservative direction. 1 of 7,221.
+
+## R-11 — qwen3 needs a query instruct prefix, and memo never sent one (2026-08-02) [002/FR-111]
+
+**Read this before R-10.** R-10's qwen3 numbers were measured against a client that was
+configured wrong, so they are a floor for that model rather than a verdict on it. This
+section is the cause, and it is a defect in memo, not in the model.
+
+Qwen3-Embedding is trained for **asymmetric** retrieval: an instruction prefix on the
+**query** side only, documents embedded bare. memo sends bare queries. Everything R-10
+reports about the short bands is that omission.
+
+Reproduce with the artifacts checked in beside this file:
+`instruct-prefix-2026-08-02.txt` (5 bands, seed 7), `instruct-prefix-seed202-2026-08-02.txt`
+(the replication), `instruct-prefix-2000plus-2026-08-02.txt` (the powered long-band run).
+Every run is **paired** — each document is queried both ways against the same stored
+vectors, so corpus composition cannot explain a difference — at retrieval depth 10.
+
+### Three alternatives refuted by measurement before the prefix was proposed
+
+This is what makes the finding a diagnosis rather than a story that happened to fit.
+
+1. **Did the re-embed change the embedded text?** No. R-09's vectors came from
+   `backfill.py:361` embedding `memo["content"]`; `memo-reembed-corpus` reads the same
+   `documents.content`. Same input, so the band deltas are a model effect.
+2. **Near-duplicate confusion** — the corpus holds ~179 near-identical
+   `Backfill checkpoint — <host>…` memos, so perhaps qwen3 cannot pick the right family
+   member. **Refuted**: failed queries return *unrelated* documents. Title overlap between
+   the query and the top-1 result is a median **0.16** on misses against **1.00** on hits.
+3. **Vectors attached to the wrong rows** by a batched writer pairing on position.
+   **Refuted**: 25 of 25 whole-document vectors, stratified across all five bands, match a
+   fresh singleton re-embed of their own content, negative control 0.2268. ⚠️ This check
+   had to be *written* — `memo-verify-provenance` sampled only `document_chunks` /
+   `chunk_embeddings` and had never read `document_embeddings`, the table the regressed
+   path actually queries. It now checks both (commit `2369889`).
+
+### The effect, and its replication
+
+Band-stratified, 15 documents per band, five bands, n=75 per draw. Only the seed differs.
+
+| | seed 7 | seed 202 | spread |
+|---|---|---|---|
+| rank-1 | 49.3% → 70.7% (+21.3) | 52.0% → 72.0% (+20.0) | 1.3 pt |
+| top-5 | 74.7% → 84.0% (+9.3) | 76.0% → 84.0% (+8.0) | 1.3 pt |
+| absent | 15 → 9 (−40%) | 15 → 9 (−40%) | 0 |
+| discordant rank-1 | 18 improved / 2 worsened | 15 / 0 | |
+| sign test | p = 0.00020 | p = 0.00003 | |
+
+The second draw exists because a sibling service measured ~10 points of draw-to-draw
+variance on top-5 in the same design, which would have made a +9.3 point result
+indistinguishable from the draw taken. It replicates to 1.3 points, and `absent` reproduces
+exactly. (The likely reason memo's variance is so much lower: this path stores **one vector
+per document**, so no single document can occupy several top-10 slots under resampling.)
+
+**Pre-registration, missed.** Before running, the prediction recorded in the script was that
+the prefix would help *little* — the published effect of instruction prefixes is 1–5% and
+the gap to close was ~33 points. It is +21 points. **Wrong by an order of magnitude**, and
+recorded here because a prediction that survives being wrong is the only kind that shows the
+number was not chosen after seeing the data.
+
+### What it does not license
+
+**The gain is not uniform, and the long band does not share it.** The 2000+ band was re-run
+at n=120 of 399 because it is the one band where bare qwen3 already *beats*
+`text-embedding-3-large` (42.4% vs 18.8%) and therefore the one the prefix could plausibly
+harm.
+
+| 2000+, n=120 | bare | instruct | improved / worsened | one-sided sign p |
+|---|---|---|---|---|
+| rank-1 | 54/120 | 59/120 | 14 / 9 | **0.202** |
+| top-5 | 73/120 | 79/120 | 9 / 3 | 0.073 |
+| absent | 41/120 | 35/120 | 8 / 2 | 0.055 |
+
+rank-1 was the **pre-registered primary** — "worsened == 0 is the only thing that supports
+prefixing everywhere" — and it is null, with nine documents demoted out of rank 1. top-5 and
+absent are secondaries, and among three tests on one dataset a p≈0.055 is about what noise
+yields at least once; a marginal secondary does not rescue a null primary. Two documents
+went from retrievable to **unretrievable**, which neither the rank-1 nor the top-5 row can
+see (the nine demotions land at rank 1–2 and stay inside the top-5) and which the favourable
+`absent` net prices identically to a document gained.
+
+**This is not evidence that the prefix harms long documents** — that would overstate it in
+the opposite direction. Correctly: it does not help them, and it moves nine the wrong way.
+
+⚠️ **The same band at n=15 showed zero harm, twice.** Seed 7 gave 2 improved / 0 worsened and
+seed 202 gave 3 / 0, against 14 / 9 at n=120. Those are not three results; they are one
+result and two failures to resolve, and the two failures are the ones that read as
+reassuring. **A small-n null in this band is no information.**
+
+**No routing by length.** Only 2 of 5 bands are individually significant at n=15, and a
+sibling service independently failed to resolve its bands too — that reproducibility makes
+it a property of the effect size, not of one sample. So the choice is uniform-or-nothing
+*within this corpus*; it is not a claim about corpora whose documents are all short.
+
+### What it would take to ship
+
+**The fix is not one line.** memo has no chokepoint: 25 call sites share a single
+`embeddings.embed()`, and the query/document distinction exists only in the local variable
+name at each one. Applying a query prefix means introducing `embed_query()` /
+`embed_document()` and **deleting the ambiguous `embed()`**, so no site can default — which
+turns ~21 silent misclassifications into ~21 forced decisions at edit time. Both directions
+of a wrong decision fail silently: a document routed through the query path stores a
+prefixed vector, and a query left bare is this regression.
+
+Both directions are already detectable, **by two instruments that must disagree about the
+prefix**: the write-side provenance check re-embeds documents *bare*, and the read-side
+harness queries *prefixed*. Unifying them for consistency would blind both at once, and it
+would look like a cleanup. The constraint is commented at both re-embed lines.
+
+### ⚠️ Unmeasured: the routed path, which is what production serves
+
+Every number in this section was measured on a **single index in isolation** — a direct KNN
+against `document_embeddings`, and the harness's `--path document` / `--path passages`.
+`search_documents` (`main.py:1242`) is the endpoint that actually serves, and it queries
+**both** indexes, merges by document id, and gives each document the score from the path
+preferred for its own token count. It is deliberately not a hybrid score — no reciprocal-rank
+fusion, no weighted blend — but it is still a **cross-path re-sort**, and no measurement here
+covers it.
+
+That matters because a sibling service measured a prefix at **+7.5 points rank-1 vector-only
+and −8.0 points through RRF fusion** on the same corpus: a post-embedding ranking layer
+reversed the sign rather than shrinking it. memo's merge is a weaker construct than RRF —
+one model, no lexical leg, scores kept unmodified — so the same reversal is not expected
+here. **"Not expected" is exactly the claim that was wrong about the 2000+ band at n=15**,
+and this section should not be read as licensing a change to the routed path until the
+routed path has been measured bare-vs-prefixed the same way.
+
+**Scope of every number above:** one fixed task string, `"Instruct: Given a search query,
+retrieve relevant documents that match the query\nQuery: {q}"`, held constant across all
+bands and both draws. A sibling measured a domain-specific string at 7/10 against a generic
+one at 5/10 with a worse tail, so the string is a live variable and these results do not
+transfer to a different one. And because every query is a document's own exact title, the
+correct answer is true by construction — read `bare` before the delta; where bare is near
+ceiling a null means no power rather than no effect.

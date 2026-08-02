@@ -116,6 +116,86 @@ from memo.config import settings  # noqa: E402
 # while the old "we checked it and it works" kept being quoted as support.
 THRESHOLD = 0.999
 
+# ⛔ A SINGLE ROW BELOW THRESHOLD IS NOT EVIDENCE OF A WRONG MODEL.
+#
+# The original verdict logic was `worst < threshold -> MISMATCH, exit 2`. That is
+# brittle wherever the margin is small, and the margin is PROVIDER-DEPENDENT:
+# `mind` measured OpenRouter/3-large at n=100 and found 1 healthy row below 0.999.
+# ⇒ On that stack the old logic would call MISMATCH on a CORRECT corpus for any
+# sample of ~100. Latent here (qwen worst 0.999930, ~8.5× margin), live the moment
+# this points at anything else. (`mind` hit it live; `embeddings` relayed.)
+#
+# ⭐ THE BAND IS DEFINED BY THE NOISE OF THE SIGNAL, NOT THE NOISE OF THE NULL.
+# These sound like one idea and are two different measurements:
+#     noise of the NULL   — how HIGH can an UNRELATED pair score?  (the control)
+#     noise of the SIGNAL — how LOW can a CORRECT pair score?      (this)
+# `mind`'s first fix used the control's maximum as the divider — elegant and
+# self-calibrating and the wrong quantity: a row at 0.62 against a control topping
+# out at 0.4 came back "marginal" when it is plainly anomalous.
+#
+# So this floor comes from observed CORRECT-pair deviation, across every stack
+# anyone has measured:
+#     qwen3/vLLM here          worst 1.18e-04 below 1.0  (memo-calibrate-drift, 3 rounds)
+#     OpenRouter/3-large       worst 1.23e-03 below 1.0  (`mind`, n=100)
+# 5e-3 is ~4× the largest of those. A row inside [MARGINAL_FLOOR, THRESHOLD) is
+# near the line; a row below MARGINAL_FLOOR is nowhere near it and means another
+# model wrote that vector.
+#
+# ⚠️ MARGINAL_FLOOR DECAYS FOR THE SAME REASON THRESHOLD DOES — it is the same
+# quantity expressed as a width instead of a point. Re-run `memo-calibrate-drift`
+# after any GPU, driver, or serving change and revisit BOTH, or one quietly
+# outlives the other.
+MARGINAL_FLOOR = 0.995
+
+# If more than this fraction of a sample lands in the marginal band, the finding is
+# about the THRESHOLD, not about the corpus — a different diagnosis with a different
+# exit code, so the two cannot be confused in a log.
+MARGINAL_FRACTION_LIMIT = 0.05
+
+
+def classify(c: float, threshold: float, marginal_floor: float) -> str:
+    """ok | marginal | mismatch — three states, because two cannot say 'near the line'."""
+    if c >= threshold:
+        return "ok"
+    if c >= marginal_floor:
+        return "marginal"
+    return "mismatch"
+
+
+def verdict(rows: list[tuple[str, float]], threshold: float, marginal_floor: float,
+            fraction_limit: float = MARGINAL_FRACTION_LIMIT) -> tuple[int, str]:
+    """Turn per-row classifications into an exit code and a sentence.
+
+    Returned rather than printed so every branch can be exercised in a test. A
+    verdict path that has never been watched to fire is not a check.
+    """
+    n = len(rows)
+    if not n:
+        return 0, "nothing checked"
+    bad = [(k, c) for k, c in rows if classify(c, threshold, marginal_floor) == "mismatch"]
+    marg = [(k, c) for k, c in rows if classify(c, threshold, marginal_floor) == "marginal"]
+    if bad:
+        worst = min(c for _, c in bad)
+        return 2, (f"PROVENANCE MISMATCH — {len(bad)} of {n} rows below "
+                   f"{marginal_floor} (worst {worst:.6f}). That is far below the "
+                   f"line, not near it: these vectors were written by a different "
+                   f"model, whatever `embedding_model` claims.")
+    if marg and len(marg) / n > fraction_limit:
+        worst = min(c for _, c in marg)
+        return 3, (f"THRESHOLD MISCALIBRATED FOR THIS STACK — {len(marg)} of {n} "
+                   f"rows ({100 * len(marg) / n:.1f}%) sit between {marginal_floor} "
+                   f"and {threshold} (worst {worst:.6f}), and none below "
+                   f"{marginal_floor}. That pattern is a threshold too tight for "
+                   f"this provider, NOT a corrupt corpus. Re-derive the floor here "
+                   f"with memo-calibrate-drift before treating it as a finding.")
+    if marg:
+        worst = min(c for _, c in marg)
+        return 0, (f"CONFIRMED WITH MARGINALS — {len(marg)} of {n} rows fell just "
+                   f"under {threshold} (worst {worst:.6f}) but stayed above "
+                   f"{marginal_floor}. A row near the line is evidence the "
+                   f"threshold is near the noise, not that the model is wrong.")
+    return 0, "provenance VERIFIED by measurement (not by the declared column)"
+
 
 def _cosine(a, b) -> float:
     dot = sum(x * y for x, y in zip(a, b))
@@ -162,6 +242,7 @@ async def _verify_document_embeddings(conn, args) -> tuple[int, int, float]:
     print(f"detects    : any contiguous block ≥ {step} rows "
           f"(≥ {100 * step / max(1, total):.2f}% of the corpus), deterministically")
 
+    scored: list[tuple[str, float]] = []
     worst, checked, missing = 1.0, 0, 0
     for doc_id, content in rows:
         blob = conn.execute(
@@ -187,7 +268,10 @@ async def _verify_document_embeddings(conn, args) -> tuple[int, int, float]:
         c = _cosine(stored, fresh)
         worst = min(worst, c)
         checked += 1
-        print(f"  {doc_id[:8]}  cosine={c:.6f}")
+        scored.append((doc_id[:8], c))
+        kind = classify(c, args.threshold, args.marginal_floor)
+        flag = "" if kind == "ok" else f"   <-- {kind.upper()}"
+        print(f"  {doc_id[:8]}  cosine={c:.6f}{flag}")
 
     # Its OWN negative control. The chunk pass's control does not license this one:
     # different table, different writer, different vector width in principle.
@@ -208,9 +292,9 @@ async def _verify_document_embeddings(conn, args) -> tuple[int, int, float]:
     if missing:
         print(f"  ⚠️ {missing} of {len(rows)} sampled documents have NO whole-document "
               f"vector — a partial backfill would look exactly like this")
-    if checked and worst < args.threshold:
-        return 2, checked, worst
-    return 0, checked, worst
+    rc, sentence = verdict(scored, args.threshold, args.marginal_floor)
+    print(f"document_embeddings: {sentence}", file=sys.stderr if rc else sys.stdout)
+    return rc, checked, worst
 
 
 async def main() -> int:
@@ -223,6 +307,10 @@ async def main() -> int:
     # run prints rather than assuming a small n means much.
     ap.add_argument("--sample", type=int, default=100)
     ap.add_argument("--threshold", type=float, default=THRESHOLD)
+    ap.add_argument("--marginal-floor", type=float, default=MARGINAL_FLOOR,
+                    help="below THRESHOLD but above this = near the line, not a "
+                         "wrong model. Set from the SIGNAL's spread on your stack "
+                         "(memo-calibrate-drift), never from the control's.")
     args = ap.parse_args()
 
     conn = db._get_or_create_conn(db.global_path())
@@ -268,6 +356,7 @@ async def main() -> int:
           "in write time. If that assumption is ever wrong here, this is WEAKER "
           "than uniform random sampling, not stronger.")
 
+    chunk_scored: list[tuple[str, float]] = []
     worst = 1.0
     checked = 0
     for doc_id, idx, text in rows:
@@ -300,7 +389,10 @@ async def main() -> int:
         c = _cosine(stored, fresh)
         worst = min(worst, c)
         checked += 1
-        print(f"  {doc_id[:8]}#{idx}  cosine={c:.6f}")
+        chunk_scored.append((f"{doc_id[:8]}#{idx}", c))
+        kind = classify(c, args.threshold, args.marginal_floor)
+        flag = "" if kind == "ok" else f"   <-- {kind.upper()}"
+        print(f"  {doc_id[:8]}#{idx}  cosine={c:.6f}{flag}")
 
     # NEGATIVE CONTROL. Without it, six passes prove nothing: a comparison that
     # returns ~1.0 to everything produces six identical ticks and reads as proof.
@@ -328,28 +420,29 @@ async def main() -> int:
     # different code and can fail independently.
     doc_rc, doc_checked, doc_worst = await _verify_document_embeddings(conn, args)
 
+    chunk_rc, chunk_sentence = verdict(chunk_scored, args.threshold,
+                                       args.marginal_floor)
+
     print(f"\n--- summary ---")
     print(f"chunk_embeddings    : checked {checked}, worst cosine {worst:.6f}")
     if doc_checked:
         print(f"document_embeddings : checked {doc_checked}, worst cosine {doc_worst:.6f}")
     else:
         print(f"document_embeddings : nothing checked")
-    print(f"threshold           : {args.threshold}")
+    print(f"threshold           : {args.threshold}  "
+          f"(marginal floor {args.marginal_floor})")
+    print(f"chunk_embeddings    : {chunk_sentence}")
 
-    if worst < args.threshold or doc_rc != 0:
-        which = []
-        if worst < args.threshold:
-            which.append("chunk_embeddings")
-        if doc_rc != 0:
-            which.append("document_embeddings")
-        print(f"PROVENANCE MISMATCH in {' and '.join(which)} — the stored vectors "
-              f"were NOT written by the configured model, whatever "
-              f"`embedding_model` claims. Do not build a model-identity check on "
-              f"that column until this is resolved.", file=sys.stderr)
-        return 2
-    print("provenance VERIFIED by measurement (not by the declared column), "
-          "in BOTH vector tables")
-    return 0
+    # Worst rc wins, and the two failure modes are DIFFERENT DIAGNOSES that must
+    # not collapse into one exit code: 2 = the corpus is wrong (vectors written by
+    # another model), 3 = the THRESHOLD is wrong for this stack (a cluster of rows
+    # near the line and none far below it). Reporting a miscalibrated threshold as
+    # a corrupt corpus is how a tool gets a corpus re-embedded for nothing.
+    rc = max(chunk_rc, doc_rc) if 2 not in (chunk_rc, doc_rc) else 2
+    if rc == 0:
+        print("provenance VERIFIED by measurement (not by the declared column), "
+              "in BOTH vector tables")
+    return rc
 
 
 if __name__ == "__main__":
