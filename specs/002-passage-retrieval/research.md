@@ -853,8 +853,21 @@ would look like a cleanup. The constraint is commented at both re-embed lines.
 
 ### Ranking layers: what is measured, and the one mode that is not
 
-Every number in this section was measured on a **single index in isolation** — a direct KNN
-against `document_embeddings`, and the harness's `/search-documents` and `/search-passages`.
+⛔ **Every number in this section is from the DOCUMENT path only. The prefix has never been
+measured on the passage path.** All three runs are a direct KNN against `document_embeddings`;
+`chunk_embeddings` is not queried by any of them. R-10's passages column measured the **bare**
+arm on that path, and a bare measurement finishing there does not make the prefix measured
+there — a distinction that has already been got wrong once by a reader working from a summary
+of this file rather than the file.
+
+⚠️ **Do not assume the gain transfers.** The passage path regressed *harder* than the document
+path (−27.3 against −19.9 rank-1 points) and contains no long vectors at all, so the 2000+ band
+that partly rescues the document path cannot exist there. Whether the prefix recovers the
+passage path as well, better, or worse is **open**, and it is the measurement that should
+precede any decision that touches passages. Tracked as T282's other half.
+
+Beyond that, every number here was measured on a **single index in isolation** — a direct KNN
+against `document_embeddings`.
 Checked rather than assumed: **memo has no lexical leg, no BM25, no reciprocal-rank fusion
 and no re-ranker anywhere in `src/`.** `/search` reads `settings.memo_retrieval_path`, which
 is **`document`** — so the product surface currently serves the same pure document path these

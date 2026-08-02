@@ -443,7 +443,12 @@ the prefix question is settled, not before.
       all: there is no evidential basis for routing by document length (R-11). [002/FR-111]
 - [ ] **T282** — Re-run the full census after T281 and compare against **both** R-09 and
       R-10. R-10 is the bare-qwen3 floor, not the model's ceiling, and the point of T281
-      is to find out where the ceiling actually is. [002/FR-111]
+      is to find out where the ceiling actually is. ⛔ **BOTH PATHS.** Every prefix number
+      to date is document-path only — `chunk_embeddings` has never been queried with a
+      prefixed vector. The passage path regressed harder (−27.3 vs −19.9) and holds no long
+      vectors, so the band that partly rescues the document path cannot exist there. Whether
+      the prefix helps passages at all is **open**, and assuming it transfers is the specific
+      error this task exists to prevent. [002/FR-111]
 - [ ] **T283** — Re-derive `DUP_COSINE` and `auto_store_similarity_threshold` on the
       current encoder. **Construct** the reference population by perturbing known texts —
       identifying natural near-duplicates requires the similarity judgement being
