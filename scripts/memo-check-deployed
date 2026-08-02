@@ -1,0 +1,174 @@
+#!/usr/bin/env python3
+"""memo-check-deployed — is the RUNNING server actually running the code you wrote?
+
+A commit hash proves neither that the process restarted, nor that it restarted
+into that commit. (`mind`'s formulation, 2026-08-02.) This compares the source
+baked into the running container against the working tree, file by file, and
+exits non-zero when they disagree.
+
+**Why this is not paranoia.** On 2026-08-02 memo-v2's `EmbeddingModelMismatch`
+read-path guard was committed, tested, and 500-green — and not running. The
+container had been up ~8 hours; the commit was ~30 minutes old. Nothing in the
+system contradicted either fact, because:
+
+  · `docker-compose.yml` uses `build: .` with **no source mount** — only
+    `memo_v2_data:/data`. The code is baked into the image, so `docker compose
+    restart` re-runs the SAME code. It needs `up -d --build`.
+  · `docker compose run --rm test` **builds from source**. So the test container
+    ran the new code while the server ran the old one. Both signals were honest.
+    Green tests and an unprotected read path, simultaneously.
+
+⇒ **"Tested" and "deployed" are different claims**, and this compose setup is
+specifically designed to isolate them — correctly, for its purpose. That is
+exactly why the drift needs its own check rather than a habit of remembering.
+
+⚖️ **Scope: long-running processes only.** CLI-invoked scripts
+(`memo-verify-provenance`, `memo-calibrate-drift`, the migration tools) start
+fresh every run and pick up new code automatically. They have no exposure here.
+The server is the one thing that holds code in memory across a commit.
+
+    scripts/memo-check-deployed              # exit 3 if the server is stale
+    scripts/memo-check-deployed --verbose    # list every differing file
+
+Run it before trusting any guard that lives inside the API process, and after any
+rebuild to confirm the rebuild actually took.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import subprocess
+import sys
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[1]
+SERVICE = "memo-v2"
+# Only what the SERVER loads. `scripts/` is deliberately excluded: those are
+# CLI-invoked and pick up new code on their own, so drift there is not a defect
+# and flagging it would train the reader to ignore this check.
+TREES = [("src", "/app/src")]
+SKIP_SUFFIX = (".pyc",)
+SKIP_PARTS = ("__pycache__", ".pytest_cache", ".mypy_cache", ".egg-info")
+
+# Hashes /app inside the container. Kept as a string because the container has no
+# access to this file — it is piped in. NOTE: a file redirect into `docker compose
+# exec -T` silently delivers NOTHING (0-byte result, rc=0); it must be a pipe.
+REMOTE = r"""
+import hashlib, os, sys
+root = sys.argv[1]
+skip_parts = {"__pycache__", ".pytest_cache", ".mypy_cache"}
+out = []
+for dirpath, dirnames, filenames in os.walk(root):
+    dirnames[:] = [d for d in dirnames if d not in skip_parts]
+    for fn in filenames:
+        if fn.endswith(".pyc"):
+            continue
+        p = os.path.join(dirpath, fn)
+        with open(p, "rb") as fh:
+            h = hashlib.sha256(fh.read()).hexdigest()
+        out.append(f"{h}  {os.path.relpath(p, root)}")
+print("\n".join(sorted(out)))
+"""
+
+
+def _local_manifest(base: Path) -> dict[str, str]:
+    man = {}
+    for p in sorted(base.rglob("*")):
+        if not p.is_file():
+            continue
+        if p.suffix in SKIP_SUFFIX or any(s in p.parts for s in SKIP_PARTS):
+            continue
+        man[str(p.relative_to(base))] = hashlib.sha256(p.read_bytes()).hexdigest()
+    return man
+
+
+def _remote_manifest(container_path: str) -> dict[str, str] | None:
+    proc = subprocess.run(
+        ["docker", "compose", "exec", "-T", SERVICE, "python3", "-", container_path],
+        cwd=REPO, input=REMOTE, capture_output=True, text=True)
+    if proc.returncode != 0:
+        print(f"could not read {container_path} from the running container: "
+              f"{proc.stderr.strip() or 'no stderr'}", file=sys.stderr)
+        return None
+    man = {}
+    for line in proc.stdout.splitlines():
+        if "  " not in line:
+            continue
+        h, rel = line.split("  ", 1)
+        man[rel] = h
+    return man
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--verbose", action="store_true",
+                    help="list every differing file, not just the counts")
+    args = ap.parse_args()
+
+    up = subprocess.run(["docker", "ps", "--filter", f"name={SERVICE}",
+                         "--format", "{{.Names}}\t{{.Status}}\t{{.RunningFor}}"],
+                        capture_output=True, text=True)
+    print(up.stdout.strip() or f"{SERVICE}: not running")
+    head = subprocess.run(["git", "log", "-1", "--format=%h %cd %s",
+                           "--date=format:%Y-%m-%d %H:%M"],
+                          cwd=REPO, capture_output=True, text=True)
+    print(f"HEAD: {head.stdout.strip()}")
+    dirty = subprocess.run(["git", "status", "--porcelain"],
+                           cwd=REPO, capture_output=True, text=True).stdout.strip()
+    if dirty:
+        print(f"working tree: {len(dirty.splitlines())} uncommitted change(s) — "
+              f"comparing against the TREE, which is what a rebuild would bake")
+
+    total_stale = total_missing = total_extra = total_same = 0
+    for rel_tree, container_path in TREES:
+        local = _local_manifest(REPO / rel_tree)
+        remote = _remote_manifest(container_path)
+        if remote is None:
+            return 2
+        if not remote:
+            # An empty manifest would otherwise compare as "everything missing",
+            # which is a louder and less accurate story than "I could not read it".
+            print(f"{container_path} came back EMPTY — refusing to report drift "
+                  f"from a reading I do not trust", file=sys.stderr)
+            return 2
+
+        stale = sorted(f for f in local.keys() & remote.keys()
+                       if local[f] != remote[f])
+        missing = sorted(local.keys() - remote.keys())   # written, never deployed
+        extra = sorted(remote.keys() - local.keys())     # deployed, since deleted
+        same = len(local.keys() & remote.keys()) - len(stale)
+
+        total_stale += len(stale); total_missing += len(missing)
+        total_extra += len(extra); total_same += same
+
+        print(f"\n{rel_tree}/ vs {container_path}: "
+              f"{same} identical · {len(stale)} differ · "
+              f"{len(missing)} not in container · {len(extra)} only in container")
+        show = ([("differs", f) for f in stale] +
+                [("not deployed", f) for f in missing] +
+                [("stale leftover", f) for f in extra])
+        for kind, f in (show if args.verbose else show[:10]):
+            print(f"    {kind:<15} {rel_tree}/{f}")
+        if not args.verbose and len(show) > 10:
+            print(f"    ... and {len(show) - 10} more (--verbose for all)")
+
+    drift = total_stale + total_missing + total_extra
+    if drift:
+        print(f"\nSTALE — the running server is NOT the code in this tree "
+              f"({drift} file(s) differ, {total_same} match).")
+        print("A commit hash proves neither that the process restarted, nor that "
+              "it restarted into that commit.")
+        print("⛔ `docker compose restart` will NOT fix this — there is no source "
+              "mount, the code is baked in. Use `docker compose up -d --build`, "
+              "and only at a boundary where restarting the API is safe.")
+        return 3
+
+    print(f"\nIN SYNC — all {total_same} server source files match this tree.")
+    return 0
+
+
+if __name__ == "__main__":
+    rc = main()
+    print(f"EXIT={rc}", flush=True)
+    raise SystemExit(rc)
