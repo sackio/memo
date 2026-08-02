@@ -544,6 +544,28 @@ failure mode is under-deduplication — silent, and consistent with R-09's `no_d
 result. Recalibrating means re-deriving the cutoffs on qwen3 from labelled pairs, not
 translating the old numbers.
 
+⛔ **And this table cannot tell you what to change `DUP_COSINE` to. Read the 0/400 as a blind
+spot, not as a verdict.** A random-pair sample contains **no near-duplicates**, so it holds no
+examples of the thing the cutoff exists to admit — and a reference population with zero
+positives cannot distinguish one candidate value from another anywhere in that region. The
+0/400 says only *"0.90 is above everything this instrument can see"*, which is equally true of
+0.86 and of 0.99. **It is not evidence that 0.90 is too strict**, and lowering it on the
+strength of this row would be acting on a measurement that has no data underneath it.
+
+⇒ The two mid-range cutoffs are the ones this population can speak to at all, which is the
+dangerous combination: **the method returns a confident-looking number for every row, and is
+only actually informative for some of them.** Re-deriving the duplicate cutoff needs a
+reference set that contains known near-duplicates — the corpus has some (R-08's
+`Backfill checkpoint — <host>…` families, and R-09's four byte-identical content groups), so
+the labelled set can be built here rather than imported. Framing owed to the `embeddings` seat.
+
+⚑ Prefer recording an **admit rate** over a raw cutoff wherever the reference population can
+support one: *"this admits 22.5% of random pairs"* is a policy about the corpus and survives an
+encoder change, whereas *"0.45"* is a reading off one encoder's distribution wearing the
+clothes of a policy decision. The admit rate is invariant to the encoder, which is precisely
+the thing that keeps changing here — and it is not portable between corpora, so each seat
+records its own.
+
 **`memo_recall_min_score = 0.5` is dead configuration.** It is defined in `config.py:76` and
 read nowhere in the tree. It looks like the relevance floor and governs nothing, so an
 operator tuning it would see no effect and no error. Recorded rather than removed: deleting a
