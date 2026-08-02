@@ -539,9 +539,18 @@ Band-stratified, 15 documents per band, five bands, n=75 per draw. Only the seed
 |---|---|---|---|
 | rank-1 | 49.3% → 70.7% (+21.3) | 52.0% → 72.0% (+20.0) | 1.3 pt |
 | top-5 | 74.7% → 84.0% (+9.3) | 76.0% → 84.0% (+8.0) | 1.3 pt |
-| absent | 15 → 9 (−40%) | 15 → 9 (−40%) | 0 |
+| absent | 15 → 9 (−8.0 pp; −40% of misses) | 15 → 9 (−8.0 pp; −40%) | 0 |
 | discordant rank-1 | 18 improved / 2 worsened | 15 / 0 | |
 | sign test | p = 0.00020 | p = 0.00003 | |
+
+⚠️ **Quote `absent` in both currencies or not at all.** −40% is a *relative* figure on a 20%
+baseline; the absolute movement is **−8.0 percentage points**, 6 documents of 75. The two
+answer different questions — *what share of the misses are recovered* versus *how many
+documents become findable* — and a relative figure computed from a low baseline reads as a
+much larger effect than the same absolute recovery from a high one. This exact substitution
+produced a cross-seat "these are different in kind" conclusion elsewhere on 2026-08-02 that
+had to be withdrawn: −40% against −11.4% is 3.5× apart in relative terms and 1.4× apart in
+absolute ones, and nearly all of the gap was the denominators.
 
 The second draw exists because a sibling service measured ~10 points of draw-to-draw
 variance on top-5 in the same design, which would have made a +9.3 point result
