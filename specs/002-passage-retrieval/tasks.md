@@ -21,9 +21,8 @@ rank-1 points across two independent draws, but is a **null with nine named
 casualties** in the 2000+ band and requires ~21 call sites to be reclassified by
 hand first. **This is new work, listed at the end of Phase G.**
 
-Measured 2026-08-01 by **full census — every titled memo in every band, 7,221
-queries per path, no sampling** (R-05's headline was wrong because n=14 could not
-separate a real effect from one document of noise):
+Measured 2026-08-01 (R-09, `text-embedding-3-large`) by **full census — every
+titled memo in every band, 7,221 queries per path, no sampling**:
 
 | | document | passages | bar | verdict |
 |---|---|---|---|---|
@@ -31,15 +30,22 @@ separate a real effect from one document of noise):
 | short bands (n=1216/2293/2007) | 78.5/76.9/76.6% | 77.1/72.0/74.5% | no regression | **SC-102 FAIL** (−1.5/−4.9/−2.1) |
 | mid-document facts (n=30) | 13.3% | **46.7%** | ≥75% | **SC-103 FAIL** |
 
-**Three things this settles.** (1) The larger embedding model **alone did not fix
-long memos** — the document path is 18.8% at 2000+, so a 3,000-token memo as one
-vector fails structurally, not for want of a better encoder. (2) **The remaining
-gap is ranking, not retrieval**: top-5 on the fact set is 26/30 (87%) against
-rank-1 14/30 (47%), so the right memo is found and lands at position 2–5. No
-further indexing moves that — a re-ranker does, which makes **T240–T243 the
-measured bottleneck** rather than a design preference. (3) The short-band
-regression is the honest cost of chunking already-coherent units, and argues for
-routing by size (**T273**) rather than replacing one path with the other.
+⚠️ **R-10 (2026-08-02, qwen3) supersedes these numbers and REFUTES one of the
+conclusions this table used to carry.** The old text said *"the remaining gap is
+ranking, not retrieval"* — that rested on top-5 being far above rank-1, i.e. on the
+target being found and merely mis-ordered. **R-10 falsified it on both paths**: the
+pre-registered prediction was that rank-1 would move materially at ≥2000 tokens while
+top-5 barely moved, and instead top-5 moved almost as much (passages −22.3 / −20.8;
+document +23.6 / +18.3). **Retrievability moves with the encoder about as much as rank
+does**, so a re-ranker is not the whole remaining gap.
+
+**What still stands.** (1) The larger embedding model **alone did not fix long
+memos** — 18.8% at 2000+ on the document path, so a 3,000-token memo as one vector
+fails structurally. (2) T240–T243 remain worth doing on the top-5-vs-rank-1 evidence,
+but they are no longer *the* measured bottleneck. (3) The short-band regression is the
+honest cost of chunking already-coherent units, which argued for routing by size
+(**T273**) — see the warning on T273 below, since R-10 changes the basis of its
+thresholds.
 
 **T253 remains true and still closed off the route the plan expected**: the
 {256,384,512} × {0,15,25}% sweep found chunk geometry does not move SC-101 (R-06).
