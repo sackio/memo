@@ -83,6 +83,45 @@ def band_label(lo: int, hi: int) -> str:
     return f"{lo}-{hi}" if hi < 10**9 else f"{lo}+"
 
 
+def failure_report(res: dict) -> list[str]:
+    """Say what `absent` is made of — or say that it cannot be known.
+
+    ⚠️ `.get("query_failures", 0)` would make a MISSING field read as a measured
+    zero, which is the same defect this field exists to fix, one level up. An
+    output written before the counter existed cannot say whether any query failed,
+    and "0 failures" is precisely the claim it must not make. (`embeddings` seat
+    hit the identical shape in their own tool on 2026-08-02: an absent metrics
+    series defaulted to Δ=0 and printed HEALTHY forever, with nothing to notice.)
+
+    ⇒ Three distinguishable states, never two:
+        unknown  — the field is absent; `absent` is an undecomposable MIXTURE
+        nonzero  — some `absent` counts are queries that never ran
+        zero     — every `absent` is a genuine retrieval miss at `limit`
+
+    Returned as lines rather than printed so the negative cases can be tested
+    directly. A branch that has never been watched to fire is not a check.
+    """
+    bands = res.get("bands") or []
+    unreported = [b["band"] for b in bands if "query_failures" not in b]
+    total = sum(b["query_failures"] for b in bands if "query_failures" in b)
+    out: list[str] = []
+    if unreported:
+        out.append(f"\n⚠️ query failures UNKNOWN for {', '.join(unreported)} — that "
+                   f"output predates this counter. `absent` there is a MIXTURE of "
+                   f"retrieval misses and queries that never ran, and cannot be "
+                   f"decomposed after the fact. Do NOT read it as zero.")
+    if total:
+        out.append(f"\n⚠️ {total} of the `absent` counts above are QUERY FAILURES, "
+                   f"not retrieval misses — the model was never asked. Per band: "
+                   + ", ".join(f"{b['band']}={b['query_failures']}"
+                               for b in bands if b.get("query_failures")))
+    elif not unreported:
+        out.append(f"\nquery failures: 0 — every `absent` above is a genuine "
+                   f"retrieval miss at depth {res.get('limit')}, not a query that "
+                   f"never ran.")
+    return out
+
+
 def run(url: str, per_band: int, limit: int, seed: int,
         path: str = "document", both_indexed_only: bool = False) -> dict:
     docs = _get(url, "/documents?limit=20000")
@@ -100,7 +139,7 @@ def run(url: str, per_band: int, limit: int, seed: int,
                 if lo <= (d.get("token_count") or 0) < hi
                 and (d.get("title") or "").strip()]
         sample = random.sample(pool, min(per_band, len(pool)))
-        rank1 = top5 = absent = 0
+        rank1 = top5 = absent = failures = 0
         scores: list[float] = []
 
         for d in sample:
@@ -108,8 +147,21 @@ def run(url: str, per_band: int, limit: int, seed: int,
                 hits = _search(url, (d.get("title") or "")[:200], limit=limit,
                                path=path)
             except Exception as e:  # a failed query is not a passing query
+                # Counting it as `absent` is still right — it did not retrieve.
+                # But `absent` is the column carrying the biggest deltas in this
+                # bench (200-500 moved 69 -> 523 across a model change), and a
+                # silent failure channel inside it is indistinguishable from a
+                # retrieval result. The per-band count below is what separates
+                # "the model missed" from "the query never ran".
+                #
+                # ⚠️ Before this field existed, ruling failures out required
+                # checking that the process's fd/2 pointed at the captured file —
+                # i.e. the artifact could not answer a question about itself.
+                # (`embeddings` seat, 2026-08-02, asking at what depth `absent`
+                # was counted; the depth was fine, this was not.)
                 print(f"  query failed for {d['id'][:8]}: {e}", file=sys.stderr)
                 absent += 1
+                failures += 1
                 continue
             ids = [_doc_of(h)["id"] for h in hits]
             if d["id"] in ids:
@@ -126,6 +178,13 @@ def run(url: str, per_band: int, limit: int, seed: int,
             "rank1": rank1,
             "top5": top5,
             "absent": absent,
+            # `absent` = not in the top `limit`, PLUS any query that failed.
+            # Both fields are needed to read it: `limit` (recorded at the top of
+            # this output) is the depth, `query_failures` is the contamination.
+            # An `absent` figure quoted without its depth names an outcome that
+            # sounds like a property of the document when it is a property of the
+            # measurement.
+            "query_failures": failures,
             "rank1_pct": round(100 * rank1 / len(sample), 1) if sample else None,
             "median_score": round(statistics.median(scores), 3) if scores else None,
         })
@@ -220,10 +279,23 @@ def main() -> int:
     print(f"corpus: {res['corpus']} memos @ {res['url']}  (seed {res['seed']})"
           f"  path={res['path']}{scope}")
     print()
-    print(f"{'band':>12} {'n':>3} {'rank-1':>7} {'top-5':>6} {'absent':>7} {'median':>7}")
+    # The depth belongs in the HEADER, not in the reader's memory. `rank-1` and
+    # `top-5` name their own cutoffs; `absent` does not, and it is the column with
+    # the largest movement across model changes.
+    absent_col = f"absent@{res['limit']}"
+    print(f"{'band':>12} {'n':>3} {'rank-1':>7} {'top-5':>6} "
+          f"{absent_col:>10} {'median':>7}")
     for b in res["bands"]:
         print(f"{b['band']:>12} {b['n']:3} {b['rank1']:7} {b['top5']:6} "
-              f"{b['absent']:7} {str(b['median_score']):>7}")
+              f"{b['absent']:10} {str(b['median_score']):>7}")
+    # ⚠️ `.get(key, 0)` would make a MISSING field read as a measured zero — the
+    # same defect this field was added to fix, one level up. An artifact written
+    # before `query_failures` existed cannot say whether any query failed, and
+    # "0 failures" is the one thing it must not claim. Distinguish absent-key from
+    # zero-value. (`embeddings` seat hit the identical shape in their own tool:
+    # an absent metrics series defaulting to Δ=0 printed HEALTHY forever.)
+    for line in failure_report(res):
+        print(line)
     print()
     for k, v in res["content_share"].items():
         print(f"  memos {k} tokens: {v['memos']} ({v['token_pct']}% of all content)")

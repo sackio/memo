@@ -3,6 +3,12 @@
 
 Do not trust `document_chunks.embedding_model`. Measure.
 
+SCOPE (widened 2026-08-02): BOTH vector tables — `chunk_embeddings` (passage path)
+and `document_embeddings` (whole-document path). It checked only the first for its
+first several weeks and ran green throughout, while the whole-document path was
+regressing. A green result is scoped to what it sampled, and this one did not say
+what it sampled.
+
 **Why, concretely.** On 2026-08-02 that column read
 `openai/text-embedding-3-large` for all 19,554 chunks whose vectors had actually
 been written by `qwen3-embedding-4b` — the re-embed wrote the vector tables
@@ -98,6 +104,95 @@ def _cosine(a, b) -> float:
     return dot / (na * nb) if na and nb else 0.0
 
 
+async def _verify_document_embeddings(conn, args) -> tuple[int, int, float]:
+    """The WHOLE-DOCUMENT vector table — the one this script never looked at.
+
+    ⚠️ HOW THIS GAP HAPPENED, because it is the instructive part. This script was
+    written to catch a corpus whose `document_chunks.embedding_model` column lied,
+    so it sampled `document_chunks` / `chunk_embeddings` and stopped there. It then
+    ran green, repeatedly, while `document_embeddings` — a table it does not read —
+    served the path that had regressed from 76.9% to 43.4% rank-1.
+
+    ⇒ A check that passes tells you only about what it sampled. `document_chunks`
+    and `document_embeddings` are written by DIFFERENT code paths
+    (`passages.py:138` via embed_batch, `main.py`/`backfill.py:361` via embed), so
+    one being sound was never evidence about the other. The scope of a green result
+    is the scope of its query, and nothing here announced that scope.
+
+    Same technique as the chunk pass, different table: re-embed the document's own
+    stored content as a SINGLETON and compare to the stored whole-document vector.
+    Verified by measurement on 2026-08-02 — 25/25 across all five token bands,
+    negative control 0.2268 — which is how the misaligned-vector hypothesis for the
+    regression was refuted.
+    """
+    rows = conn.execute(
+        "SELECT id, content FROM documents "
+        "WHERE valid_until IS NULL AND length(coalesce(content,'')) > 0 "
+        "ORDER BY created_at").fetchall()
+    if not rows:
+        print("\nno documents indexed — nothing to verify in document_embeddings")
+        return 0, 0, 1.0
+
+    total = len(rows)
+    step = max(1, total // max(1, args.sample))
+    rows = rows[::step][:args.sample]
+    print(f"\n--- document_embeddings (whole-document vectors) ---")
+    print(f"sampled    : {len(rows)} of {total} documents, stride {step} "
+          f"(stratified by created_at)")
+    print(f"detects    : any contiguous block ≥ {step} rows "
+          f"(≥ {100 * step / max(1, total):.2f}% of the corpus), deterministically")
+
+    worst, checked, missing = 1.0, 0, 0
+    for doc_id, content in rows:
+        blob = conn.execute(
+            "SELECT embedding FROM document_embeddings WHERE doc_id=?",
+            (doc_id,)).fetchone()
+        if not blob:
+            # NOT fatal on its own: a document can legitimately predate the vector
+            # table or have been skipped. It IS reported, because a large count is
+            # the signature of a partial backfill, which is exactly the failure the
+            # stride sampling exists to catch.
+            missing += 1
+            print(f"  {doc_id[:8]}  NO VECTOR")
+            continue
+        stored = struct.unpack(f"{len(blob[0]) // 4}f", blob[0])
+        # ⛔ BARE, for the same reason as the chunk pass above — see that comment.
+        # A document wrongly routed through a future embed_query() would store a
+        # PREFIXED vector, and only a bare re-embed here disagrees with it.
+        fresh = await embeddings.embed(content)
+        if len(stored) != len(fresh):
+            print(f"  {doc_id[:8]}: width {len(stored)} stored vs {len(fresh)} fresh",
+                  file=sys.stderr)
+            return 2, checked, 0.0
+        c = _cosine(stored, fresh)
+        worst = min(worst, c)
+        checked += 1
+        print(f"  {doc_id[:8]}  cosine={c:.6f}")
+
+    # Its OWN negative control. The chunk pass's control does not license this one:
+    # different table, different writer, different vector width in principle.
+    if len(rows) >= 2:
+        blob = conn.execute(
+            "SELECT embedding FROM document_embeddings WHERE doc_id=?",
+            (rows[0][0],)).fetchone()
+        if blob:
+            stored_a = struct.unpack(f"{len(blob[0]) // 4}f", blob[0])
+            control = _cosine(stored_a, await embeddings.embed(rows[-1][1]))
+            print(f"negative control (mismatched pair): cosine={control:.4f}")
+            if control >= args.threshold:
+                print("NEGATIVE CONTROL FAILED on document_embeddings — the "
+                      "comparison returns ~1.0 to unrelated text, so every pass "
+                      "above is meaningless.", file=sys.stderr)
+                return 2, checked, worst
+
+    if missing:
+        print(f"  ⚠️ {missing} of {len(rows)} sampled documents have NO whole-document "
+              f"vector — a partial backfill would look exactly like this")
+    if checked and worst < args.threshold:
+        return 2, checked, worst
+    return 0, checked, worst
+
+
 async def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -164,6 +259,19 @@ async def main() -> int:
                   f"inconsistent", file=sys.stderr)
             return 2
         stored = struct.unpack(f"{len(blob[0]) // 4}f", blob[0])
+        # ⛔ THIS RE-EMBED MUST STAY BARE. Do not "make it consistent" with the
+        # query side by adding qwen3's instruct prefix here.
+        #
+        # qwen3 wants the prefix on QUERIES ONLY; documents stay bare. When memo
+        # grows embed_query()/embed_document(), ~21 call sites get reclassified by
+        # hand, and a document mistakenly routed through the query path writes a
+        # PREFIXED vector into a document table. This line is the only thing that
+        # catches it: a bare re-embed of the stored source text will not match a
+        # prefixed stored vector, so the mismatch fires loudly.
+        #
+        # ⇒ Prefixing here would make the detector agree with exactly the defect it
+        # exists to detect. (`embeddings` seat, 2026-08-02, raised while reviewing
+        # the instruct-prefix regression.)
         fresh = await embeddings.embed(text)
         if len(stored) != len(fresh):
             print(f"  {doc_id[:8]}#{idx}: width {len(stored)} stored vs "
@@ -194,14 +302,33 @@ async def main() -> int:
                   "instrument is broken, not the corpus.", file=sys.stderr)
             return 2
 
-    print(f"\nchecked {checked}, worst cosine {worst:.6f}, threshold {args.threshold}")
-    if worst < args.threshold:
-        print("PROVENANCE MISMATCH — the stored vectors were NOT written by the "
-              "configured model, whatever `embedding_model` claims. Do not build "
-              "a model-identity check on that column until this is resolved.",
-              file=sys.stderr)
+    # BOTH vector tables, or the green light is scoped to half the corpus and does
+    # not say so. document_chunks/chunk_embeddings serve the passage path;
+    # document_embeddings serves the whole-document path. They are written by
+    # different code and can fail independently.
+    doc_rc, doc_checked, doc_worst = await _verify_document_embeddings(conn, args)
+
+    print(f"\n--- summary ---")
+    print(f"chunk_embeddings    : checked {checked}, worst cosine {worst:.6f}")
+    if doc_checked:
+        print(f"document_embeddings : checked {doc_checked}, worst cosine {doc_worst:.6f}")
+    else:
+        print(f"document_embeddings : nothing checked")
+    print(f"threshold           : {args.threshold}")
+
+    if worst < args.threshold or doc_rc != 0:
+        which = []
+        if worst < args.threshold:
+            which.append("chunk_embeddings")
+        if doc_rc != 0:
+            which.append("document_embeddings")
+        print(f"PROVENANCE MISMATCH in {' and '.join(which)} — the stored vectors "
+              f"were NOT written by the configured model, whatever "
+              f"`embedding_model` claims. Do not build a model-identity check on "
+              f"that column until this is resolved.", file=sys.stderr)
         return 2
-    print("provenance VERIFIED by measurement (not by the declared column)")
+    print("provenance VERIFIED by measurement (not by the declared column), "
+          "in BOTH vector tables")
     return 0
 
 
