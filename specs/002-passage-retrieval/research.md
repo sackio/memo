@@ -604,23 +604,27 @@ prefix**: the write-side provenance check re-embeds documents *bare*, and the re
 harness queries *prefixed*. Unifying them for consistency would blind both at once, and it
 would look like a cleanup. The constraint is commented at both re-embed lines.
 
-### ⚠️ Unmeasured: the routed path, which is what production serves
+### Ranking layers: what is measured, and the one mode that is not
 
 Every number in this section was measured on a **single index in isolation** — a direct KNN
-against `document_embeddings`, and the harness's `--path document` / `--path passages`.
-`search_documents` (`main.py:1242`) is the endpoint that actually serves, and it queries
-**both** indexes, merges by document id, and gives each document the score from the path
-preferred for its own token count. It is deliberately not a hybrid score — no reciprocal-rank
-fusion, no weighted blend — but it is still a **cross-path re-sort**, and no measurement here
-covers it.
+against `document_embeddings`, and the harness's `/search-documents` and `/search-passages`.
+Checked rather than assumed: **memo has no lexical leg, no BM25, no reciprocal-rank fusion
+and no re-ranker anywhere in `src/`.** `/search` reads `settings.memo_retrieval_path`, which
+is **`document`** — so the product surface currently serves the same pure document path these
+numbers describe, and they apply to it directly.
 
-That matters because a sibling service measured a prefix at **+7.5 points rank-1 vector-only
-and −8.0 points through RRF fusion** on the same corpus: a post-embedding ranking layer
-reversed the sign rather than shrinking it. memo's merge is a weaker construct than RRF —
-one model, no lexical leg, scores kept unmodified — so the same reversal is not expected
-here. **"Not expected" is exactly the claim that was wrong about the 2000+ band at n=15**,
-and this section should not be read as licensing a change to the routed path until the
-routed path has been measured bare-vs-prefixed the same way.
+The exception is the third mode, **`size-routed`** (`_size_routed_search`). It queries both
+indexes, merges by document id, and gives each document the score from the path preferred for
+its own token count — deliberately not a hybrid score, but still a **cross-path re-sort**. It
+is **not active** and no measurement here covers it.
+
+That mode is worth measuring before it is ever switched on, because a sibling service
+measured a query prefix at **+7.5 points rank-1 vector-only and −8.0 points through RRF
+fusion** on one corpus: a post-embedding ranking layer reversed the sign rather than shrinking
+it. memo's merge is a weaker construct — one model, no lexical leg, scores unmodified — so
+the same reversal is not expected. **"Not expected" is exactly what would have been said about
+the 2000+ band at n=15**, so `size-routed` and the prefix should not be enabled together
+until that combination has been measured bare-vs-prefixed the same way.
 
 **Scope of every number above:** one fixed task string, `"Instruct: Given a search query,
 retrieve relevant documents that match the query\nQuery: {q}"`, held constant across all
