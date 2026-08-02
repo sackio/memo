@@ -176,10 +176,34 @@ def verdict(rows: list[tuple[str, float]], threshold: float, marginal_floor: flo
     marg = [(k, c) for k, c in rows if classify(c, threshold, marginal_floor) == "marginal"]
     if bad:
         worst = min(c for _, c in bad)
-        return 2, (f"PROVENANCE MISMATCH — {len(bad)} of {n} rows below "
-                   f"{marginal_floor} (worst {worst:.6f}). That is far below the "
-                   f"line, not near it: these vectors were written by a different "
-                   f"model, whatever `embedding_model` claims.")
+        rate = len(bad) / n
+        # ⚠️ `if bad:` is a MIN in disguise — drawing more rows can only increase the
+        # chance of catching one, so the gate gets stricter the more carefully you
+        # sample. It is not currently exposed: measured healthy drift is 1.18e-04, so
+        # a healthy row sits at ~0.9999 and MARGINAL_FLOOR is ~40x outside anything
+        # observed. But the margin is the same quantity that decays with a serving
+        # change, and the rule is worth honouring before it bites.
+        #
+        # The real defect was the MESSAGE, not the branch. One bad row IS a real
+        # provenance failure for that row, so exit 2 is right either way — but saying
+        # "these vectors were written by a different model" of a single row invites a
+        # full corpus re-embed to fix one vector. Systematic and isolated get
+        # different sentences now. (`embeddings`/`mind` seats, 2026-08-02: an
+        # extreme-value gate degrades with n, and fails-safe is not the same as works.)
+        if rate >= fraction_limit:
+            return 2, (f"PROVENANCE MISMATCH — SYSTEMATIC. {len(bad)} of {n} rows "
+                       f"({100 * rate:.1f}%) fall below {marginal_floor}, worst "
+                       f"{worst:.6f}. At that rate this is the corpus, not a few "
+                       f"rows: these vectors were not written by the configured "
+                       f"model, whatever `embedding_model` claims.")
+        return 2, (f"PROVENANCE MISMATCH — ISOLATED. {len(bad)} of {n} rows "
+                   f"({100 * rate:.1f}%, under the {100 * fraction_limit:.0f}% "
+                   f"systematic bar) fall below {marginal_floor}, worst {worst:.6f}: "
+                   + ", ".join(k for k, _ in bad[:8]) +
+                   f". Those specific vectors are suspect and worth replacing. This "
+                   f"is NOT evidence the corpus is wrong — do not re-embed "
+                   f"everything to fix a handful of rows. Re-run with a larger "
+                   f"--sample to see whether the rate holds.")
     if marg and len(marg) / n > fraction_limit:
         worst = min(c for _, c in marg)
         return 3, (f"THRESHOLD MISCALIBRATED FOR THIS STACK — {len(marg)} of {n} "
