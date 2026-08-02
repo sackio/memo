@@ -1,0 +1,145 @@
+#!/usr/bin/env python3
+"""memo-verify-provenance — MEASURE which model wrote the vectors. [002/FR-108]
+
+Do not trust `document_chunks.embedding_model`. Measure.
+
+**Why, concretely.** On 2026-08-02 that column read
+`openai/text-embedding-3-large` for all 19,554 chunks whose vectors had actually
+been written by `qwen3-embedding-4b` — the re-embed wrote the vector tables
+directly and never updated the provenance. The field was present and LYING, which
+is strictly worse than absent because every future reader, and every check built
+on it, would trust it.
+
+**A declared provenance column cannot check itself.** It is written by the same
+code path that writes the vectors, so it inherits that path's bugs and fails in
+the direction that looks fine. This uses a DIFFERENT generator: re-embed the
+stored source text with the currently configured model and compare to the vector
+on disk.
+
+    cosine ~1.0  → the configured model IS the model that wrote this vector
+    cosine far   → the record is lying, whatever the column says
+
+⚠️ Threshold is 0.999, not equality, and NOT a hash. Embedding endpoints are
+mildly nondeterministic under load — a real chunk measured 0.999916 while three
+migrations shared the GPU — and a hash comparison would flag that as a mismatch
+it isn't. Validate under load, not on an idle box. (Technique from the
+`embeddings` seat's endpoint identity canary, pointed at a corpus instead.)
+
+    docker compose exec -T memo-v2 python /app/scripts/memo-verify-provenance
+"""
+from __future__ import annotations
+
+import argparse
+import asyncio
+import math
+import struct
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, "/app/src")
+
+from memo import db, embeddings  # noqa: E402
+from memo.config import settings  # noqa: E402
+
+THRESHOLD = 0.999
+
+
+def _cosine(a, b) -> float:
+    dot = sum(x * y for x, y in zip(a, b))
+    na = math.sqrt(sum(x * x for x in a))
+    nb = math.sqrt(sum(y * y for y in b))
+    return dot / (na * nb) if na and nb else 0.0
+
+
+async def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--sample", type=int, default=5)
+    ap.add_argument("--threshold", type=float, default=THRESHOLD)
+    args = ap.parse_args()
+
+    conn = db._get_or_create_conn(db.global_path())
+    declared = conn.execute(
+        "SELECT DISTINCT embedding_model FROM document_chunks").fetchall()
+    print(f"configured : {settings.embedding_model} @ {settings.embedding_dimensions}")
+    print(f"declared   : {[d[0] for d in declared]}")
+
+    # STRATIFIED BY WRITE TIME, not uniform random. [refinement from `embeddings`]
+    #
+    # Uniform sampling implicitly assumes corruption is scattered. The realistic
+    # failure here is an interrupted or reconfigured run, which is CONTIGUOUS in
+    # `created_at` — so spreading the draws across the write-time range finds it
+    # with far fewer samples than random does.
+    #
+    # The arithmetic that makes this matter for a RECURRING check: to catch a 1%
+    # divergence at 95% confidence, uniform sampling needs n ≈ ln(0.05)/ln(0.99)
+    # ≈ 300. At n=6 the probability of missing it is 0.99^6 ≈ 94%, so a weekly
+    # sweep would report `ok` every Monday against a bad 1% indefinitely. Six
+    # random samples prove the corpus is not WHOLESALE in the wrong space; they
+    # say almost nothing about a PARTIAL divergence.
+    rows = conn.execute(
+        "SELECT doc_id, chunk_index, text FROM document_chunks "
+        "ORDER BY created_at").fetchall()
+    if not rows:
+        print("no passages indexed — nothing to verify", flush=True)
+        return 0
+    step = max(1, len(rows) // max(1, args.sample))
+    rows = rows[::step][:args.sample]
+
+    worst = 1.0
+    checked = 0
+    for doc_id, idx, text in rows:
+        blob = conn.execute(
+            "SELECT embedding FROM chunk_embeddings WHERE doc_id=? AND chunk_index=?",
+            (doc_id, idx)).fetchone()
+        if not blob:
+            print(f"  {doc_id[:8]}#{idx}: chunk row with NO vector — index is "
+                  f"inconsistent", file=sys.stderr)
+            return 2
+        stored = struct.unpack(f"{len(blob[0]) // 4}f", blob[0])
+        fresh = await embeddings.embed(text)
+        if len(stored) != len(fresh):
+            print(f"  {doc_id[:8]}#{idx}: width {len(stored)} stored vs "
+                  f"{len(fresh)} fresh", file=sys.stderr)
+            return 2
+        c = _cosine(stored, fresh)
+        worst = min(worst, c)
+        checked += 1
+        print(f"  {doc_id[:8]}#{idx}  cosine={c:.6f}")
+
+    # NEGATIVE CONTROL. Without it, six passes prove nothing: a comparison that
+    # returns ~1.0 to everything produces six identical ticks and reads as proof.
+    # This pairs one chunk's stored vector against a DIFFERENT chunk's text, which
+    # must score far below threshold. If it does not, the instrument is broken and
+    # every pass above is meaningless. (`groton` measured 0.1230 on theirs; the
+    # concrete value matters less than that it is nowhere near 1.0.)
+    if len(rows) >= 2:
+        blob = conn.execute(
+            "SELECT embedding FROM chunk_embeddings WHERE doc_id=? AND chunk_index=?",
+            (rows[0][0], rows[0][1])).fetchone()
+        stored_a = struct.unpack(f"{len(blob[0]) // 4}f", blob[0])
+        fresh_b = await embeddings.embed(rows[-1][2])
+        control = _cosine(stored_a, fresh_b)
+        print(f"\nnegative control (mismatched pair): cosine={control:.4f}")
+        if control >= args.threshold:
+            print("NEGATIVE CONTROL FAILED — the comparison returns ~1.0 to "
+                  "unrelated text, so every pass above is meaningless. The "
+                  "instrument is broken, not the corpus.", file=sys.stderr)
+            return 2
+
+    print(f"\nchecked {checked}, worst cosine {worst:.6f}, threshold {args.threshold}")
+    if worst < args.threshold:
+        print("PROVENANCE MISMATCH — the stored vectors were NOT written by the "
+              "configured model, whatever `embedding_model` claims. Do not build "
+              "a model-identity check on that column until this is resolved.",
+              file=sys.stderr)
+        return 2
+    print("provenance VERIFIED by measurement (not by the declared column)")
+    return 0
+
+
+if __name__ == "__main__":
+    rc = asyncio.run(main())
+    print(f"EXIT={rc}", flush=True)
+    raise SystemExit(rc)

@@ -693,6 +693,62 @@ def _sync_search_passages(db_path: str, embedding: list[float], limit: int,
     return results
 
 
+class EmbeddingModelMismatch(RuntimeError):
+    """The configured model is not the one that wrote the stored vectors."""
+
+
+_write_model_cache: dict[str, str | None] = {}
+
+
+def _sync_stored_write_model(db_path: str) -> str | None:
+    conn = _get_or_create_conn(db_path)
+    try:
+        row = conn.execute(
+            "SELECT embedding_model FROM document_chunks LIMIT 1").fetchone()
+    except sqlite3.OperationalError:
+        return None                     # no passage index yet — nothing to compare
+    return row[0] if row else None
+
+
+def assert_read_model_matches(db_path: str | None = None) -> None:
+    """Refuse to search with a model that did not write the vectors. [002/FR-108]
+
+    **Why this exists, and why the obvious defence is not enough.** `vec0` bakes
+    the vector width into the table and rejects a mismatched QUERY vector — I
+    verified that (`2560 query on a 3072 table → "Dimension mismatch for query
+    vector"`). But that invariant keys on *dimension*, and dimension is only a
+    proxy for model. It is faithful today because 2560 is an unusual width; it is
+    a property of the model landscape rather than of memo, and the landscape is
+    not ours to control.
+
+    ⇒ Point `EMBEDDING_MODEL` at any OTHER 2560-dimension model and every read
+    silently compares vectors across models: no exception, no width error, and
+    plausible confidently-wrong results. That is precisely the failure this
+    feature exists to prevent, and it is the one case the width guard misses.
+
+    So the model is recorded beside the vectors and checked HERE, on the read
+    path. A write-side check is the half that already works — writes fail loudly
+    because a store has a shape; reads are the silent side. (Raised by the
+    `embeddings` seat 2026-08-02 during the fleet inventory; `mind` gets this
+    property structurally by resolving the model from the active collection,
+    which memo does not do.)
+
+    Cached after the first call: this is a per-process invariant, and a query-time
+    round-trip to check it would be a real cost for a value that cannot change
+    without a restart.
+    """
+    key = _resolve_path(db_path)
+    if key not in _write_model_cache:
+        _write_model_cache[key] = _sync_stored_write_model(key)
+    stored = _write_model_cache[key]
+    if stored and stored != settings.embedding_model:
+        raise EmbeddingModelMismatch(
+            f"refusing to search: vectors were written by {stored!r} but "
+            f"EMBEDDING_MODEL is {settings.embedding_model!r}. Comparing "
+            f"embeddings across models yields plausible, confidently wrong "
+            f"results — re-embed the corpus or restore the original model.")
+
+
 async def search_passages(db_path: str | None, embedding: list[float], limit: int,
                           min_score: float | None = None, tags: list[str] | None = None,
                           after: float | None = None, before: float | None = None,
@@ -700,6 +756,7 @@ async def search_passages(db_path: str | None, embedding: list[float], limit: in
                           max_tokens: int | None = None) -> list[dict]:
     """Passage-level search. [002/FR-105]"""
     path = _resolve_path(db_path)
+    assert_read_model_matches(path)
     return await asyncio.to_thread(
         _sync_search_passages, path, embedding, limit, min_score, tags or [],
         after, before, min_tokens, max_tokens)
@@ -709,6 +766,7 @@ async def search(db_path: str | None, embedding: list[float], limit: int,
                  min_score: float | None, tags: list[str], after: float | None,
                  before: float | None, min_tokens: int | None, max_tokens: int | None) -> list[dict]:
     path = _resolve_path(db_path)
+    assert_read_model_matches(path)     # see the docstring there
     return await asyncio.to_thread(
         _sync_search, path, embedding, limit, min_score, tags, after, before, min_tokens, max_tokens
     )
