@@ -55,7 +55,12 @@ def _cosine(a, b) -> float:
 async def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--sample", type=int, default=5)
+    # Default 100: with stride sampling, n is the GUARANTEE, not a confidence
+    # level — n ≥ 1/x deterministically catches any contiguous block of fraction
+    # x. n=100 → ~1%. That is ~100 embeddings, which is nothing for a weekly
+    # sweep. Drop it for a quick ad-hoc check, but read the detection limit the
+    # run prints rather than assuming a small n means much.
+    ap.add_argument("--sample", type=int, default=100)
     ap.add_argument("--threshold", type=float, default=THRESHOLD)
     args = ap.parse_args()
 
@@ -84,8 +89,23 @@ async def main() -> int:
     if not rows:
         print("no passages indexed — nothing to verify", flush=True)
         return 0
-    step = max(1, len(rows) // max(1, args.sample))
+    total = len(rows)
+    step = max(1, total // max(1, args.sample))
     rows = rows[::step][:args.sample]
+
+    # STATE THE DETECTION LIMIT. The stride IS the bound, and unlike a confidence
+    # level it is exact: any contiguous block of at least `step` rows is caught
+    # deterministically, and a shorter one is missed ENTIRELY — not merely
+    # probably. Printing n without printing the stride invites reading a small
+    # sample as broad coverage.
+    print(f"sampled    : {len(rows)} of {total} chunks, stride {step} "
+          f"(stratified by created_at)")
+    print(f"detects    : any contiguous block ≥ {step} rows "
+          f"(≥ {100 * step / max(1, total):.2f}% of the corpus), deterministically")
+    print("blind spot : SCATTERED corruption. Stride sampling assumes the "
+          "realistic failure — an interrupted or reconfigured run — is contiguous "
+          "in write time. If that assumption is ever wrong here, this is WEAKER "
+          "than uniform random sampling, not stronger.")
 
     worst = 1.0
     checked = 0
