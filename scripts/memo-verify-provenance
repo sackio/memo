@@ -94,6 +94,26 @@ sys.path.insert(0, "/app/src")
 from memo import db, embeddings  # noqa: E402
 from memo.config import settings  # noqa: E402
 
+# ⚠️ THIS NUMBER IS SCOPED TO qwen3-embedding-4b ON THE LOCAL vLLM ENDPOINT.
+#
+# It is not a general provenance floor, and it reads like one. It was derived by
+# `embeddings` on qwen3/vLLM and re-derived HERE by measurement — worst deviation
+# 1.18e-04 over 3 rounds of `memo-calibrate-drift`, so 0.999 clears the local floor
+# by ~8.5×. That validation is what makes it usable here and is exactly what does
+# not travel.
+#
+# ⛔ DO NOT INHERIT IT INTO A CHECK AGAINST A DIFFERENT STACK. `mind` measured
+# OpenRouter/text-embedding-3-large at n=100 and found min 0.998772 — 1 row in 100
+# of a CORRECT corpus falls below 0.999 there. memo v1 (:8000) is
+# text-embedding-3-small @1536 via OpenRouter, a pair nobody has measured at all.
+# Pointing this script at v1 with this default would be expected to produce false
+# PROVENANCE MISMATCHes, and after 2026-08-02 a flag from this tool would be
+# believed. Measure the floor on the stack you are checking; do not import it.
+#
+# ⛔ AND THE VALIDATION ATTACHES TO THIS VALUE, NOT TO "THE THRESHOLD". Tightening
+# to 0.9995 would not inherit the measurement above — it would need its own, and
+# on a corpus sitting ~1.2e-3 from the line it would start flagging healthy rows
+# while the old "we checked it and it works" kept being quoted as support.
 THRESHOLD = 0.999
 
 
