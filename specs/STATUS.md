@@ -65,24 +65,53 @@ withdrawal surfaces as nothing at all, which is why it needs the deliberate step
 
 ## 002 — passage retrieval
 
-**The honest headline: the passage path is a large, measured improvement — larger than
-this document claimed yesterday — and it still misses two of its three criteria, so
-the default has not been flipped.**
+**The honest headline: the corpus was moved to a self-hosted encoder and retrieval got
+much worse on both paths — but it was measured with the client configured wrong, so the
+numbers are a floor for that model rather than a verdict on it. All three criteria fail.
+Nothing has been flipped and nothing should be until the configuration is fixed.**
 
-Every band measured in full, both paths, one sample (research.md **R-07**, 2026-07-31).
-This supersedes the 14-memo samples that R-05 and yesterday's STATUS were built on:
+Two full censuses now supersede everything above: **R-09** (2026-08-01, on
+`text-embedding-3-large`) and **R-10** (2026-08-02, on `qwen3-embedding-4b` @2560). Both
+are 7,221 own-title queries per path plus a 30-case fact set, over the fully re-migrated
+7,336-memo corpus. The n=66/n=14 samples that earlier versions of this document were
+built on are gone, and two of them had produced wrong headline figures.
 
-| band | n | document rank-1 | **passage rank-1** | document absent | passage absent |
-|---|---|---|---|---|---|
-| 500–1000 | 67 | 56 (83.6%) | 56 (83.6%) | 3 | 4 |
-| 1000–2000 | 67 | 28 (41.8%) | **46 (68.7%)** | 18 | **3** |
-| **2000+** | 66 | **10 (15.2%)** | **38 (57.6%)** | **36** | **8** |
+**R-10 — 3-large → qwen3, rank-1, full census:**
 
-Mid-document fact set: document **1/12 (8%)** → passages **8/12 (67%)**.
+| band | n | document | passages |
+|---|---|---|---|
+| 0–200 | 1216 | 78.5% → 61.8% | 77.1% → 60.3% |
+| 200–500 | 2293 | 76.9% → 43.4% | 72.0% → 41.8% |
+| 500–1000 | 2007 | 76.6% → 50.8% | 74.5% → 44.3% |
+| 1000–2000 | 1306 | 51.8% → 48.6% | 68.5% → 39.8% |
+| **2000+** | 399 | **18.8% → 42.4%** | **47.6% → 25.3%** |
+| **overall** | 7221 | 69.4% → 49.4% | 71.6% → 44.3% |
 
-- **SC-102 holds** — no band regresses on rank-1.
-- **SC-101 FAILS** — 57.6% against ≥80%.
-- **SC-103 FAILS** — 67% against ≥75%, at n=12.
+- ⛔ **SC-101 fails and worsened** — passages 2000+ is 25.3% against ≥80% (was 47.6%).
+- ⛔ **SC-102 fails outright** — it forbids *any* band regressing; nine of ten cells do.
+- ⛔ **SC-103 fails, unchanged** — fact set 14/30 (46.7%) against ≥75%.
+
+**The cause is identified and it is ours, not the model's (research.md R-11).** qwen3 is
+trained for asymmetric retrieval — an instruction prefix on the *query* side only — and
+memo sends bare queries. Adding it recovers **+21.3 and +20.0 rank-1 points** across two
+independent draws (n=75 each, sign test p≈2e-4 and 3e-5). ⚠️ **This document already named
+"query formulation" as one of three candidate gaps. It was on the list and it was the
+answer; nobody had pulled that branch.**
+
+⛔ **It is not a free fix.** In the 2000+ band at n=120 it is a *null* on the pre-registered
+primary (14 improved / 9 worsened, p=0.202) with nine documents demoted out of rank 1 and
+two made unretrievable. That band is 5.5% of the corpus against 76% in the bands where the
+prefix clearly works — **a trade to be decided deliberately, with the nine titles visible,
+not a switch to throw.** And applying it at all requires `embed_query()`/`embed_document()`
+with the ambiguous `embed()` removed: 25 call sites share one function today and the
+query/document distinction lives only in local variable names.
+
+⚠️ **Separately (R-12): two cross-text cosine cutoffs were chosen in the 3-small era and
+never moved through two encoder changes** — `DUP_COSINE = 0.90` and
+`auto_store_similarity_threshold = 0.82`. Their current adequacy is **unmeasured in both
+directions**; an attempt to show they are now too strict used an assumed reference
+population and was withdrawn. Also `memo_recall_min_score = 0.5` is dead configuration:
+defined, read nowhere, and shaped exactly like the relevance floor.
 
 **What changed since yesterday, and why it matters to your review:**
 
@@ -100,33 +129,41 @@ Mid-document fact set: document **1/12 (8%)** → passages **8/12 (67%)**.
 - **Top-5 on the gating band is 56/66 (85%).** The right memo is nearly always
   retrieved and merely mis-ordered — a re-ranking problem, which points at **T201**
   (result shape).
-- ⚠️ **SC-103 is capped at n=12 by T202, not by indexing.** The fact set names 30
-  memos; only 12 exist in the v2 corpus, because it was built against v1's 7,511
-  while v2 holds a partial 1,655. T253a indexed the 4 that were present-but-unindexed
-  (coverage gap now zero); the other 18 were never migrated. **T202 therefore gates
-  whether a Phase-E criterion can be evaluated at its intended power** — it was
-  previously understood to block only T270.
+- ✅ **SC-103 is no longer capped.** It was limited to n=12 while the v2 corpus held a
+  partial 1,655 memos and 18 of the fact set's 30 targets did not exist. The full
+  re-migration (R-09) fixed that: all 30 are present and the criterion now evaluates at
+  its intended power. It still fails — 14/30 — but it fails on retrieval rather than on
+  a missing denominator, which is a different fact.
 
-**Method note that has now cost a wrong answer three times:** passage coverage is
-412/1655 memos (24.9%), so any comparison must be restricted to memos in **both**
-indexes. An unrestricted run scores un-indexed memos as `absent` and reports *indexing
-coverage* while looking exactly like a retrieval result. That mistake was made on the
+**Method note that has now cost a wrong answer three times:** any comparison must be
+restricted to memos present in **both** indexes. An unrestricted run scores un-indexed
+memos as `absent` and reports *indexing coverage* while looking exactly like a retrieval
+result. (The coverage gap that made this acute — 412 of 1,655 memos — is closed by the
+full re-migration, but the restriction stays: it is what makes the two paths comparable
+at all, not a workaround for a partial index.) That mistake was made on the
 first document-vs-passage pass (which showed the passage path doing *worse*), again in
 R-05's fact-set column, and again in the fact set's 5/30. The bench now takes
 `--path {document,passages}` and `--both-indexed-only`, applies the restriction to the
 own-title sample **and** the fact set, and **prints the excluded count on every run** —
 a silently reduced denominator is how a partial index flatters itself.
 
-**Blocked on you — three open clarifications (T201–T203):**
+**Blocked on you — one open clarification, and one decision that is new:**
 
 1. **T201 — result shape for `memo_search` / `/recall`.** Does a hit return the whole memo,
    the matching passage, or both? **This one blocks four tasks** (T240–T243) and is the
-   decision the rest of Phase C waits on.
-2. **T202 — disposition of the partial v2 corpus** (1,655 memos, ~25% passage-indexed).
-   Roll back and re-migrate, or backfill in place? Blocks T270 — **and, newly, caps
-   SC-103 at n=12**: 18 of the fact set's 30 target memos were never migrated, so a
-   Phase-E success criterion cannot be evaluated at full power until this is settled.
-3. **T203 — is `text-embedding-3-large` in scope for this feature or a separate one?**
+   decision the rest of Phase C waits on. Still open.
+2. **NEW — the query prefix (R-11).** Apply it uniformly, or not at all? There is no basis
+   for applying it by document length: individual bands cannot be resolved at the sample
+   sizes available, and a sibling service independently failed to resolve theirs. Large
+   gain over 76% of the corpus, a null with nine named casualties over 5.5%, and a
+   ~21-call-site refactor before anything can be switched on.
+
+- ✅ **T202 is resolved.** The partial 1,655-memo corpus was rolled back and re-migrated in
+  full: 7,336 written, 0 skipped, 0 errored (R-09). SC-103 is no longer capped at n=12 —
+  the fact set now evaluates at its full n=30.
+- ✅ **T203 is resolved and then some.** `text-embedding-3-large` was ruled in and migrated
+  to on 2026-08-01; the corpus then moved again to self-hosted `qwen3-embedding-4b` @2560,
+  which is what R-10 measures.
 
 **T260 is now DONE (2026-07-31), and the flip is still yours to make.**
 `settings.memo_retrieval_path` selects what `/search` serves. **The default remains

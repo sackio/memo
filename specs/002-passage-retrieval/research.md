@@ -497,6 +497,102 @@ migration.
 One passage-path query (`ec06fbb6`) timed out at 60s and was scored `absent`, which is the
 conservative direction. 1 of 7,221.
 
+## R-10 — the move to qwen3, measured: both paths regress, and the passage path regresses everywhere (2026-08-02) [002/FR-111]
+
+**Read R-11 with this section. Every number here was measured against a client that sends
+bare queries to an encoder trained to expect an instruction prefix, so these are a floor for
+qwen3, not a verdict on it.** Sections below are in write order; R-11 is the cause and R-12 is
+an unrelated threshold problem found the same night.
+
+Full census, matched to R-09: seed 7, depth 10, `--both-indexed-only`, 7,221 own-title queries
+per path plus a 30-case fact set — 7,251 requests per path, confirmed against the server's own
+access log rather than inferred. Document path finished 04:14:57 EDT, passages 06:44:02 EDT.
+Raw output is `bench-2026-08-02-qwen-{document,passages}.{json,txt}`.
+
+### Passages — every band worse
+
+| band | n | rank-1 3L → qwen3 | Δpt | top-5 3L → qwen3 | Δpt | absent |
+|---|---|---|---|---|---|---|
+| 0–200 | 1216 | 937 → 733 | −16.8 | 1159 → 1019 | −11.5 | 35 → 139 |
+| 200–500 | 2293 | 1651 → 959 | −30.2 | 2146 → 1544 | −26.3 | 98 → 575 |
+| 500–1000 | 2007 | 1495 → 889 | −30.2 | 1839 → 1358 | −24.0 | 124 → 512 |
+| 1000–2000 | 1306 | 895 → 520 | −28.7 | 1170 → 825 | −26.4 | 96 → 380 |
+| **2000+** | 399 | **190 → 101** | **−22.3** | **268 → 185** | **−20.8** | 121 → 190 |
+| **TOTAL** | 7221 | **5168 → 3202** | **−27.2** | **6582 → 4931** | **−22.9** | 474 → 1796 |
+
+rank-1 71.6% → 44.3%; top-5 91.2% → 68.3%. Fact set: rank-1 **14 → 14**, top-5 26 → 21,
+absent 2 → 7.
+
+### Document — worse everywhere except the longest band
+
+| band | n | rank-1 3L → qwen3 | Δpt | top-5 3L → qwen3 | Δpt | absent |
+|---|---|---|---|---|---|---|
+| 0–200 | 1216 | 955 → 751 | −16.8 | 1170 → 1044 | −10.4 | 32 → 126 |
+| 200–500 | 2293 | 1763 → 996 | −33.4 | 2181 → 1608 | −25.0 | 69 → 523 |
+| 500–1000 | 2007 | 1538 → 1019 | −25.9 | 1897 → 1431 | −23.2 | 73 → 434 |
+| 1000–2000 | 1306 | 677 → 635 | −3.2 | 1012 → 941 | −5.4 | 201 → 282 |
+| **2000+** | 399 | **75 → 169** | **+23.6** | **162 → 235** | **+18.3** | 215 → 142 |
+| **TOTAL** | 7221 | 5008 → 3570 | −19.9 | 6422 → 5259 | −16.1 | 590 → 1507 |
+
+rank-1 69.4% → 49.4%; top-5 88.9% → 72.8%. Fact set: rank-1 4 → 5, top-5 13 → 11, absent
+12 → 15.
+
+### The asymmetry has an explanation, and it is checkable
+
+**The document path's single gain is in the 2000+ band. The passage path has no such band, and
+that is not a coincidence — it has no long stored vectors at all.** Every passage vector is a
+chunk of a few hundred tokens, so a 2000-token memo is represented in that index by short
+text. The passage path is therefore *entirely* short-text retrieval regardless of how long the
+underlying document is.
+
+⇒ So the one place bare qwen3 beats `text-embedding-3-large` is the one place memo stores a
+**long** vector, and the index that stores no long vectors gets no benefit anywhere. This is
+consistent with R-11, which measures the missing query prefix recovering precisely the
+short-text deficit: the effect is largest in the 200–1000 bands, on both paths, and the
+document path's 2000+ band is the only cell in this census that never needed it.
+
+### Success criteria
+
+- ⛔ **SC-101 fails, and by more than in R-09.** Passages rank-1 at 2000+ is 101/399 (25.3%)
+  against a ≥80% bar; it was 190/399 (47.6%).
+- ⛔ **SC-102 fails outright.** It requires that *no* band regress against its pre-change
+  rank-1 rate. **Nine of ten band-path cells regress**, several by 25–33 points.
+- ⛔ **SC-103 fails, unchanged.** Fact-set rank-1 is 14/30 (46.7%) against a ≥75% bar —
+  numerically identical to R-09, while top-5 fell 26 → 21 and absent rose 2 → 7.
+
+### The pre-registration, judged
+
+**Registered before the data: "rank-1 at ≥2000 tokens moves materially; top-5 barely moves."**
+It was about the passage path (SC-101), so that is where it is judged.
+
+| passages, 2000+ | 3-large | qwen3 | move |
+|---|---|---|---|
+| rank-1 | 47.6% | 25.3% | −22.3 pt |
+| top-5 | 67.2% | 46.4% | −20.8 pt |
+
+**The first clause holds and the second fails.** rank-1 did move materially; top-5 moved almost
+exactly as much. ⇒ **And it failed the same way on the document path** (+23.6 rank-1 against
++18.3 top-5), so this is not a passages-specific miss. The prediction's underlying assumption
+— that the ≥2000 band's problem was *ranking* rather than *retrievability*, so the target was
+usually already in the top-5 and merely mis-ordered — **is wrong on both paths.** Retrievability
+moves with the encoder about as much as rank does. Recorded because the assumption, not the
+number, is what other work was leaning on.
+
+### Conditions
+
+Both runs: 2026-08-02, seed 7, depth 10, `--both-indexed-only`, `--per-band 2500` (no band
+reaches the cap). The two bench processes ran concurrently until 04:14:57, after which passages
+ran alone; the R-11 prefix experiments queried the same endpoint between 04:20 and 05:15.
+**Contention affects throughput, not results** — the retrieval counts are deterministic given
+the stored vectors, whose own reproduction drift is 1.18e-04 (R-11's calibration), far below
+anything that could move a rank.
+
+⚠️ Both artifacts **predate the per-band `query_failures` counter**, so the tool correctly
+reports that field as UNKNOWN rather than 0 for them. Zero failures was established separately
+and by measurement: both `fd/1` and `fd/2` of each run pointed at the captured output file, and
+neither contains a `query failed` line. A `grep` alone would not have shown this — it reads
+identically whether nothing failed or stderr was never captured.
+
 ## R-12 — the duplicate cutoffs are calibrated against an encoder the corpus no longer uses (2026-08-02) [002/FR-114]
 
 R-08 chose duplicate thresholds by measurement — against `text-embedding-3-*`. The corpus is
@@ -669,6 +765,30 @@ much larger effect than the same absolute recovery from a high one. This exact s
 produced a cross-seat "these are different in kind" conclusion elsewhere on 2026-08-02 that
 had to be withdrawn: −40% against −11.4% is 3.5× apart in relative terms and 1.4× apart in
 absolute ones, and nearly all of the gap was the denominators.
+
+⚠️ **These figures are band-stratified and R-10's are not — do not compare them directly.**
+This sample is 15 documents per band, so every band carries equal weight; the census follows
+the corpus, where 2000+ is 5.5% and 200–500 is 31.8%. Since 2000+ is the one band where bare
+qwen3 is strong and the prefix does nothing, stratification **under**states the prefix's effect
+on the real corpus. Re-weighting each band's measured rate by the census distribution:
+
+| | stratified bare → instruct | corpus-weighted bare → instruct |
+|---|---|---|
+| seed 7 | 49.3% → 70.7% (+21.3) | 51.9% → **77.7%** (+25.8) |
+| seed 202 | 52.0% → 72.0% (+20.0) | 53.4% → **74.4%** (+21.0) |
+
+⭐ Two independent checks fall out of this. **The weighted bare figures (51.9%, 53.4%) sit close
+to the census's own 49.4%** on a completely separate run, which is a consistency check on the
+sampling. And **the weighted prefixed figures exceed `text-embedding-3-large`'s 69.4%** — so on
+the corpus's real composition the prefix does not merely recover the regression, it clears the
+old baseline.
+
+⚠️ **But re-weighting costs precision, and that belongs with the number.** Band weights are
+unequal while the per-band sample sizes are equal, so effective n falls and the estimate gets
+noisier: the two seeds are **1.3 points apart stratified and 4.8 points apart weighted**. The
+weighted figure is the right comparison to make against R-10 and the *less* stable of the two.
+Both seeds still land above 69.4%, which is the claim being made; the exact margin is not
+pinned at this n.
 
 The second draw exists because a sibling service measured ~10 points of draw-to-draw
 variance on top-5 in the same design, which would have made a +9.3 point result

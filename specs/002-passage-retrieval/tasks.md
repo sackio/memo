@@ -1,15 +1,25 @@
 # Tasks: Passage-Level Retrieval
 
 **Spec**: `specs/002-passage-retrieval/spec.md` · **Plan**: `plan.md`
-**Created**: 2026-07-30 · **Last audited**: 2026-08-01 (post qwen3 migration)
-**Status**: **Phases A–D built; Phase F (re-migrate) complete; Phase E measured on the real corpus and CORRECTLY BLOCKED on SC-101, SC-102 and SC-103.**
-T201–T203 are CLOSED (operator ruled 2026-07-31), which unblocks T240–T243.
+**Created**: 2026-07-30 · **Last audited**: 2026-08-02 (post qwen3 census)
+**Status**: **Phases A–D built; Phase F (re-migrate) complete; Phase E measured twice on the full corpus and CORRECTLY BLOCKED on SC-101, SC-102 and SC-103.**
+T201–T203 are CLOSED, which unblocks T240–T243.
 31/41 done. **The FLIP is HELD by the operator** — Ben, 2026-08-01 20:31: *"hold the cut over I'm not ready to do it until we do much more testing"*. It is a decision now, not a measurement gap.
 
-⚠️ **All figures below the line in R-01…R-08 were taken on `3-small` against a
-partial corpus and DO NOT carry over.** The corpus was rolled back and re-migrated
-on `text-embedding-3-large` @3072 (7,336 memos, 0 errored) and passage-indexed in
-full (7,336/7,336, 0 errored). **R-09 is the current record.**
+⚠️ **All figures in R-01…R-08 were taken on `3-small` against a partial corpus and
+DO NOT carry over.** The corpus was rolled back and re-migrated on
+`text-embedding-3-large` @3072 (7,336 memos, 0 errored), passage-indexed in full,
+and has since moved again to self-hosted `qwen3-embedding-4b` @2560.
+**R-10 is the current record**; R-09 is its 3-large comparison point.
+
+⛔ **READ R-11 BEFORE QUOTING R-10.** R-10 measures a client that sends **bare
+queries** to an encoder trained to expect an instruction prefix, so its qwen3
+columns are a **floor for that model, not a verdict on it**. Both paths regress
+against 3-large — the passage path in *every* band — and R-11 identifies the cause
+as memo's own query formulation. Restoring the prefix recovers +21.3 / +20.0
+rank-1 points across two independent draws, but is a **null with nine named
+casualties** in the 2000+ band and requires ~21 call sites to be reclassified by
+hand first. **This is new work, listed at the end of Phase G.**
 
 Measured 2026-08-01 by **full census — every titled memo in every band, 7,221
 queries per path, no sampling** (R-05's headline was wrong because n=14 could not
@@ -61,7 +71,13 @@ repo-wide and will fail on later-phase FRs. Run inside the v2 worktree.
       caller as "the corpus has nothing on this topic". Degrading to a passage
       is precisely the fallback that was missing. Carry `matched_count` so a
       caller can tell "nothing matched" from "matched but did not fit".
-- [ ] **T202** — *Disposition of the partial v2 corpus* (1,655 memos from the
+- [x] **T202** — *(RESOLVED 2026-07-31 by rollback; both consequences below are now
+      moot.)* SC-103 evaluates at its full n=30 against the re-migrated corpus, and
+      the `DUP_COSINE` calibration is no longer blocked by this corpus — though R-12
+      finds it blocked by something else instead: the cutoff was chosen on `3-small`
+      and has never been re-derived through two encoder changes.
+      *Original entry retained below for the record.*
+- [x] **T202 (original)** — *Disposition of the partial v2 corpus* (1,655 memos from the
       stopped 2026-07-30 backfill). Keep as a development fixture (real content,
       real size distribution, useful for the sweep) or roll back now for
       cleanliness. **Recommendation: keep**, and roll back immediately before the
@@ -405,5 +421,43 @@ repo-wide and will fail on later-phase FRs. Run inside the v2 worktree.
       hostname; an inline `[⚠️ STALE …]` annotation). Deliberately not fixed inside
       the migration — changing a dedup rule to green a verifier on the day the
       corpus was rebuilt is how you get a corpus nobody can reason about.
+
+### Newly discovered, 2026-08-02 — the query prefix and the stale cutoffs
+
+⚠️ **T273's routing thresholds were derived from R-09 and R-10 changes their basis.**
+On qwen3 the document path no longer wins the short bands by the margin quoted there,
+and the passage path no longer wins anywhere. **Do not re-derive them from R-10 either**
+— R-10 measures the misconfigured client. The router's numbers should be taken after
+the prefix question is settled, not before.
+
+- [ ] **T280** — Split `embeddings.embed()` into `embed_query()` / `embed_document()`
+      and **delete the ambiguous function**, so no call site can default. 25 sites share
+      it today and the query/document distinction lives only in local variable names;
+      removing the default turns ~21 silent misclassifications into ~21 forced decisions
+      at edit time. Both directions of a wrong decision fail silently — a document routed
+      through the query path stores a prefixed vector, a query left bare reproduces the
+      R-10 regression. [002/FR-111]
+- [ ] **T281** — *(blocked by T280, and by an operator decision)* Send qwen3's instruction
+      prefix on the **query side only**. ⛔ Do NOT prefix documents — that means
+      re-embedding the corpus again and is not what the model wants. Uniformly or not at
+      all: there is no evidential basis for routing by document length (R-11). [002/FR-111]
+- [ ] **T282** — Re-run the full census after T281 and compare against **both** R-09 and
+      R-10. R-10 is the bare-qwen3 floor, not the model's ceiling, and the point of T281
+      is to find out where the ceiling actually is. [002/FR-111]
+- [ ] **T283** — Re-derive `DUP_COSINE` and `auto_store_similarity_threshold` on the
+      current encoder. **Construct** the reference population by perturbing known texts —
+      identifying natural near-duplicates requires the similarity judgement being
+      calibrated, and doing it by title prefix already produced one withdrawn result.
+      Record an **admit rate** alongside the raw cutoff: the rate is invariant to the
+      encoder, which is the thing that keeps changing. [002/FR-114]
+- [ ] **T284** — Decide the fate of `memo_recall_min_score`. It is defined in `config.py`
+      and read nowhere, so it looks like the relevance floor and governs nothing. Either
+      wire it or remove it; leaving a setting that silently does nothing is the
+      configuration-shaped version of a provenance column that lies. [002/FR-111]
+- [ ] **T285** — Before `size-routed` is ever enabled, measure whether document-level and
+      chunk-level cosines share a scale — it ranks documents against each other using
+      scores drawn from two indexes. Needs **real short-query vectors**; the zero-cost
+      stored-vector probe is confounded, because query shape is one of the two variables
+      (R-12). [002/FR-113]
 
 **Final gate**: `speckit-trace --strict` (repo-wide, all of 001 + 002)
