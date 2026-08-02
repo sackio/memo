@@ -234,10 +234,32 @@ async def migrate_one(memo: dict[str, Any], *, embedding: list[float],
                              provenance_reconstructed=provenance is not None,
                              provenance_source=prov_source,
                              note="duplicate v1 id in the corpus read")
-        if _cosine(embedding, prior["embedding"]) < DUP_COSINE:
-            continue
-        if _jaccard(title_grams, prior["title_grams"]) < DUP_TITLE_NGRAM:
-            continue
+        # T274: an EXACT content match does not need the title's permission.
+        #
+        # The conjunctive rule below (cosine AND title-4gram) is right for *near*
+        # duplicates — that is where a title disagreement is real evidence the two
+        # memos mean different things. It is wrong for byte-identical content,
+        # where the title cannot carry information the content does not.
+        #
+        # Measured: a clean migration left FOUR content-identical pairs
+        # unmerged, and in every case the titles differed only in a token
+        # carrying no information — `Backfill checkpoint — office …` vs
+        # `— server4 …` (the hostname; both proxy one database since the
+        # 2026-06-29 single-global refactor), a Storage Taxonomy memo where one
+        # copy carried a long inline `[⚠️ STALE …]` annotation in its title, and
+        # one fact stored under two phrasings. R-08 predicted exactly this: the
+        # 4-gram gate fires first every time, so it is the whole decision rather
+        # than a tiebreaker.
+        #
+        # Deliberately narrow: `==` on the content, not a similarity threshold.
+        # A stricter test than the one it bypasses cannot loosen the rule, so
+        # this can only ever collapse memos that are genuinely the same text.
+        exact_content = content == prior.get("content")
+        if not exact_content:
+            if _cosine(embedding, prior["embedding"]) < DUP_COSINE:
+                continue
+            if _jaccard(title_grams, prior["title_grams"]) < DUP_TITLE_NGRAM:
+                continue
         # Duplicate: attach provenance to the canonical row rather than writing
         # a second copy, and leave a redirect so the old id still resolves.
         if not dry_run:
@@ -285,8 +307,13 @@ async def migrate_one(memo: dict[str, Any], *, embedding: list[float],
             doc_id=v2_id, embedding=embedding,
         )
 
+    # `content` is carried so the T274 exact-match test above has something to
+    # compare against. Without it `prior.get("content")` is always None, the
+    # comparison is always False, and the whole exact-match branch is a silent
+    # no-op that reads as working — caught before shipping by checking what this
+    # record actually holds rather than assuming it held the memo.
     migrated.append({"v2_id": v2_id, "embedding": embedding,
-                     "title_grams": title_grams})
+                     "title_grams": title_grams, "content": content})
     return AuditLine(v1_id=v1_id, action="write-new", v2_ids=[v2_id],
                      class_assigned=cls, class_source=cls_source,
                      canonical_tags=tags,

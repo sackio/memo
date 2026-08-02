@@ -1258,6 +1258,8 @@ async def search_documents(req: SearchRequest, response: Response):
     """
     path = settings.memo_retrieval_path
     response.headers["X-Memo-Retrieval-Path"] = path
+    if path == "size-routed":
+        return await _size_routed_search(req)
     if path == "passages":
         embedding = await embeddings.embed(req.query)
         results = await db.search_passages(
@@ -1266,6 +1268,66 @@ async def search_documents(req: SearchRequest, response: Response):
         return [SearchResult(document=Document(**r["document"]), score=r["score"])
                 for r in results]
     return await _document_search(req)
+
+
+async def _size_routed_search(req: SearchRequest) -> list[SearchResult]:
+    """Serve each result from whichever index is better for THAT memo. [002/FR-113]
+
+    T273, and the reason it exists is SC-102 rather than SC-101. Measured by full
+    census (research.md R-09), neither path dominates:
+
+        band          document   passages
+        0-200            78.5%      77.1%
+        200-500          76.9%      72.0%
+        500-1000         76.6%      74.5%
+        1000-2000        51.8%      68.5%
+        2000+            18.8%      47.6%
+
+    Replacing one path with the other therefore trades a large win above 1000
+    tokens for a real 1.5-4.9 point loss below it. That loss is what SC-102
+    forbids, and it is not noise — it is measured at n=1216-2293 per band.
+
+    **The routing decision is made PER RESULT, not per query, and that is the
+    whole trick.** At query time the target's size is unknown — that is precisely
+    what is being searched for. But every *candidate* arrives with its own
+    `token_count`, so the choice can be made where the information actually
+    exists. Both indexes are queried, results are merged by document id, and each
+    document keeps the score from the path that measures better for its own size.
+
+    Deliberately NOT a hybrid score. No reciprocal-rank fusion, no weighted blend
+    — those mix two models' score distributions, and a number whose units change
+    between paths cannot be compared or thresholded. Each document keeps one
+    path's score, unmodified.
+    """
+    embedding = await embeddings.embed(req.query)
+    over = max(req.limit * 3, 30)  # overfetch: the merge discards duplicates
+
+    doc_hits = await db.search(
+        db_path=req.db_path, embedding=embedding, limit=over,
+        min_score=req.min_score, tags=req.tags, after=req.after,
+        before=req.before, min_tokens=req.min_tokens, max_tokens=req.max_tokens)
+    passage_hits = await db.search_passages(
+        req.db_path, embedding, over, req.min_score, req.tags,
+        req.after, req.before, req.min_tokens, req.max_tokens)
+
+    # One rule: a memo is served by its preferred path if that path found it, and
+    # by the other path otherwise. Taking the preferred score is NOT the same as
+    # taking the better score — a document whose preferred path scores it lower
+    # still keeps that score, because the point is to use the index that is more
+    # often RIGHT for that size, not to flatter each result.
+    merged: dict[str, tuple[dict, float]] = {}
+    for hits, source in ((doc_hits, "document"), (passage_hits, "passages")):
+        for r in hits:
+            doc = r["document"] if "document" in r else r
+            preferred = ("document"
+                         if (doc.get("token_count") or 0) < settings.memo_size_route_threshold
+                         else "passages")
+            if doc["id"] not in merged or source == preferred:
+                merged[doc["id"]] = (doc, r["score"])
+
+    ranked = sorted(merged.values(), key=lambda dv: dv[1], reverse=True)
+    return [SearchResult(document=Document(**d), score=s)
+            for d, s in ranked[:req.limit]]
 
 
 @app.get("/index")

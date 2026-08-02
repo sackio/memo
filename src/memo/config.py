@@ -54,7 +54,21 @@ class Settings(BaseSettings):
     # setting (`/search-documents`, `/search-passages`) precisely so a config
     # change can never silently alter what a measurement is measuring — the
     # bench targets the explicit endpoints for that reason.
+    # "document" | "passages" | "size-routed"
     memo_retrieval_path: str = "document"
+
+    # Token count at or above which `size-routed` prefers the PASSAGE index for a
+    # given result. [002/FR-113 T273]
+    #
+    # 1000 comes from the R-09 census, not from taste. Below it the document path
+    # measures better on every band (78.5/76.9/76.6 vs 77.1/72.0/74.5); at and
+    # above it the passage path wins decisively (51.8→68.5, then 18.8→47.6). The
+    # crossover sits inside 500-1000, so 1000 is the first band boundary where
+    # passages are unambiguously ahead.
+    #
+    # Re-derive it from a fresh census before trusting it on a different model —
+    # it is a property of THIS corpus measured on 3-large, and R-10 may move it.
+    memo_size_route_threshold: int = 1000
 
     # Hook settings (written to ~/.memo/hooks.env during memo-hooks install)
     memo_auto_recall: bool = True
