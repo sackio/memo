@@ -1,10 +1,10 @@
 # Tasks: Passage-Level Retrieval
 
 **Spec**: `specs/002-passage-retrieval/spec.md` · **Plan**: `plan.md`
-**Created**: 2026-07-30 · **Last audited**: 2026-08-01 (post re-migration)
+**Created**: 2026-07-30 · **Last audited**: 2026-08-01 (post qwen3 migration)
 **Status**: **Phases A–D built; Phase F (re-migrate) complete; Phase E measured on the real corpus and CORRECTLY BLOCKED on SC-101, SC-102 and SC-103.**
 T201–T203 are CLOSED (operator ruled 2026-07-31), which unblocks T240–T243.
-29/41 done. **The FLIP remains blocked — on the measurement now, not on a decision.**
+31/41 done. **The FLIP is HELD by the operator** — Ben, 2026-08-01 20:31: *"hold the cut over I'm not ready to do it until we do much more testing"*. It is a decision now, not a measurement gap.
 
 ⚠️ **All figures below the line in R-01…R-08 were taken on `3-small` against a
 partial corpus and DO NOT carry over.** The corpus was rolled back and re-migrated
@@ -392,14 +392,14 @@ repo-wide and will fail on later-phase FRs. Run inside the v2 worktree.
       — 47.6% rank-1 at 2000+ against an 80% bar, three short bands regress 1.5–4.9
       points, 46.7% on the mid-document fact set against a 75% bar. [R-09]
 
-- [ ] **T273** — *(new, from R-09)* Route by size instead of choosing one path.
+- [x] **T273** — *(from R-09, operator-approved 2026-08-01)* Route by size instead of choosing one path.
       The document path is better below ~1000 tokens (78.5/76.9/76.6% vs
       77.1/72.0/74.5%) and much worse above 2000 (18.8% vs 47.6%). Both paths are
       already live under FR-113, so the router has what it needs. This is what
       SC-102's regression is actually telling us, and it is cheaper than closing
       the short-band gap by tuning.
 
-- [ ] **T274** — *(new, from R-09)* An exact-content match should not need the
+- [x] **T274** — *(from R-09, operator-approved 2026-08-01)* An exact-content match should not need the
       title gate's permission. Four content-identical pairs survived a clean
       migration because their titles differ in a token carrying no information (a
       hostname; an inline `[⚠️ STALE …]` annotation). Deliberately not fixed inside
