@@ -1,0 +1,126 @@
+#!/usr/bin/env python3
+"""memo-bench-compare — diff two or three census runs, band by band. [002/FR-111]
+
+Exists because the arithmetic is where the mistakes happen. R-09 vs R-10 vs the
+post-prefix run is 5 bands x 3 metrics x 2 paths x 2 baselines of hand
+subtraction, and this repo's record on hand-computed deltas is poor: a -40%
+quoted for hours without its absolute, a "6x slowdown" that compared a
+516-test population against a 276-test one, a +30pt headline off a hand-picked
+n=20. None of those were arithmetic slips exactly — each was a comparison whose
+two sides were not the same thing.
+
+So this tool refuses rather than aligns:
+
+  * different `path` -> refuse. A document run is not a passage run.
+  * different band `n` -> refuse for that band, loudly, and keep going for the
+    rest. Two runs over different populations produce a delta that looks
+    identical to a real effect, which is exactly the confound that has already
+    produced three wrong answers here.
+  * `query_failures` absent -> say UNKNOWN, never 0. Runs before that counter
+    existed cannot have their `absent` column decomposed after the fact, and
+    "no failures recorded" and "no failures" are different claims.
+
+    memo-bench-compare BASE.json [BASE2.json] NEW.json
+
+The LAST file is the new run; every earlier one is a baseline it is compared
+against. Percentages are of that band's n, so they are directly comparable
+across runs only when n matches — which is the check above.
+"""
+from __future__ import annotations
+
+import json
+import sys
+
+
+def load(path):
+    with open(path) as fh:
+        d = json.load(fh)
+    d["_file"] = path.rsplit("/", 1)[-1]
+    return d
+
+
+def bands_of(run):
+    return {b["band"]: b for b in run["bands"]}
+
+
+def pct(x, n):
+    return 100.0 * x / n if n else 0.0
+
+
+def compare(base, new):
+    print(f"\n{'=' * 78}")
+    print(f"{base['_file']}  ->  {new['_file']}   (path={new['path']}, "
+          f"limit={new['limit']}, seed={new['seed']})")
+    print("=" * 78)
+
+    if base["path"] != new["path"]:
+        print(f"⛔ REFUSED: paths differ ({base['path']} vs {new['path']}). "
+              f"A document run is not a passage run.")
+        return
+
+    bb, nb = bands_of(base), bands_of(new)
+    hdr = (f"{'band':<11}{'n':>6}{'rank-1':>16}{'Δpt':>8}"
+           f"{'top-5':>16}{'Δpt':>8}{'absent':>14}")
+    print(hdr)
+
+    tot = {k: [0, 0] for k in ("n", "rank1", "top5", "absent")}
+    for band in [b["band"] for b in new["bands"]]:
+        if band not in bb:
+            print(f"{band:<11}   — not present in baseline —")
+            continue
+        b, n = bb[band], nb[band]
+        if b["n"] != n["n"]:
+            print(f"{band:<11}⛔ REFUSED: n differs ({b['n']} vs {n['n']}). "
+                  f"Different populations; any delta here is uninterpretable.")
+            continue
+        d_r1 = pct(n["rank1"], n["n"]) - pct(b["rank1"], b["n"])
+        d_t5 = pct(n["top5"], n["n"]) - pct(b["top5"], b["n"])
+        print(f"{band:<11}{n['n']:>6}"
+              f"{b['rank1']:>7} → {n['rank1']:<6}{d_r1:>+8.1f}"
+              f"{b['top5']:>7} → {n['top5']:<6}{d_t5:>+8.1f}"
+              f"{b['absent']:>6} → {n['absent']:<6}")
+        for k in tot:
+            tot[k][0] += b[k]
+            tot[k][1] += n[k]
+
+    if tot["n"][0]:
+        bn, nn = tot["n"]
+        d_r1 = pct(tot["rank1"][1], nn) - pct(tot["rank1"][0], bn)
+        d_t5 = pct(tot["top5"][1], nn) - pct(tot["top5"][0], bn)
+        print(f"{'TOTAL':<11}{nn:>6}"
+              f"{tot['rank1'][0]:>7} → {tot['rank1'][1]:<6}{d_r1:>+8.1f}"
+              f"{tot['top5'][0]:>7} → {tot['top5'][1]:<6}{d_t5:>+8.1f}"
+              f"{tot['absent'][0]:>6} → {tot['absent'][1]:<6}")
+        print(f"{'':11}{'':6}   rank-1 {pct(tot['rank1'][0], bn):.1f}% → "
+              f"{pct(tot['rank1'][1], nn):.1f}%   "
+              f"top-5 {pct(tot['top5'][0], bn):.1f}% → "
+              f"{pct(tot['top5'][1], nn):.1f}%")
+
+    for run in (base, new):
+        miss = [b["band"] for b in run["bands"] if "query_failures" not in b]
+        if miss:
+            print(f"⚠️ {run['_file']}: query failures UNKNOWN for "
+                  f"{', '.join(miss)} — predates the counter. Its `absent` is a "
+                  f"MIXTURE of misses and queries that never ran, and cannot be "
+                  f"decomposed now. This is NOT the same as zero.")
+        else:
+            t = sum(b["query_failures"] for b in run["bands"])
+            note = "" if not t else (
+                f" — those `absent` are not retrieval misses; the model was "
+                f"never asked")
+            print(f"   {run['_file']}: query failures {t}{note}")
+
+
+def main(argv):
+    if len(argv) < 3:
+        print(__doc__)
+        return 2
+    runs = [load(p) for p in argv[1:]]
+    new = runs[-1]
+    for base in runs[:-1]:
+        compare(base, new)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))
