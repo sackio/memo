@@ -634,9 +634,22 @@ score distributions — a short passage tends to score higher against a query th
 document does, for reasons of length rather than relevance — so the ordering would be biased
 toward whichever path produces larger numbers, systematically, before any prefix exists.
 "Scores unmodified" is the property that makes this wrong rather than the safeguard it reads
-as: a fusion would at least rank-normalise, a merge preserves the incomparability. **Suspected,
-not measured** — the two distributions have not been compared here, and that comparison is
-owed before the mode is enabled. (Raised by the `embeddings` seat, 2026-08-02.)
+as: a fusion would at least rank-normalise, a merge preserves the incomparability. (Raised by
+the `embeddings` seat, 2026-08-02.)
+
+**Still SUSPECTED — one attempt to measure it failed, and the failure is worth recording.**
+Using stored document vectors as queries costs no endpoint calls, and gave the document index
+a +0.0087 median edge with the chunk index winning only 32% of pairs — a real asymmetry, and
+in the *opposite* direction to the suspicion. **The pre-registered control killed it.** Re-run
+with stored *chunk* vectors as queries, the advantage mirrors: chunk index +0.0172, winning
+67%. ⇒ **The probe measures how closely the query's shape matches the index's, not how the two
+score scales compare**, so neither run answers the question. A document-shaped query is nearer
+document-shaped vectors for reasons that have nothing to do with scale.
+
+⇒ The zero-cost trick — stored vectors as queries — is sound only when the query distribution
+does not interact with the quantity being measured. Here it is the confound. **Settling this
+needs real short-query vectors, which cost embeddings**, and it is owed before `size-routed`
+is enabled rather than now, since the mode is off.
 
 That mode is worth measuring before it is ever switched on, because a sibling service
 measured a query prefix at **+7.5 points rank-1 vector-only and −8.0 points through RRF
