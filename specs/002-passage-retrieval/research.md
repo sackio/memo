@@ -1467,3 +1467,75 @@ agent-string fix first — without which more waiting would only have produced a
 larger pile of my own questions.** The instrument is now correct and the clock
 has started. Nothing about v2 is blocked on it.
 
+
+---
+
+## R-19 — the first pinned baseline: the encoder is a wash, passages are the whole win (2026-08-03) [002/FR-114]
+
+First run on a **fixed question set** (`s-2026-08-03T184827Z`, 300 per task),
+so these deltas are not resampling. Run `qa-2026-08-03T184959Z`.
+
+| task (identical questions) | v1 `/search` | v2 `document` | v2 `passages` |
+|---|---|---|---|
+| `own_title` | 53.3% | 56.9% **(+3.6)** | **69.8%** (+12.9 vs document) |
+| `content_query` | 44.7% | 41.4% **(−3.3)** | **62.2%** (+20.8 vs document) |
+
+Both deltas clear R-17's ±1.3pt floor. ⭐ **The whole-document path moves in
+OPPOSITE directions on the two tasks: +3.6 on titles, −3.3 on the realistic
+query.** R-15 asserted the encoder was doing almost none of the work on a −0.3
+that sat *inside* the floor; on pinned questions the realistic task now says
+something stronger and with a sign — the change is **not** an improvement where
+it matters.
+
+⛔ **DO NOT READ THAT ROW AS "3-large IS WORSE THAN 3-small".** `v1 → v2 document`
+bundles **two** changes: the encoder (3-small@1536 → 3-large@3072) **and the
+entire v2 build**. Nothing here separates them, and the obvious reading —
+attributing a −3.3 to the encoder because the encoder is the salient difference —
+is unsupported by this table. ⇒ **The discriminating run is v2's build on
+3-small@1536**: same code, one variable. It was already queued as "cheapest and
+probably near-best"; it is now the experiment that decides *what the cutover
+actually is*, and it is the next thing to run.
+
+**What IS attributable, because it is one build against itself:** `document` →
+`passages` is +12.9 and **+20.8**, on the same corpus, same encoder, same
+process, same questions. **Passage chunking is carrying the result.** Consistent
+with the R-15 finding that chunking and encoder upgrades are substitutes rather
+than complements — and if 3-small+passages holds up, the expensive half of the
+cutover buys nothing.
+
+**Where it wins:** every band on `own_title` except 2000+ (−3.1), largest at
+1000-2000 (+8.3). On `content_query` the long bands are where both builds
+collapse — v1 13.3%/6.7% and v2 8.5%/8.3% at 1000-2000 and 2000+. **Long memos
+are badly served by whole-document retrieval in both builds**, which is exactly
+the gap passages close.
+
+### Two things the run surfaced that no score would have
+
+**1. The `missing` guard fired on real data, on its first outing.** 2 pinned ids
+are absent from v2 and present in v1 — v1 is live and took writes after the
+parity sync. They were excluded from the denominator and printed beside the
+score (`170/298, 2✗`) rather than counted as retrieval misses. Without it, v2
+would have been charged for 2 documents it was never given.
+
+**2. ⛔ FR-115 IS CORRECT CODE OPERATING ON AN EMPTY SET.** Checking whether
+supersession could confound this comparison (v2 excludes superseded memos from
+search; v1 has no such notion) turned up something else entirely:
+
+```
+v2:  documents 8014 · valid_until NOT NULL: 0 · supersede_edges: 0 rows
+```
+
+**The 112 supersession edges did not survive the 3-large rebuild.** The DB was
+swapped and re-synced from v1, and v1 has no supersession columns to carry over.
+So "search excludes superseded memos" currently excludes nothing, and **Ben's
+concern (b) — *newer information supersedes older information it contradicts* —
+is not merely unmeasured in v2, it is inert.**
+
+⭐ **The unit tests pass, and could not have caught this.** `test_supersede_excluded_from_search.py`
+constructs its own superseded document and asserts it is not returned; that is a
+true statement about the code and says nothing about whether the corpus contains
+a single instance for it to act on. **This is the capture-miss detector again: a
+mechanism verified against data it created itself, deployed over a world that has
+none.** ⇒ Edges must be regenerated before any supersession measurement, and the
+measurement must read the corpus, not the test fixture.
+
