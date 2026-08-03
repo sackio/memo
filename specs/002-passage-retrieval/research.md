@@ -1539,3 +1539,91 @@ mechanism verified against data it created itself, deployed over a world that ha
 none.** ⇒ Edges must be regenerated before any supersession measurement, and the
 measurement must read the corpus, not the test fixture.
 
+
+---
+
+## R-20 — ground truth and context fit: passages are the best RETRIEVER and the worst DELIVERER (2026-08-03) [002/FR-116, FR-117]
+
+Ben's concerns (a) *"is what memo returns actually correct"* and (c) *"efficient
+context, not more not less than agents need"*, measured. Runs
+`qa-2026-08-03T201926Z` (answer_recall) and `qa-2026-08-03T204109Z` (context_fit),
+pinned sample `s-2026-08-03T184827Z`, 256 questions whose answer is a literal
+carried by **exactly one** memo — free supervision, exact string containment, no
+LLM judge and so nothing to drift between re-runs.
+
+### The finding
+
+| path | ranks right doc @1 | answer in **span** | answer in **full doc** |
+|---|---|---|---|
+| v1 `/search` (3-small) | 72.3% | 96.7% | 96.7% |
+| v2 `document` | 74.5% | 95.8% | 95.8% |
+| v2 `passages` | **84.0%** | **77.3%** | **98.7%** |
+
+⭐ **Passage retrieval finds the right memo ~10pt more often than whole-document
+search, and the memo it finds contains the answer 98.7% of the time — the best
+of any path. But the SPAN it matched carries the answer only 77.3% of the time,
+a 21.3pt gap.** The chunk that matches the query and the chunk holding the fact
+are routinely different chunks of the same document.
+
+⇒ **So take the ranking and discard the span.** Shipped as FR-117: `/context`
+now ranks by passage and packs whole documents.
+
+⛔ **R-19 SAID "PASSAGES ARE THE ENTIRE WIN" AND THAT WAS HALF RIGHT IN A WAY
+THAT MATTERS.** The rank-1 advantage is real and this run confirms it. But R-19
+measured *which document ranked first* and I let it stand for *whether the
+question got answered*. On the ground-truth metric the span-delivering
+configuration is the **worst** of the three. A build can top the ranking table
+and hand back text without the fact in it.
+
+### ⚠️ Two confounds checked before the number was believed
+
+1. **My grading choice would otherwise have decided the headline.** `/search-passages`
+   returns BOTH `passage.text` AND the complete `document.content`, so "did the
+   answer come back" has two honest answers: grade the span (what passage
+   retrieval BUYS — fewer tokens for the same answer) or grade the document
+   (what the caller ACTUALLY RECEIVES, since the full text is on the wire
+   anyway). Reporting one and not the other is an argument disguised as a
+   measurement. Both are now recorded per run and the GAP is the finding.
+2. **Passage-index coverage.** A document absent from the passage index cannot be
+   returned by that path at all, which would look identical to "the span didn't
+   carry the answer". Checked: **8,014 of 8,014 documents have ≥1 passage.** Not
+   a coverage artifact. (21,623 chunks ⇒ ~2.7 per document, so most memos are
+   1–3 chunks and the span cost necessarily concentrates in the long ones.)
+
+### Concern (c), quantified — the budget is the binding constraint
+
+`/context` at the default 4,000-token budget, same 256 questions:
+
+| | v1 | v2 (document path) |
+|---|---|---|
+| answer delivered in `/context` | 85.9% | 87.7% |
+| answer *retrieved* (`answer_in_topk`) | 96.7% | 95.8% |
+| ⇒ **retrieved then truncated away** | **10.8pt** | **8.1pt** |
+| documents matched / packed | 9.94 → 5.96 | 10.0 → 6.22 |
+| responses hitting the ceiling | **88.6%** | **86.5%** |
+| budget consumed | 91.7% | 92.2% |
+| exact-duplicate sections per call | 0.34 | 0.53 |
+
+⭐ **memo retrieves the answer ~96% of the time and delivers it ~86%. Roughly
+one answer in ten is found and then packed out of the response.** Nearly every
+call (87–89%) is bound by the budget rather than by the corpus, and ~40% of
+matched documents never reach the caller.
+
+⛔ **The duplicate figures are LOWER BOUNDS and were wrong before they were
+right.** The first implementation compared whole sections, but each block is
+`## <title> (score: 0.83)\n<body>` and two copies of one memo get **different
+scores** — so byte-equality missed exactly the duplicates it existed to find and
+reported a near-zero rate that read as "no redundancy". Fixed to compare bodies.
+Even fixed it catches only EXACT repeats, and the corpus's real problem is
+near-duplicates: **203 title-groups holding 524 memos and 212k tokens**, of which
+109 groups were written within an hour of each other (burst duplicates) and 80
+span ≥1 day (genuine versions).
+⚠️ That bimodality is invisible in the median, which is 0.01 days — reading the
+distribution through its median nearly discarded a viable recency-ordering task.
+
+### What is still unmeasured
+
+Concern (b), supersession, remains **inert** rather than unmeasured: `supersede_edges`
+is 0 rows and `valid_until` is NULL for all 8,014 documents (R-19). The edges must
+be regenerated before FR-115 can do anything at all.
+
