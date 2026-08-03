@@ -360,9 +360,16 @@ def _passage_text(hit) -> str:
 
 
 def _score_answer_band(url, path, items, docs_by_id, freq, limit, budget):
-    """Grade one band: did the ANSWER come back, and did it survive the budget."""
-    n = right1 = in_top1 = in_topk = in_ctx = failures = missing = ambiguous = 0
-    ctx_tokens, ctx_docs, ctx_trunc = [], [], 0
+    """Grade one band: did the ANSWER come back in the SEARCH results.
+
+    ⚠️ `/context` is deliberately NOT called here. It takes a query and a budget
+    and does not take a search path, so calling it inside this per-path loop made
+    the SAME request once per path — two of every three were identical and
+    discarded. Measured: v2 fell to ~3 questions/min and the run projected past
+    four hours. `/context` is a property of the BUILD, so it is measured once per
+    target in `task_context_fit`.
+    """
+    n = right1 = in_top1 = in_topk = failures = missing = ambiguous = 0
     for it in items:
         if it["id"] not in docs_by_id:
             missing += 1
@@ -375,8 +382,6 @@ def _score_answer_band(url, path, items, docs_by_id, freq, limit, budget):
         try:
             hits = _post(url, CANDIDATE_PATHS[path],
                          {"query": it["query"], "limit": limit})
-            ctx = _post(url, "/context",
-                        {"query": it["query"], "token_budget": budget})
         except Exception:
             failures += 1
             continue
@@ -397,29 +402,16 @@ def _score_answer_band(url, path, items, docs_by_id, freq, limit, budget):
             in_top1 += 1
         if any(it["answer"] in t for t in texts):
             in_topk += 1
-        body = ctx.get("content") or "" if isinstance(ctx, dict) else ""
-        if it["answer"] in body:
-            in_ctx += 1
-        if isinstance(ctx, dict):
-            ctx_tokens.append(ctx.get("token_count") or 0)
-            ctx_docs.append(ctx.get("doc_count") or 0)
-            ctx_trunc += 1 if ctx.get("truncated") else 0
     return {"n": n, "pinned": len(items), "missing": missing,
             # ⛔ Separate from `missing`: the document is here, the QUESTION is no
             # longer gradeable because the literal stopped being unique.
             "ambiguous": ambiguous, "failures": failures,
             "right_doc_top1": right1, "answer_in_top1": in_top1,
-            "answer_in_topk": in_topk, "answer_in_context": in_ctx,
-            "context_tokens_mean": round(sum(ctx_tokens) / len(ctx_tokens), 1)
-            if ctx_tokens else None,
-            "context_docs_mean": round(sum(ctx_docs) / len(ctx_docs), 2)
-            if ctx_docs else None,
-            "context_truncated": ctx_trunc}
+            "answer_in_topk": in_topk}
 
 
 def task_answer_recall(url: str, path: str, per_band: int, seed: int,
-                       sample=None, limit: int = 10,
-                       budget: int = 4000) -> dict:
+                       sample=None, limit: int = 10) -> dict:
     """Ground truth + context fit. See the block above ANSWER_PATTERNS."""
     if sample is not None and "answer_recall" not in (sample.get("tasks") or {}):
         return {"task": "answer_recall", "path": path, "status": "could_not_run",
@@ -438,17 +430,15 @@ def task_answer_recall(url: str, path: str, per_band: int, seed: int,
     bands = []
     for b in src_bands:
         scored = _score_answer_band(url, path, b["items"], docs_by_id, freq,
-                                    limit, budget)
+                                    limit, None)
         scored["band"] = b["band"]
         scored["pool"] = b.get("pool")
         bands.append(scored)
     ok = [b for b in bands if b["n"]]
     def pct(key):
         return round(100 * sum(b[key] / b["n"] for b in ok) / len(ok), 2) if ok else None
-    tok = [b["context_tokens_mean"] for b in bands if b["context_tokens_mean"]]
     return {"task": "answer_recall", "path": path, "seed": seed,
-            "per_band": per_band, "pinned_sample": sample_id,
-            "token_budget": budget, "bands": bands,
+            "per_band": per_band, "pinned_sample": sample_id, "bands": bands,
             "total_n": sum(b["n"] for b in bands),
             "total_pinned": sum(b["pinned"] for b in bands),
             "total_missing": sum(b["missing"] for b in bands),
@@ -456,18 +446,90 @@ def task_answer_recall(url: str, path: str, per_band: int, seed: int,
             "total_failures": sum(b["failures"] for b in bands),
             "right_doc_top1_pct": pct("right_doc_top1"),
             "answer_in_top1_pct": pct("answer_in_top1"),
+            # ⭐ GROUND TRUTH: the fact came back, not merely the document.
+            # Pair with context_fit.answer_in_context_pct on the SAME sample —
+            # the difference is what was retrieved and then truncated away.
             "answer_in_topk_pct": pct("answer_in_topk"),
-            "answer_in_context_pct": pct("answer_in_context"),
-            # ⭐ The headline: retrieved, then truncated away before delivery.
-            "truncation_loss_pt": (round(pct("answer_in_topk")
-                                         - pct("answer_in_context"), 2)
-                                   if ok else None),
-            "context_tokens_mean": round(sum(tok) / len(tok), 1) if tok else None,
             # ⛔ control: the questions must have been asked AND gradeable. Zero
             # answers over a real sample is a RESULT; zero because every literal
             # went ambiguous is an instrument failure wearing its face.
             "control_ok": bool(ok),
             "status": "ok" if ok else "could_not_run"}
+
+
+def task_context_fit(url: str, per_band: int, seed: int, sample=None,
+                     budget: int = 4000, limit: int = 10) -> dict:
+    """⭐ BEN'S CONCERN (c): *"efficient context, not more not less than agents
+    need."* Both halves, on the same questions as answer_recall.
+
+    **NOT LESS:** `answer_in_context` — the fact survived the budget and reached
+    the caller. Read against answer_recall's `answer_in_topk` on the same sample,
+    the difference is the answer that was RETRIEVED and then truncated away.
+
+    **NOT MORE:** what the call cost, and how much of it was redundant.
+    `duplicate_docs_mean` counts returned documents whose content is byte-equal
+    to another in the SAME response. That is not a hypothetical: 203 title-groups
+    in this corpus hold 524 memos and 212k tokens of near-duplicate text, so a
+    budget can be spent two and three times on one fact.
+
+    ⛔ `/context` takes a query and a budget and NOT a search path, so this is a
+    property of the build and is measured ONCE per target. Running it inside the
+    per-path loop issued the identical request three times per question and put
+    the run on a four-hour trajectory for two-thirds waste.
+    """
+    if sample is not None and "answer_recall" not in (sample.get("tasks") or {}):
+        return {"task": "context_fit", "status": "could_not_run",
+                "why": f"pinned sample {sample.get('sample_id')} has no "
+                       f"answer_recall questions to reuse", "control_ok": False}
+    docs = _get(url, "/documents?limit=20000")
+    docs_by_id = {d["id"]: d for d in docs}
+    freq = _prepare_answer(docs)["freq"]
+    src = (sample["tasks"]["answer_recall"]["bands"] if sample is not None
+           else _draw_bands(docs, "answer_recall", per_band, seed))
+    n = in_ctx = failures = missing = ambiguous = trunc = 0
+    toks, ndocs, dups, matched = [], [], [], []
+    for b in src:
+        for it in b["items"]:
+            if it["id"] not in docs_by_id:
+                missing += 1
+                continue
+            if freq.get(it["answer"], 0) != 1:
+                ambiguous += 1
+                continue
+            n += 1
+            try:
+                ctx = _post(url, "/context",
+                            {"query": it["query"], "token_budget": budget})
+            except Exception:
+                failures += 1
+                continue
+            body = ctx.get("content") or ""
+            if it["answer"] in body:
+                in_ctx += 1
+            toks.append(ctx.get("token_count") or 0)
+            ndocs.append(ctx.get("doc_count") or 0)
+            matched.append(ctx.get("matched_count") or 0)
+            trunc += 1 if ctx.get("truncated") else 0
+            # Sections are "## <title> (score: …)" blocks; count repeated bodies.
+            secs = [s.strip() for s in body.split("\n## ") if s.strip()]
+            dups.append(len(secs) - len({s for s in secs}))
+    mean = lambda xs: round(sum(xs) / len(xs), 2) if xs else None
+    return {"task": "context_fit", "token_budget": budget,
+            "pinned_sample": sample.get("sample_id") if sample else None,
+            "total_n": n, "total_missing": missing,
+            "total_ambiguous": ambiguous, "total_failures": failures,
+            "answer_in_context_pct": round(100 * in_ctx / n, 2) if n else None,
+            "context_tokens_mean": mean(toks),
+            "context_docs_mean": mean(ndocs),
+            "matched_count_mean": mean(matched),
+            # ⚠️ `truncated` counts responses that hit the ceiling — the budget
+            # bound the answer, rather than the corpus running out of matches.
+            "truncated_pct": round(100 * trunc / n, 2) if n else None,
+            "duplicate_sections_mean": mean(dups),
+            "budget_used_pct": round(100 * (sum(toks) / len(toks)) / budget, 1)
+            if toks else None,
+            "control_ok": n > 0,
+            "status": "ok" if n > 0 else "could_not_run"}
 
 
 POOLS = {"own_title": _pool_own_title, "content_query": _pool_content_query,
@@ -787,8 +849,8 @@ def mint_sample(path: Path, url: str, per_band: int, seed: int,
 
 
 # ------------------------------------------------------------------- runner
-TASKS = ("own_title", "content_query", "answer_recall", "set_stability",
-         "api_surface")
+TASKS = ("own_title", "content_query", "answer_recall", "context_fit",
+         "set_stability", "api_surface")
 
 
 def main() -> int:
@@ -908,8 +970,11 @@ def main() -> int:
                          for p in paths}
                 elif task == "answer_recall":
                     r = {p: task_answer_recall(url, p, args.per_band, args.seed,
-                                               sample, budget=args.token_budget)
+                                               sample)
                          for p in paths}
+                elif task == "context_fit":
+                    r = task_context_fit(url, args.per_band, args.seed, sample,
+                                         budget=args.token_budget)
                 elif task == "set_stability":
                     r = task_set_stability(url, primary, args.stability_n, args.seed)
                 elif task == "api_surface":
@@ -936,12 +1001,17 @@ def main() -> int:
             if isinstance(v, dict) and v.get("status") == "ok":
                 print(f"  {name:3} answer_recall  {path:10} "
                       f"right-doc {v['right_doc_top1_pct']}% · "
-                      f"ANSWER in top-k {v['answer_in_topk_pct']}% · "
-                      f"in /context {v['answer_in_context_pct']}% "
-                      f"(lost to budget {v['truncation_loss_pt']}pt) · "
-                      f"{v['context_tokens_mean']} tok/call"
+                      f"ANSWER in top-k {v['answer_in_topk_pct']}%"
                       + (f" · {v['total_ambiguous']} ungradeable"
                          if v.get("total_ambiguous") else ""))
+        cf = r.get("context_fit")
+        if isinstance(cf, dict) and cf.get("status") == "ok":
+            print(f"  {name:3} context_fit                answer in /context "
+                  f"{cf['answer_in_context_pct']}% · {cf['context_tokens_mean']} "
+                  f"tok ({cf['budget_used_pct']}% of budget) · "
+                  f"{cf['context_docs_mean']} docs, "
+                  f"{cf['duplicate_sections_mean']} dup · "
+                  f"truncated {cf['truncated_pct']}%")
         for task in ("own_title", "content_query"):
             tr = r.get(task) or {}
             for path, v in (tr.items() if isinstance(tr, dict)
