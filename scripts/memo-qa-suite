@@ -63,6 +63,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 RESULTS = REPO / "bench" / "results"
+SAMPLES = REPO / "bench" / "samples"
 
 # Search paths differ per build. v1 exposes ONLY /search; v2 exposes the explicit
 # endpoints. Auto-detecting the wrong one is what made v1 look like it retrieved
@@ -169,53 +170,162 @@ def corpus(url: str) -> dict:
 BANDS = [(0, 200), (200, 500), (500, 1000), (1000, 2000), (2000, 10 ** 9)]
 
 
-def task_own_title(url: str, path: str, per_band: int, seed: int,
-                   limit: int = 10) -> dict:
-    """Search a memo's exact title; rank 1 is the only correct answer.
+def _toks(d):
+    return d.get("token_count") or max(1, len(d.get("content") or "") // 4)
 
-    The own-title set is free supervision — every memo is a labelled example with
-    an unambiguous right answer, no hand-labelling and no LLM in the loop.
+
+# ⭐⭐ R-17 — WHY THE QUESTIONS ARE PINNED TO A FILE AND NOT REGENERATED PER RUN
+#
+# Until 2026-08-03 both recall tasks drew their sample with `rng.sample(pool)`
+# under a fixed seed, and the seed was believed to make two runs comparable.
+# **It does not.** `random.sample` over a CHANGED POOL draws different documents
+# even under the same seed: a seed makes a run reproducible against an UNCHANGED
+# corpus, which is the one situation a benchmark is never used in.
+#
+# Measured cost of not knowing this: v1 received no code change and 6 extra
+# documents, and moved −1.3pt on BOTH tasks. That made v1 an accidental control
+# and put the floor of the whole instrument at ±1.3pt — large enough to have
+# swallowed R-15's headline, which rested on a −0.3.
+#
+# ⇒ The sample is now a FILE of `{id, query}` pairs, minted once and re-used.
+# ⭐ **The QUERY TEXT is stored, not just the id.** Pinning ids alone fixes which
+# documents are asked about; it does not fix the QUESTION, because the
+# content_query excerpt is derived from the body and would silently change if the
+# body were edited. Storing the query makes a corpus edit change the corpus and
+# not the question — which is the whole claim R-17 makes.
+#
+# ⛔ **A pinned id that has left the corpus is `missing`, never `absent`.**
+# `absent` means the search failed to return a document that was there to return;
+# a document that does not exist cannot be retrieved, and scoring it as a miss
+# would charge a build for a corpus fact. Missing ids are excluded from n and
+# counted in the open, so an eroding sample announces itself rather than quietly
+# depressing every score. (Same shape as `failures` vs `absent`, already here.)
+
+
+def _pool_own_title(docs, lo, hi):
+    """Eligible (doc, query) pairs for own_title in one band."""
+    return [(d, (d.get("title") or "")[:200])
+            for d in docs
+            if lo <= _toks(d) < hi and (d.get("title") or "").strip()]
+
+
+def _pool_content_query(docs, lo, hi):
+    """Eligible (doc, query) pairs for content_query in one band.
+
+    ⛔ Skips documents whose excerpt would be mostly the title again (short
+    memos), because scoring those would quietly re-run own_title under a new name.
     """
+    pool = []
+    for d in docs:
+        if not (lo <= _toks(d) < hi):
+            continue
+        body = (d.get("content") or "").strip()
+        title = (d.get("title") or "").strip()
+        # drop markdown headers/blank lines, then take a mid-body window
+        lines = [l.strip() for l in body.split("\n")
+                 if l.strip() and not l.strip().startswith(("#", ">", "|", "-", "*"))]
+        if len(lines) < 3:
+            continue
+        excerpt = " ".join(lines[len(lines) // 3:])[:180]
+        if len(excerpt) < 60:
+            continue
+        if title and title[:40].lower() in excerpt.lower():
+            continue  # would be own_title wearing a different name
+        pool.append((d, excerpt))
+    return pool
+
+
+POOLS = {"own_title": _pool_own_title, "content_query": _pool_content_query}
+
+
+def _score_band(url, path, items, corpus_ids, limit, timed=False):
+    """Run one band's pinned questions and count outcomes.
+
+    `items` is a list of {"id", "query"}. `corpus_ids` is the set of ids the
+    target actually holds — pass None to skip the presence check.
+    """
+    rank1 = top5 = absent = failures = missing = 0
+    lat = []
+    for it in items:
+        if corpus_ids is not None and it["id"] not in corpus_ids:
+            missing += 1
+            continue
+        t0 = time.time()
+        try:
+            hits = _post(url, CANDIDATE_PATHS[path],
+                         {"query": it["query"], "limit": limit})
+        except Exception:
+            # ⛔ A query that never ran is NOT a retrieval miss. Counting it
+            # as `absent` is defensible; hiding it inside `absent` is not.
+            failures += 1
+            absent += 1
+            continue
+        lat.append((time.time() - t0) * 1000)
+        ids = [(h.get("document", h) or {}).get("id") for h in hits]
+        if ids and ids[0] == it["id"]:
+            rank1 += 1
+        if it["id"] in ids[:5]:
+            top5 += 1
+        if it["id"] not in ids:
+            absent += 1
+    lat.sort()
+    out = {"n": len(items) - missing, "pinned": len(items), "missing": missing,
+           "rank1": rank1, "top5": top5, "absent": absent, "failures": failures}
+    if timed:
+        out["p50_ms"] = round(lat[len(lat) // 2], 1) if lat else None
+        out["p90_ms"] = round(lat[int(len(lat) * 0.9)], 1) if lat else None
+    return out
+
+
+def _band_label(lo, hi):
+    return f"{lo}-{hi if hi < 10 ** 9 else ''}"
+
+
+def _draw_bands(docs, task, per_band, seed):
+    """Draw a fresh stratified sample — used to MINT a pinned file, and as the
+    fallback when no pinned sample is supplied."""
     import random
-    docs = _get(url, "/documents?limit=20000")
-    def toks(d):
-        return d.get("token_count") or max(1, len(d.get("content") or "") // 4)
     rng = random.Random(seed)
-    bands = []
+    out = []
     for lo, hi in BANDS:
-        pool = [d for d in docs if lo <= toks(d) < hi and (d.get("title") or "").strip()]
+        pool = POOLS[task](docs, lo, hi)
         sample = rng.sample(pool, min(per_band, len(pool)))
-        rank1 = top5 = absent = failures = 0
-        lat = []
-        for d in sample:
-            t0 = time.time()
-            try:
-                hits = _post(url, CANDIDATE_PATHS[path],
-                             {"query": (d.get("title") or "")[:200], "limit": limit})
-            except Exception:
-                # ⛔ A query that never ran is NOT a retrieval miss. Counting it
-                # as `absent` is defensible; hiding it inside `absent` is not.
-                failures += 1
-                absent += 1
-                continue
-            lat.append((time.time() - t0) * 1000)
-            ids = [(h.get("document", h) or {}).get("id") for h in hits]
-            if ids and ids[0] == d["id"]:
-                rank1 += 1
-            if d["id"] in ids[:5]:
-                top5 += 1
-            if d["id"] not in ids:
-                absent += 1
-        lat.sort()
-        bands.append({"band": f"{lo}-{hi if hi < 10**9 else ''}", "n": len(sample),
-                      "rank1": rank1, "top5": top5, "absent": absent,
-                      "failures": failures, "pool": len(pool),
-                      "p50_ms": round(lat[len(lat)//2], 1) if lat else None,
-                      "p90_ms": round(lat[int(len(lat)*0.9)], 1) if lat else None})
-    n = sum(b["n"] for b in bands)
+        out.append({"band": _band_label(lo, hi), "pool": len(pool),
+                    "items": [{"id": d["id"], "query": q} for d, q in sample]})
+    return out
+
+
+def _run_recall_task(task, url, path, per_band, seed, sample=None, limit=10):
+    """Shared body of own_title / content_query.
+
+    With `sample`, the questions come from the pinned file and are identical
+    across builds and across runs. Without it, they are drawn fresh — which is
+    only correct for minting, and is recorded as `pinned_sample: null` so a
+    reader can tell the two apart. ⛔ Do NOT compare a drawn run to a pinned one.
+    """
+    docs = _get(url, "/documents?limit=20000")
+    corpus_ids = {d["id"] for d in docs}
+    if sample is not None:
+        src_bands = sample["tasks"][task]["bands"]
+        sample_id = sample.get("sample_id")
+    else:
+        src_bands = _draw_bands(docs, task, per_band, seed)
+        sample_id = None
+    bands = []
+    for b in src_bands:
+        scored = _score_band(url, path, b["items"], corpus_ids, limit,
+                             timed=(task == "own_title"))
+        scored["band"] = b["band"]
+        scored["pool"] = b.get("pool")
+        bands.append(scored)
     ok_bands = [b for b in bands if b["n"]]
-    return {"task": "own_title", "path": path, "seed": seed, "per_band": per_band,
-            "bands": bands, "total_n": n,
+    total_missing = sum(b["missing"] for b in bands)
+    return {"task": task, "path": path, "seed": seed, "per_band": per_band,
+            "pinned_sample": sample_id, "bands": bands,
+            "total_n": sum(b["n"] for b in bands),
+            "total_pinned": sum(b["pinned"] for b in bands),
+            # ⛔ Reported, never folded into absent — see the R-17 note above.
+            "total_missing": total_missing,
             "total_rank1": sum(b["rank1"] for b in bands),
             # ⚠️ UNWEIGHTED mean of band rates — immune to corpus composition BY
             # CONSTRUCTION because n is fixed per band. Not a corpus-weighted score.
@@ -223,13 +333,26 @@ def task_own_title(url: str, path: str, per_band: int, seed: int,
                 100 * sum(b["rank1"] / b["n"] for b in ok_bands) / len(ok_bands), 2)
             if ok_bands else None,
             "total_failures": sum(b["failures"] for b in bands),
-            "control_ok": sum(b["rank1"] for b in bands) > 0,
-            "status": "ok" if sum(b["rank1"] for b in bands) > 0 else "could_not_run"}
+            # ⛔ control: the questions must have actually been ASKED. Zero rank-1
+            # over a real sample is a RESULT; zero rank-1 because every pinned id
+            # had left the corpus is an instrument failure wearing its face.
+            "control_ok": bool(ok_bands),
+            "status": "ok" if ok_bands else "could_not_run"}
+
+
+def task_own_title(url: str, path: str, per_band: int, seed: int,
+                   sample=None, limit: int = 10) -> dict:
+    """Search a memo's exact title; rank 1 is the only correct answer.
+
+    The own-title set is free supervision — every memo is a labelled example with
+    an unambiguous right answer, no hand-labelling and no LLM in the loop.
+    """
+    return _run_recall_task("own_title", url, path, per_band, seed, sample, limit)
 
 
 # ------------------------------------------------------ task: content query
 def task_content_query(url: str, path: str, per_band: int, seed: int,
-                       limit: int = 10) -> dict:
+                       sample=None, limit: int = 10) -> dict:
     """Query by a CONTENT excerpt instead of the exact title.
 
     ⭐ **own_title is unrealistically easy and we have been treating it as the
@@ -238,72 +361,18 @@ def task_content_query(url: str, path: str, per_band: int, seed: int,
     and more representative question — and it is still free supervision, because
     the excerpt's source document is the unambiguous right answer.
 
-    Deterministic by construction: the excerpt is taken from a fixed offset into
-    the body, so re-running with the same seed asks the same questions. No LLM in
-    the loop, nothing to drift.
-
     ⚠️ Expect LOWER scores than own_title on both builds. That is the point — a
     task everything passes cannot discriminate between builds.
     ⛔ Skips documents whose excerpt would be mostly the title again (short
     memos), because scoring those would quietly re-run own_title under a new name.
+
+    ⚠️ **This docstring used to claim "deterministic by construction: re-running
+    with the same seed asks the same questions."** That was true only of the
+    excerpt EXTRACTION, not of the sample — and the sample is where the questions
+    come from. See the R-17 note above `_pool_own_title`. Determinism now comes
+    from the pinned file, not from the seed.
     """
-    import random, re
-    docs = _get(url, "/documents?limit=20000")
-    def toks(d):
-        return d.get("token_count") or max(1, len(d.get("content") or "") // 4)
-    rng = random.Random(seed)
-    bands = []
-    for lo, hi in BANDS:
-        pool = []
-        for d in docs:
-            if not (lo <= toks(d) < hi):
-                continue
-            body = (d.get("content") or "").strip()
-            title = (d.get("title") or "").strip()
-            # drop markdown headers/blank lines, then take a mid-body window
-            lines = [l.strip() for l in body.split("\n")
-                     if l.strip() and not l.strip().startswith(("#", ">", "|", "-", "*"))]
-            if len(lines) < 3:
-                continue
-            excerpt = " ".join(lines[len(lines) // 3:])[:180]
-            if len(excerpt) < 60:
-                continue
-            if title and title[:40].lower() in excerpt.lower():
-                continue  # would be own_title wearing a different name
-            pool.append((d, excerpt))
-        sample = rng.sample(pool, min(per_band, len(pool)))
-        rank1 = top5 = absent = failures = 0
-        for d, excerpt in sample:
-            try:
-                hits = _post(url, CANDIDATE_PATHS[path],
-                             {"query": excerpt, "limit": limit})
-            except Exception:
-                failures += 1
-                absent += 1
-                continue
-            ids = [(h.get("document", h) or {}).get("id") for h in hits]
-            if ids and ids[0] == d["id"]:
-                rank1 += 1
-            if d["id"] in ids[:5]:
-                top5 += 1
-            if d["id"] not in ids:
-                absent += 1
-        bands.append({"band": f"{lo}-{hi if hi < 10**9 else ''}", "n": len(sample),
-                      "rank1": rank1, "top5": top5, "absent": absent,
-                      "failures": failures, "pool": len(pool)})
-    ok_bands = [b for b in bands if b["n"]]
-    total_r1 = sum(b["rank1"] for b in bands)
-    return {"task": "content_query", "path": path, "seed": seed,
-            "per_band": per_band, "bands": bands,
-            "total_n": sum(b["n"] for b in bands), "total_rank1": total_r1,
-            "unweighted_rank1_pct": round(
-                100 * sum(b["rank1"] / b["n"] for b in ok_bands) / len(ok_bands), 2)
-            if ok_bands else None,
-            "total_failures": sum(b["failures"] for b in bands),
-            # ⛔ control: pools must be non-empty. Zero rank-1 with a real pool is
-            # a RESULT; zero rank-1 with an empty pool is a broken selector.
-            "control_ok": sum(b["pool"] for b in bands) > 0 and sum(b["n"] for b in bands) > 0,
-            "status": "ok" if sum(b["n"] for b in bands) > 0 else "could_not_run"}
+    return _run_recall_task("content_query", url, path, per_band, seed, sample, limit)
 
 
 # ------------------------------------------------------- task: set-stability
@@ -377,6 +446,48 @@ def task_api_surface(url: str) -> dict:
     return out
 
 
+# ------------------------------------------------------------- sample minting
+def mint_sample(path: Path, url: str, per_band: int, seed: int,
+                stamp: str) -> int:
+    """Draw one stratified sample and freeze it as the question set.
+
+    ⭐ **Mint from the corpus the builds are SYNCED TO, not from a candidate.**
+    Minting from v2 would pin questions about the 88 documents v2 holds and v1
+    does not, and every one of them would score `missing` on v1 — an artefact of
+    where the sample came from, reported as a property of v1.
+
+    ⚠️ Re-minting resets the baseline. Every stored result names the sample it
+    used (`run.sample.id`); `memo-qa-diff` refuses to subtract across two ids.
+    """
+    docs = _get(url, "/documents?limit=20000")
+    if not docs:
+        print(f"✗ {url} returned no documents — refusing to mint an empty sample",
+              file=sys.stderr)
+        return 1
+    out = {"schema": 1, "sample_id": f"s-{stamp}", "created_utc": stamp,
+           "minted_from": {"url": url, "corpus_n": len(docs)},
+           "git": git_state(), "seed": seed, "per_band": per_band, "tasks": {}}
+    for task in ("own_title", "content_query"):
+        bands = _draw_bands(docs, task, per_band, seed)
+        out["tasks"][task] = {"bands": bands}
+        n = sum(len(b["items"]) for b in bands)
+        thin = [b["band"] for b in bands if len(b["items"]) < per_band]
+        print(f"  {task}: {n} questions across {len(bands)} bands"
+              + (f"  ⚠️ under-filled: {', '.join(thin)}" if thin else ""))
+    # ⛔ A sample whose questions are not unique would score the same document
+    # twice and quietly weight it double.
+    for task, spec in out["tasks"].items():
+        ids = [i["id"] for b in spec["bands"] for i in b["items"]]
+        if len(ids) != len(set(ids)):
+            print(f"✗ {task}: {len(ids) - len(set(ids))} duplicate ids",
+                  file=sys.stderr)
+            return 1
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(out, indent=2))
+    print(f"\nwrote {path}  (sample_id {out['sample_id']})")
+    return 0
+
+
 # ------------------------------------------------------------------- runner
 TASKS = ("own_title", "content_query", "set_stability", "api_surface")
 
@@ -394,12 +505,45 @@ def main() -> int:
     ap.add_argument("--tasks", default=",".join(TASKS))
     ap.add_argument("--label", default="", help="free-text note stored with the run")
     ap.add_argument("--out", default=None)
+    ap.add_argument("--sample", default=str(SAMPLES / "default.json"),
+                    help="pinned question file (see --mint-sample). "
+                         "Pass 'none' to draw fresh — NOT comparable across runs.")
+    ap.add_argument("--mint-sample", metavar="PATH", default=None,
+                    help="draw a fresh stratified sample from --mint-from and "
+                         "write it as a pinned question file, then exit")
+    ap.add_argument("--mint-from", default=None,
+                    help="corpus to mint from (default: --v1-url, the corpus both "
+                         "builds are synced to)")
     args = ap.parse_args()
 
-    want = [t.strip() for t in args.tasks.split(",") if t.strip()]
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H%M%SZ")
-    run = {"schema": 1, "run_id": stamp, "label": args.label,
+
+    if args.mint_sample:
+        return mint_sample(Path(args.mint_sample), args.mint_from or args.v1_url,
+                           args.per_band, args.seed, stamp)
+
+    sample = None
+    if args.sample and args.sample.lower() != "none":
+        p = Path(args.sample)
+        if p.exists():
+            sample = json.loads(p.read_text())
+            print(f"pinned sample: {p} ({sample.get('sample_id')})", flush=True)
+        else:
+            # ⛔ Do not silently fall back to drawing. A drawn run and a pinned run
+            # look identical in the results file except for one null field, and
+            # the whole point of R-17 is that the difference is invisible in the
+            # NUMBERS. Say it here, loudly, at the moment it becomes true.
+            print(f"⚠️  no pinned sample at {p} — DRAWING FRESH. This run is "
+                  f"reproducible but NOT comparable to any other run.\n"
+                  f"    Mint one:  {Path(__file__).name} --mint-sample {p}",
+                  file=sys.stderr, flush=True)
+
+    want = [t.strip() for t in args.tasks.split(",") if t.strip()]
+    run = {"schema": 2, "run_id": stamp, "label": args.label,
            "git": git_state(), "seed": args.seed, "per_band": args.per_band,
+           "sample": ({"id": sample.get("sample_id"), "path": args.sample,
+                       "minted_from": sample.get("minted_from")}
+                      if sample else None),
            "targets": [], "results": {}}
 
     targets = [("v1", args.v1_url, args.v1_container),
@@ -437,10 +581,11 @@ def main() -> int:
             t0 = time.time()
             try:
                 if task == "own_title":
-                    r = {p: task_own_title(url, p, args.per_band, args.seed)
-                         for p in paths if p != "passages" or True}
+                    r = {p: task_own_title(url, p, args.per_band, args.seed, sample)
+                         for p in paths}
                 elif task == "content_query":
-                    r = {p: task_content_query(url, p, args.per_band, args.seed)
+                    r = {p: task_content_query(url, p, args.per_band, args.seed,
+                                               sample)
                          for p in paths}
                 elif task == "set_stability":
                     r = task_set_stability(url, primary, args.stability_n, args.seed)
@@ -462,13 +607,22 @@ def main() -> int:
 
     for name in ("v1", "v2"):
         r = run["results"].get(name, {})
-        ot = r.get("own_title") or {}
-        for path, v in (ot.items() if isinstance(ot, dict) and "task" not in ot else []):
-            if isinstance(v, dict) and v.get("status") == "ok":
-                print(f"  {name:3} {path:10} unweighted rank-1 "
+        for task in ("own_title", "content_query"):
+            tr = r.get(task) or {}
+            for path, v in (tr.items() if isinstance(tr, dict)
+                            and "task" not in tr else []):
+                if not (isinstance(v, dict) and v.get("status") == "ok"):
+                    continue
+                # ⚠️ `missing` is printed on the SAME line as the score, not in a
+                # footnote — a score computed over a shrunken denominator must not
+                # be readable without the denominator that produced it.
+                miss = v.get("total_missing") or 0
+                print(f"  {name:3} {task:14} {path:10} unweighted rank-1 "
                       f"{v['unweighted_rank1_pct']}%  "
                       f"({v['total_rank1']}/{v['total_n']}, "
-                      f"{v['total_failures']} query failures)")
+                      f"{v['total_failures']} query failures"
+                      + (f", ⚠️ {miss} pinned ids NOT IN THIS CORPUS" if miss else "")
+                      + ")")
     return 0
 
 

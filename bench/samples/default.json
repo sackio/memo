@@ -1,0 +1,2485 @@
+{
+  "schema": 1,
+  "sample_id": "s-2026-08-03T184827Z",
+  "created_utc": "2026-08-03T184827Z",
+  "minted_from": {
+    "url": "http://server4:8000",
+    "corpus_n": 7937
+  },
+  "git": {
+    "sha": "0f0ec44",
+    "dirty": true
+  },
+  "seed": 7,
+  "per_band": 60,
+  "tasks": {
+    "own_title": {
+      "bands": [
+        {
+          "band": "0-200",
+          "pool": 1294,
+          "items": [
+            {
+              "id": "084e44cd-5878-4d87-8064-8f2244d27c9c",
+              "query": "Fire alarm Kidde interconnect \u2014 bundled with generator work at 120 Reedy Meadow"
+            },
+            {
+              "id": "4ce7d86e-41c5-4531-8442-be3e2f007529",
+              "query": "quantum-feed: badge coverage drive \u2014 corpus::badge_exhibit, commit 2f6cae83"
+            },
+            {
+              "id": "8aacc96c-6451-45d4-b1e4-3ab58849d66a",
+              "query": "Amazon order \u2014 SEYHAKI Under Desk Drawer Organizer (2026-04-28, ETA 2026-04-29)"
+            },
+            {
+              "id": "f2636942-cd8b-400a-a7d6-c2cb84c78e80",
+              "query": "buffet-buster: v0.6.0: OTA checks on every foreground, not just cold start (e94cd845)"
+            },
+            {
+              "id": "5784d43e-f6b2-457a-b738-3364b202fdbb",
+              "query": "quantum-feed: fold-bar receipts (73613cef clean run + f18348bb adapter fold) + leg-B vacuity disposition: explained-benign (fold outside the unifier cone; touched-c (013b29fd)"
+            },
+            {
+              "id": "b06c35cb-c6f2-4aae-899f-20cefca0127c",
+              "query": "Hone prescription shipped \u2014 Enclomiphene + Anastrozole (2026-06-05)"
+            },
+            {
+              "id": "756fc38f-cae2-4756-adc0-d174a4229c1e",
+              "query": "qf-guardian-pf: docs(.reviews): nonexistence-pass receipt (tool stdout verbatim @ bbaa0e4e; 69 pairs, 69 anchors; NX-G1 rerun-and-diff r (e0c06ca5)"
+            },
+            {
+              "id": "f7c812a1-a6dd-423d-8971-42734cdb203b",
+              "query": "Krasner networking favor: Wendy Krasner asked for Zach Krasner intro \u2014 Ben declined (2026-06)"
+            },
+            {
+              "id": "1ee60087-5201-49dc-b22f-14342b4c88d1",
+              "query": "Nancy Mannes \u2014 maternal grandmother, Park Florist flower delivery (May 2026)"
+            },
+            {
+              "id": "74b0c919-b734-403b-a2dd-e9e7c7e7d369",
+              "query": "quantum-feed: docs(.reviews): disposition technical:RMI mom (technical pkg absent, cannot verify) (e4529f17)"
+            },
+            {
+              "id": "f1e7b101-6e1f-4489-be34-172cd618438d",
+              "query": "K8s barn: store-union label fix \u2014 23\u219250 nodes labeled (2026-06-06)"
+            },
+            {
+              "id": "3f51eff9-fa78-411b-ab0a-c03d95045748",
+              "query": "quantum-feed: DRIVER + CHECKER cron IDs and prompt wiring (2026-07-09)"
+            },
+            {
+              "id": "fd3bb631-742a-4837-8c4b-3952150b3b59",
+              "query": "pantry: docs(deploy): web deploy needs recreate not restart (expo export rotates dist inode \u2192 403) (80da8e2)"
+            },
+            {
+              "id": "0c59c395-647c-41a1-9898-867a44da7e6d",
+              "query": "qf-guardian-nx: CLAUDE.md: pin the required-features silent-bin-skip trap (quantum-data find 2026-07-16) \u2014 green exit does not prove the (ab0548e9)"
+            },
+            {
+              "id": "03bcc4d5-5610-4834-af11-250954984755",
+              "query": "Construction at 120 Reedy Meadow: stone + fence posts delivered, work starting Jun 11"
+            },
+            {
+              "id": "28b3cfd5-eefb-4738-aba9-3401818c1927",
+              "query": "Invoice: Solo 401k Annual Fee \u2014 Due June 30, 2026"
+            },
+            {
+              "id": "c12ff668-f6f7-43a5-b0c6-d7fa0add54a7",
+              "query": "quantum-feed: predeclare \u00a77 fact extension (operator 16:05): every cluster node on UPS + whole-house battery + generator \u2014 power-loss class minimal fleet-wide; hier (93c41130)"
+            },
+            {
+              "id": "28e698f8-3da8-47e8-9cf0-ceadeffed6ac",
+              "query": "quantum-feed T003: purge-map inventory for retired vocabulary (T042 feed)"
+            },
+            {
+              "id": "bc23d6e3-818c-4584-a084-bab4a225c51f",
+              "query": "qf-guardian-pf: docs(.reviews): FR-019 upstream knob-parity census scope DRAFT (total partition, per-knob coverage obligation, pinned di (ec7e1246)"
+            },
+            {
+              "id": "eadb3ec0-60ce-41f0-8076-0bd0f73c5204",
+              "query": "Appointment: Ralph visit at 120 Reedy Meadow Rd \u2014 Wed Jun 3, 11:30-12:30 AM"
+            },
+            {
+              "id": "d5f7b281-ccaa-4995-a5ae-6a3c395e5f5c",
+              "query": "Alpaca Markets production maintenance \u2014 Sat Jun 13, 7-10 AM EDT"
+            },
+            {
+              "id": "2167218f-fd41-43a9-8be7-eb0edc8063d6",
+              "query": "quantum-feed: chore(.reviews): W2 landing battery script \u2014 adds the STANDING qf-types leg (guardian ruling 2026-07-17, memo e778cc83) with own TYPES_EXIT receipt; r (ef47a8f2)"
+            },
+            {
+              "id": "7e78ab9b-ebf8-424f-9010-c6d5e7c2f445",
+              "query": "storybook: Composer photos: show thumbnails, downsize client-side before LLM (f9b85944)"
+            },
+            {
+              "id": "aeabf816-5052-4707-a0c8-69e7d6cbc8d6",
+              "query": "aloHA: Box test suite expanded to 48 pytest (2026-07-13)"
+            },
+            {
+              "id": "9d46a253-57b8-4bc1-a075-ed31daf47d6a",
+              "query": "quantum-feed: Python injection script pitfall \u2014 struct tail-expression helpers"
+            },
+            {
+              "id": "cda5e74b-8512-4381-8ff4-cfcc0d669d80",
+              "query": "Quantum-Feed \u2014 GPU Compute Node Status"
+            },
+            {
+              "id": "968cdc34-95ec-481c-a2cc-a04f6d923e2e",
+              "query": "GitHub Fork \u2014 sackio/platform (opentdf/platform)"
+            },
+            {
+              "id": "98aa8055-420a-49a8-a1df-40198cbfcebf",
+              "query": "quantum-feed: fold liverun batch-16 (3f736bce): interleaved family DRIVABLE \u2014 merge_batch canonical drive order realizing the library MergedTradeQuote pin (quote-be (77de6469)"
+            },
+            {
+              "id": "96ee13a1-775e-4614-acbd-f189a43f8557",
+              "query": "Laura's Email \u2014 laura@sack.io is Primary Personal Email"
+            },
+            {
+              "id": "15f8c2b7-8cec-434b-8c90-3f3c36879dee",
+              "query": "Delivery: TOREAD Spa Filter 5x13 2-Pack \u2014 arriving 2026-05-24"
+            },
+            {
+              "id": "5de07f50-28f2-47a5-8456-fc99d821c0f5",
+              "query": "Best Budss Landscaping \u2014 Estimate EST0433 (front walkway, $7,290) \u2014 2026-04-28"
+            },
+            {
+              "id": "ab66bdaf-ed66-45d8-b37f-b2fe9f7d3599",
+              "query": "buffet-buster: v0.9.0: real food-photo background \u2014 looks like a designed app (7526c3f3)"
+            },
+            {
+              "id": "fc41114e-7d8b-4445-949b-c3e107ada4c4",
+              "query": "quantum-feed: LIBRARY GREEN milestone \u2014 600/600 surfaces real-verified"
+            },
+            {
+              "id": "ef45d414-1c21-449e-aed2-6457abc93404",
+              "query": "buffet-buster: US2 venue auto-detection + US3 Plan-mode scouting (v0.2.0) (38b476cd)"
+            },
+            {
+              "id": "a7dc5dc8-ba6a-487b-859c-8cf1354df2f6",
+              "query": "storybook: Add reference-photo upload for characters (b12ebfa0)"
+            },
+            {
+              "id": "892726bb-1f0d-4185-bee6-5c336146fb27",
+              "query": "Kia Sorento safety recall outstanding \u2014 NHTSA 23V639 rearview camera"
+            },
+            {
+              "id": "883106d2-e030-47da-93fc-74161497b161",
+              "query": "~/downloads NAS symlink standardized across s4/s5/s6/office"
+            },
+            {
+              "id": "eec829b5-7304-48b3-ae12-341a42a0ad04",
+              "query": "Inkling UI/UX audit \u2014 51 findings from multi-agent sweep (2026-06-06)"
+            },
+            {
+              "id": "7f32102c-665f-46aa-b15e-7e566aee8925",
+              "query": "shipping-tracker project \u2014 dormant, handed off to ha"
+            },
+            {
+              "id": "65fe1e88-59e2-41b6-ba68-4bde679e95c9",
+              "query": "Amazon NVMe refund noted (2026-06-04)"
+            },
+            {
+              "id": "685f7484-8262-49bd-bc0e-6e3bce71bbf5",
+              "query": "buffet-buster project"
+            },
+            {
+              "id": "6734d652-6c93-47c9-b964-63642119ec2d",
+              "query": "Inkling: OpenRouter credit critically low \u2014 $0.34 \u2014 May 31 2026"
+            },
+            {
+              "id": "e59017fa-6978-461c-9a35-6194e18f53b4",
+              "query": "~/downloads NAS symlink standardized across all hosts"
+            },
+            {
+              "id": "c1cf6f7d-3c87-4290-9847-fd3862bf6fcc",
+              "query": "storybook: Add photo-inspiration: draft script + characters from uploaded photos (b5748160)"
+            },
+            {
+              "id": "c2c48361-e1d4-4512-9248-18f6e82fbb3c",
+              "query": "super-agent RCS family group thread gap: fix in progress as of 7/12"
+            },
+            {
+              "id": "8154e7f8-0239-470f-94ab-f4063da17802",
+              "query": "quantum-feed: fold cluster t081-observability (2d5ffb0e): #2 failure-alert crons (applied live, drill-proven) + #3 meta-gate runlist + (0b9a8452)"
+            },
+            {
+              "id": "248dd647-da3c-4ef4-8294-d0e6b19675ff",
+              "query": "Payment to Webvitalize LLC $500 \u2014 2026-05-24"
+            },
+            {
+              "id": "cd804c12-defc-4131-a44a-68c1576b1f45",
+              "query": "House SPAN Panel + Generator Install - 3-Day Blackout 2026-06-22 to 2026-06-24"
+            },
+            {
+              "id": "4809bcbd-94a0-48a2-b3d0-107b37769886",
+              "query": "Verizon bill ready Jun 21 2026 \u2014 Auto Pay scheduled"
+            },
+            {
+              "id": "ac9c8324-623e-4909-bcbf-088db5a4cd2e",
+              "query": "qf-guardian-pf: docs(.reviews): finisher-observability battery receipt COMPLETE \u2014 both legs EXIT 0 at 4b77ef27 (feature-full 44 binaries (862de909)"
+            },
+            {
+              "id": "e57a180a-707a-41d6-b83d-3f3bb26f8e9c",
+              "query": "eBay orders Jun 2: Intel Core i7-7700 + A-Tech 32GB DDR4 RAM"
+            },
+            {
+              "id": "65922f37-44fb-4d5b-8b17-9f949d6728e3",
+              "query": "quantum-feed: fold liverun batch-17 (e598cf61): dual-input masks DRIVABLE \u2014 CellPath::Dual mirrors library SignalPath::Dual verbatim (same BarSlice both indicators, (ec8688a3)"
+            },
+            {
+              "id": "29b0eb14-b47f-48ac-9c3d-12cb8cde8612",
+              "query": "storybook: Rebrand to Inkling; remove redundant Create tab from header (870c9767)"
+            },
+            {
+              "id": "b1d99e3f-b248-4bab-9a00-4bdc015f8089",
+              "query": "quantum-feed: k8s: weekly cargo-target sweep script (auto-delete stale target dirs + worktree report-only) (c22fa4c6)"
+            },
+            {
+              "id": "6c1ca75e-1778-48ab-b10e-b55ecb8c2c03",
+              "query": "Tool-gap signal SUPERTREND \u2014 wrong default + wrong key in signal_doc_to_spec"
+            },
+            {
+              "id": "ed5f3e2c-c3c5-4b98-9d06-08b97cb475b0",
+              "query": "assistant: Slack high-signal channels list path and human filter"
+            },
+            {
+              "id": "3b05acd6-b70b-4f19-b8e0-8f7aec9a13f3",
+              "query": "Colin Fraser (stump grinder) booked: Saturday Jun 14 after 11 AM, $325, two viburnum stumps, 120 Reedy Meadow Rd, chips "
+            },
+            {
+              "id": "a91241c0-763d-490d-9b46-62fcd663d1ce",
+              "query": "ATC registry.ts: Slack escalation path removed, DM-only stale detection retained"
+            },
+            {
+              "id": "0a153adb-0068-4c61-ba95-efb9b33ec3e5",
+              "query": "quantum-feed: NAS-native ingest/sort/pivot/QA tooling committed (68da71d)"
+            },
+            {
+              "id": "d690569b-7038-4166-9464-c3201ac90d83",
+              "query": "SPAN Panel + Whole-Home Generator Install \u2014 Completed June 2026"
+            }
+          ]
+        },
+        {
+          "band": "200-500",
+          "pool": 2541,
+          "items": [
+            {
+              "id": "a6afdb2c-f3f0-4042-b071-7ab54bfa3020",
+              "query": "Cars: Amazon A/C equipment history \u2014 R-134a tools only, no working R-1234yf gear pre-2026"
+            },
+            {
+              "id": "ea56722b-8f37-4179-bba2-e67d6b24bcb5",
+              "query": "qf-historical cache-gen v6-staging-fix \u2014 two correctness bugs fixed"
+            },
+            {
+              "id": "a4866599-2723-454a-9c27-c00804e641d1",
+              "query": "quantum-feed: \u00a78 Phase-A Synthetic Foundation LANDED + perf pillar running (Jun 14, 2026)"
+            },
+            {
+              "id": "bac11580-ba01-437c-9466-c21b472fbe30",
+              "query": "Incident: Claude API \u2014 Elevated errors on Opus 4.8 \u2014 Jun 19 2026 (investigating)"
+            },
+            {
+              "id": "75940e4c-31d2-49a7-8b9d-59233d7ce50d",
+              "query": "SMS \u2014 David Power Pro (David SPAN electrician): SPAN commissioning + cable organize Thu 7/9 9:30-10 AM ET (2026-07-08)"
+            },
+            {
+              "id": "30612ca4-ea4f-4361-b012-cb1f5454a16c",
+              "query": "quantum-feed: NO_TOLERANCE enforcement \u2014 current architecture (post-qf-parity retirement)"
+            },
+            {
+              "id": "c7b197d0-6a7f-4a43-96ee-74e914c5a6af",
+              "query": "Aloha relay \u2014 production deployment on server4"
+            },
+            {
+              "id": "a0d0f231-4d43-479a-acb3-3bf339151643",
+              "query": "quantum-feed: T029 walk scale-up attest \u2014 H2 denominator defect caught pre-record"
+            },
+            {
+              "id": "b4333f34-8d77-4d01-8a11-13d01e5eadb2",
+              "query": "quantum-feed: feat(qf-library): I1 drop-site emissions wired \u2014 tooth GREEN, full suite green (a9fab70a)"
+            },
+            {
+              "id": "71dab977-4dd5-4390-a76a-f3bac02285e2",
+              "query": "~/scripts/agents \u2014 Consolidated Agent Launch Script"
+            },
+            {
+              "id": "84afe0c0-b84b-41f3-9182-7d852b546542",
+              "query": "Email \u2014 NetZero HVAC: Install scheduled 8/17/2026 (Z2 attic AC dead 7/5, watching for earlier slot) (2026-07-08)"
+            },
+            {
+              "id": "eb01a2f2-a215-449e-a4d0-d88238638125",
+              "query": "storybook: Add print-quality (hi-res) art + lock-character + multi-language (7845046b)"
+            },
+            {
+              "id": "11a5e891-fd03-4d2b-bfba-7e9f42a9aa14",
+              "query": "quantum-feed process discipline: rigorous verification sweep before implementation"
+            },
+            {
+              "id": "f716c486-a4a9-4603-a982-aadff2435abf",
+              "query": "Generac 24kW generator NOW WORKING \u2014 GEN signal fix (Jun 27)"
+            },
+            {
+              "id": "5369d85a-ebe6-474c-8b4b-ec03d2631e3d",
+              "query": "quantum-feed: gap_autofill.sh \u2014 durable ts-sorted hole self-heal (871bc354)"
+            },
+            {
+              "id": "a33c0b17-5e13-4a5e-8a63-8a21202c96b3",
+              "query": "ATC Slack bridge cruft-channel cleanup \u2014 completed 2026-07-09"
+            },
+            {
+              "id": "7f416f9a-cddc-464b-9ff8-9bfc6088307c",
+              "query": "Unibrowse \u2014 Agent Bug Reporting Protocol"
+            },
+            {
+              "id": "a6e10362-5d1a-4de6-a780-e7dbcec2195b",
+              "query": "session: Everything's dispatched and the held-out test is running. Here's where it stands (se33baa8b)"
+            },
+            {
+              "id": "ff3c43f5-a49f-4b47-9e2b-2d638257865d",
+              "query": "scripts session synth (server4) \u2014 2026-07-17"
+            },
+            {
+              "id": "cb753164-2b72-4855-a27c-75f4e624e89f",
+              "query": "Domains MCP project: set_nameservers + create_hosted_zone + SES module (2026-06-04)"
+            },
+            {
+              "id": "d3ace17a-f8d3-4489-bd0f-27078f0457c9",
+              "query": "House project emails must send from family@sack.io"
+            },
+            {
+              "id": "6c08ebb9-17ac-45c5-98db-3e8d0de5285d",
+              "query": "Groton FY2027 Preliminary Real Estate Tax Bill"
+            },
+            {
+              "id": "a7aa0f00-70ad-4c96-97c9-437585838b91",
+              "query": "\u26a0\ufe0f CORRECTION to prove-small recipe e8127582: QFC_L1_REDIS_URL = PORT-FORWARD redis-solo-0 \u2192 127.0.0.1:6379 (NodePort 31382 TIMES OUT from host)"
+            },
+            {
+              "id": "f47fa842-8593-4b1e-bfa1-dd9b09a8c037",
+              "query": "Garden Session Cron Re-Arm Rule \u2014 --resume Does NOT Restore Crons"
+            },
+            {
+              "id": "49799b7d-642c-454c-bbfa-584530047521",
+              "query": "Audit-fleet OFF until slimmed down"
+            },
+            {
+              "id": "1a9912eb-88f2-438b-96d9-08d81d37464a",
+              "query": "Amazon deliveries batch \u2014 aquarium build (Jun 12-14, 2026)"
+            },
+            {
+              "id": "99d8e042-755f-490c-9048-d1b0f81517a6",
+              "query": "Backfill checkpoint \u2014 office \u2014 2026-07-27 06:48 (heartbeat)"
+            },
+            {
+              "id": "49970896-1bbe-4e6b-a5fb-61a713966850",
+              "query": "curator: The actual fix is live \u2014 I'll trust the user's real browser to behave correctly. (s8ad2f6c0)"
+            },
+            {
+              "id": "ab118558-cad7-4761-b793-d600ffd347a4",
+              "query": "Claude API incidents \u2014 2026-05-21 and 2026-05-22"
+            },
+            {
+              "id": "ff0700f9-2dbd-489f-a474-008e984b4d80",
+              "query": "quantum-feed \u2014 qf-barstore deployed but lightly used (2026-05-02 status)"
+            },
+            {
+              "id": "9b3e7c5a-e7e0-43dc-86ce-42888e704cc3",
+              "query": "Google Calendar auto-add invitations: UI-only setting, not API-accessible"
+            },
+            {
+              "id": "78253dbc-15ca-400e-ae9c-642bbf5644da",
+              "query": "SMS/VM \u2014 Mike (Dean garage doors): HD install measurements \u2014 handled (2026-07-02)"
+            },
+            {
+              "id": "de7d715d-47d5-4c60-9e1f-9fb4000df18b",
+              "query": "quantum-feed distributed-build: full-run is READ/STORAGE-bound, compute path MAXED (cluster Run C, 2026-06-27) \u2014 parallel-decode net-positive CONFIRMED single-node"
+            },
+            {
+              "id": "318c9442-40ff-49a7-b54c-cd8c3f472e7e",
+              "query": "Sandra Ganske \u2014 Fidelity Investment Service Solutions (IRA Rollover Contact)"
+            },
+            {
+              "id": "ca482e47-b65f-4b59-8bd1-fb5bfe7113db",
+              "query": "CONFIRMED recipe: claude.ai OAuth Authorize needs real mouse MOVES (anti-bot) then real click"
+            },
+            {
+              "id": "f4faa4d1-064c-43f0-8c90-154414367e13",
+              "query": "HA path: /config mounts from /mnt/db/ha/config, not NAS"
+            },
+            {
+              "id": "07434cbf-babf-4c9b-bfd0-35f7b38d2d89",
+              "query": "**ENGINE PRODUCER \u2014 605-flame sweep FULLY CLOSED (2026-06-13 ~14:04). Close-delta on cbee7efd.**"
+            },
+            {
+              "id": "0366fcb1-73c9-4328-9747-aa41e73dd138",
+              "query": "Fleet-liveness gap + fresh-beacon respawn design (2026-07)"
+            },
+            {
+              "id": "fc533e62-a7c7-4fbd-92da-9563134309d3",
+              "query": "quantum-feed: dashboard: PROGRAMS tab \u2014 generic program-status renderer (Ben standing requirement 2026-07-16, first artifact: knobs) (8de8b84b)"
+            },
+            {
+              "id": "de9ab305-ff6d-4b37-b0d5-9aeab5c3b187",
+              "query": "quantum-feed T080 fix: red-path emit_artifacts bug"
+            },
+            {
+              "id": "660e8be2-5328-4bcf-9962-c471a89be2bf",
+              "query": "quantum-feed: historical backfill \u2014 3 detached jobs, multi-day timeline estimate (2026-06-09/10)"
+            },
+            {
+              "id": "8810220f-3544-4c04-93a4-98fdfffe5b40",
+              "query": "SWEEP HONEYPOT A \u2014 contains literal markers (leave in place, see body)"
+            },
+            {
+              "id": "56289720-2a3f-4845-8c10-1b1d576642a2",
+              "query": "qf-guardian-t094s5: tasks(001): T095 \u00a712.8.4 \u2014 the zero-regression proof set is DISCRIMINATING, and attestatio (2d36c696)"
+            },
+            {
+              "id": "7ad93248-0fd7-4263-8a9f-ec0949abdf77",
+              "query": "super-agent server WS registry race condition fix (2026-06-28)"
+            },
+            {
+              "id": "2d974f15-5e4e-454e-bab1-77367215f9de",
+              "query": "Curator Teleprompter \u2014 Self-recording tool for narration (May 4, 2026)"
+            },
+            {
+              "id": "1d802413-5a5f-4513-a217-7d55b36ce255",
+              "query": "EMBEDDING_MATCHES REGEN \u2014 REVISED ESTIMATE ~6-8h overnight (was wrongly told ben 2.3h). Update to memo fff9c994 (4-worke"
+            },
+            {
+              "id": "7a15a585-e5f6-4f3a-85df-685ad6104153",
+              "query": "Phony IVR Navigation \u2014 dtmfPreflight via Twilio sendDigits"
+            },
+            {
+              "id": "61b86fa9-5c05-45ba-bea9-69793a995f39",
+              "query": "quantum-feed: stop-drop eval-config bug (B1 run, #4 badges invalid)"
+            },
+            {
+              "id": "5c1599ea-f42c-40b5-8670-9b68ae83c522",
+              "query": "super-agent \u2014 Home Assistant integration spec"
+            },
+            {
+              "id": "c5fa2e9e-9bd4-4f17-b31d-588224ceb63c",
+              "query": "Git pulse: quantum-feed \u2014 2026-07-30/31 (37 commits)"
+            },
+            {
+              "id": "e4683ed6-58a4-4cfa-ad7d-d3ac8309d074",
+              "query": "quantum-feed: 3-layer non-Sharpe deflation \u2014 empirical-null + analytic-EV (f3ee875d)"
+            },
+            {
+              "id": "0b87a95e-49e8-421e-bd7f-d2215f076b9b",
+              "query": "Garden squirrel barrier: FINAL BOM decided \u2014 flat smooth twinwall polycarbonate, 24\" x 124 lin-ft"
+            },
+            {
+              "id": "01d39ac3-77f1-4c1b-b711-4a4fb97a9216",
+              "query": "Aloha \u2014 skills system and HA system-management layer"
+            },
+            {
+              "id": "cdf3ab53-60b9-4d75-919e-ad520ceb9c41",
+              "query": "Server4 PSU \u2014 Redundant 1100W Pair (Dell R720) \u2014 2026-05-15"
+            },
+            {
+              "id": "e344bdd6-db78-4084-819b-21db91b00ac8",
+              "query": "guardian ruling: feature-unification compile leg = fold-bar standing runner (vacuity tripwire: compiled-unit count; ~1s heavy check = red flag). 2026-07-17"
+            },
+            {
+              "id": "eb0feed3-e6d2-42b5-8095-d9d93e7219ba",
+              "query": "quantum-feed: output-correctness guard \u2014 spot-check the DATA every loop tick, not just broker-mem"
+            },
+            {
+              "id": "6f46ef6a-5894-43fa-ac4a-a64c8e888956",
+              "query": "quantum-feed: merge: t081-s5-raw-parity split invocation \u2014 scope --test-threads=1 to residency only (nav (115cb8ab)"
+            },
+            {
+              "id": "bc9dfd38-681c-4081-9d36-7c2acdbc5dc8",
+              "query": "Ben Sack \u2014 Samsung Galaxy Watch 7 Health Setup"
+            },
+            {
+              "id": "0d202088-c211-455b-9a0c-b324d788f227",
+              "query": "KM15642 project state \u2014 RA gene lists finalized, LIB12/LIB16 searches pending"
+            },
+            {
+              "id": "fb209244-4946-4661-a926-c005c87b4abf",
+              "query": "quantum-feed: gym keepup evidence assembly (spec #007 T016 COMPLETE): assemble_evidence with two structural guarantees \u2014 (1) the laten (5ba7205e)"
+            }
+          ]
+        },
+        {
+          "band": "500-1000",
+          "pool": 2140,
+          "items": [
+            {
+              "id": "86cd6f58-0c5d-4e45-9a79-7159b7b62a4c",
+              "query": "Validation-pipeline RESUME v6-DELTA-26 (GLOBAL) \u2014 2026-06-28 01:53 \u2014 reconcile CLOSED benign (corpus 0 spread_500/volume_1m signals); eval-gate a+b+reconcile GREEN; 2 pre-fan confirms (corpus-derived "
+            },
+            {
+              "id": "215ef884-bfdc-4f7d-a7ff-8e8498f8c917",
+              "query": "sieve-guardian: NULL-CONTROL is a Stage-7 BLOCKING guard (mine) + per-domain-structure is a Stage-3 design call (nav ruling 2026-06-13)"
+            },
+            {
+              "id": "5439c52d-8fb8-408f-81cf-4bac1c353b89",
+              "query": "quantum-library ITEM-5 RESOLUTION 2026-06-14 ~06:46 \u2014 cluster RULED 16-wide@p16 (32-wide moot, spec stays 16 shards); honest-partial X/605 fallback affirmed; NAS-bound perf datapoint + I/O-amplificati"
+            },
+            {
+              "id": "560ace1b-8adf-462d-9cdd-0a6f49db95b3",
+              "query": "gmail-workspace MCP \u2014 Impersonating Google Workspace Users"
+            },
+            {
+              "id": "5ca63859-5dd8-43ea-89e7-fab6873bb428",
+              "query": "Ben's mom return-flight SMS reminders pin \u2014 fire Sat 7/25"
+            },
+            {
+              "id": "77da2959-8ee4-41e2-8001-6b1d8b8a90e4",
+              "query": "nginx reverse-proxy architecture on server4"
+            },
+            {
+              "id": "80ea1933-a205-46cc-a1b0-7a79e33d91e6",
+              "query": "Grocery preferences \u2014 Costco Nashua trip 2026-06-03"
+            },
+            {
+              "id": "1e822c04-b7a4-43c4-9ec1-2aea1445f2f7",
+              "query": "SPEC VERDICT + tracked follow-on: Trade.macro_regime is PER-ASSET-CLASS by spec intent (crypto trades \u2192 crypto-macro); current writer.rs drift (2026-06-13)"
+            },
+            {
+              "id": "21a94480-6999-4fdd-8b3c-965290b7bbe2",
+              "query": "quantum-feed: decoupled-grid composed cert (axis-A/C/D), 2026-06-15"
+            },
+            {
+              "id": "11c3f3b7-7a54-4e60-b0fd-521720bd7f83",
+              "query": "guardian ~15:15: WART rider @ 013d0585 CLEAN (11th verdict; vintage battery 8/8); seal manifest bound w/ RB-H5/H6; day = 5 lanes 5 cleans + battery + 2 closers. Chains 2f220f5e."
+            },
+            {
+              "id": "3d7b06ec-9402-4427-b7d9-66f8f6e2fa9e",
+              "query": "Whole Foods Westford trip 2026-06-10 \u2014 Tessa shop"
+            },
+            {
+              "id": "fc38d268-3079-4bed-818b-1d6d52331061",
+              "query": "quantum-feed: item-5 POST-\u00a78 real-data parity gate result (2026-06-14)"
+            },
+            {
+              "id": "b1dba43b-4b1a-44f7-a1b1-6a81153d1dc7",
+              "query": "quantum-feed: Step-2a per-stage engine instrumentation LANDED \u2014 2026-06-11"
+            },
+            {
+              "id": "4bad80d5-09ff-48ab-bd6b-f01f6be967a2",
+              "query": "THREE-binary provenance map for the 2228 (mixed, per-shard tagging) + byte-identical-\u00a715-builder VERIFY condition (2026-06-15)"
+            },
+            {
+              "id": "c918968b-89af-4c63-846c-3a9004794537",
+              "query": "\u2b50 quantum-library DELTA\u21927b66d167 \u2014 canary handoff SETTLED (nav-frozen SKIP 17:54): after rung-3 clean (~20-40min), binary SELF-CLASSIFIES (no curated list), 2-leg verdict (me run-owner + taskmaster at"
+            },
+            {
+              "id": "666535a3-99ad-4d2c-8a1d-ae191c06d9c2",
+              "query": "Validation-pipeline RESUME v6-DELTA-79 (GLOBAL) \u2014 2026-06-28 06:27 \u2014 Excluded-write timing boundary sharpened (producer) + reconciled: divergence is ALREADY LIVE (16/28 active now at phantom-185; seed"
+            },
+            {
+              "id": "4a961016-d850-4b0d-b0a1-3f9d2a2594d3",
+              "query": "quantum-feed library backlog \u2014 7-item sequence, final status (Jul 2026)"
+            },
+            {
+              "id": "b8ff6c96-589a-4db4-a3e5-71052d266ef8",
+              "query": "quantum-library 2026-07-22 ~14:47 \u2014 BANK v51: READ-ONLY HELPER (nav owns T094 ceremony hands-on, now T095 census). My step 5 (A2 cs engine-ingest-seam) DONE+triple-verified @ b466bac7. Self-respawning"
+            },
+            {
+              "id": "438ddd4e-e656-4c20-80c9-9785e71e1201",
+              "query": "quantum-library-guardian T064 Step B attest arc (2026-07-09, plan1/spec-kit-migration): Writer requested independent sig"
+            },
+            {
+              "id": "c249c0ed-7319-4c64-a55a-0919ac9be7a1",
+              "query": "quantum-feed library baseline 2026-07-11/12: five slices landed"
+            },
+            {
+              "id": "5c034118-0776-4011-a5fc-9dad799c43d4",
+              "query": "quantum-discovery-producer DELTA 2026-06-28 05:40 \u2014 \u26a0\ufe0f CORRECTS capstone: belt-robustness verify FOUND the real 2nd+3rd honor-stored path (cold-start seed daemon.rs:1879 + reload daemon.rs:1654, bypas"
+            },
+            {
+              "id": "5123b2fb-628f-460b-bdfb-412d2274c326",
+              "query": "quantum-discovery-producer DELTA 2026-06-28 05:21 \u2014 corpus-correction dry-run+audit CLEAN (7da5d8b5; cohort=28, single-source-28 PROVEN structural) + parity-fix durable-mechanism lean FLIPPED B\u2192C (pla"
+            },
+            {
+              "id": "ab4d7d96-2489-44a5-8eeb-da651a809312",
+              "query": "Git pulse: atc \u2014 slack-bridge: verbosity is a delivery failure, not a style problem (2026-08-02)"
+            },
+            {
+              "id": "dae86d20-0068-4798-8083-f247766b667b",
+              "query": "Quantum-feed major refactor design \u2014 Library, Realtime Signals, Backfill, Discovery, Portfolio"
+            },
+            {
+              "id": "4414e107-7688-4f33-ac27-5e085ef841da",
+              "query": "quantum-navigator #003 T008 \u2014 enrollment reconciliation + a REAL 1-surface silent-drop finding (2026-07-09, autonomous)."
+            },
+            {
+              "id": "93c1df32-1984-4a2d-ae3b-927788b3f6ce",
+              "query": "quantum-feed project state: D1a validated, RTH-only ruling, Jun 26-27 2026"
+            },
+            {
+              "id": "56180a04-518a-4ed6-a0b6-27487f84acb6",
+              "query": "HA tplink config_entries \u2014 host=192.168.1.1 systemic bug + bedroom light fix (2026-04-28)"
+            },
+            {
+              "id": "5e28cb01-e791-4b21-a40b-a0ee4289fb0a",
+              "query": "OPERATOR DECISION 2026-08-02 \u2014 consolidate ALL container registry onto server4:32000 (NOT YET DONE)"
+            },
+            {
+              "id": "85f9a998-1e0e-4940-a932-aec61ecd8438",
+              "query": "guardian ~02:50: SPY arc CLOSED end-to-end \u2014 canonical re-emit audited from bytes (266 leniencies = 22 incident + 244 pop-hidden; SPY literal m=7 exemption). Open: W2-r2 close, rdv identity. Chains fa"
+            },
+            {
+              "id": "3a921e59-9967-4fab-a548-185c5cdb8b57",
+              "query": "Discovery sieve \u2014 C6 distributed family-gate = CONSTITUTIONAL fail-closed entry-gate + 3 nav locks (2026-06-11)"
+            },
+            {
+              "id": "3d3c9dca-ec8a-4c85-b0d0-a446120becdb",
+              "query": "sieve-guardian: #17(a) shipped as branch f749748b (content==attested 399bd2c9+3f53544f, re-verified); v2 abandoned; CONSUME pending POSTED empirical 0-div GREEN (2026-06-15)"
+            },
+            {
+              "id": "8850c3dd-4c88-45f4-bc5f-5af01b33909a",
+              "query": "quantum-engine-producer \u2014 SPEC RATIFIED committed 2f9e4eb8 (re-grep caught ~630-line skew, real save); Phase-1 land = ATOMIC spec+code merge I verdict; pg non-vacuous boundary attest; #3 anchored (eva"
+            },
+            {
+              "id": "1404f154-9d3d-4e8b-a8ca-f0b141303c3b",
+              "query": "R9 4-member hunt CLOSED: param-alias flavor asymmetry (batch honors \"length\", streaming silently defaults) \u2014 a NO_TOLERANCE class, reproduced + fix-shaped (2026-07-15)"
+            },
+            {
+              "id": "87a4e679-3f8f-4a8e-9892-c2c51ca774d3",
+              "query": "openscad-agent \u2014 3D Print Pipeline Project"
+            },
+            {
+              "id": "4e6d7258-c048-4a3d-ad28-97617a24e63f",
+              "query": "Groton KB \u2014 Cron Gotchas: wrong python + STALE OPENAI key in ~/.bashrc"
+            },
+            {
+              "id": "dcd9a780-61d8-43f6-9009-cd924038c78e",
+              "query": "quantum-assistant: Done. Summary of what landed this session (2026-05-27) [4b121cfb]"
+            },
+            {
+              "id": "5c9ab642-514f-4cad-a119-58b26180a5c8",
+              "query": "quantum-parity-guardian nightly 2026-06-14: read-only GREEN +1 allowlist WARNING (3 stale entries); heavy cargo deferred to post-library-run server3"
+            },
+            {
+              "id": "68defd30-fcd7-44a6-982c-4ab851c95405",
+              "query": "sieve-guardian: per-stage roles in the canonical run-to-verdict sequence (nav roadmap 2026-06-13)"
+            },
+            {
+              "id": "8e01fbf8-f329-4225-814b-c4d6ace4cd08",
+              "query": "[quantum-engine-producer \u2014 execute-right STATE UPDATE 2026-06-13 ~18:36 EDT \u2014 supersedes the \"freeze-gated on D1\" note i"
+            },
+            {
+              "id": "9667a1c2-ed52-4fef-9d6a-fe528b06b36b",
+              "query": "[quantum-engine-producer \u2014 TWO \u00a78 FF-MERGES EXECUTED on master 2026-06-14 ~01:25-01:30 EDT (I am the active FF-executor "
+            },
+            {
+              "id": "7c7d393b-b322-494e-80f4-fb925f713286",
+              "query": "session: What I heard (sbaabbd39)"
+            },
+            {
+              "id": "8aca90f6-19ee-42ea-8177-10b2ea48dfbf",
+              "query": "quantum-feed fleet \u2014 cadence + worker changes 2026-05-04"
+            },
+            {
+              "id": "c946106c-20ed-4b4b-82a7-b6e15cdb61ab",
+              "query": "**ENGINE PRODUCER \u2014 writer-surface \u00a78 LANDED (master 5db3bbf4) + dashboard data-owned; flamesweep-2 = land-trigger (2026"
+            },
+            {
+              "id": "be671250-6759-4cd4-9392-995e2397021a",
+              "query": "SENT \u2014 Paradisus complaint email (billing/bedding/departure), awaiting reply (2026-07-25)"
+            },
+            {
+              "id": "4359b7ee-ac90-459c-9981-88fecff34dd0",
+              "query": "K8s GPU training jobs: gpu2 NAS issue + /dev/shm DataLoader crash (2026-06-28)"
+            },
+            {
+              "id": "34d931d3-03be-4a3f-92b1-8a5b65591aa2",
+              "query": "Ben's MacBook (macbook-ben): VPN SSH access + HDMI-audio auto-mute guard"
+            },
+            {
+              "id": "271c9590-8d99-4836-8c5d-fa349cab8e14",
+              "query": "Quantum-feed respawn gotchas \u2014 guide-path landmine + --fresh flag (2026-07-04)"
+            },
+            {
+              "id": "83dea2e2-0ab7-478d-a829-2b0c57cb2b76",
+              "query": "Sub-partition hash must decorrelate from the shard hash (else collapse to one lane)"
+            },
+            {
+              "id": "e910925f-eba9-45de-b0a3-4b0704984c11",
+              "query": "quantum-feed dashboard: architecture, services, and deploy discipline"
+            },
+            {
+              "id": "36324698-184a-4457-b8ab-c48c55f86c53",
+              "query": "quantum-library 2026-07-19 ~17:17 \u2014 BANK v17: Landing A CLOSED (folded c3686e3d, #4 e2e green); Landing B tender ADVANCED (no-idle) \u2014 pre-declare tender-ready 391817a2 in guardian argue queue; F1 find"
+            },
+            {
+              "id": "e94f643d-f276-4de9-b050-a8ca84f35145",
+              "query": "DUAL-VERIFIED-8 DECLARED \u2014 first Ben coverage-delta of the badge-all campaign (2026-06-16)"
+            },
+            {
+              "id": "61141df8-2930-488d-8cc8-004133883425",
+              "query": "MEASURED: the flame perf corpus is incomplete (89 streaming / 5 batch registry keys missing) \u2014 and its denominator is an ephemeral /tmp file differing per host"
+            },
+            {
+              "id": "1651cd48-0a8f-4b7d-a2f4-8eb85cef2661",
+              "query": "quantum-feed exec: durable 2-layer trade-log DONE (2026-07-20) \u2014 layer-0 with_spec(config_id), layer-1 NAS parquet system-of-record, layer-2 exec_trade_logs; clobber retired; parbuild 27.3s; :: pyarro"
+            },
+            {
+              "id": "2219834f-8ce1-4c28-8e82-aabc1cfe1de7",
+              "query": "speckit-review 0.10.0: --no-trace (read-and-comment mode), and why suppression is a reported state"
+            },
+            {
+              "id": "a06db339-fd67-4bd0-976a-17e46c878503",
+              "query": "guardian (instance-6, Fable): bars_held shard-attest @8348768d VERDICT GREEN \u2014 survived s5 host death, sharding-invariance 8/8 digest-match; nav #26 fold unblocked. 2026-07-20"
+            },
+            {
+              "id": "18830bcf-8113-4aad-bbba-af278b728a97",
+              "query": "Recording-correctness spot-attest \u2014 taskmaster 6bc0eb6e plumbing + my 4-invariant attest design (2026-06-15)"
+            },
+            {
+              "id": "1ad022bd-e0cf-413c-a1db-939be83d3745",
+              "query": "Travel documents \u2014 Ben + Laura: Global Entry (2029), TSA PreCheck (renewed 2026-04-12), CLEAR"
+            },
+            {
+              "id": "4e7edbed-49b6-49f4-9b1a-c32c47949c5d",
+              "query": "Guardian attest discipline: run the FULL check-set (gym leg on count-changing landings; mirrors must re-derive)"
+            },
+            {
+              "id": "4db0657f-32ff-432d-95c8-e7288854a849",
+              "query": "quantum-feed: 07-01 platform-cleanup archived-live-dep sweep \u2014 1 silent break (fixed), 3 loud/cosmetic residuals pending Ben"
+            },
+            {
+              "id": "a3ca214d-75b9-4d64-908f-880b38abbb0f",
+              "query": "sieve-guardian: WAVE-1 ranking FRAMING dual-check \u2014 MOSTLY GREEN + 3 pre-Ben items (2026-06-15)"
+            }
+          ]
+        },
+        {
+          "band": "1000-2000",
+          "pool": 1455,
+          "items": [
+            {
+              "id": "df31980e-0fbb-4c18-9119-db8dae01d0e2",
+              "query": "RESUME QUEUE: quantum-library 2026-07-28 00:40 \u2014 BOTH ITEMS LANDED (T113(d) @6c71a1dc, harness @39d042ee). Queue drained. Next: 001/T115 when scheduled."
+            },
+            {
+              "id": "5687ac0d-a2c8-4f97-8735-bce3ae60d3de",
+              "query": "quantum-feed cluster infra hardening 2026-04-27..05-03 \u2014 NATS/Redis ClusterIP, CoreDNS, mergerfs, Calico"
+            },
+            {
+              "id": "d04c84fe-00b7-4875-9d44-d08679bd5e3e",
+              "query": "SPAN smart panel app on phone_ben \u2014 automation map + super-agent app-launch/kill-switch capabilities"
+            },
+            {
+              "id": "65db37dc-e561-49a5-af2e-cfbbebd3bb76",
+              "query": "Validation-pipeline RESUME v6-DELTA-127 (GLOBAL) \u2014 2026-06-28 10:51 \u2014 \u2705 RUN-ENABLER #2 (TRADELOG-WRITE-TARGET) VERIFIED (producer authoritative independent probe): target /mnt/nas/data/quantum/pipelin"
+            },
+            {
+              "id": "15ae841b-38b5-4744-9678-c3fe3a6cc352",
+              "query": "quantum-assistant: /mnt/store audit (excluding zpolygon) (2026-05-27) [4b121cfb]"
+            },
+            {
+              "id": "4ae10c3f-21f5-4869-8566-bb15ef49492e",
+              "query": "Validation-pipeline RESUME v6-DELTA-93 (GLOBAL) \u2014 2026-06-28 08:31 \u2014 BEN QUESTIONING STOP MODEL (\"why bars for stops?? just watch quotes\"). Answered: as-built = stop level+trip detected off BAR OHLC, "
+            },
+            {
+              "id": "0e2dbd46-4f23-404c-bc07-4171e586dfb6",
+              "query": "quantum-engine-producer \u2014 B1 salvage RESOLVED-POSITIVE: heavies landed, lights firming \u2265905, ETA ~15:30-17:00, case-2 OFF (2026-06-16 ~09:37)"
+            },
+            {
+              "id": "8a7ac7e9-9620-4ded-a3b1-dcb7a1ba837c",
+              "query": "quantum-library 2026-07-29 01:15 \u2014 NIGHT CLOSED OUT: T115 battery 6/6 matched, MINT GREEN @af97ead6 (Constitution IV MEASURED, both check-6 blockers discharged), T118 filed+amended to FOUR, publish_fa"
+            },
+            {
+              "id": "db3886ff-309b-42fb-83fc-53f3963885a2",
+              "query": "Concurrent observers on a shared process table: each seat sees the other's probe as data (2026-07-29, quantum-feed fleet)"
+            },
+            {
+              "id": "14db4a47-b0b5-4b1b-895f-8ab61af64d21",
+              "query": "\u2b50 FORT-STATE HANDOFF (fresh-dp warming + nav-held-message) 2026-06-16 ~00:01 EDT \u2014 quantum-discovery-producer DROPPED off ATC mid badge-the-rest; nav holding, supervisor restoring"
+            },
+            {
+              "id": "0600f2d7-2345-4ea4-9f18-6278df5b3916",
+              "query": "quantum-library: (a)+(b) batched-concurrent profile bootstrap LANDED @master 619bc937 + bin 7735e5ff (2026-06-16 ~17:47 ET)"
+            },
+            {
+              "id": "d9c2bae2-a161-4e52-9576-14aa36bf6b38",
+              "query": "\u2b50\u2b50 FRESH-NAV ENTRY POINT 2026-06-16 ~02:58 \u2014 B1 RATIFIED (held decision RESOLVED); execution-phase: 4 gates in place \u2192 production 2042\u00d7912 one-pass; watch dual-8 first-delta (imminent) + 2042 landing "
+            },
+            {
+              "id": "3fd1355a-849a-44bc-bd90-8a082fbd44c4",
+              "query": "\u2b50 nav RESUME-STATE 2026-06-16 ~01:42 \u2014 AMD measurement rc=1 HOLD + per-measured-cell metric; B1/B2 call pending CLEAN AMD re-run (supersedes 379f9eae/855ab3b4 for the decision-state)"
+            },
+            {
+              "id": "fbefb256-2502-4b97-bc3e-895611592466",
+              "query": "Phase 3b L4 real-corpus distributed transport \u2014 PROVEN GREEN on the barn (v2, 2026-07-06)"
+            },
+            {
+              "id": "06d7c80b-0974-4e02-9b7c-9d87b6d5cec8",
+              "query": "\u2696\ufe0f MIRRORED-AUDIT FINDING (quantum-data, 2026-07-30): THREE stale facts about THE DATA living in memos quantum-data does not own \u2014 DATA INVENTORY fb005fb8 names quantum_reactor as the refdata DB (the "
+            },
+            {
+              "id": "b33ff127-b581-4671-9bd9-c21c44db09a0",
+              "query": "quantum-library 2026-07-28 04:45 \u2014 T115 ADDENDUM: a cross-plane break my battery could never catch (verifier would REJECT every post-T115 cert) + a PRE-EXISTING vacuous green (cert omitting Constituti"
+            },
+            {
+              "id": "8555f790-1de7-4ac7-892d-d4ddbdf27be9",
+              "query": "Verifier integrity: probe-self-match in transcripts, multi-recipient pronouns as attribution, induced scepticism, leniency asymmetry (2026-07-29)"
+            },
+            {
+              "id": "17788486-4619-4f9e-946c-58ff07d3166e",
+              "query": "Discovery producer \u2014 org re-routes (nav advisor-only, \u00a78 nav-approval RETIRED) + qf-flatfile (ts,seq) ONE F-CONST-029 landing (2026-06-28)"
+            },
+            {
+              "id": "e33bb4d5-5749-48b0-878c-6895db02d9b3",
+              "query": "quantum-navigator DELTA-7 2026-07-10 ~02:30 \u2014 T071 Phase 2 AUTHORED+COMMITTED (8f703463 lib, a55a14e9 workers); canonical runs in flight; attest choreography pinned. Chains 9627f60c."
+            },
+            {
+              "id": "883814ae-80df-4fdf-b49a-51dffb9e2d9a",
+              "query": "quantum-taskmaster AUDIT-STATE BANK @ B1-decision boundary (2026-06-16 ~03:00 EDT). For fresh-me re-warm."
+            },
+            {
+              "id": "aa32b5b3-30ee-4c1c-ad0b-4f4ebf2889c9",
+              "query": "Server6 sdc_pool \u2014 RESOLVED 2026-04-24 (prior: 15-day Resilver Stall, Kodi Impact)"
+            },
+            {
+              "id": "365271e6-9bca-44e9-88a9-532aea525778",
+              "query": "Shaw's Nashua #3510 trip \u2014 2026-07-26 $100.58 (22 items, 16% savings)"
+            },
+            {
+              "id": "271b0a4a-e64c-405a-a97a-0bd08ba977e1",
+              "query": "[quantum-library \u2014 FULL-50t VERDICT + ATTRIBUTION RECEIPT (DEFINITIVE) 2026-06-14 ~23:00 ET]"
+            },
+            {
+              "id": "e5af9549-85e8-422f-a71a-0db28fffed66",
+              "query": "ATC ops: a broker bounce has TWO phases \u2014 sends hard-fail in phase 1, and the registry LIES between phases. Check return values."
+            },
+            {
+              "id": "641dfee3-e144-4a78-84ae-c3d51aec5dea",
+              "query": "T095 \u2461 RULING ISSUED \u2014 supplement-2/3 + manifest attested; locality floor ruled PER-TICKER every-ticker-per-half (3rd floor killed by measurement); :50 CLOSED as live-but-starved on my own numbers"
+            },
+            {
+              "id": "edec5735-daaf-42da-8143-f9a23648c742",
+              "query": "quantum-discovery-producer \u2014 SHA-reconcile DONE vs landed master d1c6ea6a; M2 8dde7ae6 + Stage-3 b86f45a2; HOLDING for go-call (2026-06-14)"
+            },
+            {
+              "id": "c6127075-caf1-4bc8-8cc2-1a8db49ee98f",
+              "query": "Validation-pipeline RESUME v6-DELTA-100 (GLOBAL) \u2014 2026-06-28 08:53 \u2014 CORPUS-HARDENING RESOLVED (quantum-data: present quotes_v1 IS hardened, 1146/1146 NYSE-day continuity clean via raw_completeness_s"
+            },
+            {
+              "id": "4b74f876-37f4-4ba6-a422-384787c41cf4",
+              "query": "quantum-library 2026-07-28 ~01:47 DELTA-2 (chains 7d87a57d) \u2014 T116 FOLDED at origin b4d20428; (B) re-mint RUNNING on s3 (guard verdict CONTAINED, first live exercise); T115 move+teeth committed uncomp"
+            },
+            {
+              "id": "312d4ea9-2f96-4d25-a726-a49d14127270",
+              "query": "2025 Tax Return \u2014 TurboTax Filing Progress (Apr 2026)"
+            },
+            {
+              "id": "05c3a60b-ac97-4afd-8d09-18c73b06e39b",
+              "query": "quantum-library 2026-06-13 ~07:30 \u2014 AT-SCALE 1000\u00d790 LAUNCHED on cluster (wave2-cs-panel-cert + wave2-ref-bars). LIVE-RUN monitoring state + cert plan. Chains 528c6d0b."
+            },
+            {
+              "id": "b28ea866-18ee-4b9d-8c52-7e959819206b",
+              "query": "GE Washer LT319609N \u2014 door lock fault diagnosed; both parts ordered 2026-08-02, arriving 8/3; blocked on Ben's meter test"
+            },
+            {
+              "id": "f5b971a4-cecc-476e-beb3-282880e1f2d5",
+              "query": "quantum-feed #003 \u2014 SCALE-VALIDATION findings + the CORPUS-SCOPE-PARITY-SAMPLING constitutional question (nav, 2026-07-0"
+            },
+            {
+              "id": "c3b0b56a-771b-4347-a291-72adea55dcd5",
+              "query": "2026-05-05 ATC infrastructure overhaul + skill cleanup"
+            },
+            {
+              "id": "01dc4547-0812-4b44-b80b-174dc982dfe2",
+              "query": "Git pulse: dojo \u2014 2026-07-29/30 (103 commits) \u2014 spec 006 backtest kernel complete (36/36, trace PASS)"
+            },
+            {
+              "id": "aa1d0029-a782-4c51-9514-3f0173dca338",
+              "query": "Barn K8s Cluster \u2014 Topology and Node Roles (GPU/Tesla rows verified 2026-05-02)"
+            },
+            {
+              "id": "b8b6cfcc-bf13-4e2b-ae36-75efc662ed9a",
+              "query": "quantum-library 2026-07-10 late night: T080 arc CLOSED+attested + T074 CLOSED (6b91dbe3, 14/14 NBBO-backed) \u2014 next T060c at fresh respawn. Chains 9e7101ad."
+            },
+            {
+              "id": "49a5b24a-a559-4f04-8315-b89f024b7497",
+              "query": "quantum-discovery-producer \u2014 POST-230 follow-up queue (gate-the-fire regression-pin, non-blocking) (2026-06-14)"
+            },
+            {
+              "id": "c6fbe719-b422-4a02-bff3-5c12b9a50dbd",
+              "query": "Validation-pipeline RESUME v6-DELTA-81 (GLOBAL) \u2014 2026-06-28 06:33 \u2014 CONSTITUTIONAL CORRECTION (eval catch): tradeability is OPERATOR-controlled (CLAUDE.md 'Operator-controlled tradeability flag'; M12"
+            },
+            {
+              "id": "5e643fda-3c85-482b-b126-afc100270f21",
+              "query": "\u26a0\ufe0f\u26a0\ufe0f 2026-07-25 VERDICT \u2014 prediction #3 FALSIFIED: campaign-1's kill is PER-POD OOMKilled (exit 137), NOT node co-tenancy. AND my density tables are VOID by 1.53\u00d7 \u2014 I named the compute-phase gap and c"
+            },
+            {
+              "id": "dd4944b7-3d33-4a19-86dc-d5fdc65ea76f",
+              "query": "Validation-pipeline RESUME v6-DELTA-111 (GLOBAL) \u2014 2026-06-28 09:25 \u2014 \u2b50 eval RULED (A) AUTHORITATIVE + STRUCTURALLY FORCED: QFD_CELL_DATES = 1002 RTH-covered td (2022-06-27..2026-06-24, ~4yr). WINDOW "
+            },
+            {
+              "id": "5918228c-7cc5-4252-bdf6-e19a250791d2",
+              "query": "quantum-library 2026-07-20 ~16:35 \u2014 BANK v48: T094 \u00a76 STEP 4 DONE (conflict probes: STOCHRSI genuinely-divergent, wqa101:38/54+VFI retired w/ real-data evidence, committed 6a14217e); LANDING 4a (STOCH"
+            },
+            {
+              "id": "4a21586e-f132-4720-9d28-3d01e484f57f",
+              "query": "QUANTUM-DATA \u2014 a-fast QUOTE-CORPUS RE-MOVE COMPLETE + VERIFIED (2026-06-14, ~00:12 EDT)"
+            },
+            {
+              "id": "3e1a152d-02ce-4763-a510-bf6ed5528eec",
+              "query": "quantum-library 2026-06-13 ~09:32 \u2014 PATH B cs-panel parity stream-refactor: GATE GREEN + COMMITTED (bea87b22) + \u00a78 TENDERED. Awaiting guardian+taskmaster dual-leg \u2192 at-scale \u2192 513\u2192605. Re-derive live."
+            },
+            {
+              "id": "adfdf381-ebaf-414b-a416-23915c64cc6a",
+              "query": "[quantum-library DELTA 2026-06-15 ~06:35 ET \u2014 TWO-GRID GYM TIER (sub-step 4/5) DONE/COMMITTED/PUSHED. Library-side two-g"
+            },
+            {
+              "id": "791b9e18-b745-42b1-a374-3585bc70172c",
+              "query": "quantum-planner DRIFT-AUDIT 2026-06-29: batch's validation build vs plan \u2014 #0=MODEL A (loader-swap/run_badging-unchanged), DRIFT#1 \u226510td-gap-reset (hardcoded, verify-not-build), Ben decided B (both-la"
+            },
+            {
+              "id": "aaa8bbd6-81e7-49a0-98b6-3c1c5cd5e892",
+              "query": "quantum-feed Data Sources \u2014 Polygon WebSocket + Benzinga (single-ingester)"
+            },
+            {
+              "id": "5efe121b-99eb-4625-8d17-7d069450b549",
+              "query": "memo-minder + memo-maintain improvement proposal (2026-05-31 audit)"
+            },
+            {
+              "id": "2dbc6a5c-8fdf-474c-abb2-0542189a7d49",
+              "query": "quantum-library #34e FINAL (2026-07-23 ~01:24Z): FR-042 CLOSED @ d33d955b (born-structured re-pin + H1 upgrade) + T104 vacuity PROVEN twice + receipt relocated out of .reviews/. Chains cbf0f539."
+            },
+            {
+              "id": "ecbb4db0-fe1f-4da5-8d9a-6e0b5bfebe85",
+              "query": "\u2b50 quantum-navigator 2026-07-14 ~22:20 \u2014 spawn#10 close: THE MAP (006\u2192PerTickerChain+Family::ReckonChain enrollment) written per Ben's re-grounding order; operator-ordered fresh Fable respawn; RESPAWN "
+            },
+            {
+              "id": "85f8908a-f0b5-4bdf-a6f7-9991bb711a89",
+              "query": "Laura IRA \u2192 Solo 401k Rollover \u2014 April 2026"
+            },
+            {
+              "id": "7303d90b-993a-4a27-baf7-4dd82ee09807",
+              "query": "NAV #23\u2192#24 respawn handoff 2026-07-20 \u2014 006-focused (spec+code-grounded); 006 largely BUILT incl analysis; bars_held lift in-flight (day-1 green, shard fix); DRIFT LESSON"
+            },
+            {
+              "id": "7a90ef18-204b-49aa-a4a1-3b59ecdd1f99",
+              "query": "T099 CONSTITUTIONAL FINDING \u2014 two parity gates use inconsistent NaN semantics; wqa101:54 is a CANDIDATE FALSE POSITIVE under \u00a72.3; :54 kernel fix HELD pending operator ruling on NaN-identity standard"
+            },
+            {
+              "id": "7b66d167-0f9f-44cc-b0c1-b2b8d9579176",
+              "query": "\u2b50 quantum-library RESUME 2026-06-14 ~16:46 \u2014 REAL-FILL BADGING CAMPAIGN: \u00a76.1 promotion LANDED+ATTESTED @8542d123, dtype-fix @e16ed8c0, warmup ruling delivered; 302/223 real-fills CANARY (I run-own) g"
+            },
+            {
+              "id": "31380c33-e79c-4c2a-96bd-4b90a22c9445",
+              "query": "DUAL-VERDICT 912 POSTED \u2014 recording-complete + recording-correct (badge-all close gate)"
+            },
+            {
+              "id": "d929b8e2-c296-4de9-83c0-d9708b20ddb2",
+              "query": "Failures that never announce themselves: false cleans, under-specified referents, and inconsistently-keyed collections"
+            },
+            {
+              "id": "512b90c3-2e28-4ace-896e-cf4718182999",
+              "query": "super-agent: hands-free DRIVE MODE \u2014 built, one-way, TABLED by Ben 2026-08-02. Resume: reinstall 1.9.31."
+            },
+            {
+              "id": "3a0c1e95-ea7c-4320-ac06-d5d88afd1aaf",
+              "query": "quantum-library DELTA 2026-07-08 ~21:06 \u2014 #0005 Phase-B B1+B7 delivered (source-oracle). Chains resume 00a36560."
+            },
+            {
+              "id": "72bc6690-ef40-4d0a-a245-2195b0fe7c66",
+              "query": "quantum-library NEWS WORKSTREAM 2026-06-16 ~13:30 ET \u2014 operator-directed (N2, supersedes News-14); P0 LANDED master@6a13e7b8 (frozen cache + NewsFeatureRecord/FileFeatureSink); P1 (backfill bin + batc"
+            },
+            {
+              "id": "23a4e04d-9440-4cf8-8716-6e4b1156a88f",
+              "query": "quantum-feed: attest arc ledger 2026-07-07 to 2026-07-11"
+            },
+            {
+              "id": "92e656f4-30af-470e-9a97-fbd9e7fb2531",
+              "query": "quantum-library #34f (2026-07-23 ~01:48Z): T099 post-fix probe GREEN (both first-diffs vanished @456662a7) + the multi-seat attribution rule (my 2x error). Chains 2dbc6a5c."
+            }
+          ]
+        },
+        {
+          "band": "2000-",
+          "pool": 392,
+          "items": [
+            {
+              "id": "065a994e-9011-4b69-bb81-e6e0cbf98dea",
+              "query": "Gamy (Sallyann Sack-Pikus) \u2014 Life Story from Memoirs"
+            },
+            {
+              "id": "d8d4b723-8ba9-4508-8f13-40c82c270f0c",
+              "query": "Jay Moody HVAC Site Visit \u2014 2026-05-18 (Leo, owner)"
+            },
+            {
+              "id": "862d1b3c-946a-438c-aaa0-35b8f3095572",
+              "query": "\u2b50\u2b50 NAV #40 \u2014 CDL pre-declare + site enumeration + \u00a714.6 landed @fcd4d8b7; guardian ruled ALL (P1 REJECTED \u2192 derive read-set from CODE; close is ABSOLUTE not a delta); 2 mechanism calls open"
+            },
+            {
+              "id": "6b919f26-ac63-4672-b92e-000a7134e0f9",
+              "query": "Nashoba Air & BoilerWorks \u2014 2025 service history + 6 estimates (Feb 2025, expired)"
+            },
+            {
+              "id": "630472c3-645e-4e4a-995b-ae7831c013d1",
+              "query": "PushBuild Tax Categorization \u2014 Context & Strategy"
+            },
+            {
+              "id": "c10511da-c244-46cb-b92a-c95713886308",
+              "query": "\u26d4 SUPERSEDED FOR THE rdv-reemit VERIFY \u2014 re-arm ONLY from memo 5550872f-548f-4c94-886e-68109bc74440 (this memo is TWO-state and pings the guardian only on FAILURE). Otherwise still-valid quantum-clust"
+            },
+            {
+              "id": "981c8694-4513-495a-a99b-0a04a14e9fc6",
+              "query": "Memo Minder Checkpoint \u2014 2026-07-14 (p2/6)"
+            },
+            {
+              "id": "761c1e07-3638-4cdf-8a00-a76dc98d5d95",
+              "query": "RULINGS BACKLOG + SCOPED-NOT-BUILT \u2014 for when Ben lifts the stand-down. \u26a0\ufe0f \u00a77 SCOPE WAS REVISED: CronList is NOT the bounding artifact, and the wrapper refuses UNANNOUNCED RESIDUAL, not inline-ness."
+            },
+            {
+              "id": "82f12c3b-239f-4b66-b1ce-6e55be7332a0",
+              "query": "\u26a0\ufe0f #007 LIFT GUARD \u2014 demand the RUN_ID; source \"work happened\" from the STORE/worker logs, because a terminal progress record's counters are CLOSE-RESETS that read as measurements. + OWED FIX: qf:l1 d"
+            },
+            {
+              "id": "4da0cf61-d491-425c-afe6-8776c996661e",
+              "query": "Git pulse: mind \u2014 2026-08-01"
+            },
+            {
+              "id": "865e47bd-bb25-45f8-97eb-90afb68c9a71",
+              "query": "Git pulse: qf-t115 \u2014 2026-07-26 \u2192 2026-07-28"
+            },
+            {
+              "id": "787ec756-8da9-432b-a298-8ac61a3fb932",
+              "query": "quantum-navigator RESUME UPDATE-3 \u2014 NEW trade-fill constitutional thread + idx/merge gate states (2026-06-17 ~13:55 EDT)"
+            },
+            {
+              "id": "3178c4f0-7422-42f3-a24d-e29c824f840d",
+              "query": "quantum-dashboard: 005/T029 landed \u2014 the terminal-reset render defect, plus four findings that outlive it (2026-07-29)"
+            },
+            {
+              "id": "9697f587-e5a4-4b00-8c5c-99c30d971955",
+              "query": "\u2b50 NAV #43\u2192#44 HANDOFF @90806b9f \u2014 items \u2463/\u2464 landed, guardian rules UNION-not-switch, wqa101:85 root-caused as a numeric-domain sibling-miss; queue = classify 7 keys \u2192 the dual-profile union gate \u2192 cla"
+            },
+            {
+              "id": "c00b9173-9850-46a7-92d1-16adb4b24fe3",
+              "query": "Git pulse: hi-score \u2014 2026-07-27 \u2192 2026-07-29"
+            },
+            {
+              "id": "7b03bb44-d0dc-475e-88a2-fa4b291c3372",
+              "query": "\u2b50 quantum-library ITEM-5 LAUNCHED 2026-06-14 ~05:52 EDT \u2014 post-\u00a78 all-605 real-data parity gate RUNNING on barn (D-pod live worker16, result ~08:40 EDT). RUN_DIR + 5-leg specs + rollup-extension desig"
+            },
+            {
+              "id": "808797c4-4aba-4782-ab67-8ce4b5b72858",
+              "query": "VyOS WAN failback bug \u2014 eth1 flap incident 2026-05-12 + script patch"
+            },
+            {
+              "id": "18b29312-0802-4e95-ad7d-fed47612721d",
+              "query": "server4 + server5 boot-state cleanup \u2014 2026-05-17"
+            },
+            {
+              "id": "f7679e3e-2b9d-49bd-8ece-437711527f4c",
+              "query": "MCP centralization: per-session stdio \u2192 HTTP on server4 (Ben authorized 2026-08-03 16:56)"
+            },
+            {
+              "id": "af65d265-d67f-44a1-9c5c-a5e4ea958347",
+              "query": "\u2696\ufe0f nav RESUME 2026-06-15 ~22:05 \u2014 badge-the-rest: dual-canary running (seeky-NAS), two-grid read-path DECISION pending, obs-gap promoted (chains fd4b08e1)"
+            },
+            {
+              "id": "a92c57c7-4469-48c3-90d1-48c0fefe37e3",
+              "query": "Flawless Construction \u2014 Contract, Project Status & History (Apr 2026)"
+            },
+            {
+              "id": "b3cad8ca-c600-4984-b1ac-4bf20e594abc",
+              "query": "Server4 \u2014 docker-heal status"
+            },
+            {
+              "id": "ee1ade93-7608-4173-8f6d-fad887d125b7",
+              "query": "The fanned-reply incident (2026-08-01): an addressee STRIPPED in transit gets re-resolved by every reader; hedging the SUBSTANCE does not protect the FRAME; and diagnosing your own gap without a probe"
+            },
+            {
+              "id": "90685fcd-298c-4241-91fa-5b6a0f9e80cf",
+              "query": "Server4 \u2014 docker-heal status"
+            },
+            {
+              "id": "4b108a13-b86c-456d-a9f8-e6d1e9e7609b",
+              "query": "Yard session state 2026-08-02 (rollup sent; Ben overrode the drought posture; herbicide Tue 8/4 PM on unless vetoed)"
+            },
+            {
+              "id": "3c30c28a-1074-47b0-bf99-2e4b53df47ff",
+              "query": "Memo Minder Checkpoint \u2014 2026-07-12 (p1/6)"
+            },
+            {
+              "id": "df08714a-f7d9-49d8-ac94-8534f5720ce5",
+              "query": "Frigate NVR Setup on Server4"
+            },
+            {
+              "id": "db7e6c7c-e37b-4a8f-8959-d33b2b899998",
+              "query": "Murilo / Flawless Construction \u2014 Contract Review & Scope Issues"
+            },
+            {
+              "id": "a0a59295-be06-4f92-bc54-94a143769d50",
+              "query": "Convention-batch queue OVERFLOW-2 (items 46+) \u2014 C6 triple: observed-constancy vs structural pin, N/A-first-validation trap, pin-the-luck"
+            },
+            {
+              "id": "946f61f5-440b-4cdf-b563-9c66cf59a22b",
+              "query": "\u2b50 nav CONVERGED+IN-FLUX STATE 2026-06-15 ~23:58 \u2014 two-grid feasibility (B1-vs-B3 + which-build + centrality) ALL HOLD pending the ~23:54 REAL-du; dual first-delta imminent (Ben relay armed); lint-bloc"
+            },
+            {
+              "id": "5cc50d8f-839b-44dd-9e26-ef1cd365071f",
+              "query": "\u2b50\u2b50 quantum-data RESUME STATE 2026-07-30 03:13Z \u2014 READ FIRST. \u2696\ufe0f STANDING RULE (Ben 22:42): pipeline QC/integrity is NEVER stood down by a halt; my lane is UN-HELD, do not re-queue it. 6 commits PUSHED"
+            },
+            {
+              "id": "054d9757-090c-4fc2-bce5-6718c2dbd8be",
+              "query": "HVAC Replacement \u2014 Quote Search (May 2026, refreshed 5/18)"
+            },
+            {
+              "id": "462b2dd8-8285-4471-b3f7-8516ad47ba83",
+              "query": "Grocery shopping responsibility \u2014 Claude owns it"
+            },
+            {
+              "id": "9aee5ab3-1177-4ef2-ba1c-e4daa22e5d29",
+              "query": "Backfill checkpoint \u2014 server4 \u2014 2026-07-21 07:04 (p1/13)"
+            },
+            {
+              "id": "efea9766-e509-4def-bc01-31d65156a08b",
+              "query": "A fanned reply strips its addressee \u2014 `atc_reply` + `to_channel` mints phantom authors (2026-08-01, four seats)"
+            },
+            {
+              "id": "19c746fa-c654-4a00-af21-9e965ef47c44",
+              "query": "Dell iDRAC Management \u2014 All Servers"
+            },
+            {
+              "id": "bce61591-c436-4a47-96d7-27ff60808304",
+              "query": "Laura M. Sack, PhD, FACMG \u2014 CV / Career Corpus"
+            },
+            {
+              "id": "7d5b0678-017c-486d-b155-a52ca9938bbb",
+              "query": "Canonical quantum-feed monitoring dashboard \u2014 ONE dashboard, :3000, systemd qf-dashboard.service (2026-06-19)"
+            },
+            {
+              "id": "171a247c-f497-4ba6-8b10-ad885f31f8b1",
+              "query": "Magill Reunion \u2014 Paradisus Pro Tips (Reddit-sourced, shareable for WhatsApp group) (2026-07-07)"
+            },
+            {
+              "id": "4a51c981-37b9-4518-8049-ef1887b7ed68",
+              "query": "Sallyann 95 \u2014 Research: Martha's Vineyard"
+            },
+            {
+              "id": "e8cde8a1-839c-48ed-a22a-dfe8fa6affb6",
+              "query": "quantum-feed: Bar Types \u2014 Non-Trade & Advanced Reference"
+            },
+            {
+              "id": "e531bd85-c513-4b91-83fd-d816c8baa225",
+              "query": "nav #81 RESUME STATE PART 2 (2026-07-30 03:00-05:20) \u2014 the memo outage, the T064 retraction, the three ways session crons fail, and ruling A's closed trap"
+            },
+            {
+              "id": "43067c6e-b84f-4c01-a5b9-b16936bcf179",
+              "query": "\u26d4 quantum-data 2026-07-30: CONFIRMED data loss in global_crypto/trades_v1 (68.6% + 23.5% short vs Polygon source, presort exonerated, scope UNKNOWN) \u2014 found by the new volume_anomaly detector (committ"
+            },
+            {
+              "id": "b5937f75-7bc5-42f7-97d0-6c5fd9322714",
+              "query": "buffet-buster seat state \u2014 durable re-grounding (current as of 2026-08-02)"
+            },
+            {
+              "id": "4d4c96b0-b78f-4e51-a8f5-9cc2a5a4ec9c",
+              "query": "Git pulse: agentkit \u2014 2026-08-02 (90 commits)"
+            },
+            {
+              "id": "06b45a07-7863-4f58-8006-9ffc66242a0f",
+              "query": "Guardian method findings II: deadline claims need their artifact, sibling-output independence, wrong-environment positive controls, credit attribution (2026-07-29/30)"
+            },
+            {
+              "id": "73a3c831-221d-431a-aed3-2147ddd98ca6",
+              "query": "quantum-feed: qf-realtime: snapshot v5 (msgpack+zstd, streaming) + orphan-tmp prune (4e83244)"
+            },
+            {
+              "id": "82f521ed-8a90-4803-b19a-32bcbf9c5c78",
+              "query": "quantum-navigator RESUME UPDATE-7 \u2014 PHASE-1 LANDED CLEAN @ bbe62ae1 (relayed to Ben); post-land cascade idx\u2192#3\u2192frontier (2026-06-17 ~17:37 EDT)"
+            },
+            {
+              "id": "ff49575e-327a-47f1-9531-60da2c887a01",
+              "query": "Storage Taxonomy \u2014 NFS + ZFS + mergerfs across server4/5/6 (with per-path layouts)"
+            },
+            {
+              "id": "ff580ef7-55c7-4a96-a1f2-9043d0fb3bde",
+              "query": "Guardian rewarm pin 6af38f64 archived verbatim before revocation \u2014 carried a FALSE publish_failed warning; method content (forced-value tautology, battery terminal-vocabulary grep hazard, prediction-r"
+            },
+            {
+              "id": "8f1ee808-050c-4826-b40a-25a3c6876e81",
+              "query": "Ben Sack Health Profile \u2014 Current State (2026)"
+            },
+            {
+              "id": "fb81b6f1-436e-476e-8de6-fbfa01dfcd13",
+              "query": "Lawn Mowing & Treatment Log \u2014 120 Reedy Meadow"
+            },
+            {
+              "id": "87bbcac5-f795-46a7-b9b4-9aa2e85cb0a7",
+              "query": "bvol-179 UNION COMPLETE (912\u00d7179=163,248) through a full power-off + recovery \u2014 cluster-orchestration lessons (2026-06-17)"
+            },
+            {
+              "id": "ac22af6a-dea3-4958-ab95-f4991ee689dc",
+              "query": "Server4 \u2014 Critical Single-Point-of-Failure Inventory & Risk Profile"
+            },
+            {
+              "id": "f9d261b4-1f7b-440d-8b4d-61367fce1228",
+              "query": "MCC WES Data Appendix \u2014 table a_degradation_curves FULL (384 rows)"
+            },
+            {
+              "id": "06855c02-55e8-49cd-95ff-f9783db197d9",
+              "query": "quantum-data ROOT CAUSE: duplicate `=== DONE ===` is a DOUBLED SELF-OVERLAPPING LOG (two fds, one filename). \u26d4\u26d4 THIS MEMO'S OWN PRESCRIBED PROBE WAS WRONG \u2014 `/proc/self/fd/1` CANNOT FIRE inside `$( )`"
+            },
+            {
+              "id": "f07859c3-39b8-4585-b885-af0319b41a4f",
+              "query": "quantum-assistant: Current state (server5 + cluster) (2026-05-19) [78c043ef]"
+            },
+            {
+              "id": "1cee21e4-9170-493c-a41c-f44f29bda161",
+              "query": "Respawn invalidates every pin claim about the dead process \u2014 and a fleet alert that quotes measured numbers banks instants (2026-07-30, guardian)"
+            },
+            {
+              "id": "2bc237ba-72d0-44b5-a45c-abb4cb4de588",
+              "query": "Backfill checkpoint \u2014 all hosts \u2014 2026-08-03 06:47 (p4/11)"
+            },
+            {
+              "id": "0d17d34c-4c18-4fd7-a2a7-1dabb40b4e67",
+              "query": "Backfill checkpoint \u2014 all hosts \u2014 2026-08-03 06:47 (p7/11)"
+            }
+          ]
+        }
+      ]
+    },
+    "content_query": {
+      "bands": [
+        {
+          "band": "0-200",
+          "pool": 494,
+          "items": [
+            {
+              "id": "ad0eeb59-e8a9-4c1b-9265-10835c9f8e48",
+              "query": "Root cause: Two routes \u2014 public_url_route (using cached app.state.config) and relay_account (loading fresh config) \u2014 fighting over the same config file. The stale-config save() wou"
+            },
+            {
+              "id": "109b50c2-13b3-48b7-80dd-7985fd7c0b67",
+              "query": "1. Build `dist/` locally on **office** (plenty of RAM). 2. Update Dockerfile to `COPY` the pre-built `dist/` instead of running `tsc` inside the build. 3. Rebuild docker image on s"
+            },
+            {
+              "id": "cb2c2bb2-9d72-4ece-b700-804c38ad63cf",
+              "query": "Regenerated the hungry-dollar-sign icon (Gemini 3 Pro Image, ref-image iterate): clean red carton of fries + pizza/hot dog/taco/donut/burgers scattered in the background. Corners f"
+            },
+            {
+              "id": "b98eea02-2fb5-4bde-98e9-5ca1f9db74bb",
+              "query": "T079 \u2192 T078+T080 \u2192 T062 \u2192 T074 \u2192 T060c \u2192 T075 \u2192 T041 T072(b) badge slice-cell emission assigned to quantum library session as first execution item once Ben gives go. Push gate: all"
+            },
+            {
+              "id": "4aeeb701-ebca-447e-a728-221e857b4de9",
+              "query": "Qty: 1 Price: $19.99 (paid via reward points \u2014 $0.00 charged) Seller: Melife US Ordered: May 3, 2026 ETA: May 4, 2026 (shipped same day per follow-up email) Ship to: 120 Reedy Mead"
+            },
+            {
+              "id": "4f252329-8e15-4512-92a6-1764ce6728fc",
+              "query": "per-source staleness (default 30d); evergreen never aged out; search excludes archived. Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
+            },
+            {
+              "id": "43602c49-0fae-4eb6-92cc-b85eb9e6e2b1",
+              "query": "Service: (ad-hoc) [ASST 2026-07-18] Beacon acked, state fully warmed and confirmed consistent with what I already re-established: Nothing pending until the cron fires the next tick"
+            },
+            {
+              "id": "3eaa3265-2735-40d7-98f3-95e57553270c",
+              "query": "Time: 12:00 PM \u2013 2:00 PM Location: (implied: 120 Reedy Meadow Rd, Groton MA) Contact: (508) 357-2354 | client-concierge@goendlessenergy.com Arriving between 12:00 and 2:00 PM. Conf"
+            },
+            {
+              "id": "4b73dcc6-1814-4758-aeae-65c1375febee",
+              "query": "Verdict: important, P2 (informational \u2014 verify sufficient funds in linked account, no fraud, expected charges). Sits during heavy week (contractor finish + Kristen arrival + water "
+            },
+            {
+              "id": "00e25377-af5f-4fb4-8b69-748a4607323f",
+              "query": "model uses a visible reference to gauge portion; results show a '\ud83d\udccf sized by X' tag. Capture screen shows a tip to include a common object for a sharper size read. SW cache v6->v7. "
+            },
+            {
+              "id": "463a0c88-12aa-4c34-9dd1-da3cea0dd9ff",
+              "query": "As of 2026-07-10: Main floor AND basement share a dead compressor \u2014 both ecobees are locked OFF via HA automation. The lockout snaps them back to OFF within ~10s if turned on. An i"
+            },
+            {
+              "id": "574a1f2b-69d9-44bb-b2dd-52f2c862592e",
+              "query": "ap_frontyard (outdoor EAP650) has been DOWN since ~June 21 (lastSeen June 21, uptime None). The other 5 APs came back after the blackout with ~2.5-day uptime. SSIDs: sfw (tri-band,"
+            },
+            {
+              "id": "da8c8442-bece-4863-b7b5-7a1c7f19de35",
+              "query": "(not a list), and the judge model comes from settings.batch_llm_model (llm has no MODEL constant). Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
+            },
+            {
+              "id": "a2a9203d-f6ce-4932-9747-b63bdfae959b",
+              "query": "3. **Pump LED display**: dead \u2014 unclear if tech noticed 4. **Salt cell**: showing \"no flow\", not generating \u2014 unclear if tech flagged it 5. **Antifreeze bottles** left on the lawn "
+            },
+            {
+              "id": "853026d5-d79b-4d66-b26c-585952c1cd53",
+              "query": "Verdict: important, P3 (informational \u2014 likely expected contractor supplies for the metal-roof / painting / walkway finish week). Not fraud territory unless Ben doesn't recognize i"
+            },
+            {
+              "id": "870b4b13-371c-4906-901a-b15b4dac520a",
+              "query": "Label in Phony: 'BSack - Direct' Used as sender for outbound SMS via the electric ATC session and other agent sessions. This is the number to use when agents need to send SMS as Be"
+            },
+            {
+              "id": "81e0d6d7-4570-4a10-a5b3-9df7cb5114a9",
+              "query": "launcher icon (full-bleed + adaptive foreground on terracotta bg), splash, web favicon, and the login-screen logo (replaces the \ud83e\udd5b emoji). Android launcher mipmaps regenerated at al"
+            },
+            {
+              "id": "b9815642-8450-41f0-9a3e-7018371f6c7b",
+              "query": "on first visit (localStorage bb_guide_seen); '?' button in the top bar reopens it anytime. Reuses the modal pattern. SW cache v4->v5. Also: generic SES send log wording. Co-Authore"
+            },
+            {
+              "id": "ec22f245-46e8-414d-8648-d06a19786b00",
+              "query": "1. Gate matrix regen at HEAD 7eb3bff3 \u2192 598/598 green 2. Rollup emit re-run 3. Corpus-health A\u2013G all healthy 4. T062 box flipped with per-mask-fire citations, committed, pushed"
+            },
+            {
+              "id": "b771f014-4e3f-4d03-b840-c63ec84f8c2e",
+              "query": "3. Same-sha skew handshake 4. G1 evidence parity on the receipt 5. perf_sample unchanged Guardian T029 attest re-derivation running separately."
+            },
+            {
+              "id": "f5096331-a5bb-4992-a50a-c86c20d1759e",
+              "query": "(provenance: .reviews/plans/t018-record-wiring-design-2026-07-14.md, mtime 07-14). The .reviews original stays in place pending the migration program; the record-loss risk is close"
+            },
+            {
+              "id": "4be7d37b-bf3b-4051-aca5-f044d406a202",
+              "query": "New directory_* tools cover: domains (insert/verify/delete), users (create/update/delete), groups + members, org units, customer info. Add-domain flow proven end-to-end: directory_"
+            },
+            {
+              "id": "7a8d0fbc-9714-4cc6-b01c-062cdf3dd578",
+              "query": "WebChromeClient.onShowFileChooser (FileProvider capture + ACTION_GET_CONTENT), persistent cookies for login, back-nav, error/retry, best-effort OTA on launch. Same applicationId \u2192 "
+            },
+            {
+              "id": "b687621c-d92b-47f5-920b-4866c1db1403",
+              "query": "Verdict: todo \u2014 action on Ben's side. Next action: Log into PayPal (business account tied to admin@pushbuild.com), update card 5140 details (activate replacement first if a physica"
+            },
+            {
+              "id": "28e698f8-3da8-47e8-9cf0-ceadeffed6ac",
+              "query": "`/mnt/nas/data/code/quantum-feed/.reviews/plans/t042-purge-map-2026-07-11.md` This feeds T042 (the full purge task). T002 and T003 both closed in tasks.md."
+            },
+            {
+              "id": "3cdb474b-cc56-4a30-a982-a34f5e51f0a1",
+              "query": "300-claim run would have issued ~45k LLM calls. Now ranks partners by embedding cosine and judges only the closest few above a similarity floor: the same retrieve-then-judge split "
+            },
+            {
+              "id": "7bb83dcb-8f7e-42df-9a94-9a120a0fe53d",
+              "query": "Benchmark results (fio numjobs=4): This gives s4 much better write durability and throughput than a single NVMe would."
+            },
+            {
+              "id": "13a5df7a-c527-46a6-87c4-3622e701f3a2",
+              "query": "\"Hi Ben, this is Nick, Jason's supervisor over at Endless Energy. I wanted to thank you for the opportunity to visit with you and discuss potential options \u2014 I really appreciate it"
+            },
+            {
+              "id": "b4dd15ab-ec20-4f18-9d7c-d18b1ef023eb",
+              "query": "structured/validated LLM output, testable core, delight-as-feature). auto-detection, P3 plan-mode scouting. 22 FRs, 7 success criteria, edge cases, key entities, assumptions. Quali"
+            },
+            {
+              "id": "e1360d54-7689-4ece-9e4e-8751264e2465",
+              "query": "analyze-video: higher-level skill that orchestrates transcribe-video to produce a storyboard + summary doc. Spawns subagent for parallel visual frame analysis. Supporting script: v"
+            },
+            {
+              "id": "a535a64f-1808-48ae-aaa8-5a3f1de0d97c",
+              "query": "Ruling: memo 9c75d640 (2026-06-15, nav-blessed structural ruling). Rationale (anti-capture, agent-fleet \u00a73.1/\u00a75): the library *writer* must not run the guardian's standing certific"
+            },
+            {
+              "id": "883567c4-eed9-4304-91f7-a881fa17af71",
+              "query": "All new work is done in isolated worktrees off origin/master: Reference: memo 04e410b7 (shared-checkout hazard). Worktree creation pattern: git worktree add <path> -b <branch> orig"
+            },
+            {
+              "id": "b93af512-3e1f-41e4-ac98-5c6a8c535827",
+              "query": "max pairwise cosine was 0.544, so the judge was never called and the pipeline silently returned zeros. text-embedding-3-small puts genuinely related trading claims in the 0.40-0.55"
+            },
+            {
+              "id": "9418f053-6ccd-4cd2-9646-65b9efd7d864",
+              "query": "Also fixed: `stat -c` \u2192 `stat -f` (macOS stat difference) and bash shebang. Changes are on branch feat/server4-enp65s0-tuning (uncommitted as of June 25 \u2014 awaiting ben's commit dec"
+            },
+            {
+              "id": "d5fd8a8e-4df5-475d-a967-812dc41c7d2b",
+              "query": "Structlog fix: removed `add_logger_name` processor (incompatible with PrintLoggerFactory \u2014 crashes on first log call). OTA_PUBLIC_BASE_URL must be set for the iOS OTA manifest piec"
+            },
+            {
+              "id": "cc1a79c9-8840-46cb-a791-5ade8e0d54fd",
+              "query": "cargo test --manifest-path /mnt/nas/data/code/quantum-feed/qf-library/Cargo.toml Reusable suite runner script at: .reviews/fr026-suite-run.sh (NAS, visible from all servers). Scrip"
+            },
+            {
+              "id": "4a166cdc-e860-476e-9d58-bfb063235388",
+              "query": "build pipeline, CLI + backfill. Every test block includes expected-to-PASS controls, not just expected-to-fail cases. Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
+            },
+            {
+              "id": "2c584821-4d1c-4e4c-b137-e1e92581d8df",
+              "query": "Example pattern: ```yaml {{ (now() - as_datetime(states.input_datetime.marker.state)).total_seconds() }} {{ as_timestamp(now()) - as_timestamp(states.input_datetime.marker.state) }"
+            },
+            {
+              "id": "b9c347da-c4b6-4423-8c76-ba4b71d0e9d9",
+              "query": "C:EURUSD forex, else stock) and uses the aggregates endpoint (all classes on pro plan), so crypto/index/forex claims become testable instead of untestable. Co-Authored-By: Claude O"
+            },
+            {
+              "id": "f5c06194-0034-4a00-a266-3165cc8a98ea",
+              "query": "Amount: $2,234.20 Date: Jul 01, 2026 at 5:37 AM ET Verdict: important + informational. Mortgage auto-payment cleared as expected. Retain for records. For /loose-ends: if a future m"
+            },
+            {
+              "id": "1c988a6d-1411-41e8-a02d-67c065b306e8",
+              "query": "saveMeta/saveStyle replaced App.book without re-rendering, leaving page cards bound to stale page objects; a subsequent page Save then serialized the fresh (un-edited) pages and dr"
+            },
+            {
+              "id": "62962ab4-c6f6-4ea5-9574-2f77d6e0f523",
+              "query": "camera, for both Record and Plan. Picked image copies to a temp file and flows through the identical downscale->vision pipeline. Gallery button on the camera screen and as a fallba"
+            },
+            {
+              "id": "95283904-80d7-4df6-8893-4fb5cb8c9267",
+              "query": "Scope gotcha: requesting `admin.directory.group.member` scope causes Google to reject the ENTIRE batch (not on DWD allowlist). Only request the 6 confirmed-granted scopes. Siteveri"
+            },
+            {
+              "id": "86ee4241-60a5-4bf2-bd8f-04a0fb5c6700",
+              "query": "Remove the mascot everywhere (splash/empty/analyzing/celebration) per feedback, bump the type scale up, and put the food-banked readout in a defined rounded card so the home screen"
+            },
+            {
+              "id": "210faec4-fa23-4d2f-9dac-0ec3d53c102d",
+              "query": "Actions in description: 1. DEFERRED SELL \u2014 FXF lot now qualifies as LTCG: Sell FXF ~$20.4K (Laura Individual-TOD) 2. DCA MONTH 5 BUYS (~$125K) \u2014 Momentum picks TBD, rerun before bu"
+            },
+            {
+              "id": "9b722bd8-d8db-4820-99e6-28709672738e",
+              "query": "manifest env now complete. In-file: the GO-2 pilot-read precondition \u2014 deployed dataserver-daemon pinned to June DAYS vs the pilot's July reads; owned, resolution pre-flip pending "
+            },
+            {
+              "id": "ff6a4b75-595b-4dbd-9b49-5d6e8acd44df",
+              "query": "Generator is installed at 120 Reedy Meadow Road, Groton MA. It operates on GEN input to two parallel Sol-Ark 15K-2P inverters (not GRID). The \"gen signal\" setting in the Sol-Ark ap"
+            },
+            {
+              "id": "0aac42bf-33fb-476a-9243-85506113541e",
+              "query": "DNS: sack.io wildcard \u2192 74.104.230.49 (covers genomics.sack.io automatically). Key nginx directives used for streaming compatibility: These settings were chosen specifically to sup"
+            },
+            {
+              "id": "a3d60f4d-faad-4f2f-98c2-641a4ec01c6e",
+              "query": "2 duplicate UPS notification emails received 2026-07-02 16:28 EDT (order confirmation may also have received Aquatic Arts side). Verdict: order (informational). Related: Aquatic Ar"
+            },
+            {
+              "id": "a18a437d-dd97-411b-bb61-7dd9b49bea36",
+              "query": "Context: Endless Energy did HVAC site visit at 120 Reedy Meadow 2026-06-04 12-2pm. Jason is the sales/follow-up contact. Phone: +15085001581 (labeled as work mobile)"
+            },
+            {
+              "id": "567693c6-42ea-441e-84f4-4838c323ff34",
+              "query": "Note: Laura has multiple email addresses on file (including sack.laura@gmail.com), but laura@sack.io is the correct primary. Signature files location: /mnt/nas/data/files/personal/"
+            },
+            {
+              "id": "0c415a18-5557-4875-bd19-0a1e6e320f2f",
+              "query": "Print fulfillment (separate token-gated _print/ PDFs -> Lulu) is unaffected; book-ready emails already drive users back to the site to read. {id}.pdf still generated (used as a com"
+            },
+            {
+              "id": "8bc4f2db-5934-4849-b27e-320350694b36",
+              "query": "item to a clean two-row card: dot + name + \u270eedit + \u2715remove on top; area chips (left) and qty stepper (right) below. Tapping the name or \u270e edits it inline (rename the vague AI guess"
+            },
+            {
+              "id": "cedefdf4-60b8-4bf5-ad5e-07abb814cc51",
+              "query": "The relay is a DNS-failover proxy + iperf3 box with a WireGuard tunnel to server4 (10.100.0.2 on the WG side, tunnel healthy as of June 27). DNAT rules on the relay include :4999 \u2192"
+            },
+            {
+              "id": "14c8c872-7ed8-414d-95cf-d81d6843eb5d",
+              "query": "Subject: Delivered: \"SAPHIR Medaille d'Or Super...\" SAPHIR Medaille d'Or Super (premium leather shoe care \u2014 likely cream polish or wax)."
+            },
+            {
+              "id": "5ae6c9cc-b347-4cad-8a71-bd56fd5260b7",
+              "query": "Bug found LIVE at first real reckon declare: mongodb::sync internally calls block_on; inside #[tokio::main] ceremony this panicked 'Cannot start a runtime from within a runtime'. T"
+            },
+            {
+              "id": "3f51eff9-fa78-411b-ab0a-c03d95045748",
+              "query": "ATC zones: quantum-data + quantum. .last-rearm sentinel: tools/data/completeness/.last-rearm (holds today date, prevents double-rearm). Resume memo bank: 24012c0e (Mongo memo ID as"
+            },
+            {
+              "id": "bb0b0b32-a49e-4b80-86ac-8d1b38108edf",
+              "query": "add_items stores it; session payload returns it; YOUR HAUL rows show the '\ud83d\udccf sized by X' tag too (not just the results screen). SW cache v7->v8."
+            },
+            {
+              "id": "f2077f82-ba4c-4383-9d82-f8e3369ad775",
+              "query": "Verdict: important. Ben created this form; someone responded. Content not surfaced in this notification email \u2014 Ben should view via Google Forms. Next step: Ben can check the summa"
+            },
+            {
+              "id": "c55b2376-d924-463f-a9ed-702dcf148e8b",
+              "query": "Date ordered: Jun 15, 2026 (~02:29 UTC) Vendor: Amazon (via family@sack.io) Status: Ordered (no shipping confirmation yet) Note: Item name from email subject \"Smart Multi-Mode Gate"
+            }
+          ]
+        },
+        {
+          "band": "200-500",
+          "pool": 1602,
+          "items": [
+            {
+              "id": "b8a0955c-d8a4-4a18-8464-6ba70fac567d",
+              "query": "msg `19f91249da847243` \u00b7 thread `19f90f057f5b1e30` The `mom` session (office, Mary Ann's affairs) sent her an intake form on 2026-07-23 17:45 ET about automating her consulting wor"
+            },
+            {
+              "id": "90965900-b149-4c8e-9403-90ae51893ecb",
+              "query": "\u2022 My Ben-correction 69ad6450 (04:15) is ACCURATE + STANDS (no free family runs; generate-new=deliberate-scope; real-frontier=news/idx/quote/ohlcv wires) \u2192 NO 3rd Ben message needed"
+            },
+            {
+              "id": "e2d8994d-af68-4f1d-995e-8fbdfe1bd622",
+              "query": "Google Ads API application was submitted but flagged INCOMPLETE \u2014 cited reason: the company website URL provided was invalid/inaccessible (\"Your company website http://\u2026\"). Why: wa"
+            },
+            {
+              "id": "49799b7d-642c-454c-bbfa-584530047521",
+              "query": "5 tmux sessions (`audit-data`, `audit-discovery`, `audit-backfill`, `audit-realtime`, `audit-portfolio`) launched by `docs/audit-fleet/launch-agent.sh` from 2026-05-12 20:11 ET. Ea"
+            },
+            {
+              "id": "1ad23887-1340-4adf-a930-b4f2d0668c72",
+              "query": "Problem: The free RPN evaluator over &[&[u8]] cannot see leg misalignment \u2014 batch silently zero-backfills a missing leg. Solution: CombinationSurface closes the hazard structurally"
+            },
+            {
+              "id": "2eea8fc9-1c5f-49d9-b5fb-f3239d0a5b25",
+              "query": "Any memo that pins `server6 = 192.168.1.165` is now wrong. Audit candidates: Do NOT auto-patch these without confirming server6's actual current IP \u2014 server6 may simply be powered "
+            },
+            {
+              "id": "c88a9d2b-4584-48f3-a4d1-f6d8bbd7bdd2",
+              "query": "Primary: Bluesky Jetstream WebSocket (free, sub-second) \u2014 curated journalist/news account list. Secondary: X API Basic ($200/mo) for belt-and-suspenders, especially for government/"
+            },
+            {
+              "id": "3df06720-6dbf-4207-aea2-87a4386ec379",
+              "query": "1. Main goal: protection vs. cash generation vs. full upside? 2. Risk tolerance for the covered call leg 3. Preferred hold period 4. Tax situation (whether to favor long-term gains"
+            },
+            {
+              "id": "98dc0657-f086-4c36-84dd-4e82a3ede340",
+              "query": "2. Determine if this is a real production key or a placeholder 3. If real: rotate the key (generate new APP_KEY, update production env) 4. Remove from git history: `git filter-bran"
+            },
+            {
+              "id": "25c83ccc-e066-415c-8558-d72a6517a39d",
+              "query": "1. **Auto-discovers** all active nginx site configs via `--nginx-dir` flag \u2014 found 78 domains as of March 2026 2. **Detects active WAN** by SSH-ing to EdgeRouter and checking WAN_F"
+            },
+            {
+              "id": "d4ad8047-6d9f-410e-9371-818fe9a0a146",
+              "query": "Finding caught: fixture rank-degeneracy root-cause was measurement-fidelity issue \u2014 frozen cross-sectional ordering made corr-of-rank NaN by construction; 26 zero-finite rows reduc"
+            },
+            {
+              "id": "012b8d8f-64f6-467e-8f26-887a3819e527",
+              "query": "The completed frontier up to that point: B1-2042, bvol-179, news-14, idx-119 \u2014 all DONE. Open items at respawn (as of 2026-06-17, may be stale): Correctness rule surfaced: never st"
+            },
+            {
+              "id": "1fef60c1-5d8b-4d34-a118-b68f2d8cbfd7",
+              "query": "The C6 keystone: family-level global-N deflation gate replacing the degenerate per-signal multitest. Design principles: 4 source-green tests: Honest status at commit: production ga"
+            },
+            {
+              "id": "a3ffbd96-0c78-4f37-b059-0cb88ebf0d77",
+              "query": "Persisted via networkd hook \u2014 survives reboots. 1. Permanent Starlink-LAN subnet de-collision (needs Ben + Starlink app to change Starlink subnet; recurs each cold boot until then,"
+            },
+            {
+              "id": "41f8354b-143e-40c5-bccc-243ff748007a",
+              "query": "1. One-shot whole-spec generation made it easier to restart than fix in place 2. Invisible automated likeness-retry loop (generate.py:294\u2013331) burned gens with no user visibility o"
+            },
+            {
+              "id": "3a6bfd4f-55dc-45ed-ab16-29851b6a252a",
+              "query": "2. Rachio Weather Intelligence (WI): built-in forecast-based skip. Fires automatically based on next-day forecast. Saves ~786 gal per skip (observed savings). Sends email notificat"
+            },
+            {
+              "id": "72de634a-1122-4df9-b9fe-b2057319876f",
+              "query": "Working approach (as of 2026-07-08): polling script (startup-tabs) using wmctrl for window detection (more reliable than xdotool \u2014 xdotool misses 2 of 7 windows in testing). Timer:"
+            },
+            {
+              "id": "8fdf931b-0afb-4ac8-8db8-711b9254a1b8",
+              "query": "(2) #001 FR-019: every indicator/bar surface supports the FULL vbt-pro-provenance knob surface, not just mongo-config-exercised params; sole exclusion = constitutional (lookahead-c"
+            },
+            {
+              "id": "c8ee4554-8c26-4f7e-807a-7b2b877fe875",
+              "query": "Admin URL is private \u2014 don't share widely. Anyone with the link can edit. Located in ~/code/projects/gamy-jeopardy on NAS."
+            },
+            {
+              "id": "9e3eb093-0aa4-4629-9e44-1e248bdbf90c",
+              "query": "GPU card dropout is a known hardware issue where cards lose PCIe connection showing Unknown Error in nvidia-smi. Software reboot alone does NOT fix it \u2014 requires hard power cycle v"
+            },
+            {
+              "id": "4607ec15-383b-45e8-b287-fced9fca64c0",
+              "query": "Key decisions and fixes: Output: /mnt/nas_media/source/content/aktenzeichen-xy-dubbed/ Batch results (Aktenzeichen XY playlist): 7 successful dubs (~7 hours, 1.1GB), 12 ZDF copyrig"
+            },
+            {
+              "id": "4b05e5e1-0bb8-4778-b0ec-fe7dcfb55afd",
+              "query": "action, the other a price observation. The statements described different things because they are RAW CLAIM TEXT. So statement synthesis is upstream of dedup, not a cosmetic last s"
+            },
+            {
+              "id": "e840d308-c580-44bc-8aca-47eabff8ba0c",
+              "query": "NAV RULED (msg accepted my lean): the Stage-1 exec-fidelity \u00a78 completes on LIBRARY's kernel + batch driver + SYNTHETIC-streaming parity (\u00a75.2/\u00a75.3 determinism cell, kernel-level b"
+            },
+            {
+              "id": "aa158340-897f-422d-90f6-c4fa45cf717d",
+              "query": "1. Splice FFmpeg crash: loudnorm + 4-stage pipeline crashed with SIGABRT on short recordings. Fix: replaced with single filter_complex using dynaudnorm (forgiving of any clip lengt"
+            },
+            {
+              "id": "91665319-0125-45da-ac39-2a4704880c62",
+              "query": "Calendar event showed arrival 12pm-2pm EDT Jun 13. Work completed same day."
+            },
+            {
+              "id": "1f33f7e1-b674-42c1-9913-d3b66d4bced1",
+              "query": "Avoids base64 context bloat when attaching images/PDFs to MMS. Any prior code passing `/mnt/nas/...` paths to phony MCP MUST be updated to `/mnt/db/...` paths. Old paths now reject"
+            },
+            {
+              "id": "f3705894-15c8-4096-b929-b3519a197d08",
+              "query": "SOLUTION: Single contiguous range run does ONE warmup pass for all days via --skip-covered flag. chunk_covered skips only fully-covered chunks; with --chunk-months 1, a span like 2"
+            },
+            {
+              "id": "7d41fb5b-ac70-420b-a6a8-8322df8db7d6",
+              "query": "Config: /home/ben/nginx.conf/site:teleprompter.pushbuild.com (mirror in /home/ben/code/nginx/conf/) Reload: docker exec nginx nginx -s reload (the nginx-server4 MCP reload tool fai"
+            },
+            {
+              "id": "632a9fe8-aafb-4f30-a194-7c9b6f98eadc",
+              "query": "'This validation run needs to use quote-filled stops / take profits etc \u2014 no execution bars for this one.' Meaning: stops/TPs/exits fill at REAL bid/ask (the STOCKS/ETF certified q"
+            },
+            {
+              "id": "389baad3-607e-4b96-a95a-c927b40b16b7",
+              "query": "Hammock style: Chair style: Laura ordered some herself after receiving the recommendations."
+            },
+            {
+              "id": "daefe825-660f-41f6-85a1-df3f65bb2460",
+              "query": "THE INCIDENT: the shared NAS checkout /mnt/nas/data/code/quantum-feed got branch-switched to a GATED branch (library-streamsma-dedup) by an agent doing #6 work on the shared checko"
+            },
+            {
+              "id": "55e90f35-754e-450a-acf9-7412073503cf",
+              "query": "off-LAN without a valid session shows login; only then mounts the state provider. authHeaders() Bearer is attached to every API call (state, vision, plan, nutrition) \u2014 ignored on-L"
+            },
+            {
+              "id": "30f4fd92-14df-4d21-8a1b-e0de4efc0439",
+              "query": "Service: (ad-hoc) [ASST 2026-07-18] Beacon acked, repeats stopped \u2014 my context is fully re-warmed and matches the state I'd already reconstructed. Everything is in a clean overnigh"
+            },
+            {
+              "id": "6ec3ffe0-b6c1-40cd-92e9-7f9570804070",
+              "query": "Admin URL is private \u2014 don't share widely. Anyone with the link can edit. Located in ~/code/projects/gamy-jeopardy on NAS."
+            },
+            {
+              "id": "190bf48e-dd9a-4464-b982-a30a60963e3a",
+              "query": "BRAND: Cavit (a Trentino cooperative \u2014 large-scale Italian white producer, well-distributed in US grocery/liquor). Value tier, widely available \u2014 Whole Foods, Shaw's, most NH Liquo"
+            },
+            {
+              "id": "bf317d9b-5171-4293-8fff-d1428547fae6",
+              "query": "Swap: decide.rs degraded-close inline slippage mirror \u2192 the sole canonical qf_types::apply_slippage (bit-identical by construction, guardian-verified AST-identical modulo names); c"
+            },
+            {
+              "id": "7174890e-da6f-40b2-8b1a-c8bc2fd1c2f7",
+              "query": "Host server5 BindAddress 192.168.1.168 This forces the SSH client to source packets from 192.168.1.168 (eno1) even though the route goes out enp65s0. Verified 2026-04-21. Symptoms "
+            },
+            {
+              "id": "846e5319-a129-4f20-9b5a-c8a4cde6bd7b",
+              "query": "QFL_RD_SHA=<sha> cargo run --release -p qf-library --example real_data_verify --features real-data-verify ``` Run from server3 (absolute NAS paths). Full 3-day run takes >10 minute"
+            },
+            {
+              "id": "873bf354-a26f-4e19-96aa-b403b6a7e064",
+              "query": "GPS/Places). Removed the mandatory start screen. consistent poses (idle/scan/cheer) wired into splash, empty state, analyzing, and the beat-the-buffet celebration. Animations: bobb"
+            },
+            {
+              "id": "45d6e5f8-f9b9-4f8f-b1cb-c9942e5cd427",
+              "query": "Git-verified at 1afefc93: Git-verified at a4239529: Status as of session end: Impl commits with data_type_for: f7efd018/1e75122f (ohlcv), d2677bbf (gap) \u2014 the integrated attest cov"
+            },
+            {
+              "id": "8efbc1c8-520c-404b-aeea-4699117d0643",
+              "query": "FINDING: the refactored qf-data-status build_snapshot() (:8731) is SLOWER than the old running service. Running service (uvicorn started 2026-06-29, pre-refactor) serves old code a"
+            },
+            {
+              "id": "41a5bcc9-018c-4905-b8e5-3fccdaf28c65",
+              "query": "identical alerts in 24 min for the collapsing, and a 93-94 -> 0 before/after across seven startups for the join storm. Keeps the rewarm pin's pointer resolving to current truth -- "
+            },
+            {
+              "id": "c30139b9-ebee-4735-a24c-f23aa3d4f0c3",
+              "query": "Per operator directive 2026-05-31 04:53 EDT after observing the day-rollover buffer-fill spiked s5 memory +189 GiB at the start of day 2 of the corpus-third1 soak (155 GiB availabl"
+            },
+            {
+              "id": "fe9e5bf9-a8b2-468f-95a9-3401cb84cd99",
+              "query": "(fuse corpus + live market/news, evergreen vs temporal split). Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
+            },
+            {
+              "id": "7f416f9a-cddc-464b-9ff8-9bfc6088307c",
+              "query": "2026-MM-DD, server: office|server4|server5 { param1: value1, param2: value2, ... } What should have happened. Exact error message or description of wrong behavior. 1. ... 2. ... An"
+            },
+            {
+              "id": "59cc9833-f5c1-4b91-bccb-60f351cb29d1",
+              "query": "\u2705 RENDER BUILD CONFIRMED: npm ci (372 pkgs) + `next build` in dashboard/web = exit 0, \"\u2713 Compiled successfully\", 7/7 static pages, /trade-surface is a built route (2.58kB / 105kB f"
+            },
+            {
+              "id": "162ebb62-6f1a-4ed1-9ad4-f2b0837f4252",
+              "query": "(A) RE-MOVED RANGE: own rsync --checksum s5\u2194NAS on 8 cells \u00d7 8 months \u00d7 8 tickers (A/AAPL/NVDA/ZM/TSLA/F/GME/BAC, 2025-06\u21922026-05) = all byte-identical 0 diffs. NEGATIVE CONTROL pa"
+            },
+            {
+              "id": "d69c675c-f46f-4b8d-9373-f56d1fcefb7e",
+              "query": "qf_feed (canonical for reads -- Ben ruling 2026-07-09): quantum_reactor (cron write target for ETF pre-fix; ticker_universe written by old-schema tool): AGG/VT/VWO/VSS in qf_feed h"
+            },
+            {
+              "id": "486bbfcb-dbca-44ca-a887-acc4e564d2ce",
+              "query": "etf_constituents: sub_universe_classification: For PIT universe queries, ticker_universe at latest effective_date is the cleanest source. ETF aggregation (7.4s): best run as CHECKE"
+            },
+            {
+              "id": "ea7015a4-b914-49cc-9243-1fee1dfd548c",
+              "query": "Note on fake 2TB SD card: A '2TB' microSD proved counterfeit (only ~7.5GB real capacity). f3probe can detect fake cards. Auto-expand on first boot will corrupt a fake card by tryin"
+            },
+            {
+              "id": "0067226b-eb32-4164-8475-9b9c0d892c71",
+              "query": "Use the Omada web UI directly: Devices -> house-switch -> Ports tab -> select ports -> set Native Network -> Apply. Takes ~20 seconds. Reliable. Drive via Playwright against the Om"
+            },
+            {
+              "id": "2e2ee2c6-05cf-4498-ae5f-da18358eca5a",
+              "query": "1. **Deflation-is-the-cause contrast:** `deflation_does_the_work()` uses strict `<` (n_survivors < n_survivors_floors_only), backed by floors_only \u2265 20 lucky-noise-admission assert"
+            },
+            {
+              "id": "d131bcd2-deec-4d18-aa3a-7d5649849e4a",
+              "query": "Parity-light pods OOM-loop or stuck if scheduled onto these workers. kubelet hostPath autocreation created **empty** `/mnt/store-union/{zpolygon,zquantum}/` subdirs **before** merg"
+            },
+            {
+              "id": "9c8f82cf-a0ab-40e9-91de-cdbe5c965d40",
+              "query": "THREE PIECES (bounded, file:line evidence): (1) bars\u2192regime repoint \u2014 qf-regime daemon.rs:61 subscribes qf.bars.> but engine stopped publishing (FIX-13, daemon.rs:4332) + realtime "
+            },
+            {
+              "id": "6088a837-2595-496b-98f9-6ca9c9fbb2ee",
+              "query": "Any cron you intended to survive a session restart/respawn/exit does NOT. It dies with the tmux session/REPL. (It DOES survive a mere context compaction, which keeps the same REPL."
+            },
+            {
+              "id": "eca2b6aa-8431-47a2-89c0-9410cd3ff39c",
+              "query": "1. **A backstop is not armed until you've watched it deliver once.** alpaca's first backstop script had a bad curl flag and would have failed SILENTLY \u2014 armed-looking but dead. Onl"
+            },
+            {
+              "id": "ca410ee7-39cf-4785-9c44-cc819b019ab2",
+              "query": "the live universe in the drive). shard_batch_size() pure fn + tooth shard_batching_partitions_every_ticker_exactly_once (no boundary drop). NEUTRALITY PROVEN empirically: carry-hea"
+            },
+            {
+              "id": "2a9f4512-bbb4-473c-9c97-b3e5c030498c",
+              "query": "\u2022 dataserver-daemon bin runs a 5s residency reporter (dataserver-daemon.rs ~L225-323): ResidentFootprint + ResidencyDetail queried over the SAME one-actor seam as serves (no separa"
+            },
+            {
+              "id": "b7715af8-529d-4a64-9372-075ff099ddb5",
+              "query": "Example: `dtmfPreflight: \"wwwwww2\"` presses 2 six half-seconds after dial, at carrier level. Verified working against Weston Nurseries IVR \u2014 human picked up after DTMF navigation."
+            },
+            {
+              "id": "8b68950f-560e-4bd2-885b-3b042c79db2b",
+              "query": "Admin URL is private \u2014 don't share widely. Anyone with the link can edit. Located in ~/code/projects/gamy-jeopardy on NAS."
+            }
+          ]
+        },
+        {
+          "band": "500-1000",
+          "pool": 1885,
+          "items": [
+            {
+              "id": "60f94000-a75e-4c29-8d82-3d2bfb5ebb37",
+              "query": "\u2022 My ledger cross-check: 452 non-badged = 111 (evaluated-non-badged) + 341 substrate (330 buildable + 11 residue) \u2713. [mongo membership of 70-in-2419 = taskmaster's lane; I co-verif"
+            },
+            {
+              "id": "bfe183ec-217b-4e81-b1ca-0c9e5d61ebeb",
+              "query": "3. **Run the planted-mismatch verification pass.** Discard and redo any batch whose verifier failed to reject its plants. 4. **Turn on `--require-coverage` and fix what it finds BE"
+            },
+            {
+              "id": "671ef8de-44be-454e-949e-cc688652fa10",
+              "query": "2. Compute days-since-last-full-panel. Targets: FC 3\u20135, pH 7.4\u20137.6, alk 70\u2013120, CYA 60\u201380, CH 250\u2013400, salt 2,700\u20133,400 (target 3,000). 3. Check loose ends: Dolphin (`vacuum.pool_c"
+            },
+            {
+              "id": "68a9e3ca-0fb9-4cb3-a244-38fa6c34993a",
+              "query": "RSS plateaus at 8.56 GiB (cgroup ground-truth) \u2014 DEAD FLAT (cluster point-1\u2192point-2 = +0.3 MiB/90s; my independent 7-min read marginally DOWN). NOT a leak. Cause: panel ~3.5GB + ON"
+            },
+            {
+              "id": "b44c1f75-acb2-483e-93b7-c6c8316f8fa6",
+              "query": "nav PREFERS 32-wide IF cluster judges capacity-clean + D-protected (lands ~2.5h sooner on the demonstrably-finishing shape); else 16-wide@p16 ~11:00 is fine \u2014 same done-line. nav a"
+            },
+            {
+              "id": "79fc564e-8701-4ab1-a502-3722920860c0",
+              "query": "T010 closes both: projected serialization result (with the day-boundary verdict) instead of the bin re-projecting a fresh `None`. Populated at all 4 construction sites (single-slic"
+            },
+            {
+              "id": "1d064c9c-0c4a-455a-bbc0-57317958135a",
+              "query": "1. EXPECTED universe = signals_in_batch \u00d7 tickers \u00d7 trailing-year trading-days. 2. COVERAGE: every signal present? daily badges span the FULL trailing-year date range (no missing d"
+            },
+            {
+              "id": "d7fc46c8-d7a7-4649-b0e5-875358d36e21",
+              "query": "I banked nav's \"family-leverage firing\" into 170afd2b WITHOUT registry-checking that the family signals EXIST. They don't. Same pattern as the session's prior cascade-drifts (379f9"
+            },
+            {
+              "id": "cb1c90cd-57be-48a4-b5fc-2d269f9ab550",
+              "query": "\u2022 DENOMINATOR seal \u2014 real loader on the REAL artifact (.reviews/tradeable-mask-trades_v1-1000xPASTYEAR-2026-06-14.parquet) \u2192 eligible_cell_count=248,215, eligible_tickers=1000. EXA"
+            },
+            {
+              "id": "4be73e6a-a815-42ae-8a69-84cb8cfd8f95",
+              "query": "Both fans together to avoid pressure imbalance. Ventilation is schedule-only until a sensor is added. With a sensor, can layer temp-based overrides. Kasa-app device name == VyOS st"
+            },
+            {
+              "id": "8003fda4-b377-43cb-bc9a-2b0eaf2e2d72",
+              "query": "\u2705 window LOCKED \u00b7 \u2705 dissolution PROVEN \u00b7 \u2705 manifest verified (zero-pole 634 shards) \u00b7 \u2705 build-date-wiring (impl source-confirm, read-scope=QFD_CELL_DATES, member.date_start unreach"
+            },
+            {
+              "id": "af710d82-5a95-4621-bb38-520d3e883723",
+              "query": "2. Both panel WiFi radios MAC-blocked in Omada (kicked off `sfw` and `sfw_iot_2.4`) 3. After power-cycle by Ben, both panels re-associated on VLAN 30: Panel A = `192.168.30.11`, Pa"
+            },
+            {
+              "id": "8e01fbf8-f329-4225-814b-c4d6ace4cd08",
+              "query": "1. exchange_hint wire-fix \u2192 library drops it. 2. D-ORDER-1 fill-affecting \u2192 \u00a712.6 honest-limit + determinism cell pins same-ts case. 3. no-condition-filtering + top-of-book-L1-only"
+            },
+            {
+              "id": "9b401005-cdff-410b-bc97-b741b482122d",
+              "query": "TIMELINE 2026-06-28: FLEET STATUS: producer, eval-author, impl, cluster \u2014 ALL acked stood down + holding. Planner stood down, cron disarmed. OPEN / AWAITING: Ben's word on (a) opti"
+            },
+            {
+              "id": "c4ed210b-757d-40e9-a356-c9084cd7b5b1",
+              "query": "Values like `\"12,2\"` appear deep in files. pyarrow CSV inference treats them as int until a later row breaks. Pre-2017 crypto (dataset start `2017-10-02`) + weekend index dates fai"
+            },
+            {
+              "id": "844c757a-0fe4-4c78-8d63-80f11326fa61",
+              "query": "\u2022 ONE monotonic CLOSE-TIME frontier across BOTH grids. running_extreme(open position) = max(high)/min(low) over ALL bars from {signal-grid \u222a exec-grid} whose CLOSE ts \u2208 [entry_boun"
+            },
+            {
+              "id": "d8779a99-6b99-4d9a-8dfe-4ae02631d126",
+              "query": "DONE (authored line-by-line myself, \u00a73.1): VERIFIED: cargo check -p qf-gym clean (0 warnings my code). Hermetic suite exit 0 (all green). L7-relevant binaries explicitly green: exe"
+            },
+            {
+              "id": "67fb190f-8dfc-4826-99a1-edf438f2ee7d",
+              "query": "3. LOWERCASE ASR vs UNDER-DOCUMENTED BODIES 42% of large-v3's Conservation output returns lowercase/unpunctuated. My segmenter's patterns required [A-Z], so they would have skipped"
+            },
+            {
+              "id": "c5f2d5e3-6b19-4eb5-ba3f-65b20f04220f",
+              "query": "1. ONE read of the day-file \u2192 REDIS SHARED MEMORY (single read, shared with the cluster). This IS the read-once-into-redis stage. It is PHASE 1 / the core, NOT a deferred \"phase 1b"
+            },
+            {
+              "id": "0ba00398-3712-4180-913e-de9e97ecc802",
+              "query": "WHAT WAS BUILT (all in crates/qf-library/src/corpus/ + tests/): \u26a0\ufe0f DURABLE FINDING (kernel, affects #003 SC-012 + corpus exit-gamut): ExitReason::ExitSignal + ExitReason::CrossDire"
+            },
+            {
+              "id": "771f32c0-df6d-4400-abf8-c823024fc5d6",
+              "query": "CENSUS STATE @1704141f: A48/B34/C16/B\u2229C2/D148/clean222 (identity A+D+clean=418; A=B+C\u2212B\u2229C). Frontier=63 sweep-red keys. KEY METHODOLOGY: guardian re-derives every number from a liv"
+            },
+            {
+              "id": "934659e2-2979-4b8c-ada5-f85ce5b5f439",
+              "query": "\u2022 std-3/4 = exit-255 = kubelet LOST-CONTACT = NODE-disruption; worker36/39 MemoryPressure=False + DiskPressure=False + NO Evicted event \u2192 NOT clean cgroup-OOM (would be 137), NOT m"
+            },
+            {
+              "id": "7a70c8f3-f01d-4504-b8ca-a735ec5150d7",
+              "query": "``` Exit 0 = the artifact enumerates EXACTLY the five frozen sessions. Exit 1 = campaign-stopping. \u00b7 It contains **NO notion of weekends/holidays/trading calendars \u2014 deliberately.*"
+            },
+            {
+              "id": "8c15ef4d-0f4f-4b21-b4cf-ebdd502401e0",
+              "query": "curl -k -u 'ben:mallet-chisel-harrow' -X POST \\ https://192.168.1.55/redfish/v1/Systems/System.Embedded.1/Actions/ComputerSystem.Reset \\ ``` Returns HTTP 204 on success. SSH disapp"
+            },
+            {
+              "id": "80123175-2045-4019-93fd-3d8fc2292531",
+              "query": "Cost = **deliveries \u00d7 payload**. Each of us had a *different dominant term*: \u21d2 **General rule with its conditions attached: shrink the payload FIRST \u2014 it has a floor you can reach "
+            },
+            {
+              "id": "199aeb25-6601-4137-b841-d28544902149",
+              "query": "WHY THIS IS THE RIGHT L0 TOOL (nav): the pilot reads only its lease-seed universe (~20-50 tickers), so producing whole-market midprice bars (~11k tickers) just for that read is was"
+            },
+            {
+              "id": "028c3a1c-d09b-48c6-a097-b1262b42fa7c",
+              "query": "1. Installed perf: `sudo apt-get install -y linux-tools-5.15.0-179-generic linux-tools-common` \u2192 /usr/bin/perf (kernel 5.15.0-179-generic). PERSISTENT (survives reboot; `sudo apt r"
+            },
+            {
+              "id": "1b4f404c-9c44-4a8b-a04a-cef5a7c0fd06",
+              "query": "WHERE APPLIED (3 render sites, all this session): 1. Coverage tiers (libTier.ts): colour=tierBgClass, label=real_scope (\"4tkr\u00d73day\u00d71cluster\") in COV hover/row/summary. normTier unk"
+            },
+            {
+              "id": "6dab2671-11e9-41a2-8382-734390f2d89e",
+              "query": "Window: `newer_than:2d` Pulled: 20 inbox + 7 spam Verdicts: reply_needed 0 \u00b7 todo 1 \u00b7 order 0 \u00b7 important 0 \u00b7 noise 19 \u00b7 watch_later 1 P1 nudges: 0 \u00b7 Memos written: 2 (incl. this c"
+            },
+            {
+              "id": "885d4d49-ecc7-4078-bb5d-eaa30f0b3b18",
+              "query": "=== WHY 32 === Firm 16-wide read showed ~8-10hr (spec phase is inherently ~52\u00d7 TIME phase: 52 bar-types \u00d7 413 ind \u00d7 2 \u2014 NOT just mega-caps). Re-shard 32 halves per-shard work \u2192 ~4-"
+            },
+            {
+              "id": "2ca08643-90c3-4586-8c76-493cb4d176b8",
+              "query": "WHAT: CombinationSurface (src/surface/combination_surface.rs) \u2014 per-leg tagged input {leg:u16,ts,bit}; row cursor emits ONLY when all n legs delivered the same closed-bar ts; skew "
+            },
+            {
+              "id": "c1d4e842-5e2b-495b-becc-fc9dead9afde",
+              "query": "\u2022 eval is NOT separately pinging Ben (planner carries it in the parity-resolution update; double-routing = noise). Ready package self-serve (mechanism = qf-admin CAS set tradeabili"
+            },
+            {
+              "id": "7ed35fbf-9f8c-472d-bf4c-dab44cbd5633",
+              "query": "\u2705 CAMPAIGN-WINDOW searched\u2261traded CROSS-CHECK = CLOSED (discovery-impl at-source, producer-accepted). Evidence (k8s/discovery.yaml live, git-diff-clean): train 2024-01-02..06-28 + "
+            },
+            {
+              "id": "8aa07a09-eb63-45af-940b-dc853beb0626",
+              "query": "1. Start SSH with authorized_keys (enables debug even on failed installs) 2. Deactivate LVM (`vgchange -an`) and mdadm RAID 3. `wipefs` + `sgdisk --zap-all` on /dev/sda and /dev/nv"
+            },
+            {
+              "id": "0e27f982-daa5-4548-a0db-cda1f1bcf246",
+              "query": "2. After receiving `conversation_initiation_metadata` event, inject the system prompt via `contextual_update` `docker-compose.yml` volume-mounts `./dist:/app/dist:ro` and `./fronte"
+            },
+            {
+              "id": "23da130a-f890-42ca-8499-4c5617e765e3",
+              "query": "This sidesteps agents that put wrong-zone timestamps in their own content (e.g. memo agent stamping UTC time as \"EDT\" \u2014 see #3). Once running sessions restart, every notification c"
+            },
+            {
+              "id": "3b1c2a49-2745-44aa-919e-f5f2976c230d",
+              "query": "NAV'S SHARE: the push gate is delegated to nav's approval by operator ruling 2026-07-10 (memo bce307b6). Nav has been issuing and withholding approvals through this script for week"
+            },
+            {
+              "id": "f33b6669-32a1-4076-ae55-31505dc3864e",
+              "query": "The ruling corrected BOTH defective predicates in the tree: warmup-NaN-then-constant kernels as non-constant from an artifact (this is how wqa101:27 stayed out of BLIND_ON_BOTH whi"
+            },
+            {
+              "id": "d0edf1f4-0f3b-4bad-8ccf-35ef42d0c573",
+              "query": "SCOPE (agents-confirmed, not inferred): NOT a launch-config systemic issue \u2014 `agents`/`c` pass no memo db_path/MEMO_DB, no .memo.db at workdir from launch \u2192 it's planner PER-CALL d"
+            },
+            {
+              "id": "ffdc2f49-2156-4cbd-ad71-da3d0dd09905",
+              "query": "2. Tier B Bosch/Lennox at $23,890 is the defensible floor; bids at <$24K all-in are at distributor cost 3. Tier C (Goodman/Mr Cool) is genuinely different equipment \u2014 holds to ~-5\u00b0"
+            },
+            {
+              "id": "d0396e80-5fc3-48db-8166-0449db5cf0ec",
+              "query": "1. No live discovery campaign consumes embedding_matches yet (discovery on loader-wiring/B1 frontier) \u2192 picking a fixed threshold now = optimize-before-characterize. Defer. 2. PRES"
+            },
+            {
+              "id": "afb03a65-38ab-42b2-b965-b7cd12352b8d",
+              "query": "Library is a self-proving durable asset \u2014 verifies every surface via its own tests + own bounded real-data runs on server3 (not contending with barn/gym cluster). The gym only AUGM"
+            },
+            {
+              "id": "ee8f973f-35ef-4c3f-b93a-09cc6f53fee9",
+              "query": "All clues and correct responses are in the Claude plan file: `/home/ben/.claude/plans/mighty-baking-gem.md` This plan contains the complete game: all 60 clues + answers, host guide"
+            },
+            {
+              "id": "f3789b65-f948-4355-9d67-99c263379c66",
+              "query": "2026-07-22 evening (Ben-directed) \u2014 spec + Stage 1 build for signal fusion \u2192 rolling option sleeve. Full MVP market attention map dashboard (server4:3000) built from scratch, repla"
+            },
+            {
+              "id": "1bfa3df6-fa72-4502-bf67-193b51aa51a8",
+              "query": "1. **Influx CSV column-order bug** \u2014 parser assumed `_time,_field,_value` but Influx returns `_time,_value,_field`. Fixed with header-driven index lookup. Same family of bug as the"
+            },
+            {
+              "id": "bee0545a-cb70-4eb5-bfb7-03e1d8af4a6a",
+              "query": "\u2022 GATE-CRITICAL CLEAN (NO_TOLERANCE): entry_price 1966/1966 exact (= my bar-open \u00d71.0003 slip) \u00b7 signal_mask 1966/1966 \u00b7 only_handoff=0 (EVERY eval trade reproduced on my independe"
+            },
+            {
+              "id": "f68e0033-276d-45cf-a6fe-dbe062012477",
+              "query": "3. Workers rebuilt `cg:completed` from disk (skip existing files, mark complete) 4. P0 rebuild took ~20 min, then feeder rapidly advanced through completed tiers RDB snapshots were"
+            },
+            {
+              "id": "ae6fc1d4-7320-41b0-8c28-d967e2ebebaa",
+              "query": "\u2022 Historical embedding_matches regen: investigated + 1-day-validated (0\u219211/750 @0.75) but DEFERRED per ben \u2014 the 4 parallel workers were KILLED. Cost reality: ~$0 (embeddings cache"
+            },
+            {
+              "id": "8b78b23c-8498-49aa-a1ad-4fd973b6422e",
+              "query": "CONFIRMED ROOT CAUSE: employer (Mass General Brigham / BWH) security stack creates an always-on off-VPN flow cap of ~92 Mbps on ALL interfaces (wired AND WiFi). Not a network, dong"
+            },
+            {
+              "id": "d9c9d621-3aac-4f56-b4f0-e1b4c2f0b2f0",
+              "query": "STAGE-1 FOUNDATION \u00a78 LANDED \u2014 the run-to-verdict arc's first major foundation gate cleared with full dual-leg anti-capture discipline (guardian fresh-attest + taskmaster carry-con"
+            },
+            {
+              "id": "c29aa7e3-1512-4729-a28b-f712347248e7",
+              "query": "\u2b50 REMAINING (everything else resolved/staged): (1) BEN's FIRE-NOD = the FAN gate (escalation 02:54 + correction 02:58 + coordination 03:28 + simplification 03:32; ~3:46am Sun, hour"
+            },
+            {
+              "id": "4db0657f-32ff-432d-95c8-e7288854a849",
+              "query": "KEY INSIGHT (quantum-data): Rust breaks are COMPILE-caught (cargo check --workspace goes red) \u2192 NOT the silent class. The silent-risk surface is RUNTIME-resolved refs only: python "
+            },
+            {
+              "id": "b271652b-8bbb-47a4-92ec-92c03ac54381",
+              "query": "(1) DENOMINATOR/ALLOWLIST UNTOUCHED: git diff 9c4c3e70..ee5865c6 on crates/qf-library/src + full_registry_reconciliation.rs + workspace_no_tolerance.rs = EMPTY. 497/605 + reconcili"
+            },
+            {
+              "id": "c676886a-d382-4af5-9505-69873ce134d4",
+              "query": "All clues and correct responses are in the Claude plan file: `/home/ben/.claude/plans/mighty-baking-gem.md` This plan contains the complete game: all 60 clues + answers, host guide"
+            },
+            {
+              "id": "bf254839-01d5-48cc-bc11-138d93683efa",
+              "query": "Planner (who gated \u00a72.1) caught the producer's stale framing BEFORE impl built it. LESSON (memory-is-a-hint): the \u00a72.1 reconcile (d2baa73b/b6551bd6) postdated the \"first-quote-afte"
+            },
+            {
+              "id": "8ef6ca21-e8a5-4e70-89de-0893adfb73a1",
+              "query": "DAY LEDGER (one session-day, all guardian-gated): alias-fix VERDICT 28 \u2192 T086 v29 \u2192 W1 v30 (re-land) \u2192 [respawn 11:30] \u2192 knobs panel LIVE (Ben 11:25 req; census-to-glass 8 min) \u2192 M"
+            },
+            {
+              "id": "c54e7b47-7a1b-4089-aa58-a26ee8aab074",
+              "query": "1. **Leftover record-by-demonstration recording (the main culprit).** SuperAccessibilityService.onAccessibilityEvent \u2192 if `recording` is true, captureRecordingStep() runs captureSc"
+            },
+            {
+              "id": "aa67973a-f6a7-4cf0-b94e-15f8d059bc63",
+              "query": "FULL      FR-303   task=Y impl=1 gate=1 TOTALS: L1 misses: 0 \u00b7 zero-anchor FRs: 0 \u00b7 dangling markers: 0 RESULT: PASS                                  EXIT: 0 ``` Exit zero, 100% FU"
+            },
+            {
+              "id": "c56c8924-14d8-49da-a0f1-f3b506bfb995",
+              "query": "The DRAIN/WATER/TOP-UP WATCHDOGS ARE TIED TO CYCLING \u2192 disabled during trip \u2192 **effectively cannot fire**. No drain/fill ops happening. So the real P1 threat list for 7/22-7/26 is "
+            },
+            {
+              "id": "a0ff92e6-6662-4ade-9cb0-bfccbfc08434",
+              "query": "f6ce9c78) \u2014 the mis-drive arm; DESIGN; worker wires the panel cell per day + a named frontier fallback; trades/badges deliberately OUT of cs v1 (design boundary, stated). D5 (T087 "
+            }
+          ]
+        },
+        {
+          "band": "1000-2000",
+          "pool": 1437,
+          "items": [
+            {
+              "id": "b17f719c-6aa4-4fcd-aba2-e7672f1cd7f0",
+              "query": "`quantum-reactor-mongodb` container mounts: MongoDB writes are not storage-bound (disk I/O <1 ms). Bottleneck is network round-trip to Mongo (~2 ms LAN) and sequential upsert patte"
+            },
+            {
+              "id": "9d6a4536-9e4a-4928-8296-341c57a98417",
+              "query": "\u2192 Parity green, terminal recovers; only the count-based ALIGN deviates \u21d2 the lag buffer/index is contaminated by the NaN where the withheld run reaches back. Fix = reach-back: stre"
+            },
+            {
+              "id": "2bd16998-ec97-45cb-87db-83482f040969",
+              "query": "OUTSIDE the schedule, so it cannot bite today. Fixing it is a CODE change with its own gate. NOT an ingest trigger (daily-health exit 2 exists to keep those apart). diagnose. 2026-"
+            },
+            {
+              "id": "883814ae-80df-4fdf-b49a-51dffb9e2d9a",
+              "query": "CERT==RUN/BINARY CHAIN: the runnable two-grid binary didn't exist. 4-deep measured=0 trap caught pre-launch: (1) deployed 7322866f DEFERS decoupled; (2) cert'd 08c5e67a NOT deploye"
+            },
+            {
+              "id": "6356bb0d-59a8-48a2-8a13-07c443d26dc7",
+              "query": "interfaces: [eno2, eno3, eno4, eno1] addresses: ... ``` Applied 2026-06-03 to s1 (`macaddress: 00:25:64:fe:79:de`) and s3 (`macaddress: 90:b1:1c:53:df:3d`). `netplan apply` causes "
+            },
+            {
+              "id": "6123db82-1d69-4edc-b5c2-a5b32f10099c",
+              "query": "is why the pinned-relaunch salvage lost even at its best case. Full mechanism + corpus + node facts: Companion, library's: the `CorpusSource` trades-only re-encode amplifier. == CR"
+            },
+            {
+              "id": "c72e4a18-dd0b-431b-85d3-27bb36fbc3d9",
+              "query": "Supporting: garden agent + cal. Aged: 5d since first flagged. Suggested action: complete LLC annual filing this week (2 days out). Supporting: cal event `0vhfofb50ejbc1kb3gqrghp0n8"
+            },
+            {
+              "id": "65190c13-2852-40ef-a653-3ac8e954c720",
+              "query": "=== NEXT (in order) === 1. On library's landing ping: rebase my 2 commits onto their tip, integrate run_bars_keys_real into worker stage-1 (bar_reports 1\u219238 keys for trade set), re"
+            },
+            {
+              "id": "c65a7980-d41a-48fc-8aa3-578a197be9d6",
+              "query": "own_title was the ONLY retrieval task this project had, and it is unrealistically easy \u2014 nobody searches by pasting a memo's exact title. **On own_title the encoder looks worth +6."
+            },
+            {
+              "id": "7d87a57d-07a4-460b-97a5-a1c3838be32a",
+              "query": "\u00b7 Documented-not-renumbered: an uncaught exception exits 1 = REJECTED (tool crash reads as bad cert). Discriminator = the MARKER. CONSUMER CONTRACT now in the header: a verdict is "
+            },
+            {
+              "id": "b7c0b7d5-9c7f-4db5-b9a1-02ec1a4e6bcc",
+              "query": "1. **37MUHA \"Preferred\" \u2260 Hyper-Heat.** Standard cold-climate line, not the Evolution Hyper-Heat. HSPF2 10 / 10.8 are decent but low-temp performance won't match Mitsubishi SUZ-AK "
+            },
+            {
+              "id": "d747cff3-18a9-4837-907a-ce520530c99e",
+              "query": "MY DELIVERABLES (HELD for nav go-call line-reads): M2 design @ a6f538f5 (branch discovery-producer/m2-design-2026-06-13) + Stage-3 measure-all orchestrator @ 5f8c9f73 (branch disco"
+            },
+            {
+              "id": "4ddb3139-f28d-4193-8d49-6938fa47583a",
+              "query": "\u2022 LIVE qf:l1 scan NOW (k-barn redis-cli, source-of-truth verify): 15 qf:l1:*:QQQ keys, dated 1656288000:1656374400 = 2022-06-27 (SEPARATE/later build, post-FLUSHALL, NOT the dry-ru"
+            },
+            {
+              "id": "22bd8aa5-2cc4-494f-85d4-11b424831dcc",
+              "query": "displaced the WiredTiger cache. Per-prediction feature_history lookups inside the resolver loop (10000 round trips per cycle) hit cold cache, each 10-100x slower than warm. Cycle n"
+            },
+            {
+              "id": "f60eec65-2405-48e9-8863-fe936862b209",
+              "query": "generate_smoke: reads default_full_registry()/default_manifest()/SignalKind; picks ~6 indicators (one per family, hand-classified scale-type via pick_smoke_indicators) \u00d7 ~4 bar spe"
+            },
+            {
+              "id": "dbbbb073-97b8-494c-a73e-8912f85a76bf",
+              "query": "=== WHY (the bytes that flipped it \u2014 I was WRONG, Ben pushed twice) === Real file sizes 2024-06-03: us_stocks quotes_v1=6.0GB, us_indices values_v1=2.8GB(!), us_stocks trades_v1=2."
+            },
+            {
+              "id": "9cadc38e-92d5-40cf-9ba0-c88557d45120",
+              "query": "1. `get_orders` \u2014 FILLED status + actual fill prices (never the `place_stock_order` response) 2. `get_all_positions` \u2014 resulting quantities 3. **cash reconciliation to the penny** "
+            },
+            {
+              "id": "b822ba9f-38ea-4308-a6b6-792a6d685fa9",
+              "query": "4. `sudo microk8s remove-node 192.168.1.168 --force` from server3 \u2014 removed server4 from cluster, auto-promoted server6 standby \u2192 active voter 5. Result: 3-voter set = server3 + se"
+            },
+            {
+              "id": "27b13f09-ff68-451b-9a87-5e376d23f34d",
+              "query": "1. BEN'S RESPONSE (mine; ~37min async at respawn \u2014 he's away) \u2014 possibly the strategic two-grid-vs-ticker-tail call. Handle it; fresh-dp backs the framing. 2. WAVE-2 #17(a)-PEAK-GA"
+            },
+            {
+              "id": "fcc7f5cd-4c13-4644-abe6-e4d5dcfe14d5",
+              "query": "3. Directory has no people. 4. Incumbents funded+fast (Pursuit $22M, Shovels $6.5M, AcuityMD $80M) or commoditized (parcel: Regrid 100%/BatchData sub-penny; NPPES: CarePrecise $599"
+            },
+            {
+              "id": "79a598b6-d6f0-4ab1-8642-fe9c06c54ac9",
+              "query": "Key insight: signals are 1-bar direction predictions; returns scale with \u221atime = signature of genuine alpha. Live = time-based exit (hold N min, close). Daily loss -1% \u2192 halt; week"
+            },
+            {
+              "id": "59bae7ee-fd74-4055-b47b-3c6ba2bd0887",
+              "query": "\"fastLeaveEnable\": false, \"mldSnoopEnable\": false, \"dhcpv6Guard\": {\"enable\": false}, \"dhcpGuard\": {\"enable\": false}, \"dhcpL2RelayEnable\": false, \"portal\": false, \"accessControlRule"
+            },
+            {
+              "id": "bf856e95-e6c4-4e8c-bcfe-69af75dd620a",
+              "query": "closed the finding and LOOKED closed. Three fields: generator_sha256 / run_id / written_at. \u26a0\ufe0f `generated_at` = the RUN'S START (ts computed before phase 1). Unrenamed on purpose. "
+            },
+            {
+              "id": "f621da55-8999-493e-88e3-24b5a0316a37",
+              "query": "\u2705 news-\u2461 (Sentiment loader, 14 sent_ signals) DONE \u2014 all-5-green CONFIRMED (4-source triangulation: sieve-guardian 6th-convergence floor-verify \u2295 tm true-N 12,754 banked 572a64b6 \u2295"
+            },
+            {
+              "id": "b91d1408-f2cb-4edf-8d11-f7e80c318bf9",
+              "query": "```ini [Unit] Description=Remount NFS shares after network is up After=network-online.target remote-fs-pre.target Wants=network-online.target Before=remote-fs.target [Service] Type"
+            },
+            {
+              "id": "e557d983-79fb-4d1b-a1f3-426a1b6d7567",
+              "query": "All 3 \u00a78-approved (taskmaster source-audit + guardian independent attestation for the keystone; taskmaster single-leg for surface-fix + C5; nav approval each). All ancestors of ori"
+            },
+            {
+              "id": "61f6bc74-3fae-4dba-b8c1-1a875392542b",
+              "query": "\u2705 GREEN: build substrate both lanes \u00b7 build-wall ~35-40h FINAL (NAS-read ruled out by measurement: NAS ~80<s5-local ~140 MB/s; s5 IO-isolation parked per don't-gold-plate) \u00b7 \u00a73.3 w"
+            },
+            {
+              "id": "b25d9172-46d0-447a-9c61-b3633dc4e712",
+              "query": "=== REDIS (the likely binding resource) === redis-solo (F-EDGE-044: REUSE, no new instance). In-cluster 10.152.183.175:6379; host NodePort 192.168.1.42:31382; env QFC_L0_REDIS_URL "
+            },
+            {
+              "id": "b8c10c68-8fda-42ac-a4d0-2d48b0735fed",
+              "query": "Battery: `chargeCurrent`, `batteryMaxCurrentCharge:180` (~9kW charge ceiling, \u2248 what Ben sees), `batteryMaxCurrentDischarge:275` (~14.6kW; actual discharge plateaus ~9kW = battery "
+            },
+            {
+              "id": "22f6b34b-391a-4d9a-8c9f-368e21cae7a2",
+              "query": "TWO PASSES (no transitivity; concurrency = new surface the sequential GREEN didn't cover): \u2022 PASS-1 parallel-ENCODE (conns=1): GREEN \u2014 40/40 cells bit-exact. \u2022 PASS-2 parallel-ENCO"
+            },
+            {
+              "id": "1c0801e5-6897-49ef-b352-f01131f32252",
+              "query": "FOUR UNENFORCED ARMS: (1) FR-004 \"whole market\" \u2014 evidence.rs:121 universe_resolved compared to NOTHING anywhere, pin.universe_rule free text checked only non-empty \u21d2 a 40-ticker L"
+            },
+            {
+              "id": "5235821d-ad65-4723-8bc2-a325397411ac",
+              "query": "BEN-FORK (lane-LOCKED with nav): engine-FRAMES options+done-line \u2192 tm/dp-SURFACE verified numbers (tag case-1/case-2) \u2192 nav-RELAYS/judges \u2192 Ben-DECIDES case-2 / nav-REPORTS case-1."
+            },
+            {
+              "id": "86ff9e37-b46a-487a-ba42-2384b42b13cd",
+              "query": "The Google Doc also notes Stage B/C/E/F portfolio infrastructure is **aspirational** \u2014 not deployed. CLAUDE.md was updated to flag this. Don't memo aspirational sections as feature"
+            },
+            {
+              "id": "8f3ec81b-c6cd-4ba0-b186-28178ebb65c0",
+              "query": "2. addon credential bug (api_key/ha_token are encrypted properties \u2192 env-overlay dropped them \u2192 SUPERVISOR_TOKEN never reached HA); fixed in config.load() 3. Skill system: aloha/sk"
+            },
+            {
+              "id": "c533738d-87a4-4a3a-a7c5-f46b91116fbe",
+              "query": "2. **`comment_limit` is TOP-LEVEL comments only.** Reddit nests replies under `replies`; the extractor takes the top level. **Corrections live in replies** \u2014 \"actually that closed "
+            },
+            {
+              "id": "a1ef5101-e25f-4ab3-b782-6d7c00c4380a",
+              "query": "(1) Ground per Rule 1 (constitution + 001 tasks.md T101 region + 004 tasks.md tail). (2) RE-ARM the :34 Ben cron \u2014 DIED WITH #64; prompt shape = spec-number-keyed + BUILD ORDER #00"
+            },
+            {
+              "id": "dd6abdbb-9c0d-4f93-86f1-d7c3612ad4b5",
+              "query": "never lift the depth ceiling, and an agent below the ceiling never needed its permission. \u00b7 Depth is enforced by TOOL REMOVAL (the agent never sees it, so never tries) \u2014 EXCEPT in "
+            },
+            {
+              "id": "a651efb2-15fe-4494-878b-9680cf1fd609",
+              "query": "COROLLARY, learned the same night: **a wrong CONTROL is far worse than a wrong FINDING.** A wrong finding is one wrong claim. A wrong control silently corrupts every claim made thr"
+            },
+            {
+              "id": "bc13d2b5-667f-4337-bf00-bb47db7ae96c",
+              "query": "CURRENT STATE (vs master, was 126b592f\u2192 now d3b49784, re-fetch ALWAYS): \u2022 \u2705 LANDED: Phase-1 stop-fill (77aaba6d, driver-deferral both drivers) + \u00a72.9 EOD clamp (3ba4e934) + spec ra"
+            },
+            {
+              "id": "8a2be6f8-c546-4b18-b562-bc617de5a2fd",
+              "query": "Contractors, gig-economy settlements. Later ask: \"did I pay X / how much.\" Ben's own escalation language. 1. **Live agents** (assistant, mind, any Ben-facing session) \u2014 read this m"
+            },
+            {
+              "id": "c4ddf38e-d92b-4fb3-b6aa-d1e12cb42686",
+              "query": "\u26a0\ufe0f It does NOT re-prove the 3 discharged test-visible files: **a clean run over a tree does not retroactively verify each argument that was made about the tree.** 4 seal/immutabili"
+            },
+            {
+              "id": "9a1b8422-7996-48e5-9bc8-3c71c48ff393",
+              "query": "Ben's verbatim call: \"since changes to the bar builders touch library i do not want to modify things now, and want to allow all lots, just use the spec as is, the goal here is to s"
+            },
+            {
+              "id": "3c7aba65-3234-4481-aa25-cf4eaaf5a5ae",
+              "query": "\u2514\u2500\u2500 EOD snapshot (state for tomorrow + restart-safe) ``` This is a **protocol**, not just a code path. Currently canonical-vision treats each artifact's pipeline separately (\u00a75 lib"
+            },
+            {
+              "id": "2ad92fd8-4ae0-4134-8db0-4a435acec255",
+              "query": "\u27f9 when a tooth and its subject both handle a case, the tooth's handling is DERIVED from the subject's, never written independently. Writing it from first principles FEELS like rigo"
+            },
+            {
+              "id": "52e0bbb8-b57a-4825-9f44-f8ac14b73b2f",
+              "query": "\u2b50 **But it CORROBORATES the median half of the finding independently.** `doc.rs` persists BOTH variants explicitly as separate columns: `win_rate_median` (:203), `expectancy_median"
+            },
+            {
+              "id": "55625795-389d-4afe-b9f4-00d6c2260c62",
+              "query": "\u2014 four `print(f\"RESULT=` sites and `s.find()` took the FIRST, inside an early-return branch, splitting an `if` from its body. **Every other patch that day asserted `count(anchor) ="
+            },
+            {
+              "id": "c68347bd-c843-4b7d-a8f4-6bfed592d15e",
+              "query": "=== BUILD-RISK CAUGHT BY RECON (doc \u00a79b) === Per-indicator SCALE-TYPE (the VALID-coverage reactor-failure-guard input, base plan \u00a74) is NOT in the Rust registry \u2014 only resources/si"
+            },
+            {
+              "id": "db2076cb-ad58-42fe-86e4-96744f2dbd3b",
+              "query": "1. **No recency decay on law** \u2014 a 1987 bylaw is current law; otherwise chatter *about* a setback outranks the setback rule. 2. **BUT \"recency off\" is NECESSARY AND NOT SUFFICIENT "
+            },
+            {
+              "id": "ae911012-aa75-42b8-826c-6b2bf31d82b6",
+              "query": "(1) W#2 (MINE, small, FIRST): env-red qf-tradelog::test_real_nats_integration_round_trip (crates/qf-tradelog/tests/testcontainer_nats.rs:159). \u26a0\ufe0f LOOK-BEFORE-#[ignore]: it is DELIB"
+            },
+            {
+              "id": "8555f790-1de7-4ac7-892d-d4ddbdf27be9",
+              "query": "complete. (Library applied it in the very message accepting it.) Weaker intermediate form, still useful: name the author FROM THE ENVELOPE, never from memory. The gap in the pre-ex"
+            },
+            {
+              "id": "d6600f10-4bbd-4ba0-9259-c9d84e78eca4",
+              "query": "\u2022 Real non-degenerate bar data all bar types + 5 tickers (time_15m 4242B, ohlcv_vol_10k 664KB, dollar_25m(NVDA) 42KB, time_1h(TQQQ) 1257B, ohlcv_range_1(AAPL) 10.5KB, time_1d 159B)"
+            },
+            {
+              "id": "2aa3a20b-9cc4-4401-8893-4b7a35c7c108",
+              "query": "offsets and overflows INT32_MAX. Fix: cast the derived column to `large_string` right after the strftime, before append_column. This matches the rest of the wide_schema (built upst"
+            },
+            {
+              "id": "cce13097-808a-4b9f-9107-2d8192bc2b10",
+              "query": "The hook keys on `rewarm:<session-id>`. A pin in `rewarm:claude-<name>` is **never delivered.** The hook header used to *print* `rewarm:{agent_id}` while querying the session form "
+            },
+            {
+              "id": "c8f96b92-cc2a-43b4-a2e6-86c79933c1a6",
+              "query": "2. \u2b50 **NO ENUMERATIONS OF THINGS THAT MOVE.** Deferred domains were listed; now the rule is general \u2014 *code under `deferred/` is ignored, not part of the build, carries no constitu"
+            },
+            {
+              "id": "ec865a96-c189-4c8c-b068-5935c5afcd97",
+              "query": "marker without subject fails; subject without forecast fails; \"I think Micron will break 120 by Friday\" still passes, so it does not reject every sentence containing \"I\"). 2. `src/"
+            },
+            {
+              "id": "19cf5a42-bd3f-44db-bd82-27b416b0f0c8",
+              "query": "(commit e4c25cc) added the shape `qf.shard.<N>.sentiment.input.<ticker>` whose payload is `BarInput::Sentiment` (serde tag = `kind`), not a MarketEvent (serde tag = `_type`). Fix: "
+            },
+            {
+              "id": "4ae10c3f-21f5-4869-8566-bb15ef49492e",
+              "query": "library (08:31-08:32) \u2014 TWO: \u2022 (a)-vs-(b) DECISION: ADD the (Some,Some) fixture, do NOT ratify-by-orthogonality. Reason: orthogonality = documented intent (mod.rs:819 \"ticks affect"
+            },
+            {
+              "id": "f0b01c8d-3434-411f-84e0-3598d9e20b1d",
+              "query": "parity.surfaces_run     604         <- REPRODUCES the prior denominator; no silent registry drift age_s                   75          <- via freshness.py, THE one predicate The lan"
+            },
+            {
+              "id": "5030d79d-011f-4808-8b3f-8796ba14d09e",
+              "query": "CARRIED FACADE (qf-gym drive.rs, composition-only \u2014 nav LINE-REVIEW PASS 21:58): carried_ticker_day_inputs mirrors fresh_* over CarryCtx/carried_lane/carried_chain_mask/carried_com"
+            },
+            {
+              "id": "b53fa5e7-3e37-4733-aa8a-51d63bcffed4",
+              "query": "LIVE SEQUENCE: cluster is running the STRATIFIED-slice weight profile on master 55480e30 NOW (est-mem/ticker = trades/day\u00d7state, NOT ticker count; liquid+illiquid+megacap-pole) \u2192 w"
+            }
+          ]
+        },
+        {
+          "band": "2000-",
+          "pool": 369,
+          "items": [
+            {
+              "id": "944286a6-ad79-4ebc-9e3a-efb0a69df60c",
+              "query": "For both furnaces, LP conversion implies: smaller orifice (LP #54\u201356 vs NG #45), gas valve / regulator change (LP manifold pressure ~10\" w.c. vs NG 3.5\" w.c.), and an LP conversion"
+            },
+            {
+              "id": "2062872a-f2c6-405f-b140-c02ce784232d",
+              "query": "7. **Major Administrative Leadership Positions** \u2014 Chief/Director/Co-Director/Course Director/Program Director etc. Group by Local/Regional/National/International. Faculty-level on"
+            },
+            {
+              "id": "e0b05d9a-d829-4943-b080-731b96235e7d",
+              "query": "7. crates/qf-parity/src/bin/cs_panel_gym.rs (NEW bin qf-parity-cs-panel) \u2014 assemble panel\u2192run_cs_panel_parity_progress (heartbeat) \u2192 registry is_cross_sectional count-PIN reconcili"
+            },
+            {
+              "id": "3dd26786-5b99-47e6-a60a-2759b7d6146d",
+              "query": "Context so nobody re-derives it as a new idea: the upstairs/attic unit has been dead since ~7/5, install is 8/17, and Net Zero never followed up on Brian Pelton's 7/8 \"we'll reach "
+            },
+            {
+              "id": "b5937f75-7bc5-42f7-97d0-6c5fd9322714",
+              "query": "LAST SUBSTANTIVE FIX (deployed, commit 8991efe): /api/record and /api/scout were async FastAPI routes calling the SYNCHRONOUS blocking vision call directly, which blocked uvicorn's"
+            },
+            {
+              "id": "aa797b1e-7f38-440b-9666-4484a005a359",
+              "query": "WHAT IT DOES: generate_smoke(seed) [INC-1, in qf-library] \u2192 replay every tuple on qf-parity gym SynthBars (gym.rs, seed-based, ZERO on-disk data) \u2192 per indicator run BOTH batch + s"
+            },
+            {
+              "id": "2a09bf22-4313-493a-aed6-d581973dc562",
+              "query": "2. SUB-UNIVERSES IN as CORE scope: run all signals \u00d7 {universe AND sector/cap sub-universes} on the past year; badge per-universe AND per-sub-universe. 3. END DELIVERABLE = a FULL "
+            },
+            {
+              "id": "a48ca8f8-88f9-4533-8a33-c046ebb26132",
+              "query": "=== \u00a78 IN FLIGHT (event-gated, native ATC wakes fresh-me) \u2014 DON'T self-declare done === Tendered to quantum-navigator (FF-merge gate + guardian-timing call) + quantum-taskmaster (s"
+            },
+            {
+              "id": "612af27d-0a83-4ea6-a558-4f96c0b86f0f",
+              "query": "REPORT FLIPPED (co-equal deliverable, nav brought to Ben): .reviews/unified-per-surface-parity-perf-2026-06-11.md \u2014 32 surfaces (\u00a73.c 29 masks + \u00a73.b 3 eval-units) \u2192 \"\ud83d\udfe2 REAL-DATA ("
+            },
+            {
+              "id": "1522a9cb-a72f-4aa9-87b1-918af4574fcf",
+              "query": "\u00b7 **CLASS A \u2014 FOUR keys GREEN on the standing gate that violate under varied**: `pandas_ta:MASSI` 0\u21929, `pandas_ta:CMF` 0\u21923, `technical:CHAIKIN_MONEY_FLOW` 0\u21923, `technical:TOUCHES` "
+            },
+            {
+              "id": "78d8b29d-8293-4fd0-8ad8-2e97fef43e07",
+              "query": "Two things, one of them a correction of my own claim from an hour ago. Ben's decision: no fresh fork. Stay on his fork's main, confirm it is pulled Ben asked whether the Rust backe"
+            },
+            {
+              "id": "06855c02-55e8-49cd-95ff-f9783db197d9",
+              "query": "\u00b7 **driver-prompt.txt REDIRECT PINNED + RE-ARMED** (the instruction-layer root fix): step 2 now says launch with **NO STDOUT REDIRECT AT ALL** and explains that the script owns its"
+            },
+            {
+              "id": "af805fb5-efc1-46af-964e-46ba5c827baf",
+              "query": "=== 2. \u26d4 `live:N` MEANS ROUTED \u2014 NOT ARRIVED, AND NOT WHERE === `atc_send` returning `sent:N live:N` says the broker accepted and routed it. **NOT a delivery confirmation**, and si"
+            },
+            {
+              "id": "908221bd-cf88-4402-bee6-61d1ed0777b7",
+              "query": "e34a2200-d2d5-412d-9c92-b8e7e74c639e@0 e34dc6db-6804-4234-bee9-25a87b6d0111@656 e357c633-e2b2-4715-8984-6db0a224e5c0@222 e385f81d-6c5e-43ed-a242-49510b2ad825@56 e3967fb0-69f4-4c87-"
+            },
+            {
+              "id": "48ef05bd-aa5d-45df-afc7-c0d31cac130f",
+              "query": "f79658f8-c8a5-4d87-836e-9cbbf19b13cc@0 f79e0a72-a379-4708-889a-1d14c6c707df@0 f7e39ab2-d63d-4f9b-8673-768c07cf7963@101 f8305db2-da20-48af-8b9b-2865b29074fb@14 f877aada-8876-4526-89"
+            },
+            {
+              "id": "e8cde8a1-839c-48ed-a22a-dfe8fa6affb6",
+              "query": "File: `bars/advanced.rs` All PerTicker, accept Trade. \u26a0\ufe0f NOTE: adverse_selection manifest uses param \"threshold\" but registry expects \"volume_threshold\" \u2014 potential mismatch (defau"
+            },
+            {
+              "id": "655e9895-527f-4ee4-9a3c-a92c785a6760",
+              "query": "Distortion is **non-monotonic in the stray rate and its sign unpredictable** \u2014 cannot be corrected analytically or assumed conservative. Entry signals, exit signals and time stops "
+            },
+            {
+              "id": "3d87a4e3-2eab-44d1-bcd6-b51ccfd4144e",
+              "query": "fast        mirror-0 (nvme2n1, nvme3n1)   \u2192 2-NVMe mirror store_pool  single LUN sdb                (Dell PERC RAID, hw-managed, spinners) + L2ARC nvme0n1, nvme1n1 ``` ``` sdc_pool"
+            },
+            {
+              "id": "9983f89f-0fe8-4397-985b-bd7cee04b83f",
+              "query": "3a75b40f-c1a3-4a91-b7de-87c90fc673ff@61 3a88182f-2f48-43f8-92d5-03cb1ad2020c@70 3ac2b876-b12c-4e3b-9055-1459f67fc347@322 3ae02f07-56dc-4d7d-b89c-748dee90910b@1865 3aeb6c64-1887-409"
+            },
+            {
+              "id": "85b03b9a-3f42-4413-91f0-01eabecfd70e",
+              "query": "5. `--help` \u2192 7 upheld on the LIVE CONTRACT (consumers gate on 0, so help-exits-0 hands that gate a green for a run that read no cert), not on principle-coherence. The mint guard r"
+            },
+            {
+              "id": "f07859c3-39b8-4585-b885-af0319b41a4f",
+              "query": "4. Reclaim ~10T on store_pool (97% \u2192 ~80%) 5. **Mergerfs can then be reduced to optional** \u2014 store on s5-only for new data; s4 branch stays for legacy archive access 1. Promote `re"
+            },
+            {
+              "id": "c7ec7d14-45b7-45a0-9ce4-3064a3f7fcc1",
+              "query": "0fd2b331-1c73-4666-a5f4-ae97bf6b612d@45 0fd90c97-5e20-426d-9e55-c32f55854e0b@0 100b62ef-6f99-4ed4-9fad-9a8ebefe1413@0 10218e69-c70c-4800-bd68-767fa939ad02@0 1066731e-f6ba-44da-9f27"
+            },
+            {
+              "id": "e531bd85-c513-4b91-83fd-d816c8baa225",
+              "query": "\u2691 AND RULING A'S TRAP IS NOW FOUND AND CLOSED (do not present it as a pending risk): qf-data-checkcron opens FD 9 for the whole script (exec 9>\u2026/.lock + flock -n 9, lines 297-298) "
+            },
+            {
+              "id": "630472c3-645e-4e4a-995b-ae7831c013d1",
+              "query": "If data feeds + utilities + cloud are pooled as \u00a7195 startup costs AND hardware (~$60K) is included: Startup cost analysis tab: \"\u00a7195 Startup Pool\" in the main Business Expenditure"
+            },
+            {
+              "id": "2f46303c-51ec-4233-8a12-6591454831bd",
+              "query": "ticker_universe Mongo (X:BTCUSD), and subject.rs doctext/tests (X:BTC-USD) blocks any future crypto discovery campaign; (P1) no shard-level filter on legacy qf.{cluster}.> dispatch"
+            },
+            {
+              "id": "3d43f8cd-a924-4485-ae5b-9e89812a3cbf",
+              "query": "0561ae6b-d62f-4620-af2d-2c5d55f9760f@15 057a472e-22bf-49e6-a8b3-5d72064f3777@110 05871d33-4e31-4f09-a187-810a3c725c88@0 059327e2-b64b-4fe9-acbd-e70e218cc059@0 059954bd-fc0b-49f3-a4"
+            },
+            {
+              "id": "59752c22-70e0-440f-8fee-1eb8feddfa30",
+              "query": "869edd8d-073f-49e3-ac56-166ab6691c39@1806 869edd8d-073f-49e3-ac56-166ab6691c39@456 869edd8d-073f-49e3-ac56-166ab6691c39@5941 869edd8d-073f-49e3-ac56-166ab6691c39@5998 869edd8d-073f"
+            },
+            {
+              "id": "ca7be1a5-f776-4083-a00c-369a34874d9e",
+              "query": "``` Convenience symlinks: /mnt/store \u2192 /mnt/server5 (most clients; but on server5 itself the symlink goes the opposite way, /mnt/server5 \u2192 /mnt/store \u2014 this is a footgun for Ansibl"
+            },
+            {
+              "id": "4da0cf61-d491-425c-afe6-8776c996661e",
+              "query": "search_chunks read `transcript_chunks.embedding` \u2014 the OLD 1536 column \u2014 so the Measured before any index existed: lanes-resume.sh restarted two of the three manual-launch supervis"
+            },
+            {
+              "id": "dea3e355-9d9c-43e8-a743-b96d8edb1f32",
+              "query": "``` ```python run = 0 for i in range(n): if arr[i]: run += 1 else: run = 0 if run >= min_len: out[i] = 1 ``` ```python w = dilate + 1 for i in range(n): m = 0 start = max(0, i - w "
+            },
+            {
+              "id": "83b882e4-a77d-4178-b2d2-806ed2291fed",
+              "query": "An \"unreachable\" host is usually NOT a crash. Distinguish: office is **not a Dell iDRAC server** (that's server1/3/4/5 \u2014 see [[dell-idrac-management]]); it has **no IPMI/Redfish re"
+            },
+            {
+              "id": "485ead47-a59f-463d-a60f-3139f4903046",
+              "query": "nas-read: (groupid=0, jobs=4): err= 0 read: IOPS=1155, BW=1155MiB/s (1211MB/s)(2048MiB/1773msec) READ: bw=1155MiB/s (1211MB/s), io=2048MiB (2147MB), run=1773-1773msec ``` ``` $ dd "
+            },
+            {
+              "id": "cba55715-6b31-4db7-a4b8-eedc97a12dc1",
+              "query": "da4676bc-afd2-486c-98c6-06607ab9554f@15 da6483c8-0cf4-4e99-ab11-8830424df4ca@26 da855b88-8637-46d5-8c7e-e07b466105ac@0 dade0e23-ce76-4f59-8ac3-23d3b3a3a158@16 dae6bc52-51db-4793-a4"
+            },
+            {
+              "id": "5cc50d8f-839b-44dd-9e26-ef1cd365071f",
+              "query": "42339bec  news-downloader: REFUSE to write a truncated day (Constitution #IV) ``` Shared ref == origin, 0 local-only, 0 dirty tracked. `qd-push-gate.sh --approve <sha> <who>` takes"
+            },
+            {
+              "id": "bf096711-0fd2-4b47-a7ab-84cd26f4eed2",
+              "query": "7b6c637e-b894-4b58-b623-5632c0938c17@0 7bb86e4f-7111-43a2-a2a9-908f8ea7487d@83 7bf51f3c-dd6e-4547-a68c-c52367f22cc4@0 7bfdb243-af27-4ee3-af38-c0044811d654@78 7c178109-e606-4f8a-878"
+            },
+            {
+              "id": "bbb33602-47ca-4cce-9af6-c9559da1abdb",
+              "query": "\u26a0\ufe0f\u26a0\ufe0f **THE PROCESS FINDING (probably bigger than the defect):** the failing job's OWN last log line is `[t081] ALERT posted class=s5-raw-parity (HTTP 201; masked: none) -> quantum "
+            },
+            {
+              "id": "91f0100e-3e6d-4112-a120-b344db8e6df3",
+              "query": "2. **Held-out tickers** \u2014 train on most tickers, test on held-out ones 3. **Held-out windows** \u2014 train on most windows, test on held-out ones The campaign log line `phase4 batch sw"
+            },
+            {
+              "id": "c8ac21f1-2f08-4b05-b226-4079155a76a6",
+              "query": "{\"type\":\"ai-title\",\"aiTitle\":\"Send message to quantum zone agents\",\"sessionId\":\"a586e916-2c87-425a-a5a1-277c316e4f84\"} {\"type\":\"mode\",\"mode\":\"normal\",\"sessionId\":\"a586e916-2c87-425"
+            },
+            {
+              "id": "850d7db9-23a2-49aa-bec3-c6a41d3fc506",
+              "query": "entry mask (29 kinds, constitutional 1-bar shift \u2192 enter at open N+1) \u00b7 FLIP long\u2192short (EntryMode::LongShort / LongOnly / ShortOnly) \u00b7 take_profit_pct \u00b7 trailing_stop_pct (HWM) \u00b7 "
+            },
+            {
+              "id": "d26c224c-d560-4f36-a0f6-0000243e85af",
+              "query": "SEQUENCE LOCKED: **E2 \u2192 F \u2192 G \u2192 H \u2192 CDL classification + 502-accounting \u2192 G5 (lifts colour freeze) \u2192 post-G5 001 backlog \u2192 001 DONE \u2192 002.** \u2b50\u2b50 **THE BIG RESULT OF THIS SESSION \u2014 \u00a7"
+            },
+            {
+              "id": "ac22af6a-dea3-4958-ab95-f4991ee689dc",
+              "query": "2. **NFS server** for `/mnt/db` \u2192 if server4 stalls, every client mount stalls (was hard, now `soft+nofail` after 2026-04-18 incident \u2014 but apps still error). 3. **nginx with ~50 v"
+            },
+            {
+              "id": "26005881-11ae-4739-8c08-17a2cc9a7070",
+              "query": "The 2024-2026 era is exclusively AMEX; older 2021-2022 was Visa-heavy. Card mix likely matters for HSA/FSA classification \u2014 TBD with ben. This memo + the 16 Costco trips in `83f260"
+            },
+            {
+              "id": "8eae9ed1-9ae9-45eb-9b3c-6c741e795309",
+              "query": "`Unmeasured` needs none. **The gate IS satisfiable on the judged producer**, and the passing route is candidate #2 of the open filing \u2014 the fix I had myself proposed twenty minutes"
+            },
+            {
+              "id": "1fb30263-304b-494e-bf57-ee197b03c130",
+              "query": "\u00b7 Q3 sites \u2192 TWO, split on the byte/fence line: PRESERVE at end-of-walk (inside the spawn_blocking closure where `central` is alive \u2014 it does NOT survive to seal()); FINALIZE + the"
+            },
+            {
+              "id": "7ffcfc04-da14-4b15-95be-87047642aca3",
+              "query": "Context: \u00a72.3 divergence-verify = certified arrow-batch decode == qf-flatfile core row-iter decode bit-identical NO_TOLERANCE (~7.2M rows, 5 cells); commits 341bc0a2 / a65a87b8 / 2"
+            },
+            {
+              "id": "4765ab2c-2975-495a-b87a-1f8fffb70b46",
+              "query": "\u2550\u2550\u2550 COMPANIONS (FULL uuids \u2014 a prefix is NOT resolvable by memo_get) \u2550\u2550\u2550 `e873b83c-274f-4314-abaf-5f9d9698efb8` the halt (authoritative) \u00b7 `ee5c0f06-7746-4cd9-8550-a0333d975364` co"
+            },
+            {
+              "id": "82f12c3b-239f-4b66-b1ce-6e55be7332a0",
+              "query": "\u21d2 **THE GUARD.** If nav's lift cites SC-009, do NOT accept it on the name. Require: (a) **the RUN_ID** \u2014 which run, exactly. (b) **a positive assertion that work happened, sourced "
+            },
+            {
+              "id": "2b5d806e-9b20-4e36-a0ff-f7d86b42f6a5",
+              "query": "Propagated to: [[fishtank-upgrade-2026-06-11]] (c8186676), Fishtank Jun-15 snapshot (b4ed3ced), Fishtank equipment upgrade status (265233dd). This is a **10-gallon starter kit**, N"
+            },
+            {
+              "id": "83746797-f486-4292-8da4-3e9df7f9a17b",
+              "query": "\u2b50 **GATE-HOLDER COROLLARY, MINE:** when two seats are mid-correction, **DO NOT ADJUDICATE BETWEEN THE OFFERED VERSIONS** \u2014 both are artefacts of the exchange. Route to a third seat"
+            },
+            {
+              "id": "3fce1547-31c1-44c0-b530-a1ee02887914",
+              "query": "Enum trap confirmed live on the installed alpaca-py: repr is BaseURL.TRADING_PAPER carrying value 'https://paper-api.alpaca.markets', but str() yields the MEMBER NAME. Reading it w"
+            },
+            {
+              "id": "23967ab2-a157-43ad-8e3e-e01b2c76f674",
+              "query": "NAS checkout HEAD ffe4fea8 (feat/dashboard-data-page) DIVERGED from origin/master: 3 ahead / 19 BEHIND. Master has Wave-1 bars commits (5e1ff62e primary_param + synth_intraday_trad"
+            },
+            {
+              "id": "c98f4783-08f9-429b-b38a-1fdf7b2f36da",
+              "query": "CV corpus + baseline .docx; CV-updates log; promotion hub (TP53 = critical path); calendar monitoring + Sunday family digest to `assistant`; Career-Intel Monday digest; PTO tracker"
+            },
+            {
+              "id": "808797c4-4aba-4782-ab67-8ce4b5b72858",
+              "query": "&& ip route show default via \"$GW\" dev \"$FIOS_IFACE\" 2>/dev/null | grep -q .; then logger -t failover-route \"Restored FIOS default route via $GW dev $FIOS_IFACE\" else logger -t fai"
+            },
+            {
+              "id": "6ff421b5-98ce-46c8-9942-a1a77bc5e92b",
+              "query": "baabbd39-3864-478e-b0dc-a1e72437bb6f@0 bab43b7f-6cdd-4e6e-8878-6cd10965abad@0 baf11902-5851-4684-9302-99c1220197bb@0 bb0de77a-5262-4d3b-a557-cbefd5f3d0c6@14 bb34f032-9cec-4f9c-95b5"
+            },
+            {
+              "id": "82f521ed-8a90-4803-b19a-32bcbf9c5c78",
+              "query": "=== POST-LAND CASCADE (FINAL ORDER = #3-FIRST \u2192 idx-SECOND \u2192 frontier; engine-producer drives #3+idx; nav sequences frontier) === \u26a0\ufe0f SEQUENCING NOTE: nav+engine-producer initially "
+            },
+            {
+              "id": "f7628e7b-94d0-4e56-966d-dd7dd0305d29",
+              "query": "66d9059a-72bb-4360-bdee-d3caafb73d83@0 66df9f70-04e6-4159-a792-c22ad18b0597@53 66e3a0b3-389c-4bbd-8468-eaa8c42a8338@60 66ebb068-f668-4284-96a4-9f71baaabcb4@96 67074986-cecb-4a0f-a7"
+            },
+            {
+              "id": "1aa4e433-e1e7-4a1d-982d-fe9506436b7d",
+              "query": "\u27f9 **a count that DROPS is itself a finding** \u2014 a rising count gets investigated, a falling one looks like progress. Correct rule was narrower: **a token is an ARGUMENT iff the PREC"
+            },
+            {
+              "id": "92fda2c7-54d3-4175-b04c-3133206b5061",
+              "query": "A discriminator that flips between two CORRECT samplings of the same ticker-date is not measuring the data. \u00b7 Signal B (quote/trade ratio, WITHIN-date, per-ticker) rebuilt with bas"
+            },
+            {
+              "id": "e37612ff-8625-401e-af51-e009c2c69edd",
+              "query": "3. THEN library found the REAL killer: run_cs_panel_parity MATERIALIZED every row's full output (84k IndicatorValues/row \u00d7 2 String clones) into batch_series+stream_series HashMaps"
+            },
+            {
+              "id": "f2e928a7-6984-4b98-9ff9-0dc3cc8304ec",
+              "query": "\u2551                          -> drew a FLOW conclusion (\"nothing is being written\")           \u2551 \u2551                          I patched the StatefulSet and restarted redis UNDERNEATH a "
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

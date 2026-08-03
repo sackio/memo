@@ -55,12 +55,12 @@ def target(run: dict, name: str) -> dict:
     return {}
 
 
-def own_title_paths(run: dict, name: str) -> dict:
+def task_paths(run: dict, name: str, task: str) -> dict:
     r = (run.get("results") or {}).get(name) or {}
-    ot = r.get("own_title")
+    ot = r.get(task)
     if not isinstance(ot, dict):
         return {}
-    # own_title is stored per-path: {"document": {...}, "v1-search": {...}}
+    # recall tasks are stored per-path: {"document": {...}, "v1-search": {...}}
     if "task" in ot:            # single-path shape
         return {ot.get("path", "?"): ot}
     return {k: v for k, v in ot.items() if isinstance(v, dict) and "task" in v}
@@ -100,11 +100,43 @@ def print_config_delta(a_run, b_run, a_name, b_name, a_label, b_label) -> None:
     print()
 
 
-def print_task_delta(a_run, b_run, a_name, b_name, a_label, b_label) -> None:
-    pa, pb = own_title_paths(a_run, a_name), own_title_paths(b_run, b_name)
-    print("── own_title (unweighted mean of band rates; raw counts in parens) ──")
+NOISE_FLOOR_PT = 1.3   # R-17, measured. See print_sample_provenance().
+
+
+def print_sample_provenance(a_run, b_run, a_label, b_label) -> None:
+    """⛔ Whether the two runs asked the SAME QUESTIONS — printed before any
+    number, because it decides whether the numbers may be subtracted at all.
+
+    R-17: a seed does NOT make two runs comparable. `random.sample` over a
+    changed pool draws different documents under the same seed, and the resulting
+    ±1.3pt of resampling noise is invisible in the results — it looks exactly
+    like a small real effect. This is the check that makes it visible.
+    """
+    sa, sb = a_run.get("sample"), b_run.get("sample")
+    print("── SAMPLE (whether these two runs asked the same questions) ──")
+    for s, lbl in ((sa, a_label), (sb, b_label)):
+        print(f"  {lbl:22} " + (f"pinned {s.get('id')}" if s else
+                                "DRAWN FRESH (schema 1, or --sample none)"))
+    if sa and sb and sa.get("id") == sb.get("id"):
+        print("  ✓ same pinned question set — deltas are comparable")
+    elif not sa and not sb and a_run is b_run:
+        # v1-vs-v2 inside ONE drawn run: both columns were drawn from the same
+        # rng in the same process, but from each build's OWN corpus.
+        print(f"  ⚠️ both DRAWN — within-run v1-vs-v2 only. Treat anything under "
+              f"±{NOISE_FLOOR_PT}pt as noise (R-17).")
+    else:
+        print(f"  ⛔ DIFFERENT QUESTION SETS. These numbers answer different "
+              f"questions and MUST NOT be subtracted.\n"
+              f"     Re-run both with the same --sample, or read each on its own.")
+    print()
+
+
+def print_recall_task(task, a_run, b_run, a_name, b_name, a_label, b_label) -> None:
+    pa, pb = task_paths(a_run, a_name, task), task_paths(b_run, b_name, task)
+    print(f"── {task} (unweighted mean of band rates; raw counts in parens) ──")
     if not pa and not pb:
-        print("  — neither run has an own_title result (could_not_run)\n")
+        print(f"  — neither run has a {task} result (could_not_run)\n")
+        return
     for path in sorted(set(pa) | set(pb)):
         va, vb = pa.get(path), pb.get(path)
         def cell(v):
@@ -113,15 +145,31 @@ def print_task_delta(a_run, b_run, a_name, b_name, a_label, b_label) -> None:
             return (f"{v['unweighted_rank1_pct']:.1f}% "
                     f"({v['total_rank1']}/{v['total_n']}"
                     + (f", {v['total_failures']}F" if v.get("total_failures") else "")
+                    + (f", {v['total_missing']}✗" if v.get("total_missing") else "")
                     + ")")
         line = f"  {path:12} {cell(va):26} {cell(vb):26}"
-        if va and vb and va.get("status") == "ok" and vb.get("status") == "ok":
+        both_ok = (va and vb and va.get("status") == "ok"
+                   and vb.get("status") == "ok")
+        if both_ok:
             d = vb["unweighted_rank1_pct"] - va["unweighted_rank1_pct"]
-            line += f"  {d:+.1f}pt"
+            # ⛔ The floor is applied to the PRINTED delta, not left to the
+            # reader. A number small enough to be resampling should not be
+            # readable as a result just because it has a sign.
+            line += (f"  {d:+.1f}pt"
+                     + ("  (< floor — NOT a result)"
+                        if abs(d) < NOISE_FLOOR_PT else ""))
         else:
             line += "   (no delta — a missing task is not a zero)"
         print(line)
-        if va and vb and va.get("status") == "ok" and vb.get("status") == "ok":
+        # ⚠️ `missing` breaks the denominators apart: two builds scored over
+        # different subsets of the pinned set are not directly comparable, and
+        # the totals will not say so.
+        for v, lbl in ((va, a_label), (vb, b_label)):
+            if isinstance(v, dict) and v.get("total_missing"):
+                print(f"      ⚠️ {lbl}: {v['total_missing']} of "
+                      f"{v['total_pinned']} pinned ids are NOT IN THAT CORPUS "
+                      f"— scored over {v['total_n']}, not {v['total_pinned']}")
+        if both_ok:
             for ba, bb in zip(va["bands"], vb["bands"]):
                 if not ba["n"] or not bb["n"]:
                     continue
@@ -130,6 +178,11 @@ def print_task_delta(a_run, b_run, a_name, b_name, a_label, b_label) -> None:
                       f"  ->  {rb_:5.1f}% ({bb['rank1']}/{bb['n']})"
                       f"   {rb_-ra_:+5.1f}pt")
     print()
+
+
+def print_task_delta(a_run, b_run, a_name, b_name, a_label, b_label) -> None:
+    for task in ("own_title", "content_query"):
+        print_recall_task(task, a_run, b_run, a_name, b_name, a_label, b_label)
 
     for key, label in (("set_stability", "set_stability (T287)"),
                        ("api_surface", "api_surface")):
@@ -180,6 +233,7 @@ def main() -> int:
     print(f"\nA: {args.a}   git={a_run.get('git')}")
     print(f"B: {args.b or args.a}   git={b_run.get('git')}\n")
     print_config_delta(a_run, b_run, a_name, b_name, a_label, b_label)
+    print_sample_provenance(a_run, b_run, a_label, b_label)
     print_task_delta(a_run, b_run, a_name, b_name, a_label, b_label)
     return 0
 
