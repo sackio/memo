@@ -1,0 +1,207 @@
+#!/usr/bin/env python3
+"""memo-regenerate-supersede-edges — give FR-115 something to act on. [002/FR-118]
+
+## ⛔ WHY THIS IS NEEDED AT ALL
+
+FR-115 made search exclude superseded memos, its unit tests pass, and it does
+**nothing**: v2 holds `supersede_edges` 0 rows and `valid_until` NULL for all
+8,014 documents. The 112 edges did not survive the 3-large rebuild — the DB was
+swapped and re-synced from v1, and v1 has no supersession columns to carry over.
+⇒ Ben's concern (b), *"newer information supersedes older information it
+contradicts"*, is not unmeasured in v2. It is **inert**. (research.md R-19.)
+
+The unit tests pass because they construct their own superseded document. That is
+a true statement about the code and says nothing about whether the corpus holds a
+single instance for it to act on.
+
+## ⭐ WHAT COUNTS AS A SUPERSESSION PAIR, AND WHY THIS RULE
+
+Same **exact title**, **≥ `--min-days` apart**, **differing content**. In this
+corpus that is a real and common pattern — rewarm pins at v8/v9, checkpoint
+memos, contact records re-written months later.
+
+⚠️ **SAME TITLE IS NOT THE SAME CLAIM, AND THIS RULE CANNOT TELL.** Two memos may
+share a title and cover different facts, in which case superseding the older
+DESTROYS information rather than updating it. The rule is a defensible proxy, not
+a judgement about contradiction, and every edge it writes records
+`method: "same-title-heuristic"` so a later reader can tell a heuristic edge from
+one an agent asserted deliberately.
+
+⛔ **THE ≥1 DAY GATE IS LOAD-BEARING.** 203 title-groups exist; **109 of them span
+under an hour** and are burst duplicates from cross-host writes, not versions.
+Superseding within those would mark an arbitrary copy authoritative for reasons
+that are pure write-ordering. Only **80 groups span ≥1 day.**
+⚠️ The median span across all groups is **0.01 days**, which reads as "these are
+all duplicates" and is wrong — the distribution is BIMODAL and the median sits in
+the wrong hump. Reading it through the median nearly discarded this whole task.
+
+## ⛔ WHY THIS DOES NOT MAKE THE MEASUREMENT CIRCULAR
+
+Marking the old memo superseded and then asking "does search still return the
+old one" is trivially answered by FR-115 itself — the exclusion is the mechanism
+under test, so it would be testing that a filter filters.
+
+**The non-trivial question is what happens to the QUERY.** R-16 found the
+replacement usually is not returned. So the measurement that matters is: a query
+that used to find the OLD memo — asked with an excerpt from the OLD memo's body,
+never its title — must now find the NEW one. If instead it returns nothing
+relevant, superseding has made recall WORSE, and that is a real possible outcome
+this is built to be able to report.
+
+⇒ So this script records, for every edge, the **old memo's body excerpt** as a
+probe query. `memo-qa-suite`'s supersession task reads them back.
+
+    scripts/memo-regenerate-supersede-edges --dry-run     # always look first
+    scripts/memo-regenerate-supersede-edges --apply
+"""
+from __future__ import annotations
+
+import argparse
+import collections
+import json
+import sys
+import time
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, "/app/src")
+
+from memo import db  # noqa: E402
+
+
+def _excerpt(content: str, title: str) -> str | None:
+    """A probe query from the BODY, never the title.
+
+    ⛔ Querying by the shared title would make the task own_title in costume:
+    both memos carry that title, so a hit would say nothing about which VERSION
+    the index prefers. This project has already built that exact confound once.
+    """
+    lines = [l.strip() for l in (content or "").split("\n")
+             if l.strip() and not l.strip().startswith(("#", ">", "|", "-", "*"))]
+    if len(lines) < 3:
+        return None
+    ex = " ".join(lines[len(lines) // 3:])[:180]
+    if len(ex) < 60:
+        return None
+    if title and title[:40].lower() in ex.lower():
+        return None
+    return ex
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--min-days", type=float, default=1.0)
+    ap.add_argument("--apply", action="store_true")
+    ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--out", default=None,
+                    help="write the edge list as JSON (probe queries included)")
+    args = ap.parse_args()
+    if not args.apply and not args.dry_run:
+        print("refusing to guess: pass --dry-run or --apply", file=sys.stderr)
+        return 2
+
+    conn = db._get_or_create_conn(db._resolve_path(None))
+    rows = conn.execute(
+        "SELECT id, title, content, created_at FROM documents "
+        "WHERE valid_until IS NULL").fetchall()
+    groups: dict[str, list] = collections.defaultdict(list)
+    for r in rows:
+        t = (r["title"] or "").strip()
+        if t:
+            groups[t].append(r)
+
+    edges, skipped_recent, skipped_same, skipped_noprobe = [], 0, 0, 0
+    for title, members in groups.items():
+        if len(members) < 2:
+            continue
+        members = sorted(members, key=lambda r: r["created_at"] or 0)
+        span_days = ((members[-1]["created_at"] or 0)
+                     - (members[0]["created_at"] or 0)) / 86400.0
+        if span_days < args.min_days:
+            skipped_recent += 1
+            continue
+        if len({(r["content"] or "") for r in members}) == 1:
+            # Byte-identical copies are a DEDUPE problem, not a supersession one.
+            # Marking one authoritative would assert an update that never happened.
+            skipped_same += 1
+            continue
+        newest = members[-1]
+        for old in members[:-1]:
+            if (old["content"] or "") == (newest["content"] or ""):
+                continue
+            probe = _excerpt(old["content"] or "", title)
+            if probe is None:
+                skipped_noprobe += 1
+                continue
+            edges.append({
+                "old_id": old["id"], "new_id": newest["id"], "title": title,
+                "days_apart": round(((newest["created_at"] or 0)
+                                     - (old["created_at"] or 0)) / 86400.0, 2),
+                "probe_query": probe, "method": "same-title-heuristic",
+            })
+
+    print(f"title groups: {sum(1 for v in groups.values() if len(v) > 1)} "
+          f"with >1 member")
+    print(f"  skipped, span < {args.min_days}d (burst duplicates): {skipped_recent}")
+    print(f"  skipped, byte-identical (a DEDUPE problem, not supersession): "
+          f"{skipped_same}")
+    print(f"  skipped, no usable body probe: {skipped_noprobe}")
+    print(f"⇒ edges to write: {len(edges)}")
+    if edges:
+        print("  examples:")
+        for e in sorted(edges, key=lambda x: -x["days_apart"])[:5]:
+            print(f"    {e['days_apart']:7.1f}d  {e['title'][:58]!r}")
+
+    if args.out:
+        Path(args.out).write_text(json.dumps(edges, indent=2))
+        print(f"wrote {args.out}")
+
+    if not args.apply:
+        print("\nDRY RUN — nothing written")
+        return 0
+
+    now = time.time()
+    written = 0
+    for e in edges:
+        try:
+            # ⚠️ Column names read off the LIVE schema, not assumed. The first
+            # draft wrote (created_at, method) — neither exists; the real table
+            # is (superseded_at, actor, reason). An `--apply` would have failed
+            # every row. `actor`/`reason` are where the provenance goes, so a
+            # later reader can separate a heuristic edge from one an agent
+            # asserted deliberately.
+            conn.execute(
+                "INSERT OR IGNORE INTO supersede_edges "
+                "(old_id, new_id, superseded_at, actor, reason) VALUES (?,?,?,?,?)",
+                (e["old_id"], e["new_id"], now,
+                 "memo-regenerate-supersede-edges",
+                 f"{e['method']}: same exact title, {e['days_apart']}d apart, "
+                 f"differing content"))
+            conn.execute(
+                "UPDATE documents SET valid_until = ? WHERE id = ? "
+                "AND valid_until IS NULL", (now, e["old_id"]))
+            written += 1
+        except Exception as ex:
+            print(f"  ✗ {e['old_id'][:8]}: {type(ex).__name__}: {ex}",
+                  file=sys.stderr)
+    conn.commit()
+
+    # ⭐ Verify the OUTCOME, not the intent. FR-115 filters on `valid_until`, NOT
+    # on the edge table — so edges written without the column set would leave the
+    # feature exactly as inert as it was, while this script reported success.
+    n_edges = conn.execute("SELECT COUNT(*) FROM supersede_edges").fetchone()[0]
+    n_marked = conn.execute(
+        "SELECT COUNT(*) FROM documents WHERE valid_until IS NOT NULL").fetchone()[0]
+    print(f"\nafter: supersede_edges {n_edges} · documents with valid_until "
+          f"{n_marked} (attempted {written})")
+    if n_marked == 0 and written:
+        print("  ✗ edges exist but NO document is marked — FR-115 filters on "
+              "valid_until, so search behaviour is unchanged", file=sys.stderr)
+        return 1
+    print("  ✓ superseded memos are now excluded from search by FR-115")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
