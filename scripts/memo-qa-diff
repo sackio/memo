@@ -180,9 +180,57 @@ def print_recall_task(task, a_run, b_run, a_name, b_name, a_label, b_label) -> N
     print()
 
 
+ANSWER_ROWS = [
+    ("right_doc_top1_pct", "right doc @1", "the OLD metric — kept beside the "
+                                           "others so the gap is visible"),
+    ("answer_in_topk_pct", "ANSWER in top-k", "⭐ GROUND TRUTH: the fact came back"),
+    ("answer_in_context_pct", "answer in /context", "⭐ …and survived the budget"),
+    ("truncation_loss_pt", "  ↳ lost to budget", "retrieved, then truncated away"),
+    ("context_tokens_mean", "tokens per call", "what delivery cost"),
+]
+
+
+def print_answer_recall(a_run, b_run, a_name, b_name, a_label, b_label) -> None:
+    pa = task_paths(a_run, a_name, "answer_recall")
+    pb = task_paths(b_run, b_name, "answer_recall")
+    print("── answer_recall (did the ANSWER come back, not did the doc rank) ──")
+    if not pa and not pb:
+        print("  — neither run has an answer_recall result (could_not_run)\n")
+        return
+    for path in sorted(set(pa) | set(pb)):
+        va, vb = pa.get(path), pb.get(path)
+        ok = lambda v: isinstance(v, dict) and v.get("status") == "ok"
+        print(f"  [{path}]  n={va.get('total_n') if ok(va) else '—'}"
+              f" / {vb.get('total_n') if ok(vb) else '—'}")
+        for key, lbl, why in ANSWER_ROWS:
+            fa = va.get(key) if ok(va) else None
+            fb = vb.get(key) if ok(vb) else None
+            unit = "" if key == "context_tokens_mean" else ("pt" if key.endswith("_pt") else "%")
+            cell = lambda f: "—" if f is None else f"{f:.1f}{unit}"
+            line = f"    {lbl:20} {cell(fa):>10}  ->  {cell(fb):>10}"
+            if fa is not None and fb is not None:
+                d = fb - fa
+                # ⛔ The floor is R-17's and applies to RATES. Token counts are a
+                # different quantity and are NOT floored — silently applying a
+                # percentage-point floor to a token count would be a category error.
+                floored = (unit == "%" and abs(d) < NOISE_FLOOR_PT)
+                line += (f"   {d:+.1f}{unit}"
+                         + ("  (< floor — NOT a result)" if floored else ""))
+            print(f"{line:<62} · {why}")
+        for v, lbl in ((va, a_label), (vb, b_label)):
+            if isinstance(v, dict) and (v.get("total_ambiguous")
+                                        or v.get("total_missing")):
+                print(f"    ⚠️ {lbl}: {v.get('total_missing',0)} missing, "
+                      f"{v.get('total_ambiguous',0)} ungradeable of "
+                      f"{v.get('total_pinned')} pinned")
+    print("    (ground truth = answer_in_topk; right-sizing = the loss row "
+          "and tokens-per-call)\n")
+
+
 def print_task_delta(a_run, b_run, a_name, b_name, a_label, b_label) -> None:
     for task in ("own_title", "content_query"):
         print_recall_task(task, a_run, b_run, a_name, b_name, a_label, b_label)
+    print_answer_recall(a_run, b_run, a_name, b_name, a_label, b_label)
 
     for key, label in (("set_stability", "set_stability (T287)"),
                        ("api_surface", "api_surface")):

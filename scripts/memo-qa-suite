@@ -77,16 +77,29 @@ CANDIDATE_PATHS = {
 }
 
 
+# ⛔ THE HARNESS MUST BE SEPARABLE FROM REAL TRAFFIC IN v1's query_log.
+# v1 logs every search with its user-agent so live usage can be replayed against
+# v2 (Ben, 2026-08-03: *"compare the results from our real live usage"*).
+# Measured 2026-08-03: 2,714 of 2,791 logged rows were `Python-urllib/3.10` from
+# 192.168.0.109 — server4, which is where this harness runs. **The benchmark was
+# drowning the log it exists to mine, and was indistinguishable from the fleet's
+# own hooks, which are also Python and also on these hosts.** Attributing it by
+# IP is an inference; a distinct agent string is a measurement.
+UA = "memo-qa-suite/2 (benchmark; EXCLUDE-FROM-MIRROR)"
+
+
 def _post(url: str, path: str, body: dict, timeout: float = 60.0):
     req = urllib.request.Request(
         url.rstrip("/") + path, data=json.dumps(body).encode(),
-        headers={"Content-Type": "application/json"})
+        headers={"Content-Type": "application/json", "User-Agent": UA})
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return json.loads(r.read())
 
 
 def _get(url: str, path: str, timeout: float = 180.0):
-    with urllib.request.urlopen(url.rstrip("/") + path, timeout=timeout) as r:
+    req = urllib.request.Request(url.rstrip("/") + path,
+                                 headers={"User-Agent": UA})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
         return json.loads(r.read())
 
 

@@ -1408,3 +1408,62 @@ the rest of this suite already enforces.
 
 📌 Also this run: set-stability v1 **0/25**, v2 **3/25** (was 2/25). v2 remains the
 less reproducible build; still undecided as a REQUIREMENT (T287).
+
+---
+
+## R-18 — the query log is 97% my own benchmark, and the mirror test cannot run yet (2026-08-03) [002/FR-114]
+
+**Ben, 11:23:** *"do we have query logging in v1? if so you could compare the
+results from our real live usage."* **11:27:** *"yes logging for writing /
+reading from v1, then we'll run some mirror tests."*
+
+Logging shipped in v1 `fc3d190` (0.3.8) and works. After ~4 hours it holds
+**2,791 rows** — which reads like an ample corpus to replay against v2, and is
+not one.
+
+| source | agent | rows |
+|---|---|---|
+| 192.168.0.109 | `Python-urllib/3.10` | **2,714** |
+| — (MCP) | `mcp:memo_update` | 44 |
+| — (MCP) | `mcp:memo_store` | 16 |
+| 192.168.1.199 | `curl/8.12.1` | 8 |
+| — (MCP) | `mcp:memo_search` | **7** |
+| — (MCP) | `mcp:memo_context` | **1** (my control probe, below) |
+| 192.168.48.1 | `curl/7.81.0` | 1 |
+
+**192.168.0.109 is server4** — the first address in its own `hostname -I`, and
+where this benchmark harness runs. ⇒ **The instrument is drowning the log it
+exists to mine.** Replaying `query_log` against v2 today would replay my own
+`own_title` and `content_query` questions and report the result as *real live
+usage* — the same shape as R-14's "incumbent" that turned out to be a v2 build.
+
+⛔ **And the attribution was an INFERENCE, not a measurement.** The fleet's own
+hooks (`memo-judge.py`, `memo-reconciler.py`, the periodic hooks) are Python on
+these same hosts, so `Python-urllib/3.10` from a LAN address is exactly what
+they would look like too. I could not separate them, and the row count would
+never have said so. ⇒ Fixed by giving the harness a distinct agent string,
+`memo-qa-suite/2 (benchmark; EXCLUDE-FROM-MIRROR)`, so the split is a property
+of the data rather than of my reasoning about it.
+
+### The zero that needed a control
+
+`op='context'` was **0** across all 2,791 rows. Zero because nobody called it and
+zero because the log line is unreachable look identical, and only one of them is
+a fact about the fleet. One `POST /context` against v1 → the counter moved to 1.
+⇒ **`/context` is instrumented and reachable; the fleet genuinely made no
+`memo_context` calls in four hours.** (This is the `usage_triggers_without_data`
+lesson from `/remind`, in a different system: an unfed probe is indistinguishable
+from a quiet one *from the inside*.)
+
+### What this actually means for the mirror test
+
+Unambiguously-not-mine reads: **16 searches and 0 contexts in ~4 hours.** That is
+not a sample; it is an anecdote. ⚠️ It is also lower than a ~50-session fleet
+would suggest, which is worth understanding on its own — but the immediate
+consequence is scheduling, not diagnosis:
+
+⇒ **The mirror test needs DAYS of accumulation, not hours, and it needed the
+agent-string fix first — without which more waiting would only have produced a
+larger pile of my own questions.** The instrument is now correct and the clock
+has started. Nothing about v2 is blocked on it.
+
