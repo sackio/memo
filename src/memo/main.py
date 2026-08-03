@@ -520,7 +520,75 @@ if _ui_dist.exists():
 
 @app.get("/health")
 async def health():
+    """Liveness. Deliberately constant — it answers "is this process up".
+
+    ⛔ IT CANNOT TELL YOU MEMO IS WORKING, AND ON 2026-08-03 IT DID NOT.
+    During the server4 IO storm this endpoint returned 200 in 0.27s while
+    `POST /search` HUNG PAST 90 SECONDS. `/recall` was dead fleet-wide and every
+    monitor watching memo was green, because the process genuinely was alive —
+    it just could not do the one thing it exists to do. The outage was found by a
+    benchmark harness that happened to call `/search` and got a TimeoutError.
+    No alert fired, and none would have.
+    ⇒ **Absence of an alert was evidence about the CHECK, not about the SERVICE.**
+    Use `/ready` for "is it doing its job". Keep both: they answer different
+    questions and collapsing them loses the ability to tell a wedged disk from a
+    dead process.
+    """
     return {"status": "ok"}
+
+
+@app.get("/ready")
+async def ready(timeout_s: float = 5.0):
+    """Readiness — exercises the ACTUAL read path, bounded.
+
+    ⭐ Touches what a search touches: the sqlite connection AND the vec0 index.
+    A `SELECT count(*)` on `documents` alone would not have caught 2026-08-03,
+    because the wedge was in IO against the vector index, so this reads a row
+    back out of `document_embeddings` too.
+
+    ⛔ DELIBERATELY DOES NOT CALL THE EMBEDDING PROVIDER. A probe that embeds
+    fails whenever the VENDOR is slow, which is a different outage with a
+    different owner, and it would page us for OpenRouter latency while telling us
+    nothing about this host. **Probe your own dependencies, not your vendors'.**
+    (Measured during the same incident: OpenRouter answered in 1.3s while memo
+    was unusable — a provider-touching probe would have been green too, for the
+    opposite reason.)
+
+    ⚠️ BOUNDED, because an unbounded readiness probe becomes a load source under
+    exactly the conditions it exists to detect. On 2026-08-03 `docker exec`-based
+    monitoring stacked instead of returning and the monitoring itself became part
+    of the storm. A probe that cannot time out is a probe that piles up.
+    """
+    started = _now()
+
+    def _probe():
+        conn = db._get_or_create_conn(db._resolve_path(None))
+        n = conn.execute("SELECT COUNT(*) FROM documents").fetchone()[0]
+        # Read an actual vector back — the index, not just the table beside it.
+        row = conn.execute(
+            "SELECT doc_id FROM document_embeddings LIMIT 1").fetchone()
+        return n, (row[0] if row else None)
+
+    try:
+        n, probe_id = await asyncio.wait_for(
+            asyncio.to_thread(_probe), timeout=timeout_s)
+    except asyncio.TimeoutError:
+        # ⛔ 503, not 200-with-a-field. A monitor that has to parse the body to
+        # learn it is broken is the failure this endpoint exists to prevent.
+        return JSONResponse(
+            status_code=503,
+            content={"status": "not_ready",
+                     "reason": f"store did not respond within {timeout_s}s",
+                     "elapsed_ms": round((_now() - started) * 1000, 1)})
+    except Exception as e:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "not_ready", "reason": f"{type(e).__name__}: {e}",
+                     "elapsed_ms": round((_now() - started) * 1000, 1)})
+    elapsed = round((_now() - started) * 1000, 1)
+    return {"status": "ready", "documents": n,
+            "vector_index_readable": probe_id is not None,
+            "elapsed_ms": elapsed}
 
 
 @app.post("/documents", response_model=StoreResponse)
