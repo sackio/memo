@@ -49,7 +49,25 @@ def _get(url: str, path: str, timeout: float = 180.0):
 # output still said "document" — the same shape as the coverage confound that
 # has already produced three wrong answers here. The measurement names its own
 # path.
-PATHS = {"document": "/search-documents", "passages": "/search-passages"}
+#
+# ⭐ `v1-search` (added 2026-08-03) is the ONE deliberate exception, and it does
+# not weaken the rule above — it applies it. **v1 has no `/search-documents`; it
+# exposes only `/search`.** So the docstring's own example,
+# `--url http://server4:8000`, has NEVER worked: every query 404s, every band
+# scores rank-1 = 0, and the table reads as "v1 retrieves nothing" rather than
+# "the bench never asked it anything". That is why there has never been a v1
+# number to compare v2 against — the missing baseline was a routing bug wearing
+# a result's clothes.
+#
+# ⛔ It is a SEPARATE KEY rather than a fallback inside "document" precisely
+# because of the T260 argument: a silent fallback would let one label describe
+# two different indexes. This one names itself, and the label is carried into
+# the JSON (`path` field), so a v1 run can never be mistaken for a v2 run.
+# ⚠️ On v1, `/search` IS the configurable route T260 warns about. A `v1-search`
+# number is therefore a claim about "whatever v1's /search is wired to today",
+# not about a named index. Record v1's config alongside the result.
+PATHS = {"document": "/search-documents", "passages": "/search-passages",
+         "v1-search": "/search"}
 
 
 def _search(url: str, query: str, limit: int = 10, timeout: float = 60.0,
