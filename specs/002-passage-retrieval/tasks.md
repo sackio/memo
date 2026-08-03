@@ -12,6 +12,20 @@ DO NOT carry over.** The corpus was rolled back and re-migrated on
 and has since moved again to self-hosted `qwen3-embedding-4b` @2560.
 **R-10 is the current record**; R-09 is its 3-large comparison point.
 
+⭐ **R-13 (2026-08-02) SUPERSEDES R-10 ON THE DOCUMENT PATH.** The prefix is live and
+measured on the full corpus: rank-1 **49.4% → 66.4%** vs bare qwen3. Against 3-large the
+TOTAL reads −3.0, **which is the wrong number to quote** — short bands lose (−5.3 / −11.1 /
+−7.9) and long bands win (+11.5, **+28.1**), taking 2000+ from **18.8% → 46.9%**, more than
+double, on the one band this feature exists to fix. A corpus that is 77% short memos lets
+the short bands dominate any weighted mean.
+⛔ **SC-101 STILL FAILS on the document path** (46.9% vs 80%) — a better encoder raises the
+document-as-one-vector ceiling rather than removing it.
+⚠️ **THE PASSAGE HALF OF T282 IS NOT DONE.** It ran to ~64% and was paused when server4
+wedged; it carries **90 query timeouts**, 79 of them inside a 70-minute window where memo-v2
+completed almost nothing. Those are scored `absent` and must be repaired with
+`scripts/memo-bench-repair` before any passage number is quoted. **Raw and corrected, both
+columns, always.**
+
 ⛔ **READ R-11 BEFORE QUOTING R-10.** R-10 measures a client that sends **bare
 queries** to an encoder trained to expect an instruction prefix, so its qwen3
 columns are a **floor for that model, not a verdict on it**. Both paths regress
