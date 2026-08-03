@@ -1290,3 +1290,66 @@ and is still undecided — but v2 is now measurably the less reproducible of the
 two, which was not previously known.
 ✅ **API surface: 26 routes added, NONE removed.** No endpoint a v1 caller depends
 on has disappeared, so the cutover carries no route-level breakage.
+
+## R-16 — supersession is unimplemented in practice, and the replacement usually isn't returned
+
+2026-08-03, first experiment under Ben's multi-day mandate (concern (b): *"newer
+information supersedes older information it now contradicts"*).
+
+### The census — not a sample
+
+| | count | of corpus |
+|---|---|---|
+| memos declaring supersession/correction **in prose** | **655** | 8.9% |
+| …of which name a specific memo id | 112 | 1.5% |
+| marked in `supersede_edges` | **0** | 0% |
+| documents with `valid_until` set | **0** | 0% |
+
+⇒ **The mechanism is fully built and has never been used once.** `supersede_edges`
+carries `old_id, new_id, superseded_at, actor, reason, operator_directive_ref`;
+`/supersede` is a live route; `documents.valid_until` exists. All empty.
+⇒ ***655 memos know they are stale. Search cannot read any of it.***
+
+### The cost, measured — and the number I would NOT quote
+
+28 old→new pairs where a memo declares supersession AND names a **strictly newer**
+memo (the newer-than check is what makes it a pair rather than two co-mentioned
+memos). Queried each OLD memo's own title, top-10:
+
+| outcome | n | |
+|---|---|---|
+| stale ranked above its replacement | 21 | 75% |
+| **replacement NOT RETURNED AT ALL** | **17** | **61%** |
+| replacement ranked above stale | 3 | 11% |
+| neither returned | 4 | 14% |
+
+⛔ **DO NOT QUOTE THE 75%.** The query is the old memo's own title, which biases
+toward the old memo *by construction* — an own-title query returning its own
+document is retrieval working correctly, not a supersession failure. **That figure
+mostly measures the thing it is not about.**
+
+⭐ **The defensible number is 17/28 (61%): the replacement is absent from the top
+10 entirely.** Own-title bias does not explain an absence — a system that
+understood the relationship would surface the replacement alongside, and the
+query text is by construction highly relevant to it (the replacement is *about the
+same subject*). ⇒ **An agent recalling one of these topics usually receives the
+superseded version and, more often than not, never sees the correction at all.**
+
+### What this justifies, and what it does not
+
+✅ **Justified:** building edges for the **112** memos that already name their
+replacement. That is mechanical, reversible, and needs no judgement — the memo
+states the relationship itself.
+⛔ **NOT justified from this data:** inferring supersession from *content
+similarity*. Nothing here measures how often two similar memos actually
+contradict, and the 2026-08-02 `.42:32000` repoint work established the failure
+mode directly — **a keyword classifier split 41 claims into asserted/denied and
+was wrong in BOTH directions on the first eight hand-checked**, because proximity
+cannot recover whether a string is *used* or *mentioned*. The memos that must not
+be touched are exactly the ones that were already right.
+
+⇒ **Next step is the 112, one class at a time, not a corpus-wide inference pass.**
+
+⚠️ n=28 on the cost measurement. The census (655 / 112 / 0 / 0) is a full count and
+is solid; the retrieval-cost figure is a small sample and deserves re-running at
+larger n before it carries a decision.
