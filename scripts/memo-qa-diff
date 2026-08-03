@@ -1,0 +1,188 @@
+#!/usr/bin/env python3
+"""memo-qa-diff — compare two memo-qa-suite runs, or two targets inside one.
+
+⭐ **The question is almost never "what does v2 score." It is "did this change
+help, and where did it hurt."** That needs two runs side by side WITH their
+config deltas attached, which is the whole reason `memo-qa-suite` stores the
+resolved config next to the numbers.
+
+    memo-qa-diff bench/results/qa-A.json bench/results/qa-B.json
+    memo-qa-diff --within bench/results/qa-A.json        # v1 vs v2 in one run
+
+## ⛔ WHAT THIS REFUSES TO DO
+
+**It will not diff two numbers whose configs differ without saying so.** A
+rank-1 delta between a 3-small run and a 3-large run is not a regression or an
+improvement in anything until you know which knob moved. Config deltas print
+FIRST, above the numbers, and a run with `git.dirty` is flagged as
+non-reproducible.
+
+**It will not treat a missing task as a zero.** `could_not_run` propagates; a
+task that did not execute prints as `—`, never as `0.0%` and never as a delta.
+*The most expensive mistakes in this project have all been a null rendered as a
+value.*
+
+## ⚠️ ON COMPARING TOTALS
+
+Totals are UNWEIGHTED means of five band rates with n fixed per band, so they are
+immune to corpus composition **by construction**. A total delta is therefore not
+explainable by "one corpus has more long documents" — that argument is already
+excluded by the sampling design and reaching for it produces a confident wrong
+mechanism attached to a possibly-right conclusion.
+
+⛔ **Band-level deltas are the noisy ones and they are the ones that get quoted
+alone.** At n=60 a single band swing of 25pt is ~15 documents. This tool prints
+the raw integers next to every percentage for exactly that reason.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+CFG_FIELDS = ("model", "dims", "url")
+
+
+def load(p: str) -> dict:
+    return json.loads(Path(p).read_text())
+
+
+def target(run: dict, name: str) -> dict:
+    for t in run.get("targets", []):
+        if t.get("name") == name:
+            return t
+    return {}
+
+
+def own_title_paths(run: dict, name: str) -> dict:
+    r = (run.get("results") or {}).get(name) or {}
+    ot = r.get("own_title")
+    if not isinstance(ot, dict):
+        return {}
+    # own_title is stored per-path: {"document": {...}, "v1-search": {...}}
+    if "task" in ot:            # single-path shape
+        return {ot.get("path", "?"): ot}
+    return {k: v for k, v in ot.items() if isinstance(v, dict) and "task" in v}
+
+
+def fmt_pct(v) -> str:
+    return "—" if v is None else f"{v:.1f}%"
+
+
+def cfg_line(t: dict) -> str:
+    r = t.get("resolved") or {}
+    if r.get("error"):
+        return f"{r['error']} ({r.get('detail','')[:60]})"
+    return " · ".join(f"{k}={r.get(k)}" for k in CFG_FIELDS)
+
+
+def print_config_delta(a_run, b_run, a_name, b_name, a_label, b_label) -> None:
+    ta, tb = target(a_run, a_name), target(b_run, b_name)
+    print("── CONFIG (printed first, because a delta between different configs "
+          "is not a regression) ──")
+    print(f"  {a_label:22} {cfg_line(ta)}")
+    print(f"  {b_label:22} {cfg_line(tb)}")
+    ra, rb = ta.get("resolved") or {}, tb.get("resolved") or {}
+    diffs = [f"{k}: {ra.get(k)} -> {rb.get(k)}" for k in CFG_FIELDS
+             if ra.get(k) != rb.get(k)]
+    print("  CHANGED: " + ("; ".join(diffs) if diffs else "nothing"))
+    ca, cb = ta.get("corpus") or {}, tb.get("corpus") or {}
+    if ca and cb and "error" not in ca and "error" not in cb:
+        print(f"  corpus:  n {ca.get('n')} -> {cb.get('n')}"
+              f"   ≥2000tok {ca.get('ge_2000')} -> {cb.get('ge_2000')}")
+        if ca.get("n") != cb.get("n"):
+            print("  ⚠️ CORPUS SIZES DIFFER — band pools are not the same memos. "
+                  "Stratification fixes composition, NOT within-band difficulty.")
+    for run, lbl in ((a_run, a_label), (b_run, b_label)):
+        if (run.get("git") or {}).get("dirty"):
+            print(f"  ⚠️ {lbl}: git tree was DIRTY — run is not reproducible")
+    print()
+
+
+def print_task_delta(a_run, b_run, a_name, b_name, a_label, b_label) -> None:
+    pa, pb = own_title_paths(a_run, a_name), own_title_paths(b_run, b_name)
+    print("── own_title (unweighted mean of band rates; raw counts in parens) ──")
+    if not pa and not pb:
+        print("  — neither run has an own_title result (could_not_run)\n")
+    for path in sorted(set(pa) | set(pb)):
+        va, vb = pa.get(path), pb.get(path)
+        def cell(v):
+            if not v or v.get("status") != "ok":
+                return "—"
+            return (f"{v['unweighted_rank1_pct']:.1f}% "
+                    f"({v['total_rank1']}/{v['total_n']}"
+                    + (f", {v['total_failures']}F" if v.get("total_failures") else "")
+                    + ")")
+        line = f"  {path:12} {cell(va):26} {cell(vb):26}"
+        if va and vb and va.get("status") == "ok" and vb.get("status") == "ok":
+            d = vb["unweighted_rank1_pct"] - va["unweighted_rank1_pct"]
+            line += f"  {d:+.1f}pt"
+        else:
+            line += "   (no delta — a missing task is not a zero)"
+        print(line)
+        if va and vb and va.get("status") == "ok" and vb.get("status") == "ok":
+            for ba, bb in zip(va["bands"], vb["bands"]):
+                if not ba["n"] or not bb["n"]:
+                    continue
+                ra_, rb_ = 100*ba["rank1"]/ba["n"], 100*bb["rank1"]/bb["n"]
+                print(f"      {ba['band']:>10}  {ra_:5.1f}% ({ba['rank1']}/{ba['n']})"
+                      f"  ->  {rb_:5.1f}% ({bb['rank1']}/{bb['n']})"
+                      f"   {rb_-ra_:+5.1f}pt")
+    print()
+
+    for key, label in (("set_stability", "set_stability (T287)"),
+                       ("api_surface", "api_surface")):
+        va = ((a_run.get("results") or {}).get(a_name) or {}).get(key)
+        vb = ((b_run.get("results") or {}).get(b_name) or {}).get(key)
+        print(f"── {label} ──")
+        for v, lbl in ((va, a_label), (vb, b_label)):
+            if not isinstance(v, dict):
+                print(f"  {lbl:22} — absent"); continue
+            if v.get("status") != "ok":
+                print(f"  {lbl:22} could_not_run ({v.get('why','')[:60]})"); continue
+            if key == "set_stability":
+                print(f"  {lbl:22} rank1 varied {v['rank1_varied']}/{v['n_ran']}"
+                      f" · id-list varied {v['id_list_varied']}/{v['n_ran']}"
+                      f" ({v['replicates']} replicates)")
+            else:
+                print(f"  {lbl:22} {len(v.get('routes') or [])} routes; "
+                      f"paths={ {k: (s.get('row_keys') or s.get('error')) for k, s in (v.get('search_shape') or {}).items()} }")
+        if key == "api_surface" and isinstance(va, dict) and isinstance(vb, dict):
+            ra_, rb_ = set(va.get("routes") or []), set(vb.get("routes") or [])
+            if ra_ or rb_:
+                print(f"  only in {a_label}: {sorted(ra_-rb_) or '—'}")
+                print(f"  only in {b_label}: {sorted(rb_-ra_) or '—'}")
+        print()
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("a")
+    ap.add_argument("b", nargs="?")
+    ap.add_argument("--within", action="store_true",
+                    help="compare v1 vs v2 inside a single run file")
+    args = ap.parse_args()
+
+    a_run = load(args.a)
+    if args.within or not args.b:
+        b_run = a_run
+        a_name, b_name = "v1", "v2"
+        a_label = f"v1 @ {a_run['run_id']}"
+        b_label = f"v2 @ {a_run['run_id']}"
+    else:
+        b_run = load(args.b)
+        a_name = b_name = "v2"
+        a_label = f"{a_run['run_id'][:17]} {a_run.get('label','')}"[:22]
+        b_label = f"{b_run['run_id'][:17]} {b_run.get('label','')}"[:22]
+
+    print(f"\nA: {args.a}   git={a_run.get('git')}")
+    print(f"B: {args.b or args.a}   git={b_run.get('git')}\n")
+    print_config_delta(a_run, b_run, a_name, b_name, a_label, b_label)
+    print_task_delta(a_run, b_run, a_name, b_name, a_label, b_label)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
