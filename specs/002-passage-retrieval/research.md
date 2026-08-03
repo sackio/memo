@@ -1353,3 +1353,58 @@ be touched are exactly the ones that were already right.
 ⚠️ n=28 on the cost measurement. The census (655 / 112 / 0 / 0) is a full count and
 is solid; the retrieval-cost figure is a small sample and deserves re-running at
 larger n before it carries a decision.
+
+## R-17 — v1 is an accidental control, and it puts the noise floor at ±1.3pt (n=60)
+
+2026-08-03. Re-ran the suite after corpus parity (7,336 → 8,014 docs) and FR-115.
+`bench/results/qa-2026-08-03T164406Z.json` vs `…T153656Z.json`.
+
+| task | build | pre | post | Δ |
+|---|---|---|---|---|
+| own_title | v1 3-small | 53.3 | 52.0 | **−1.3** |
+| | v2 documents | 59.7 | 57.7 | −2.0 |
+| | v2 passages | 66.0 | 65.0 | −1.0 |
+| content_query | v1 3-small | 49.0 | 47.7 | **−1.3** |
+| | v2 documents | 48.7 | 45.7 | −3.0 |
+| | v2 passages | 64.0 | 62.7 | −1.3 |
+
+### ⭐ THE FINDING IS IN THE v1 ROW
+
+**v1 received no code change and gained 6 documents (7,921 → 7,927), and it moved
+−1.3pt on BOTH tasks.** It is the one column where the true delta is known to be
+≈0. ⇒ ***±1.3pt is the resolution floor of this harness at n=60, and any smaller
+difference is unreadable.***
+
+**Mechanism, and it is not corpus size:** `random.sample` over a *changed pool*
+draws different documents even under a fixed seed. Adding six memos to v1 was
+enough to reshuffle which 60 land in each band. **The seed makes a run
+reproducible against an unchanged corpus and does NOT make two runs comparable
+across a corpus edit.**
+
+⇒ ⛔ **THIS IS A LIMITATION OF THE HARNESS FOR EXACTLY THE QUESTION IT EXISTS TO
+ANSWER** — *did this change help?* — because the interesting changes are often
+accompanied by corpus edits, which is precisely when the seed stops holding the
+sample fixed.
+
+### What that implies for everything measured today
+
+✅ **Unaffected — the gaps are far outside the floor.** passages 65.0 vs documents
+57.7 (+7.3) and vs v1 52.0 (+13.0); content_query passages 62.7 vs v1 47.7
+(+15.0). R-15's headline — *the encoder buys nothing on realistic queries, all the
+long-document gain is chunking* — rests on a −0.3 that is INSIDE the floor, but it
+is supported independently by the 2000+ band moving 15.0 → 15.0 on own_title and
+by both long bands going negative. **It should be re-derived at larger n before it
+is treated as settled.**
+⛔ **Affected — do not read the 1-3pt drops above as a regression from FR-115 or
+the sync.** They are indistinguishable from resampling.
+
+### The fix, not yet built
+
+Pin the sample to a **fixed document-id list** per band, stored alongside the
+results, rather than re-drawing by seed. Then a corpus edit changes the corpus and
+not the question. ⚠️ Cost: ids that leave the corpus have to be handled explicitly
+rather than silently replaced — which is the same "a null is not a zero" discipline
+the rest of this suite already enforces.
+
+📌 Also this run: set-stability v1 **0/25**, v2 **3/25** (was 2/25). v2 remains the
+less reproducible build; still undecided as a REQUIREMENT (T287).

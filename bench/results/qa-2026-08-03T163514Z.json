@@ -1,0 +1,296 @@
+{
+  "schema": 1,
+  "run_id": "2026-08-03T163514Z",
+  "label": "CORPUS PARITY: v2 3-large@3072+passages (8014 docs) vs v1 3-small@1536 (7926) \u2014 678 synced with ids preserved",
+  "git": {
+    "sha": "9a4bd5b",
+    "dirty": false
+  },
+  "seed": 7,
+  "per_band": 60,
+  "targets": [
+    {
+      "name": "v1",
+      "url": "http://server4:8000",
+      "container": "memo",
+      "reachable": true,
+      "resolved": {
+        "model": "openai/text-embedding-3-small",
+        "dims": 1536,
+        "url": null
+      },
+      "search_paths": {
+        "document": "http 404",
+        "passages": "http 404",
+        "v1-search": "present"
+      },
+      "corpus": {
+        "n": 7927,
+        "ge_1000": 1895,
+        "ge_2000": 396
+      }
+    },
+    {
+      "name": "v2",
+      "url": "http://localhost:8091",
+      "container": "memo-v2",
+      "reachable": true,
+      "resolved": {
+        "model": "openai/text-embedding-3-large",
+        "dims": 3072,
+        "url": "https://openrouter.ai/api/v1"
+      },
+      "search_paths": {
+        "document": "present",
+        "passages": "present",
+        "v1-search": "present"
+      },
+      "corpus": {
+        "n": 8014,
+        "ge_1000": 1971,
+        "ge_2000": 469
+      }
+    }
+  ],
+  "results": {
+    "v1": {
+      "primary_path": "v1-search",
+      "paths_present": [
+        "v1-search"
+      ],
+      "own_title": {
+        "v1-search": {
+          "task": "own_title",
+          "path": "v1-search",
+          "seed": 7,
+          "per_band": 60,
+          "bands": [
+            {
+              "band": "0-200",
+              "n": 60,
+              "rank1": 45,
+              "top5": 59,
+              "absent": 0,
+              "failures": 0,
+              "pool": 1294,
+              "p50_ms": 392.2,
+              "p90_ms": 506.8
+            },
+            {
+              "band": "200-500",
+              "n": 60,
+              "rank1": 41,
+              "top5": 55,
+              "absent": 3,
+              "failures": 0,
+              "pool": 2541,
+              "p50_ms": 394.1,
+              "p90_ms": 483.8
+            },
+            {
+              "band": "500-1000",
+              "n": 60,
+              "rank1": 38,
+              "top5": 48,
+              "absent": 10,
+              "failures": 0,
+              "pool": 2138,
+              "p50_ms": 408.0,
+              "p90_ms": 860.1
+            },
+            {
+              "band": "1000-2000",
+              "n": 60,
+              "rank1": 20,
+              "top5": 36,
+              "absent": 18,
+              "failures": 0,
+              "pool": 1449,
+              "p50_ms": 396.5,
+              "p90_ms": 490.1
+            },
+            {
+              "band": "2000-",
+              "n": 60,
+              "rank1": 12,
+              "top5": 29,
+              "absent": 25,
+              "failures": 0,
+              "pool": 390,
+              "p50_ms": 396.9,
+              "p90_ms": 532.7
+            }
+          ],
+          "total_n": 300,
+          "total_rank1": 156,
+          "unweighted_rank1_pct": 52.0,
+          "total_failures": 0,
+          "control_ok": true,
+          "status": "ok"
+        },
+        "elapsed_s": 129.8
+      },
+      "content_query": {
+        "v1-search": {
+          "task": "content_query",
+          "path": "v1-search",
+          "seed": 7,
+          "per_band": 60,
+          "bands": [
+            {
+              "band": "0-200",
+              "n": 60,
+              "rank1": 53,
+              "top5": 57,
+              "absent": 3,
+              "failures": 0,
+              "pool": 494
+            },
+            {
+              "band": "200-500",
+              "n": 60,
+              "rank1": 40,
+              "top5": 49,
+              "absent": 9,
+              "failures": 0,
+              "pool": 1602
+            },
+            {
+              "band": "500-1000",
+              "n": 60,
+              "rank1": 22,
+              "top5": 41,
+              "absent": 16,
+              "failures": 0,
+              "pool": 1883
+            },
+            {
+              "band": "1000-2000",
+              "n": 60,
+              "rank1": 12,
+              "top5": 27,
+              "absent": 26,
+              "failures": 0,
+              "pool": 1432
+            },
+            {
+              "band": "2000-",
+              "n": 60,
+              "rank1": 9,
+              "top5": 17,
+              "absent": 41,
+              "failures": 0,
+              "pool": 367
+            }
+          ],
+          "total_n": 300,
+          "total_rank1": 136,
+          "unweighted_rank1_pct": 45.33,
+          "total_failures": 0,
+          "control_ok": true,
+          "status": "ok"
+        },
+        "elapsed_s": 123.7
+      },
+      "set_stability": {
+        "task": "set_stability",
+        "path": "v1-search",
+        "n_requested": 25,
+        "n_ran": 25,
+        "replicates": 3,
+        "rank1_varied": 0,
+        "id_list_varied": 0,
+        "control_ok": true,
+        "status": "ok",
+        "elapsed_s": 40.1
+      },
+      "api_surface": {
+        "task": "api_surface",
+        "routes": [
+          "/admin/access-stats",
+          "/admin/leak-incidents",
+          "/admin/recount-tokens",
+          "/auto-store",
+          "/context",
+          "/documents",
+          "/documents/{doc_id}",
+          "/documents/{doc_id}/copy",
+          "/documents/{doc_id}/move",
+          "/health",
+          "/index",
+          "/search"
+        ],
+        "search_shape": {
+          "document": {
+            "error": "HTTPError"
+          },
+          "passages": {
+            "error": "HTTPError"
+          },
+          "v1-search": {
+            "container": "list",
+            "row_keys": [
+              "document",
+              "score"
+            ],
+            "doc_keys": [
+              "content",
+              "created_at",
+              "id",
+              "metadata",
+              "tags",
+              "title",
+              "token_count",
+              "updated_at"
+            ]
+          }
+        },
+        "control_ok": true,
+        "status": "ok",
+        "elapsed_s": 0.4
+      }
+    },
+    "v2": {
+      "primary_path": "document",
+      "paths_present": [
+        "document",
+        "passages",
+        "v1-search"
+      ],
+      "own_title": {
+        "status": "could_not_run",
+        "why": "URLError: <urlopen error [Errno 111] Connection refused>",
+        "elapsed_s": 0.0
+      },
+      "content_query": {
+        "status": "could_not_run",
+        "why": "URLError: <urlopen error [Errno 111] Connection refused>",
+        "elapsed_s": 0.0
+      },
+      "set_stability": {
+        "status": "could_not_run",
+        "why": "URLError: <urlopen error [Errno 111] Connection refused>",
+        "elapsed_s": 0.0
+      },
+      "api_surface": {
+        "task": "api_surface",
+        "routes": null,
+        "search_shape": {
+          "document": {
+            "error": "URLError"
+          },
+          "passages": {
+            "error": "URLError"
+          },
+          "v1-search": {
+            "error": "URLError"
+          }
+        },
+        "routes_error": "<urlopen error [Errno 111] Connection refused>",
+        "control_ok": false,
+        "status": "could_not_run",
+        "elapsed_s": 0.0
+      }
+    }
+  }
+}
