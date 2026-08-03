@@ -114,7 +114,8 @@ def git_state() -> dict:
             "dirty": bool(sh("git", "status", "--porcelain"))}
 
 
-def resolve_target(name: str, url: str, container: str | None) -> dict:
+def resolve_target(name: str, url: str, container: str | None,
+                   probe_timeout: float = 30.0) -> dict:
     """Read the config off the RUNNING service, not off any file.
 
     ⚠️ LOAD-BEARING. This host exports EMBEDDING_MODEL=…-3-small and
@@ -133,12 +134,21 @@ def resolve_target(name: str, url: str, container: str | None) -> dict:
 
     for label, p in CANDIDATE_PATHS.items():
         try:
-            _post(url, p, {"query": "probe", "limit": 1}, timeout=30)
+            _post(url, p, {"query": "probe", "limit": 1},
+                  timeout=probe_timeout)
             out["search_paths"][label] = "present"
         except urllib.error.HTTPError as e:
             out["search_paths"][label] = f"http {e.code}"
         except Exception as e:
-            out["search_paths"][label] = f"err {type(e).__name__}"
+            # ⚠️ RECORD THE BUDGET, not just the failure. A timeout here makes
+            # the whole target `could_not_run` ("no working search path"), so a
+            # service that is SLOW is reported identically to one that is
+            # ABSENT. Measured 2026-08-03: during a host IO storm v1 answered
+            # /search in 6.9s while a 30s probe had timed out minutes earlier —
+            # the difference between "degraded" and "gone" was the load at the
+            # instant I probed, and nothing in the record said so.
+            out["search_paths"][label] = (
+                f"err {type(e).__name__} (probe budget {probe_timeout}s)")
 
     if container:
         # ⚠️ `getattr(..., None)` per field, NOT attribute access. v1's settings
@@ -918,6 +928,10 @@ def main() -> int:
     ap.add_argument("--per-band", type=int, default=60)
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--stability-n", type=int, default=25)
+    ap.add_argument("--probe-timeout", type=float, default=30.0,
+                    help="per-path reachability probe budget. Raise it on a "
+                         "loaded host: a timeout drops the WHOLE target to "
+                         "could_not_run, so slow reads as gone.")
     ap.add_argument("--token-budget", type=int, default=4000,
                     help="/context budget for answer_recall (both builds default "
                          "to 4000; changing it changes what is being measured)")
@@ -974,8 +988,9 @@ def main() -> int:
                ("v2", args.v2_url, args.v2_container)]
     display = {"v1": args.v1_name or "v1", "v2": args.v2_name or "v2"}
     run["display_names"] = display
+    run["probe_timeout_s"] = args.probe_timeout
     for name, url, cont in targets:
-        t = resolve_target(name, url, cont)
+        t = resolve_target(name, url, cont, probe_timeout=args.probe_timeout)
         t["display_name"] = display[name]
         if t["reachable"]:
             try:
