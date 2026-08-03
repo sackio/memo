@@ -1031,6 +1031,12 @@ the number that the others could not.
 
 ### R-13 coda — ⚠️ SC-102 has quietly become ambiguous, and nobody has said so
 
+> ✅ **RESOLVED BY R-14 (2026-08-03).** The passage half landed and SC-102 is now evaluated
+> as the path-vs-path criterion this coda argued it was: **FAIL on both builds — 3 of 5
+> bands on 3-large, 5 of 5 on qwen3+prefix.** The row below reading *"not yet measured"* is
+> the one that mattered, and it is measured. **Read R-14 before quoting anything in this
+> coda**, which is preserved as written.
+
 SC-102 reads: *"**no** size band regresses against its **pre-change** rank-1 rate."*
 
 That was unambiguous when written. It is not any more, because the corpus has moved
@@ -1059,3 +1065,148 @@ re-stated.**
 absolute rate (≥80%), not a delta, so it survives an encoder change unchanged. **Absolute
 bars are portable across encoders; delta bars are not.** Worth remembering when writing the
 next one.
+
+---
+
+## R-14 — the passage half landed. SC-102 is evaluated, and the cutover loses on every axis measured.
+
+Census completed **2026-08-03 01:00:06 EDT**, 7,221 queries, 103 query failures. This
+closes R-13's coda and answers SC-102 for the first time since the baseline drifted.
+
+### The headline, stated before the caveats
+
+**The incumbent beats the proposed configuration in every band, and the one band where it
+does not is inside noise.** Corrected rank-1, full corpus:
+
+| band | **A** 3-large + passages *(live today)* | **B** qwen3+prefix + documents | **C** qwen3+prefix + passages |
+|---|---|---|---|
+| 0-200 | **77.1%** | 73.3% | 72.1% |
+| 200-500 | **72.0%** | 65.8% | 63.8% |
+| 500-1000 | **74.5%** | 68.7% | 62.1% |
+| 1000-2000 | **68.5%** | 63.3% | 54.4% |
+| 2000+ | 47.6% | **47.9%** | 42.4% |
+| **TOTAL** | **71.6%** | 66.4% | 61.8% |
+
+⇒ **B vs A: −5.1pt. C vs A: −9.7pt.** And B additionally costs **+51% read-path tokens**
+(the query instruction prefix is 17.9 of 53 tokens/query, R-12).
+
+⛔ **The caveat cannot flip this, only widen it.** A predates the query-failure counter, so
+its `absent` is an undecomposable mixture and any failures it carried *depressed* its
+measured rank-1. **A is a LOWER BOUND on the incumbent.** The asymmetry is real and it runs
+against the challenger.
+
+### ⭐ Why: passage-chunking and the qwen3 upgrade are SUBSTITUTES, and they do not stack
+
+The whole case for qwen3 was long documents. At the 2000+ band, rank-1:
+
+| | document path | passage path |
+|---|---|---|
+| **3-large** | 18.8% | **47.6%** |
+| **qwen3+prefix** | **46.9%** | 42.4% |
+
+⇒ Chunking buys **+28.8**. The encoder buys **+28.1**. Applying both buys **−5.2 against
+either alone.** They are two ways of solving one problem — a long memo whose answer is a
+small part of it — and the second one applied is not merely redundant, it is negative.
+
+⭐ **A component justified by a benchmark it wins can still be worthless in a system that
+already contains a different fix for the same failure.** Neither R-10 nor R-13 could have
+seen this: both compared ENCODERS on ONE path, and this is visible only across all four
+cells. The four-cell design was not cleverness — it is the minimum that could answer it.
+
+### SC-102 — EVALUATED. Both builds fail, and the difference between the failures is the finding.
+
+SC-102: *no size band regresses against its pre-change rank-1 rate* — properly read as
+path-vs-path on one build (R-13 coda).
+
+| build | verdict | per-band |
+|---|---|---|
+| 3-large (R-09) | **FAIL, 3 of 5** | −1.5 / −4.9 / −2.1, then **+16.7 / +28.8** |
+| qwen3+prefix | **FAIL, 5 of 5** | −1.1 / −2.0 / −6.6 / −8.9 / −4.5 |
+
+⇒ On 3-large the failure is **the trade the passage index exists to make**: a few points on
+short memos, bought with +16.7 and +28.8 where documents were nearly unfindable. On qwen3
+there is no trade — **the passage index loses everywhere, so on that build there is no
+reason to run it at all.** Same criterion, same verdict word, opposite engineering meaning.
+📌 The three 3-large deltas reproduce research.md:470 exactly, which is a check on the
+instrument, not a new result.
+
+### The 103 failures decompose into episodes, and the single-window story was wrong twice
+
+Failures are recorded per-band, so the raw report reads *95 of 103 in the 500-1000 band* —
+which invites "that band is hard." It is not: the bench's **outer** loop is over bands
+(`memo-retrieval-bench:137`), so ordinal position is a clock and a stall lands in whatever
+band the run is standing in. ⚠️ **A failure clustered in one band of a sequentially-scanned
+corpus is a clock artefact wearing a content artefact's clothes** (`embeddings`, 2026-08-02).
+
+But the band was not one window either. Reconstructing the exact query order (seed 7) and
+timestamping it against the container access log:
+
+| episode | n | window (EDT) | attribution |
+|---|---|---|---|
+| pos 466-537 | **71** | 20:16-21:50 | the 86-min hole |
+| pos 1160-1168 | 9 | ~22:37 | just after the census resumed |
+| 0-1 (first two queries of the run) | 2 | 17:33 | cold start |
+| eleven others, 1-6 each | 21 | scattered 19:43-00:34 | background rate |
+
+⛔ **Only 71 of 103 belong to the named incident.** The root cause of the hole is an
+18.7-hour single-threaded `zfs send | gzip` starving docker, fixed at source (`gzip` →
+`pigz -6`) — but **~30 failures are outside it and that fix does not touch them.** Had the
+named-and-closed account been accepted whole, the correct prediction would have been a
+clean census next run. It will not be clean.
+
+⚠️ **The 86-minute hole is CONFOUNDED and I am not attributing it.** It opens at 20:16,
+before my registry mirror started at 20:32:49, and persists to 21:42, an hour after the
+backup cron ended at 20:40. Neither cause spans it. Running the mirror concurrently with
+the census was already the choice I would take back; this neither exonerates nor convicts
+it, and the honest record is that the window has two candidates and no discriminator.
+
+### ⚠️ "Retrieval is deterministic" is FALSE at the 1-in-95 level — and it was found by accident
+
+`memo-bench-repair` rests on three premises, the first being that retrieval is deterministic
+so a query re-asked later is as good as one asked during the run. **Two byte-identical
+repair runs disagreed: 500-1000 rank-1 came back 55, then 56.**
+
+Replicated three times on the identical 95 queries, and separately probed for mechanism:
+
+| run | rank-1 | top-5 | absent | found outside top-5 |
+|---|---|---|---|---|
+| 1 | 55 | 78 | 10 | 7 |
+| 2 | **56** | 78 | 10 | 7 |
+| 3 | **56** | 78 | **11** | 6 |
+
+Two distinct flips, both at a **boundary**: one rank-1↔rank-2-4, one rank-9↔rank-10. The
+mechanism is visible directly — asking 25 titles 5× each, **the target's rank never varied
+(0/25) but the returned 10-id list varied on 11/25 (44%)**. ⇒ **Retrieval is rank-stable for
+the target and not set-stable for the list**; the target only moves when it sits on a
+boundary, which is why the effect is ~1-2 counts in 95 rather than pervasive.
+
+⚠️ **That 0/25 does not license "rank is deterministic" — the probe is underpowered for the
+effect it was built to chase.** A 1-in-95 rate predicts ~0.25 flipping titles in 25, so 0/25
+was the expected null whether or not the effect exists. It was the n=95 replicate that
+carried the information. **A null from an instrument too small to see the effect is not
+evidence of absence, and it reads exactly like evidence of absence.**
+
+⇒ So the premise is *approximately* true. The corrected figures carry a replication term of
+±1-2 counts per 95 — immaterial to a 5.1-point decision, **material to any future use of
+this tool on a small margin.**
+
+📌 **Separately consequential for the product, not just the bench:** a 44% set-instability
+rate means two identical `/recall` calls can return different supporting documents even when
+the top hit is the same. Anything downstream that depends on the *set* — `memo_context`
+budget packing, dedup, citation lists — is not reproducible run-to-run. Not evaluated here;
+flagged because nothing in the retrieval spec currently claims set-stability either way.
+
+⭐ **It surfaced only because the first run crashed writing its JSON and forced a
+replicate.** A premise asserted in a docstring and never replicated is indistinguishable
+from one that is true. The tool now creates its output path *before* doing the work
+(a four-minute run had been discarded at its last statement — and because it was piped to
+`tail`, both stdout and `$?` reported success).
+
+### What this does and does not say
+
+✅ **Says:** on this corpus, with this query mix, the live configuration is better than
+either proposed one, and the passage index earns its place on 3-large and not on qwen3.
+⛔ **Does not say:** qwen3 is a worse encoder. On the document path it is transformative at
+2000+ (18.8% → 46.9%). It is the wrong upgrade *for a system that already chunks*.
+⛔ **Does not evaluate** anything outside title-recall and the 30-item mid-document fact set
+— no multi-turn, no negation, no cross-lingual, no recency-weighted retrieval.

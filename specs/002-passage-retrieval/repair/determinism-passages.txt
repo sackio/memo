@@ -1,0 +1,33 @@
+path=passages  n=25 titles x 5 reps  (limit 10)
+
+  611f9dff tok=  301 ranks=[None, None, None, None, None]  <- rank same, ID LIST varies
+  a2bcf73b tok= 1939 ranks=[0, 0, 0, 0, 0]
+  89e035e9 tok=  275 ranks=[0, 0, 0, 0, 0]
+  7e9db1ed tok=  675 ranks=[0, 0, 0, 0, 0]  <- rank same, ID LIST varies
+  e9007910 tok=  509 ranks=[0, 0, 0, 0, 0]
+  2fd33d96 tok=  673 ranks=[1, 1, 1, 1, 1]  <- rank same, ID LIST varies
+  1d2cbb5e tok=  196 ranks=[0, 0, 0, 0, 0]  <- rank same, ID LIST varies
+  868ee7c9 tok=  286 ranks=[0, 0, 0, 0, 0]
+  b91d1408 tok= 1412 ranks=[8, 8, 8, 8, 8]  <- rank same, ID LIST varies
+  af30f2f4 tok=  703 ranks=[0, 0, 0, 0, 0]
+  7009f77d tok=  317 ranks=[0, 0, 0, 0, 0]  <- rank same, ID LIST varies
+  ff3c43f5 tok=  225 ranks=[None, None, None, None, None]
+  8f1ee808 tok= 2640 ranks=[8, 8, 8, 8, 8]
+  763ec30d tok=  114 ranks=[0, 0, 0, 0, 0]
+  7fa36850 tok=  748 ranks=[1, 1, 1, 1, 1]  <- rank same, ID LIST varies
+  ddbbfb92 tok=  814 ranks=[2, 2, 2, 2, 2]
+  d6cbd8f7 tok= 1063 ranks=[0, 0, 0, 0, 0]  <- rank same, ID LIST varies
+  2d66b7f8 tok=  210 ranks=[1, 1, 1, 1, 1]
+  715b9491 tok=  116 ranks=[0, 0, 0, 0, 0]
+  a6feac94 tok=  197 ranks=[0, 0, 0, 0, 0]
+  951d2246 tok= 1251 ranks=[0, 0, 0, 0, 0]
+  8447bca0 tok=  133 ranks=[1, 1, 1, 1, 1]  <- rank same, ID LIST varies
+  73617d59 tok=  575 ranks=[2, 2, 2, 2, 2]  <- rank same, ID LIST varies
+  ec865a96 tok= 1179 ranks=[1, 1, 1, 1, 1]  <- rank same, ID LIST varies
+  f843bfd1 tok=  503 ranks=[1, 1, 1, 1, 1]
+
+rank varied on   0/25 titles
+id-list varied on 11/25 titles
+
+A nonzero rate means repaired figures carry a replication error term,
+and that 'retrieval is deterministic' cannot be stated flatly.

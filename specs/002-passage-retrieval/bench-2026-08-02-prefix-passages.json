@@ -1,0 +1,80 @@
+{
+  "url": "http://localhost:8091",
+  "seed": 7,
+  "per_band": 100000,
+  "limit": 10,
+  "path": "passages",
+  "both_indexed_only": true,
+  "corpus": 7336,
+  "bands": [
+    {
+      "band": "0-200",
+      "n": 1216,
+      "rank1": 876,
+      "top5": 1124,
+      "absent": 53,
+      "query_failures": 2,
+      "rank1_pct": 72.0,
+      "median_score": 0.738
+    },
+    {
+      "band": "200-500",
+      "n": 2293,
+      "rank1": 1462,
+      "top5": 2033,
+      "absent": 156,
+      "query_failures": 0,
+      "rank1_pct": 63.8,
+      "median_score": 0.699
+    },
+    {
+      "band": "500-1000",
+      "n": 2007,
+      "rank1": 1190,
+      "top5": 1587,
+      "absent": 332,
+      "query_failures": 95,
+      "rank1_pct": 59.3,
+      "median_score": 0.678
+    },
+    {
+      "band": "1000-2000",
+      "n": 1306,
+      "rank1": 706,
+      "top5": 1042,
+      "absent": 178,
+      "query_failures": 6,
+      "rank1_pct": 54.1,
+      "median_score": 0.656
+    },
+    {
+      "band": "2000+",
+      "n": 399,
+      "rank1": 169,
+      "top5": 247,
+      "absent": 136,
+      "query_failures": 0,
+      "rank1_pct": 42.4,
+      "median_score": 0.651
+    }
+  ],
+  "content_share": {
+    ">=1000": {
+      "memos": 1761,
+      "token_pct": 57.2
+    },
+    ">=2000": {
+      "memos": 405,
+      "token_pct": 25.3
+    }
+  },
+  "factset": {
+    "n": 30,
+    "rank1": 16,
+    "top5": 24,
+    "absent": 4,
+    "skipped_unindexed": 0,
+    "query_failures": 0,
+    "rank1_pct": 53.3
+  }
+}

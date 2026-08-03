@@ -42,6 +42,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 import urllib.request
@@ -80,6 +81,14 @@ def main():
     ap.add_argument("--limit", type=int, default=10)
     ap.add_argument("--json", default=None)
     args = ap.parse_args()
+
+    # ⭐ CHECK THE OUTPUT PATH BEFORE DOING THE WORK, NOT AFTER.
+    # An output destination that is only touched at the end converts every
+    # minute of work before it into something you can lose in one statement.
+    if args.json:
+        os.makedirs(os.path.dirname(os.path.abspath(args.json)), exist_ok=True)
+        with open(args.json, "a"):
+            pass
 
     ids8 = RE_FAIL.findall(open(args.txt).read())
     if not ids8:
@@ -142,6 +151,12 @@ def main():
           "\n   the gap between raw and corrected describes the run's conditions.")
 
     if args.json:
+        # Created up-front rather than assumed: the first run of this tool did
+        # all 103 repairs, printed the whole table, and THEN died here because
+        # the parent dir did not exist — four minutes of work discarded at the
+        # last statement. Worse, it was piped to `tail`, so the shell reported
+        # exit 0 and both stdout and $? agreed it had succeeded.
+        os.makedirs(os.path.dirname(os.path.abspath(args.json)), exist_ok=True)
         with open(args.json, "w") as fh:
             json.dump({"path": args.path, "rows": rows, "by_band": agg,
                        "still_failing": errs, "not_in_corpus": missing}, fh,

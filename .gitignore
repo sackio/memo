@@ -11,3 +11,4 @@ ui/dist/
 
 # Single-global migration export artifacts (kept on NAS only)
 migration-*/
+scratchpad/
