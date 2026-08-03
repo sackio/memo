@@ -796,6 +796,15 @@ def main() -> int:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--v1-url", default="http://server4:8000")
     ap.add_argument("--v2-url", default="http://localhost:8091")
+    # ⛔ THE SLOTS ARE STRUCTURAL; THE NAMES ARE NOT. Nothing stops --v1-url
+    # pointing at a second v2 build — which is the right way to isolate one
+    # variable, and is also EXACTLY how R-14 came to call a v2 build "the
+    # incumbent" and conclude the cutover lost. The slot keys stay v1/v2 so
+    # stored results keep one shape; what a reader SEES is set here.
+    ap.add_argument("--v1-name", default=None,
+                    help="honest display name for the --v1-url build "
+                         "(e.g. 'v2@3-large'). Defaults to the slot key.")
+    ap.add_argument("--v2-name", default=None)
     ap.add_argument("--v1-container", default="memo")
     ap.add_argument("--v2-container", default="memo-v2")
     ap.add_argument("--per-band", type=int, default=60)
@@ -855,16 +864,19 @@ def main() -> int:
 
     targets = [("v1", args.v1_url, args.v1_container),
                ("v2", args.v2_url, args.v2_container)]
+    display = {"v1": args.v1_name or "v1", "v2": args.v2_name or "v2"}
+    run["display_names"] = display
     for name, url, cont in targets:
         t = resolve_target(name, url, cont)
+        t["display_name"] = display[name]
         if t["reachable"]:
             try:
                 t["corpus"] = corpus(url)
             except Exception as e:
                 t["corpus"] = {"error": str(e)}
         run["targets"].append(t)
-        print(f"{name}: reachable={t['reachable']} resolved={t.get('resolved')}",
-              flush=True)
+        print(f"{display[name]} [slot {name}]: reachable={t['reachable']} "
+              f"resolved={t.get('resolved')}", flush=True)
         print(f"    paths={t['search_paths']}", flush=True)
 
     for name, url, _ in targets:

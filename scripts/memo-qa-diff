@@ -270,8 +270,11 @@ def main() -> int:
     if args.within or not args.b:
         b_run = a_run
         a_name, b_name = "v1", "v2"
-        a_label = f"v1 @ {a_run['run_id']}"
-        b_label = f"v2 @ {a_run['run_id']}"
+        # ⛔ Use the name the run RECORDED for the build, not the slot key —
+        # a slot named v1 may hold a second v2 build (see --v1-name).
+        dn = a_run.get("display_names") or {}
+        a_label = f"{dn.get('v1', 'v1')} @ {a_run['run_id'][:17]}"
+        b_label = f"{dn.get('v2', 'v2')} @ {a_run['run_id'][:17]}"
     else:
         b_run = load(args.b)
         a_name = b_name = "v2"
