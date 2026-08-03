@@ -335,7 +335,8 @@ def _sync_update(db_path: str, doc_id: str, content: str | None, title: str | No
 
 def _sync_search(db_path: str, embedding: list[float], limit: int, min_score: float | None,
                  tags: list[str], after: float | None, before: float | None,
-                 min_tokens: int | None, max_tokens: int | None) -> list[dict]:
+                 min_tokens: int | None, max_tokens: int | None,
+                 include_superseded: bool = False) -> list[dict]:
     """Semantic search with tag scope (v0.3.1+).
 
     Two paths:
@@ -349,7 +350,31 @@ def _sync_search(db_path: str, embedding: list[float], limit: int, min_score: fl
     Tag-scoped queries need a true DB-side scope; that's what this does.
     """
     conn = _get_or_create_conn(db_path)
+    # ⭐ SUPERSEDED DOCUMENTS ARE EXCLUDED FROM SEARCH. [002/FR-115, 2026-08-03]
+    #
+    # ⛔ Before this, `/supersede` worked perfectly and changed NOTHING that any
+    # caller could observe. Measured live rather than read off the source: a
+    # document was superseded (edge written, `valid_until` set, both verified in
+    # the DB) and search returned it at rank 3 on the very next query, above
+    # everything except its own replacement.
+    #
+    # ⇒ **The bitemporal model was complete on the WRITE side and absent from the
+    # READ path.** `get_current` and `as-of` honoured `valid_until`; the one
+    # function every agent's `/recall` actually goes through did not reference it
+    # at all. So the corpus's 655 self-declared-stale memos could ALL have been
+    # correctly superseded and every one of them would still have been served.
+    #
+    # ⭐ `valid_until IS NULL` is already the codebase's definition of "currently
+    # true" (FR-002). This makes the default read path mean what the schema says.
+    # Time-travel remains available and explicit: `/documents/{id}/as-of`.
+    # ⚠️ NOT a de-rank. A superseded memo is not "less relevant" — it is a fact
+    # the corpus has been told is no longer true, and returning it ranked lower
+    # still returns it.
     date_token_filters = bool(after or before or min_tokens or max_tokens)
+    # Over-fetch when ANY post-filter can drop rows, supersession included —
+    # otherwise excluded documents silently consume top-k slots and the caller
+    # gets fewer results than asked for with nothing to indicate why.
+    post_filters = date_token_filters or not include_superseded
 
     if tags:
         # PATH B — tag-scoped semantic search.
@@ -360,6 +385,8 @@ def _sync_search(db_path: str, embedding: list[float], limit: int, min_score: fl
         )
         clauses.append(f"({tag_clause})")
         params.extend(tags)
+        if not include_superseded:
+            clauses.append("valid_until IS NULL")
         if after is not None: clauses.append("created_at >= ?"); params.append(after)
         if before is not None: clauses.append("created_at <= ?"); params.append(before)
         if min_tokens is not None: clauses.append("token_count >= ?"); params.append(min_tokens)
@@ -408,7 +435,7 @@ def _sync_search(db_path: str, embedding: list[float], limit: int, min_score: fl
         "FROM document_embeddings de "
         "WHERE de.embedding MATCH ? AND k = ? "
         "ORDER BY de.distance",
-        (_serialize_vector(embedding), limit * 5 if date_token_filters else limit),
+        (_serialize_vector(embedding), limit * 5 if post_filters else limit),
     ).fetchall()
 
     results = []
@@ -424,6 +451,8 @@ def _sync_search(db_path: str, embedding: list[float], limit: int, min_score: fl
             "SELECT * FROM documents WHERE id = ?", (doc_id,)
         ).fetchone()
         if doc_row is None:
+            continue
+        if not include_superseded and doc_row["valid_until"] is not None:
             continue
         doc = _row_to_memo(doc_row)
         if not _matches_filters(doc, [], after, before, min_tokens, max_tokens):
@@ -602,7 +631,8 @@ def _sync_search_passages(db_path: str, embedding: list[float], limit: int,
                           min_score: float | None, tags: list[str],
                           after: float | None, before: float | None,
                           min_tokens: int | None, max_tokens: int | None,
-                          overfetch: int = 8) -> list[dict]:
+                          overfetch: int = 8,
+                          include_superseded: bool = False) -> list[dict]:
     """Passage-level semantic search. [002/FR-105 002/FR-106 002/FR-107]
 
     Matches narrowly and returns broadly: the vector search runs over passages,
@@ -640,6 +670,8 @@ def _sync_search_passages(db_path: str, embedding: list[float], limit: int,
         if before is not None: clauses.append("created_at <= ?"); params.append(before)
         if min_tokens is not None: clauses.append("token_count >= ?"); params.append(min_tokens)
         if max_tokens is not None: clauses.append("token_count <= ?"); params.append(max_tokens)
+        if not include_superseded:
+            clauses.append("valid_until IS NULL")
         rows = conn.execute(
             f"SELECT id FROM documents WHERE {' AND '.join(clauses)}", params).fetchall()
         scoped_ids = [r["id"] for r in rows]
@@ -677,6 +709,11 @@ def _sync_search_passages(db_path: str, embedding: list[float], limit: int,
             continue
         doc_row = conn.execute("SELECT * FROM documents WHERE id = ?", (doc_id,)).fetchone()
         if doc_row is None:
+            continue
+        # Same exclusion as the document path — a superseded memo's PASSAGES are
+        # just as stale as the memo, and the passage path is the one the
+        # benchmark says we should be defaulting to.
+        if not include_superseded and doc_row["valid_until"] is not None:
             continue
         prow = conn.execute(
             "SELECT text, token_start, token_end FROM document_chunks "
@@ -753,22 +790,36 @@ async def search_passages(db_path: str | None, embedding: list[float], limit: in
                           min_score: float | None = None, tags: list[str] | None = None,
                           after: float | None = None, before: float | None = None,
                           min_tokens: int | None = None,
-                          max_tokens: int | None = None) -> list[dict]:
+                          max_tokens: int | None = None,
+                          include_superseded: bool = False) -> list[dict]:
     """Passage-level search. [002/FR-105]"""
     path = _resolve_path(db_path)
     assert_read_model_matches(path)
     return await asyncio.to_thread(
         _sync_search_passages, path, embedding, limit, min_score, tags or [],
-        after, before, min_tokens, max_tokens)
+        after, before, min_tokens, max_tokens,
+        # ⛔ KEYWORD, NOT POSITIONAL. `_sync_search_passages` takes
+        # `overfetch: int = 8` BEFORE `include_superseded`, so appending this
+        # positionally put `False` into the OVERFETCH slot — `limit * False` is
+        # `k = 0`, and passage search returned 0 hits with HTTP 200 for every
+        # query. A silent, plausible "no results" rather than an error.
+        # ⇒ **Appending a positional argument is unsafe whenever the callee has
+        # an intervening default.** `to_thread` forwards positionally and cannot
+        # warn. Caught only because a positive control on an unrelated query
+        # failed; the superseded-doc test it was meant to confirm PASSED, and
+        # would have shipped this.
+        include_superseded=include_superseded)
 
 
 async def search(db_path: str | None, embedding: list[float], limit: int,
                  min_score: float | None, tags: list[str], after: float | None,
-                 before: float | None, min_tokens: int | None, max_tokens: int | None) -> list[dict]:
+                 before: float | None, min_tokens: int | None, max_tokens: int | None,
+                 include_superseded: bool = False) -> list[dict]:
     path = _resolve_path(db_path)
     assert_read_model_matches(path)     # see the docstring there
     return await asyncio.to_thread(
-        _sync_search, path, embedding, limit, min_score, tags, after, before, min_tokens, max_tokens
+        _sync_search, path, embedding, limit, min_score, tags, after, before,
+        min_tokens, max_tokens, include_superseded
     )
 
 
