@@ -164,8 +164,23 @@ def resolve_target(name: str, url: str, container: str | None,
                 "'memo_retrieval_path')}))")
         last_err = None
         for _ in range(4):  # docker exec on this host DOES also intermittently return nothing
-            r = subprocess.run(["docker", "exec", container, "python3", "-c", code],
-                               capture_output=True, text=True, timeout=60)
+            # ⛔ TimeoutExpired MUST be caught here. The retry loop originally
+            # handled only EMPTY stdout, so a slow docker daemon raised straight
+            # out of resolve_target and killed the entire run with a traceback —
+            # losing every task, for a CONFIG PROBE that is not the measurement.
+            # Under host load `docker exec` routinely exceeds 60s.
+            try:
+                r = subprocess.run(
+                    ["docker", "exec", container, "python3", "-c", code],
+                    capture_output=True, text=True, timeout=60)
+            except subprocess.TimeoutExpired:
+                last_err = "docker exec timed out after 60s"
+                time.sleep(2)
+                continue
+            except Exception as e:
+                last_err = f"{type(e).__name__}: {e}"
+                time.sleep(2)
+                continue
             if r.stdout.strip():
                 try:
                     d = json.loads(r.stdout.strip())
@@ -738,6 +753,68 @@ def task_content_query(url: str, path: str, per_band: int, seed: int,
     return _run_recall_task("content_query", url, path, per_band, seed, sample, limit)
 
 
+
+# ------------------------------------------------------- task: supersession
+def task_supersession(url: str, path: str, edges_path: str,
+                      limit: int = 10) -> dict:
+    """⭐ BEN'S CONCERN (b): does newer information actually REPLACE older?
+
+    Reads the edge list written by `memo-regenerate-supersede-edges`. Each edge
+    carries a probe query taken from the OLD memo's BODY.
+
+    ⛔ NOT "is the old memo still returned" — FR-115 excludes it by construction,
+    so that question tests that a filter filters. **The question is what happened
+    to the QUERY.** A query that used to find the old memo must now find its
+    replacement. If it finds NEITHER, supersession destroyed recall rather than
+    updating it, and R-16 already found the replacement usually is not returned —
+    so that outcome is live, not hypothetical.
+
+    ⛔ The probe is never the shared TITLE. Both memos carry it, so a title hit
+    would say nothing about which VERSION the index prefers — that is own_title
+    wearing a costume, a confound this project has already built once.
+    """
+    try:
+        edges = json.loads(Path(edges_path).read_text())
+    except Exception as e:
+        return {"task": "supersession", "status": "could_not_run",
+                "why": f"no edge list at {edges_path}: {type(e).__name__}",
+                "control_ok": False}
+    new_1 = new_5 = old_back = neither = failures = 0
+    for e in edges:
+        try:
+            hits = _post(url, CANDIDATE_PATHS[path],
+                         {"query": e["probe_query"], "limit": limit})
+        except Exception:
+            failures += 1
+            continue
+        ids = [(h.get("document", h) or {}).get("id") for h in hits]
+        if ids and ids[0] == e["new_id"]:
+            new_1 += 1
+        if e["new_id"] in ids[:5]:
+            new_5 += 1
+        # ⛔ Must be 0 while FR-115 is active. Any hit here means the exclusion
+        # is not working, and every other number in this row is then untrustworthy.
+        if e["old_id"] in ids:
+            old_back += 1
+        if e["new_id"] not in ids and e["old_id"] not in ids:
+            neither += 1
+    n = len(edges) - failures
+    pct = lambda k: round(100 * k / n, 2) if n else None
+    return {"task": "supersession", "path": path, "edges": len(edges),
+            "n_ran": n, "failures": failures,
+            "replacement_at_1_pct": pct(new_1),
+            "replacement_in_top5_pct": pct(new_5),
+            # ⭐ THE COST OF SUPERSEDING: the query used to land on the old memo
+            # and now lands on nothing relevant.
+            "neither_returned_pct": pct(neither),
+            "superseded_still_returned": old_back,
+            "control_ok": n > 0 and old_back == 0,
+            "status": "ok" if n > 0 else "could_not_run",
+            "why": ("superseded memos are STILL being returned — FR-115 is not "
+                    "filtering, so the rest of this row is meaningless"
+                    if old_back else None)}
+
+
 # ------------------------------------------------------- task: set-stability
 def task_set_stability(url: str, path: str, n: int, seed: int,
                        replicates: int = 3) -> dict:
@@ -906,7 +983,7 @@ def mint_sample(path: Path, url: str, per_band: int, seed: int,
 
 # ------------------------------------------------------------------- runner
 TASKS = ("own_title", "content_query", "answer_recall", "context_fit",
-         "set_stability", "api_surface")
+         "supersession", "set_stability", "api_surface")
 
 
 def main() -> int:
@@ -928,6 +1005,8 @@ def main() -> int:
     ap.add_argument("--per-band", type=int, default=60)
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--stability-n", type=int, default=25)
+    ap.add_argument("--edges", default=str(SAMPLES / "supersede-edges.json"),
+                    help="supersession edge list (memo-regenerate-supersede-edges --out)")
     ap.add_argument("--probe-timeout", type=float, default=30.0,
                     help="per-path reachability probe budget. Raise it on a "
                          "loaded host: a timeout drops the WHOLE target to "
@@ -1036,6 +1115,9 @@ def main() -> int:
                 elif task == "context_fit":
                     r = task_context_fit(url, args.per_band, args.seed, sample,
                                          budget=args.token_budget)
+                elif task == "supersession":
+                    r = {p: task_supersession(url, p, args.edges)
+                         for p in paths}
                 elif task == "set_stability":
                     r = task_set_stability(url, primary, args.stability_n, args.seed)
                 elif task == "api_surface":
@@ -1067,6 +1149,17 @@ def main() -> int:
                       f"(span costs {v['span_cost_pt']}pt)"
                       + (f" · {v['total_ambiguous']} ungradeable"
                          if v.get("total_ambiguous") else ""))
+        sup = r.get("supersession") or {}
+        for path, v in (sup.items() if isinstance(sup, dict)
+                        and "task" not in sup else []):
+            if isinstance(v, dict) and v.get("status") == "ok":
+                print(f"  {name:3} supersession   {path:10} "
+                      f"replacement @1 {v['replacement_at_1_pct']}% · "
+                      f"top5 {v['replacement_in_top5_pct']}% · "
+                      f"NEITHER returned {v['neither_returned_pct']}% · "
+                      f"old still returned {v['superseded_still_returned']}"
+                      + ("  ⛔ FR-115 NOT FILTERING"
+                         if v['superseded_still_returned'] else ""))
         cf = r.get("context_fit")
         if isinstance(cf, dict) and cf.get("status") == "ok":
             print(f"  {name:3} context_fit                answer in /context "

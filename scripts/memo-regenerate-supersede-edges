@@ -93,6 +93,9 @@ def main() -> int:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--min-days", type=float, default=1.0)
     ap.add_argument("--apply", action="store_true")
+    ap.add_argument("--revoke", action="store_true",
+                    help="clear valid_until and delete edges written by this "
+                         "script, so a bad rule is reversible")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--out", default=None,
                     help="write the edge list as JSON (probe queries included)")
@@ -112,6 +115,7 @@ def main() -> int:
             groups[t].append(r)
 
     edges, skipped_recent, skipped_same, skipped_noprobe = [], 0, 0, 0
+    skipped_recent_pair = 0
     for title, members in groups.items():
         if len(members) < 2:
             continue
@@ -130,6 +134,18 @@ def main() -> int:
         for old in members[:-1]:
             if (old["content"] or "") == (newest["content"] or ""):
                 continue
+            pair_days = (((newest["created_at"] or 0)
+                          - (old["created_at"] or 0)) / 86400.0)
+            # ⛔ THE GATE MUST APPLY PER PAIR, NOT PER GROUP. Gating only on the
+            # group's total span lets a group like {t0, t60, t60} supersede one
+            # t60 memo by its same-instant twin — 4 of the first 47 edges came
+            # out at days_apart 0.00, which is exactly the arbitrary
+            # write-ordering the gate exists to exclude. The group span being
+            # wide says the GROUP contains versions; it does not say THIS pair
+            # is one.
+            if pair_days < args.min_days:
+                skipped_recent_pair += 1
+                continue
             probe = _excerpt(old["content"] or "", title)
             if probe is None:
                 skipped_noprobe += 1
@@ -143,7 +159,9 @@ def main() -> int:
 
     print(f"title groups: {sum(1 for v in groups.values() if len(v) > 1)} "
           f"with >1 member")
-    print(f"  skipped, span < {args.min_days}d (burst duplicates): {skipped_recent}")
+    print(f"  skipped, GROUP span < {args.min_days}d (burst duplicates): {skipped_recent}")
+    print(f"  skipped, PAIR < {args.min_days}d apart inside a wide group: "
+          f"{skipped_recent_pair}")
     print(f"  skipped, byte-identical (a DEDUPE problem, not supersession): "
           f"{skipped_same}")
     print(f"  skipped, no usable body probe: {skipped_noprobe}")
@@ -156,6 +174,24 @@ def main() -> int:
     if args.out:
         Path(args.out).write_text(json.dumps(edges, indent=2))
         print(f"wrote {args.out}")
+
+    if args.revoke:
+        # ⭐ A heuristic that marks memos unfindable MUST be reversible, and the
+        # revoke has to be scoped to THIS script's actor so it cannot clear an
+        # edge an agent asserted deliberately.
+        ids = [r[0] for r in conn.execute(
+            "SELECT old_id FROM supersede_edges WHERE actor = ?",
+            ("memo-regenerate-supersede-edges",))]
+        for doc_id in ids:
+            conn.execute("UPDATE documents SET valid_until = NULL WHERE id = ?",
+                         (doc_id,))
+        conn.execute("DELETE FROM supersede_edges WHERE actor = ?",
+                     ("memo-regenerate-supersede-edges",))
+        conn.commit()
+        left = conn.execute(
+            "SELECT COUNT(*) FROM documents WHERE valid_until IS NOT NULL").fetchone()[0]
+        print(f"revoked {len(ids)} heuristic edges · documents still marked: {left}")
+        return 0
 
     if not args.apply:
         print("\nDRY RUN — nothing written")

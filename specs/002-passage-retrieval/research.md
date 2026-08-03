@@ -1687,3 +1687,57 @@ With `retrieval_path=passages`, `/search` (the path v1 callers use) now scores
 **right-doc 84.3%, answer present 99.0%** — the best of any configuration
 measured, because it ranks by passage and returns the whole document.
 
+
+---
+
+## R-22 — supersession, finally measured: the replacement DOES surface, and recall does not collapse (2026-08-03) [002/FR-118]
+
+FR-115 had been correct code over an empty set since the 3-large rebuild (R-19).
+FR-118 regenerated 43 edges — same exact title, ≥1 day apart **per pair**,
+differing content — each carrying a probe query drawn from the OLD memo's **body**.
+Run `qa-2026-08-03T222501Z`.
+
+| same 43 probe queries | v1 (no supersession) | v2 (FR-115 active) |
+|---|---|---|
+| replacement ranked **@1** | 16.3% | **39.5%** |
+| replacement in **top-5** | 51.2% | **69.8%** |
+| **neither version returned** | 20.9% | **18.6%** |
+| superseded memo still returned | **32 of 43** | **0 of 43** |
+
+⭐ **THE WORRY FROM R-16 DOES NOT MATERIALISE.** R-16 found the replacement was
+usually not returned, so the live risk was that excluding the old memo would
+leave the query landing on nothing — supersession destroying recall rather than
+updating it. **"Neither returned" barely moved: 20.9% → 18.6%.** Removing the
+superseded memo did not cost the query its answer; the replacement took its
+place.
+
+⭐ **`32 of 43` → `0 of 43` is the unambiguous part**, and it is a within-feature
+fact rather than a cross-build one: FR-115 is now doing exactly what it claims.
+
+⛔ **DO NOT READ +23.3pt AS THE VALUE OF SUPERSESSION.** The v1 column differs
+from v2 by encoder, build, AND supersession at once — the same bundling error
+R-19 warns about. What this table supports is: *with supersession active, the
+replacement is at rank 1 for 39.5% of queries that used to find the old memo,
+and 18.6% find neither.* The v1 column is context, not a controlled contrast.
+
+⚠️ **AND 39.5% AT RANK 1 IS NOT A GOOD NUMBER.** Supersession is working and
+retrieval of the replacement is mediocre: for 3 queries in 5, text drawn straight
+from the old memo's body does not rank its own successor first. That is the next
+thing worth attacking, and it is a retrieval problem rather than a supersession
+one.
+
+### ⛔ The gate was wrong the first time, in a way the dry run hid
+
+The ≥1-day rule was applied to the **group span**, not the **pair**. A group like
+`{t0, t60, t60}` therefore superseded one t60 memo by its same-instant twin —
+**4 of the first 47 edges came out at `days_apart: 0.00`**, which is precisely the
+arbitrary write-ordering the gate exists to exclude. The dry run reported "47
+edges, examples up to 64.7d apart" and looked entirely healthy; the defect was
+only visible in the **minimum**, which nothing printed.
+⇒ Fixed to gate per pair (43 edges, min 1.31d), and `--revoke` added so a bad
+heuristic is reversible — it scopes deletion to this script's `actor` so it can
+never clear an edge an agent asserted deliberately.
+
+⇒ ⭐ **A summary that prints the extremes in one direction hides the failure at
+the other end.** The examples were sorted by `days_apart` descending.
+
