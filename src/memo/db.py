@@ -146,6 +146,41 @@ def _init_schema(conn: sqlite3.Connection) -> None:
             user_agent TEXT,              -- HTTP User-Agent (or MCP client indicator) — distinguishes claude-p / claude.ai / Claude Code
             source_ip TEXT                -- request source IP
         );
+
+        -- v0.3.8 2026-08-03: query log, for replaying REAL traffic against a
+        -- candidate build instead of synthetic queries. [Ben's ask, 11:23 EDT]
+        --
+        -- ⭐ WHY THIS IS THE MEASUREMENT THAT MATTERS. Until today every number
+        -- comparing memo builds came from the own-title set — searching a memo's
+        -- exact title. That is free supervision and it is unrealistically easy:
+        -- nobody searches by pasting a title. The corpus of what the fleet
+        -- ACTUALLY asks is the only test set that cannot be accused of being
+        -- chosen to suit the thing being tested.
+        --
+        -- ⛔ `results` stores the returned doc ids AND scores, not just a count.
+        -- A replay that can only compare "how many hits" cannot see a RANKING
+        -- change, which is the entire quantity under test.
+        --
+        -- ⚠️ CONTAINS QUERY TEXT, which for this corpus means credentials,
+        -- family, finances. It lives in the same DB as the memos it searches and
+        -- goes nowhere else. Trimmed to QUERY_LOG_MAX rows.
+        CREATE TABLE IF NOT EXISTS query_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ts REAL NOT NULL,
+            op TEXT NOT NULL,             -- "search" | "context" | "store" | "update" | "delete"
+            query TEXT,                   -- the query text (reads) or title (writes)
+            arg_limit INTEGER,
+            tags TEXT,                    -- json list, the filter actually applied
+            result_ids TEXT,              -- json list of returned doc ids, IN RANK ORDER
+            result_scores TEXT,           -- json list of scores, parallel to result_ids
+            n_results INTEGER,
+            latency_ms REAL,
+            embedding_model TEXT,         -- ⭐ so a replay knows what produced the ranking
+            user_agent TEXT,
+            source_ip TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_query_log_ts ON query_log(ts);
+        CREATE INDEX IF NOT EXISTS idx_query_log_op ON query_log(op);
     """)
     # Migration: add token_count to existing DBs that predate this column
     cols = {row[1] for row in conn.execute("PRAGMA table_info(documents)")}
@@ -158,6 +193,59 @@ def _init_schema(conn: sqlite3.Connection) -> None:
     if leak_cols and "source_ip" not in leak_cols:
         conn.execute("ALTER TABLE leak_incidents ADD COLUMN source_ip TEXT")
     conn.commit()
+
+
+QUERY_LOG_MAX = 200_000
+
+
+def log_query(db_path: str | None, op: str, *, query: str | None = None,
+              arg_limit: int | None = None, tags: list[str] | None = None,
+              result_ids: list[str] | None = None,
+              result_scores: list[float] | None = None,
+              latency_ms: float | None = None,
+              user_agent: str | None = None,
+              source_ip: str | None = None) -> None:
+    """Record one request for later replay. BEST-EFFORT — never raises. [v0.3.8]
+
+    ⛔ **THE `except: pass` IS THE MOST IMPORTANT LINE HERE, NOT A LAZY ONE.**
+    This runs inside every read on LIVE FLEET INFRASTRUCTURE — every agent's
+    `/recall` goes through it. A logging bug that propagated would take out
+    retrieval for the whole fleet to collect a benchmark. **The observation must
+    never be able to damage the thing it observes.**
+
+    ⚠️ It is deliberately called AFTER the response is computed, so a slow or
+    failing log cannot delay or fail the query it is recording.
+    """
+    try:
+        conn = _get_or_create_conn(_resolve_path(db_path))
+        conn.execute(
+            "INSERT INTO query_log (ts, op, query, arg_limit, tags, result_ids, "
+            "result_scores, n_results, latency_ms, embedding_model, user_agent, source_ip) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            (time(), op, (query or "")[:2000], arg_limit,
+             json.dumps(tags or []),
+             json.dumps(result_ids or []),
+             json.dumps([round(s, 6) for s in (result_scores or [])]),
+             len(result_ids or []), latency_ms, settings.embedding_model,
+             user_agent, source_ip))
+        # Bounded growth. Trimmed rarely rather than on every insert.
+        if int(time()) % 500 == 0:
+            conn.execute(
+                "DELETE FROM query_log WHERE id < (SELECT MAX(id) - ? FROM query_log)",
+                (QUERY_LOG_MAX,))
+        conn.commit()
+    except Exception:
+        pass  # see the docstring — this must never break a live request
+
+
+async def log_query_async(*a, **kw) -> None:
+    """Off the event loop. `log_query` does sync SQLite; a live read path should
+    not wait on it even for a few ms, and `to_thread` also means a stalled write
+    lock cannot hold up the response that was already computed."""
+    try:
+        await asyncio.to_thread(log_query, *a, **kw)
+    except Exception:
+        pass
 
 
 def _bump_access(conn: sqlite3.Connection, doc_id: str, kind: str) -> None:

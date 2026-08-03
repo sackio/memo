@@ -1,5 +1,6 @@
 import asyncio
 import contextlib
+import time as _time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
@@ -131,6 +132,7 @@ async def memo_store(
     a path does NOT write to a per-directory .memo.db.
     """
     await _reject_leaked_tool_call(content, tags, "memo_store")
+    _t0 = _time.time()
     embedding = await embeddings.embed(content)
     doc_id = await db.store(
         db_path=db_path,
@@ -140,6 +142,10 @@ async def memo_store(
         metadata=metadata or {},
         embedding=embedding,
     )
+    await db.log_query_async(
+        db_path, "store", query=title or (content or "")[:200], tags=tags or [],
+        result_ids=[doc_id], latency_ms=(_time.time() - _t0) * 1000,
+        user_agent="mcp:memo_store")
     return {"id": doc_id}
 
 
@@ -174,6 +180,9 @@ async def memo_update(
         metadata=metadata,
         embedding=embedding,
     )
+    await db.log_query_async(
+        db_path, "update", query=title or id, tags=tags or [],
+        result_ids=[id] if result is not None else [], user_agent="mcp:memo_update")
     if result is None:
         # 2026-07-30: was a bare null, which collapsed "bad id", "memo absent"
         # and (from the caller's seat) "applied, nothing returned" into one
@@ -210,18 +219,29 @@ async def memo_search(
     - after/before: Unix timestamps bounding created_at
     - min_tokens/max_tokens: bound by stored token_count of content
     """
+    # ⛔ LOGGED HERE, NOT ONLY ON THE HTTP ROUTE. Agents reach memo through the
+    # MCP tool, which calls db directly — logging only POST /search would
+    # capture a small, unrepresentative slice and the bias would be invisible
+    # in the resulting numbers. [v0.3.8]
+    _t0 = _time.time()
     embedding = await embeddings.embed(query)
     kwargs = dict(embedding=embedding, limit=limit, min_score=min_score, tags=tags or [],
                   after=after, before=before, min_tokens=min_tokens, max_tokens=max_tokens)
 
     if scope == "global" or (scope == "local" and db_path is None):
-        return await db.search(db_path=None, **kwargs)
-
-    if scope == "all" and db_path is not None:
+        out = await db.search(db_path=None, **kwargs)
+    elif scope == "all" and db_path is not None:
         paths = list({db.global_path(), db._resolve_path(db_path)})
-        return await db.search_multi(paths, **kwargs)
+        out = await db.search_multi(paths, **kwargs)
+    else:
+        out = await db.search(db_path=db_path, **kwargs)
 
-    return await db.search(db_path=db_path, **kwargs)
+    await db.log_query_async(
+        db_path, "search", query=query, arg_limit=limit, tags=tags or [],
+        result_ids=[r["document"]["id"] for r in out],
+        result_scores=[r["score"] for r in out],
+        latency_ms=(_time.time() - _t0) * 1000, user_agent="mcp:memo_search")
+    return out
 
 
 @mcp.tool()
@@ -453,6 +473,16 @@ async def memo_context(
             truncated = True
 
     content = "\n".join(parts)
+    # ⭐ `ranked` is what retrieval chose; `parts` is what survived the token
+    # budget. Logging the RANKED ids (not the packed ones) keeps this comparable
+    # to a plain search — otherwise a replay would be measuring the packer's
+    # budget arithmetic and calling it a retrieval difference. [v0.3.8]
+    await db.log_query_async(
+        db_path, "context", query=query, arg_limit=limit_per_query,
+        tags=tags or [],
+        result_ids=[r["document"]["id"] for r in ranked],
+        result_scores=[r["score"] for r in ranked],
+        user_agent="mcp:memo_context")
     return {
         "content": content,
         "token_count": total_tokens,
@@ -502,6 +532,7 @@ async def store_document(req: StoreRequest, request: Request):
         )
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
+    _t0 = _time.time()
     embedding = await embeddings.embed(req.content)
     doc_id = await db.store(
         db_path=req.db_path,
@@ -511,6 +542,12 @@ async def store_document(req: StoreRequest, request: Request):
         metadata=req.metadata,
         embedding=embedding,
     )
+    await db.log_query_async(
+        req.db_path, "store", query=req.title or (req.content or "")[:200],
+        tags=req.tags, result_ids=[doc_id],
+        latency_ms=(_time.time() - _t0) * 1000,
+        user_agent=request.headers.get("user-agent"),
+        source_ip=request.client.host if request.client else None)
     return StoreResponse(id=doc_id)
 
 
@@ -596,7 +633,11 @@ async def move_document(doc_id: str, req: CopyMoveRequest):
 
 
 @app.post("/search", response_model=list[SearchResult])
-async def search_documents(req: SearchRequest):
+async def search_documents(req: SearchRequest, request: Request = None):
+    # Timed around the work, logged AFTER the response is built. [v0.3.8]
+    # ⛔ The log must never delay or fail the query it records — see
+    # db.log_query's docstring. This is live fleet infrastructure.
+    _t0 = _time.time()
     embedding = await embeddings.embed(req.query)
     results = await db.search(
         db_path=req.db_path,
@@ -609,7 +650,15 @@ async def search_documents(req: SearchRequest):
         min_tokens=req.min_tokens,
         max_tokens=req.max_tokens,
     )
-    return [SearchResult(document=Document(**r["document"]), score=r["score"]) for r in results]
+    out = [SearchResult(document=Document(**r["document"]), score=r["score"]) for r in results]
+    await db.log_query_async(
+        req.db_path, "search", query=req.query, arg_limit=req.limit,
+        tags=req.tags, result_ids=[r["document"]["id"] for r in results],
+        result_scores=[r["score"] for r in results],
+        latency_ms=(_time.time() - _t0) * 1000,
+        user_agent=(request.headers.get("user-agent") if request else None),
+        source_ip=(request.client.host if request and request.client else None))
+    return out
 
 
 @app.get("/index")
