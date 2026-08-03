@@ -28,8 +28,19 @@ independently, and pinned by tests/unit/test_vec0_table_swap.py.
 doc_id+embedding would silently drop the passage ordinal — the thing that makes a
 passage addressable at all.
 
-    docker compose exec -d memo-v2 python /app/scripts/memo-reembed-corpus \\
-        --log /data/reembed.log
+    docker exec -d memo-v2 sh -lc 'python3 -u /app/scripts/memo-reembed-corpus \\
+        > /data/reembed.log 2>&1'
+
+⛔ **There is no `--log` flag.** An earlier version of this line advertised one.
+A detached launch carrying it dies on argparse with the error going nowhere, and
+the absence of a log file is the only symptom — indistinguishable from a job that
+has not started writing yet. Redirect yourself, and use `python3 -u`: without it
+progress sits in a block buffer and a healthy run looks identical to a wedged one.
+
+⚠️ **`timeout N docker exec ...` kills the CLIENT, not the process in the
+container.** A run "cancelled" that way keeps going. On 2026-08-03 that produced
+two concurrent writers, 13,936 rows where 7,336 were expected, and a refused
+swap. To actually stop one, kill it inside the container.
 """
 from __future__ import annotations
 
@@ -145,6 +156,25 @@ def _swap(conn, dims: int) -> None:
         f"embedding FLOAT[{dims}] distance_metric=cosine)")
     conn.execute(f"INSERT INTO chunk_embeddings(doc_id, chunk_index, embedding) "
                  f"SELECT doc_id, chunk_index, embedding FROM {CHUNK_NEW}")
+
+    # ⛔ THE PROVENANCE MUST MOVE WITH THE VECTORS, IN THE SAME TRANSACTION.
+    # `db.assert_read_model_matches()` reads `document_chunks.embedding_model`
+    # and REFUSES every search when it disagrees with `EMBEDDING_MODEL`. That
+    # guard is correct and is stronger than the width check — it catches a
+    # same-width model swap that vec0's dimension typing cannot see.
+    #
+    # ⚠️ But this function used to rebuild the vectors and leave that column
+    # alone, so a LEGITIMATE, fully-verified rebuild ended with the service
+    # refusing 100% of queries — the guard firing on its own successful
+    # migration. Observed live 2026-08-03 after the 3-large rebuild: swap
+    # verified, counts exact, tables FLOAT[3072], and every /search returned
+    # HTTP 500 `vectors were written by 'qwen3-embedding-4b'`.
+    #
+    # ⇒ ⭐ **A CORRECTNESS GUARD KEYED ON METADATA IS ONLY AS GOOD AS THE PATHS
+    # THAT MAINTAIN THAT METADATA.** The guard was right, the writer was
+    # incomplete, and the symptom looked like the guard malfunctioning.
+    conn.execute("UPDATE document_chunks SET embedding_model = ?, embedding_route = ?",
+                 (settings.embedding_model, settings.embedding_base_url))
     conn.commit()
 
     conn.execute(f"DROP TABLE {DOC_NEW}")
@@ -256,6 +286,26 @@ async def main() -> int:
                       f"ordinal makes passages unaddressable, and it bites at "
                       f"query time, not here", file=sys.stderr, flush=True)
                 ok = False
+
+    # ⭐ The vectors are only half the migration. `db.assert_read_model_matches()`
+    # refuses EVERY search when `document_chunks.embedding_model` disagrees with
+    # `EMBEDDING_MODEL` — so a rebuild that moves the vectors and not the
+    # provenance produces a correct index that the service will not read.
+    # ⚠️ This check exists because that is not hypothetical: it happened on the
+    # 2026-08-03 3-large rebuild, and every symptom pointed at the guard rather
+    # than at the writer that had failed to maintain what the guard reads.
+    stale = conn.execute(
+        "SELECT embedding_model, COUNT(*) FROM document_chunks "
+        "WHERE embedding_model IS NOT ? GROUP BY 1",
+        (settings.embedding_model,)).fetchall()
+    if stale:
+        print(f"  ✗ document_chunks.embedding_model still records {stale} — "
+              f"the read guard will refuse 100% of searches. The index is fine; "
+              f"the provenance did not move with it.", file=sys.stderr, flush=True)
+        ok = False
+    else:
+        print(f"  provenance: document_chunks.embedding_model == "
+              f"{settings.embedding_model!r} ✓", flush=True)
 
     # A schema that looks right and a query that works are two claims — and a
     # query that returns SOMETHING is still a third claim short of correct.
