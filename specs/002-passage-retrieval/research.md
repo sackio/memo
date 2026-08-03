@@ -390,6 +390,14 @@ Reproduce: `scripts/memo-dup-threshold-check`.
 
 ## R-09 — The re-migration onto text-embedding-3-large, and the measurement that follows (2026-08-01) [002/FR-111 002/FR-110]
 
+> ⚠️ **STILL THE 3-large REFERENCE POINT, AND NO LONGER THE CURRENT BUILD.** The corpus has
+> since moved to `qwen3-embedding-4b` (R-10) and then to qwen3 **with the query instruct
+> prefix** (R-13). **R-13 is the current document-path record.** Against these numbers it
+> loses the short bands (−5.3 / −11.1 / −7.9) and wins the long ones (+11.5, **+28.1**),
+> taking 2000+ from **18.8% → 46.9%**. ⛔ **Quoting R-09's totals as "the baseline" without
+> saying which comparison is meant is the drift R-13's coda documents.**
+
+
 **Every number in R-01 through R-08 was measured on `text-embedding-3-small` at 1536
 dimensions against a partially-migrated corpus. None of them carry over.** Ben ruled on
 2026-07-31 to use the large model — the one everything else here uses — so the corpus was
@@ -498,6 +506,16 @@ One passage-path query (`ec06fbb6`) timed out at 60s and was scored `absent`, wh
 conservative direction. 1 of 7,221.
 
 ## R-10 — the move to qwen3, measured: both paths regress, and the passage path regresses everywhere (2026-08-02) [002/FR-111]
+
+> ⛔ **SUPERSEDED ON THE DOCUMENT PATH BY R-13.** Every number in this section was measured
+> against a client sending **bare queries** to an encoder trained to expect an instruction
+> prefix. R-11 identifies the cause; **R-13 measures the fix on the full corpus**: document
+> rank-1 **49.4% → 66.4%**, `absent` **1,507 → 601**. ⇒ **Do not quote R-10's document
+> columns as qwen3's performance — they are the performance of a defect that has been fixed.**
+> ⚠️ **The passage columns here are NOT yet superseded**: that half of the census was still
+> unfinished and contaminated at the time of writing (90 timeouts during a host incident).
+> **Until it lands, R-10 remains the only passage-path qwen3 measurement, floor and all.**
+
 
 **Read R-11 with this section. Every number here was measured against a client that sends
 bare queries to an encoder trained to expect an instruction prefix, so these are a floor for
