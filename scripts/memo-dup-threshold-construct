@@ -76,6 +76,7 @@ from memo import db  # noqa: E402
 from memo import embeddings  # noqa: E402
 
 MAX_TOKENS = 6000
+EMBED_TIMEOUT_S = 60   # a hung embed must fail the pair, not the run
 CANDIDATE_CUTOFFS = [0.70, 0.75, 0.80, 0.82, 0.85, 0.88, 0.90, 0.92, 0.95]
 SAME_CLASSES = ("identical", "whitespace", "reorder", "numbers",
                 "truncate_50", "append_noise")
@@ -190,6 +191,7 @@ async def main():
         cosines = []
         errs = 0
         skips = 0
+        done = 0
         for (did, text), (odid, otext) in zip(sample, donors):
             if odid == did:
                 skips += 1
@@ -199,11 +201,26 @@ async def main():
                 skips += 1
                 continue
             try:
-                a, b = await asyncio.gather(
-                    embeddings.embed_document(text),
-                    embeddings.embed_document(variant),
+                # ⛔ TIMEOUT, and ⭐ PROGRESS — both absent on the first attempt,
+                # 2026-08-03, and their absence is why it went unnoticed for 38
+                # minutes. The run made ~3 requests (syscw=7 for the whole
+                # process), had its sockets closed by the endpoint, then spun
+                # CPU-bound over cached pages: 463M read syscalls, 1.9 TB rchar,
+                # no output, no JSON. **A job with no progress output and no
+                # timeout cannot be distinguished from a slow one from outside**
+                # — and its buffered stdout is then lost when you kill it, so
+                # the wedge destroys its own evidence.
+                a, b = await asyncio.wait_for(
+                    asyncio.gather(
+                        embeddings.embed_document(text),
+                        embeddings.embed_document(variant),
+                    ),
+                    timeout=EMBED_TIMEOUT_S,
                 )
-            except Exception as e:  # never silently drop — see docstring
+                done += 1
+                if done % 20 == 0:
+                    print(f"  … {name}: {done} pairs", flush=True)
+            except (Exception, asyncio.TimeoutError) as e:  # never silently drop
                 errs += 1
                 if errs <= 2:
                     print(f"  {name}: embed failed for {did[:8]}: {e}",

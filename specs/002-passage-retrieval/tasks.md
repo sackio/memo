@@ -469,7 +469,27 @@ the prefix question is settled, not before.
       vectors, so the band that partly rescues the document path cannot exist there. Whether
       the prefix helps passages at all is **open**, and assuming it transfers is the specific
       error this task exists to prevent. [002/FR-111]
-- [ ] **T283** — Re-derive `DUP_COSINE` and `auto_store_similarity_threshold` on the
+- [ ] **T283** — ⛔ **FIRST ATTEMPT WEDGED 2026-08-03, still UNRUN.** Launched
+      `--n 120 --seed 7` at 05:29:31Z; killed at 06:08Z having produced nothing. Its own
+      `/proc/<pid>/io` counters are the record: **`syscw = 7` for the entire 38-minute
+      life** (~3 HTTP requests), all three sockets to the embedding endpoint in
+      `CLOSE-WAIT`, and meanwhile `syscr = 463,693,461` / `rchar = 1.9 TB` climbing at
+      2.4 GB/s with `read_bytes` only 112 MB — i.e. spinning CPU-bound over cached pages.
+      ⚠️ **Root cause NOT established.** It made a few embed calls, had its connections
+      closed, and then span. Whether that is retry logic, the event loop, or something in
+      `cosine()` is unknown and should not be guessed at when re-running.
+      ⭐ **Two defects made this invisible for 38 minutes and both are now fixed:** no
+      progress output (stdout was block-buffered to a pipe, so the log was empty AND the
+      buffer was destroyed by the kill — the wedge erased its own evidence), and no
+      timeout on the embed call. **A job with no progress output and no timeout cannot be
+      distinguished from a slow one from the outside.**
+      ⛔ **And a reporting failure worth keeping:** while it sat wedged I told the
+      `embeddings` seat it was submitting 1,680 calls at up to 567 tok/s, derived by
+      READING THE SOURCE and reported as a submit-side measurement. The counters
+      disagreed by three orders of magnitude. **Source code is a claim about behaviour,
+      not an observation of it.** Re-run with a submit-side counter, on an idle box, and
+      announce to `embeddings` first.
+      Original task: Re-derive `DUP_COSINE` and `auto_store_similarity_threshold` on the
       current encoder. **Construct** the reference population by perturbing known texts —
       identifying natural near-duplicates requires the similarity judgement being
       calibrated, and doing it by title prefix already produced one withdrawn result.
