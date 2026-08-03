@@ -74,6 +74,18 @@ services:
       # answers, and two runs would differ with nothing in the record saying why.
       # memo-qa-suite now reads this back off the live container per run.
       MEMO_RETRIEVAL_PATH: passages
+      # ⛔ SPAN WINDOWING IS OFF, AND THE MEASUREMENT IS WHY. [002/FR-120, R-25]
+      # Tried at 160 tokens either side of the matched passage. It did exactly
+      # what it promised mechanically and made the product worse:
+      #   whole documents   90.8% answers · 5.25 docs · 93.2% truncated
+      #   windowed ±160     82.1% answers · 7.77 docs · 81.7% truncated
+      # ⇒ MORE documents, LESS truncation, 8.8pt FEWER ANSWERS — far outside the
+      # ~2.4pt floor. Capacity was never the binding constraint; FIDELITY was.
+      # ⚠️ Do not re-enable by widening the window without re-measuring: a wider
+      # window converges on whole-document packing, so the knob's best value is
+      # the one that turns it off. The code stays because it is tested and
+      # reversible, and because a future chunker may change the trade.
+      MEMO_CONTEXT_SPAN_WINDOW: 0
       MEMO_CONDUCTOR_PROVIDER: ${MEMO_CONDUCTOR_PROVIDER:-atc}
       MEMO_AGENT_CONTROLLER_PROVIDER: ${MEMO_AGENT_CONTROLLER_PROVIDER:-agents_supervisor}
       MEMO_V2_VERSION: 2.0.0-alpha1

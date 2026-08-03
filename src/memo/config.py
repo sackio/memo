@@ -56,6 +56,9 @@ class Settings(BaseSettings):
     # bench targets the explicit endpoints for that reason.
     # "document" | "passages" | "size-routed"
     memo_retrieval_path: str = "document"
+    # Tokens kept either side of the matched passage when packing /context.
+    # 0 disables windowing entirely (pack whole documents). [002/FR-120]
+    memo_context_span_window: int = 0
 
     # Token count at or above which `size-routed` prefers the PASSAGE index for a
     # given result. [002/FR-113 T273]

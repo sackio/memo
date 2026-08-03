@@ -506,6 +506,8 @@ async def memo_context(
     # Whitespace-normalised because a trailing newline is not a different memo.
     seen_bodies: set[str] = set()
     duplicates_dropped = 0
+    spans_windowed = 0
+    span_window = settings.memo_context_span_window
 
     for item in ranked:
         doc = item["document"]
@@ -517,7 +519,12 @@ async def memo_context(
             continue
         title = doc.get("title") or doc["id"]
         tags_str = (", ".join(doc["tags"]) + " ") if doc["tags"] else ""
-        section = f"## {title} {tags_str}(score: {item['score']:.2f})\n{doc['content']}\n"
+        body, windowed = _pack_body(doc, item, span_window)
+        if windowed:
+            spans_windowed += 1
+        marker = " [window]" if windowed else ""
+        section = (f"## {title} {tags_str}(score: {item['score']:.2f})"
+                   f"{marker}\n{body}\n")
         section_tokens = _count_tokens(section)
         if total_tokens + section_tokens > token_budget:
             truncated = True
@@ -561,6 +568,10 @@ async def memo_context(
         # collapses sections is indistinguishable from a corpus that had no
         # duplicates — and those two want opposite next actions.
         "duplicates_dropped": duplicates_dropped,
+        # ⛔ Reported so "windowing did nothing" and "windowing never ran" stay
+        # distinguishable — the document path carries no passage offsets and
+        # falls back silently by necessity. [002/FR-120]
+        "spans_windowed": spans_windowed,
         "truncated": truncated,
     }
 
@@ -594,6 +605,53 @@ import os as _os
 _ui_dist = Path(_os.environ.get("MEMO_UI_DIST", "/app/ui/dist"))
 if _ui_dist.exists():
     app.mount("/ui", StaticFiles(directory=str(_ui_dist), html=True), name="ui")
+
+
+def _pack_body(doc: dict, item: dict, window: int) -> tuple[str, bool]:
+    """What text to spend budget on for one hit. [002/FR-120]
+
+    Returns `(body, windowed)`.
+
+    ⭐ WHY A WINDOW AND NOT THE SPAN. R-20: the matched passage carries the
+    answer only **77.3%** of the time while the whole document carries it
+    **98.7%** — the chunk that matches the query and the chunk holding the fact
+    are routinely different chunks of one memo. So packing the bare span would
+    cut tokens and lose answers, which is the wrong trade in the direction that
+    matters. Packing the matched chunk **plus `window` tokens either side** aims
+    to keep the fact while dropping the parts of a long memo that no query
+    touched.
+
+    ⛔ SMALL MEMOS ARE PACKED WHOLE. Windowing a memo that already fits spends
+    the same budget and can only lose information — there is nothing to save.
+    ⛔ AND A WINDOW THAT WOULD COVER MOST OF THE DOCUMENT IS NOT WORTH TAKING:
+    below ~1.3× saving it trades a real risk of dropping the answer for a few
+    tokens. Falls back to the whole document.
+
+    ⚠️ Returns the whole document whenever the hit carries no passage offsets —
+    the `document` retrieval path has none. That is a silent fallback by
+    necessity, so the caller counts `windowed` and the benchmark reports it;
+    otherwise "windowing did nothing" and "windowing never ran" look identical.
+    """
+    content = doc.get("content") or ""
+    if window <= 0:
+        return content, False
+    p = item.get("passage")
+    if not isinstance(p, dict):
+        return content, False
+    start, end = p.get("token_start"), p.get("token_end")
+    if not isinstance(start, int) or not isinstance(end, int) or end <= start:
+        return content, False
+
+    toks = db._tokenizer.encode(content)
+    if len(toks) <= 2 * window:
+        return content, False           # already small; nothing to save
+    lo = max(0, start - window)
+    hi = min(len(toks), end + window)
+    if (hi - lo) * 1.3 >= len(toks):
+        return content, False           # saving too little to risk the answer
+    prefix = "…" if lo > 0 else ""
+    suffix = "…" if hi < len(toks) else ""
+    return prefix + db._tokenizer.decode(toks[lo:hi]) + suffix, True
 
 
 @app.get("/health")

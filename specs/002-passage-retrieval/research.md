@@ -1837,3 +1837,63 @@ consistent with R-20, and further support for FR-117's rank-by-passage.
 ⚠️ 51.7% is still not good, and it is now a genuine retrieval target rather than
 an artefact.
 
+
+---
+
+## R-25 — span windowing FAILED: capacity was never the binding constraint, fidelity was (2026-08-03) [002/FR-120]
+
+I predicted, in writing and to Ben, that packing a window around the matched
+passage would push delivery above ~92% without raising tokens per call, and said
+that if it did not, "the packing theory is wrong and the real constraint is
+elsewhere — I'll say so rather than keep tuning." It did not. Run
+`qa-2026-08-03T232115Z` against `qa-2026-08-03T223023Z`.
+
+| v2 `/context` @ 4k | whole documents | windowed ±160 |
+|---|---|---|
+| **answer delivered** | **90.84%** | **82.07%** |
+| documents packed | 5.25 | **7.77** |
+| responses truncated | 93.2% | **81.7%** |
+| tokens per call | 3671 | 3700 |
+
+⭐ **It did exactly what it promised mechanically — 48% more documents, a third
+less truncation — and delivered 8.8pt FEWER ANSWERS.** That is far outside the
+~2.4pt floor.
+
+⇒ ⛔ **THE "PACK MORE MEMOS" THEORY IS DEAD, AND IT WAS THE ONE I WAS MOST
+CONFIDENT IN.** The reasoning was: 93% of calls hit the ceiling, ~40% of matched
+documents never reach the caller, so the budget is the binding constraint. Every
+one of those facts is true. **The inference from them was wrong.** Delivering 5.25
+whole documents beats delivering 7.77 windowed ones, so the constraint was never
+how MANY memos fit — it was how much of each one survives.
+
+⇒ ⭐ **Truncation at 93% is not a problem to solve. It is what a well-packed
+response looks like** when the packer is spending the budget on the documents
+most likely to hold the answer and stopping. Reading a high truncation rate as
+waste is what motivated this whole direction.
+
+**This is R-20 again, one level up.** There the finding was that a matched span
+carries the answer 77.3% of the time versus 98.7% for the whole document. A ±160
+window is a wider span, and it lands between the two — better than a bare span,
+worse than the document. **The chunk that matches a query is simply not reliably
+the chunk that holds the fact, and no amount of padding around the match fixes
+that; it only converges back on packing the document.** ⇒ Widening the window
+cannot rescue this: its best value is the one that disables it.
+
+⇒ Reverted to `MEMO_CONTEXT_SPAN_WINDOW: 0`. The code and its six tests stay —
+it is reversible, it is measured, and a future chunker that aligns chunks to
+semantic units rather than token counts would change the trade.
+
+### What this leaves
+
+The remaining ~9pt gap between retrieved (96%) and delivered (90.8%) is NOT
+recoverable by packing more into the budget. Candidates that remain, none tried:
+raising the budget (rejected earlier as paying the caller's context for our
+inefficiency — that argument is weaker now that inefficiency is not the cause);
+better ranking so the packed few are more often right; or accepting ~91% as close
+to the ceiling of a 4k budget over this corpus.
+
+⚠️ **Recorded as a hypothesis I held confidently and shipped against.** The
+measurement existed only because the harness diffs against a stored baseline;
+without it the extra documents and reduced truncation would have read as a clean
+win, and both numbers moved the "right" way.
+

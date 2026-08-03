@@ -93,6 +93,8 @@ class ContextResponse(BaseModel):
     # Byte-identical (whitespace-normalised) memos collapsed before packing.
     # Defaulted so existing callers and stored responses stay valid. [002/FR-119]
     duplicates_dropped: int = 0
+    # Hits packed as a window around the matched passage rather than whole.
+    spans_windowed: int = 0
     truncated: bool
 
 
