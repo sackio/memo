@@ -251,14 +251,36 @@ def log_query(db_path: str | None, op: str, *, query: str | None = None,
         # this thread's connection. **Every subsequent read on that connection
         # then serves a snapshot from before other connections' commits.**
         #
-        # Reported independently 2026-08-03 by two seats on the same host and
-        # in the same hour:
-        #   - `groton`: memo_update → not_found for an id memo_search returned
-        #     moments earlier; an unchanged retry succeeded.
-        #   - `insurance`: `database is locked` on bulk writes, also recovering
-        #     on retry.
-        # Both are this shape: a stale read snapshot pinned by a connection
-        # whose failed commit was never rolled back.
+        # ⚠️ WHAT IS PROVEN vs WHAT WAS INFERRED — corrected within the hour,
+        # because the first version of this comment asserted a mechanism it had
+        # not earned:
+        #
+        # PROVEN (measured in the built image, both directions): an INSERT
+        # leaves `in_transaction` True until commit; a failed commit under the
+        # old `except: pass` left it that way; this rollback clears it.
+        #
+        # ⛔ NOT PROVEN: that this path caused `groton`'s 2026-08-03
+        # `memo_update → not_found` for an id `memo_search` had just returned.
+        # It fits the symptom, and I inferred it from that fit. The next
+        # consequence fails: **a pinned connection holds a write lock and blocks
+        # EVERY other writer** (measured — an independent connection with
+        # busy_timeout=3000 dies with `database is locked`). A pin lasting the
+        # ~10 minutes between that store and that update would have failed every
+        # write on the host for ten minutes, which nobody observed. So the pin
+        # was short-lived, and a short pin does not explain a failure ten minutes
+        # later.
+        #
+        # ⇒ **This rollback is correct defensively and stays regardless.** It is
+        # not evidence that the reported symptom is diagnosed. If it recurs, the
+        # discriminator is whether OTHER seats' writes fail in the same window —
+        # pinning predicts they do.
+        #
+        # ⚠️ `insurance`'s concurrent `database is locked` reports were nearly
+        # folded in here as confirmation. They are lock contention on a saturated
+        # disk (the busy_timeout half) and that seat explicitly declined to be
+        # counted as a witness for the pinning half. Folding them in would have
+        # made one unproven story look like two independent confirmations of
+        # itself.
         #
         # ⚠️ Introduced by the query logging added in v0.3.8 — i.e. by the
         # observation, running inside every read on live fleet infrastructure.
