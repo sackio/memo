@@ -944,3 +944,69 @@ one at 5/10 with a worse tail, so the string is a live variable and these result
 transfer to a different one. And because every query is a document's own exact title, the
 correct answer is true by construction — read `bare` before the delta; where bare is near
 ceiling a null means no power rather than no effect.
+
+## R-13 — the prefix, measured on the full corpus: +16.9 rank-1 vs bare qwen3, and a BAND TRADE against 3-large (2026-08-02) [002/FR-111]
+
+⚠️ **DOCUMENT PATH ONLY. The passage run was paused at ~78% when server4 wedged
+under an unrelated 18-hour ZFS saturation and is not in this section.** R-11's
+warning still stands unanswered: `chunk_embeddings` has never been queried with a
+prefixed vector, the passage path regressed harder in R-10 (−27.2 vs −19.9), and
+nothing below transfers to it by assumption.
+
+Same population as R-09 and R-10 — seed 7, depth 10, `--both-indexed-only`, 7,221
+own-title queries, verified as 7,336 corpus − 115 blank-title before the run rather
+than after. Raw: `bench-2026-08-02-prefix-document.{json,txt}`.
+
+### vs R-10 (bare qwen3) — the defect is real and this is its size
+
+| band | n | rank-1 | Δpt | top-5 | Δpt | absent |
+|---|---|---|---|---|---|---|
+| 0–200 | 1216 | 751 → 890 | +11.4 | 1044 → 1138 | +7.7 | 126 → 45 |
+| 200–500 | 2293 | 996 → 1509 | **+22.4** | 1608 → 2077 | +20.5 | 523 → 134 |
+| 500–1000 | 2007 | 1019 → 1379 | +17.9 | 1431 → 1758 | +16.3 | 434 → 169 |
+| 1000–2000 | 1306 | 635 → 827 | +14.7 | 941 → 1116 | +13.4 | 282 → 130 |
+| 2000+ | 399 | 169 → 187 | +4.5 | 235 → 260 | +6.3 | 142 → 123 |
+| **TOTAL** | 7221 | **3570 → 4792** | **+16.9** | 5259 → 6349 | +15.1 | 1507 → 601 |
+
+rank-1 49.4% → 66.4%; top-5 72.8% → 87.9%. **`absent` falls 1,507 → 601** — the
+prefix is not re-ranking, it is making documents findable at all.
+
+⚠️ **+16.9 is BELOW the +21.3 / +20.0 that R-11 predicted from two smaller draws.**
+The prediction was not wrong by much, but it was high, and it was made on
+band-stratified and corpus-weighted samples rather than the full corpus. Record the
+full-corpus number as the estimate and the sample numbers as what they were.
+
+### vs R-09 (`text-embedding-3-large`) — ⭐ THE RESULT THAT MATTERS
+
+| band | n | rank-1 | Δpt | top-5 | Δpt |
+|---|---|---|---|---|---|
+| 0–200 | 1216 | 955 → 890 | −5.3 | 1170 → 1138 | −2.6 |
+| 200–500 | 2293 | 1763 → 1509 | −11.1 | 2181 → 2077 | −4.5 |
+| 500–1000 | 2007 | 1538 → 1379 | −7.9 | 1897 → 1758 | −6.9 |
+| **1000–2000** | 1306 | 677 → 827 | **+11.5** | 1012 → 1116 | +8.0 |
+| **2000+** | 399 | **75 → 187** | **+28.1** | 162 → 260 | +24.6 |
+| **TOTAL** | 7221 | 5008 → 4792 | **−3.0** | 6422 → 6349 | −1.0 |
+
+⇒ **The aggregate says qwen3 is 3.0 points worse. The aggregate is the wrong
+statistic here.** Prefixed qwen3 **loses on short memos and wins decisively on long
+ones**, and 002 exists because of long ones. At 2000+ tokens the document path goes
+**18.8% → 46.9% rank-1** — it more than doubles, on the single band this feature was
+opened to fix.
+
+**A corpus that is 77% short memos will always let the short bands dominate a
+corpus-weighted mean.** That is the same shape as R-05's coverage confound and
+R-01's own-title framing: the number that reads like a verdict is a property of the
+size distribution, not of the encoder.
+
+⛔ **SC-101 still FAILS on the document path**: 46.9% against a ≥80% bar. The
+document-as-one-vector ceiling is not removed by a better encoder, only raised —
+which is the finding R-09 already recorded and this confirms with a second encoder.
+
+**Fact set (SC-103)**: rank-1 7/30 (23%), top-5 14/30, absent 14/30 — up from 4/30
+(R-09) and 5/30 (R-10), still far under the 75% bar.
+
+**Query failures: 9**, reported per band (0–200 = 3, 2000+ = 6) — the first run in
+this series that can state that at all. R-09 and R-10 predate the counter, so their
+`absent` columns are mixtures of misses and queries that never ran and **cannot be
+decomposed after the fact**. Do not read this run as the dirtier one for reporting
+the number that the others could not.
