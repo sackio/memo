@@ -1,3 +1,31 @@
+==============================================================================
+⛔ CORRECTION 2026-08-03 — THIS REPORT'S COUNTS ARE WRONG AND IT CANNOT BE RE-RUN
+==============================================================================
+Three defects, found while acting on the .42:32000 line. Read them before
+quoting any number below.
+
+1. UNDERCOUNT. This file reports `[26 claims / 19 memos] 192.168.1.42:32000`.
+   Re-derived directly against the live v1 corpus (7,955 memos):
+   41 claims across 28 memos. Both figures are low.
+
+2. SILENT TRUNCATION. Every `memos :` line prints at most SIX ids and then
+   stops — no ellipsis, no "+N more" — directly beneath a header stating a
+   larger count. The output gives a reader no way to see the cap. A bounded
+   result rendered as a complete one.
+
+3. ⛔ NO GENERATOR. The script that produced this file was an inline heredoc,
+   not a committed tool. It is not in scripts/ and not in any scratchpad file.
+   So this report cannot be re-run, re-checked, or repaired — only replaced.
+   That is why defects 1 and 2 are being annotated here rather than fixed.
+
+⇒ The PROBE RESULTS below (what answered, what refused, what timed out) are
+  still good — they were measured. It is the AGGREGATION that is unreliable.
+  Treat every count as a lower bound and every memo list as a sample.
+
+📌 See specs/repoint-42-32000-REPORT.md for the corrected .42:32000 analysis,
+  including why that repoint must not be batched.
+==============================================================================
+
 FIRST TRUTH SWEEP — failure list, 2026-08-02
 ==============================================================================
 READ-ONLY. Nothing in the corpus was modified. There is no --fix flag.
