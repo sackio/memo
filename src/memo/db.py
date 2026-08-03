@@ -85,7 +85,13 @@ def _get_or_create_conn(db_path: str) -> sqlite3.Connection:
     conn.enable_load_extension(False)
 
     conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA busy_timeout=5000")
+    # ⚠️ 5000 was too tight and produced real failures. On 2026-08-03 server4
+    # spent hours at ~50% iowait with load peaking above 120, and `insurance`
+    # hit `database is locked` on roughly 4 bulk writes — a lock wait longer
+    # than 5s is ordinary on a saturated disk, not a sign of contention worth
+    # failing over. 30s costs nothing when the disk is healthy (the timeout is
+    # a ceiling, not a delay) and converts a caller-visible error into a wait.
+    conn.execute("PRAGMA busy_timeout=30000")
 
     # Schema creation is serialized across threads: WAL permits concurrent
     # readers, but two threads running CREATE TABLE IF NOT EXISTS at once on a
@@ -216,6 +222,7 @@ def log_query(db_path: str | None, op: str, *, query: str | None = None,
     ⚠️ It is deliberately called AFTER the response is computed, so a slow or
     failing log cannot delay or fail the query it is recording.
     """
+    conn = None
     try:
         conn = _get_or_create_conn(_resolve_path(db_path))
         conn.execute(
@@ -235,6 +242,35 @@ def log_query(db_path: str | None, op: str, *, query: str | None = None,
                 (QUERY_LOG_MAX,))
         conn.commit()
     except Exception:
+        # ⛔⛔ ROLLBACK IS NOT OPTIONAL, AND `pass` ALONE WAS A BUG. [v0.3.9]
+        #
+        # Python's sqlite3 opens a transaction implicitly before DML and holds
+        # it until commit. If the INSERT above succeeds and the COMMIT then
+        # fails — which is exactly what a 5s `busy_timeout` does on a host at
+        # 50% iowait — swallowing the exception leaves the transaction OPEN on
+        # this thread's connection. **Every subsequent read on that connection
+        # then serves a snapshot from before other connections' commits.**
+        #
+        # Reported independently 2026-08-03 by two seats on the same host and
+        # in the same hour:
+        #   - `groton`: memo_update → not_found for an id memo_search returned
+        #     moments earlier; an unchanged retry succeeded.
+        #   - `insurance`: `database is locked` on bulk writes, also recovering
+        #     on retry.
+        # Both are this shape: a stale read snapshot pinned by a connection
+        # whose failed commit was never rolled back.
+        #
+        # ⚠️ Introduced by the query logging added in v0.3.8 — i.e. by the
+        # observation, running inside every read on live fleet infrastructure.
+        # **The instrument damaged the thing it was measuring, in precisely the
+        # way this function's own docstring says it must never do.** Best-effort
+        # means the log may be lost; it does not mean the connection may be left
+        # in a state that corrupts later reads.
+        if conn is not None:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
         pass  # see the docstring — this must never break a live request
 
 
