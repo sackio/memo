@@ -227,6 +227,85 @@ def task_own_title(url: str, path: str, per_band: int, seed: int,
             "status": "ok" if sum(b["rank1"] for b in bands) > 0 else "could_not_run"}
 
 
+# ------------------------------------------------------ task: content query
+def task_content_query(url: str, path: str, per_band: int, seed: int,
+                       limit: int = 10) -> dict:
+    """Query by a CONTENT excerpt instead of the exact title.
+
+    ⭐ **own_title is unrealistically easy and we have been treating it as the
+    whole picture.** Nobody searches memo by pasting a memo's exact title; they
+    search for something they half-remember from the body. This asks the harder
+    and more representative question — and it is still free supervision, because
+    the excerpt's source document is the unambiguous right answer.
+
+    Deterministic by construction: the excerpt is taken from a fixed offset into
+    the body, so re-running with the same seed asks the same questions. No LLM in
+    the loop, nothing to drift.
+
+    ⚠️ Expect LOWER scores than own_title on both builds. That is the point — a
+    task everything passes cannot discriminate between builds.
+    ⛔ Skips documents whose excerpt would be mostly the title again (short
+    memos), because scoring those would quietly re-run own_title under a new name.
+    """
+    import random, re
+    docs = _get(url, "/documents?limit=20000")
+    def toks(d):
+        return d.get("token_count") or max(1, len(d.get("content") or "") // 4)
+    rng = random.Random(seed)
+    bands = []
+    for lo, hi in BANDS:
+        pool = []
+        for d in docs:
+            if not (lo <= toks(d) < hi):
+                continue
+            body = (d.get("content") or "").strip()
+            title = (d.get("title") or "").strip()
+            # drop markdown headers/blank lines, then take a mid-body window
+            lines = [l.strip() for l in body.split("\n")
+                     if l.strip() and not l.strip().startswith(("#", ">", "|", "-", "*"))]
+            if len(lines) < 3:
+                continue
+            excerpt = " ".join(lines[len(lines) // 3:])[:180]
+            if len(excerpt) < 60:
+                continue
+            if title and title[:40].lower() in excerpt.lower():
+                continue  # would be own_title wearing a different name
+            pool.append((d, excerpt))
+        sample = rng.sample(pool, min(per_band, len(pool)))
+        rank1 = top5 = absent = failures = 0
+        for d, excerpt in sample:
+            try:
+                hits = _post(url, CANDIDATE_PATHS[path],
+                             {"query": excerpt, "limit": limit})
+            except Exception:
+                failures += 1
+                absent += 1
+                continue
+            ids = [(h.get("document", h) or {}).get("id") for h in hits]
+            if ids and ids[0] == d["id"]:
+                rank1 += 1
+            if d["id"] in ids[:5]:
+                top5 += 1
+            if d["id"] not in ids:
+                absent += 1
+        bands.append({"band": f"{lo}-{hi if hi < 10**9 else ''}", "n": len(sample),
+                      "rank1": rank1, "top5": top5, "absent": absent,
+                      "failures": failures, "pool": len(pool)})
+    ok_bands = [b for b in bands if b["n"]]
+    total_r1 = sum(b["rank1"] for b in bands)
+    return {"task": "content_query", "path": path, "seed": seed,
+            "per_band": per_band, "bands": bands,
+            "total_n": sum(b["n"] for b in bands), "total_rank1": total_r1,
+            "unweighted_rank1_pct": round(
+                100 * sum(b["rank1"] / b["n"] for b in ok_bands) / len(ok_bands), 2)
+            if ok_bands else None,
+            "total_failures": sum(b["failures"] for b in bands),
+            # ⛔ control: pools must be non-empty. Zero rank-1 with a real pool is
+            # a RESULT; zero rank-1 with an empty pool is a broken selector.
+            "control_ok": sum(b["pool"] for b in bands) > 0 and sum(b["n"] for b in bands) > 0,
+            "status": "ok" if sum(b["n"] for b in bands) > 0 else "could_not_run"}
+
+
 # ------------------------------------------------------- task: set-stability
 def task_set_stability(url: str, path: str, n: int, seed: int,
                        replicates: int = 3) -> dict:
@@ -299,7 +378,7 @@ def task_api_surface(url: str) -> dict:
 
 
 # ------------------------------------------------------------------- runner
-TASKS = ("own_title", "set_stability", "api_surface")
+TASKS = ("own_title", "content_query", "set_stability", "api_surface")
 
 
 def main() -> int:
@@ -360,6 +439,9 @@ def main() -> int:
                 if task == "own_title":
                     r = {p: task_own_title(url, p, args.per_band, args.seed)
                          for p in paths if p != "passages" or True}
+                elif task == "content_query":
+                    r = {p: task_content_query(url, p, args.per_band, args.seed)
+                         for p in paths}
                 elif task == "set_stability":
                     r = task_set_stability(url, primary, args.stability_n, args.seed)
                 elif task == "api_surface":
