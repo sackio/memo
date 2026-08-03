@@ -5,7 +5,8 @@
     "title": "Ecobee Auth0 silent renewal via unibrowse \u2014 working prototype",
     "days_apart": 7.01,
     "probe_query": "``` https://auth.ecobee.com/authorize?response_type=form_post&prompt=none&client_id=183eORFPlXyz9BbDZwqexHPBQoVjgadh&scope=openid+piiRead+piiWrite+smartRead+smartWrite&redirect_uri",
-    "method": "same-title-heuristic"
+    "method": "same-title-heuristic",
+    "similarity": 0.95
   },
   {
     "old_id": "0be2ed33-6742-4aa3-9bc5-3d5db9a83814",
@@ -13,7 +14,8 @@
     "title": "Best Budss Landscaping \u2014 Walkway Estimate EST0433 ($7,290)",
     "days_apart": 53.86,
     "probe_query": "4. **Location:** approximately 1/3 of the way from the house end (one crossing, two sleeves). 5. **Cost question:** ask whether the extra trench/sleeves are included in the $7,290 ",
-    "method": "same-title-heuristic"
+    "method": "same-title-heuristic",
+    "similarity": 0.788
   },
   {
     "old_id": "0e0a711e-f617-4587-80d5-772dd374e0c0",
@@ -21,7 +23,8 @@
     "title": "Omada Controller \u2014 API and Configuration",
     "days_apart": 2.09,
     "probe_query": "CONTROLLER_ID=\"bd0747d5d6ba1492d82d4ad47f7a5428\" BASE_URL=\"https://localhost:8043/$CONTROLLER_ID/api/v2\" SITE_ID=\"68d8605cf6424e512e1a2779\" LOGIN=$(curl -k -s -X POST -H \"Content-T",
-    "method": "same-title-heuristic"
+    "method": "same-title-heuristic",
+    "similarity": 0.662
   },
   {
     "old_id": "6ddae34f-d1e0-437b-abcf-af64c9a9f777",
@@ -29,7 +32,8 @@
     "title": "House switch port inventory (SG3428X-M2, 192.168.1.3) after 2026-05-28 cutover",
     "days_apart": 14.0,
     "probe_query": "Key port assignments post-cutover: Barn switch MAC: 10-5A-95-CA-48-71 Omada controller local URL: https://localhost:8043, controller ID: bd0747d5d6ba1492d82d4ad47f7a5428, site ID: ",
-    "method": "same-title-heuristic"
+    "method": "same-title-heuristic",
+    "similarity": 0.817
   },
   {
     "old_id": "9459ddac-5e02-4248-9c98-074910178d40",
@@ -37,7 +41,8 @@
     "title": "Ben Sack \u2014 Athena CCDA Export (Sarkisyan, 2015-2026)",
     "days_apart": 4.63,
     "probe_query": "Full 2024-01-03 panel (lipid + CMP + CBC + TSH + A1c) \u2014 values match what was already in the Quest PDFs in `medical/lab-results/`. Athena also has placeholder entries for 2025-05-2",
-    "method": "same-title-heuristic"
+    "method": "same-title-heuristic",
+    "similarity": 0.869
   },
   {
     "old_id": "112bd49d-cf61-4123-ad34-35ed78444116",
@@ -45,7 +50,8 @@
     "title": "Git pulse: quantum-predict -- 2026-05-31",
     "days_apart": 20.88,
     "probe_query": "Source: `git log --since=2026-05-24` in `/home/ben/code/quantum-predict`. Headline business signal: **MSTR-only paper trading produced $1.5-1.8k/24h in iter34 12.5h holdout; iter35",
-    "method": "same-title-heuristic"
+    "method": "same-title-heuristic",
+    "similarity": 0.959
   },
   {
     "old_id": "1604fd5a-182a-4479-b770-1dfcea82085c",
@@ -53,7 +59,8 @@
     "title": "Ben Sack \u2014 Healthcare Provider Directory",
     "days_apart": 16.02,
     "probe_query": "Provider: Dr. Jeanette Qablawi, MD (telemed) Next visit: 2026-05-18 1:00 PM EDT (10-min telemed slot) Zepbound (tirzepatide) 15mg weekly, $449/mo First charge 2026-05-11 Providers:",
-    "method": "same-title-heuristic"
+    "method": "same-title-heuristic",
+    "similarity": 0.684
   },
   {
     "old_id": "11588416-0604-4451-99df-ddc235f4f1f4",
@@ -61,7 +68,8 @@
     "title": "Ben Sack \u2014 Healthcare Provider Directory",
     "days_apart": 16.02,
     "probe_query": "Zepbound (tirzepatide) 15mg weekly, $449/mo First charge 2026-05-11 Providers: John Watson MD, Danielle Raja DCNP, Moira Quinn CNP, Allison Vecchiarello, Kelly Scott (PA/CMA) Recur",
-    "method": "same-title-heuristic"
+    "method": "same-title-heuristic",
+    "similarity": 0.543
   },
   {
     "old_id": "346d0edf-d14c-42d7-a057-7bcb7e4009c7",
@@ -69,7 +77,8 @@
     "title": "Ben Sack \u2014 Current Health Profile (May 2026)",
     "days_apart": 39.69,
     "probe_query": "ALT/AST consistently low-normal (AST 11-13, ALT 15-16). Alkaline phosphatase normal. Bilirubin normal. Albumin/globulin normal. (Prior memo noted \"no hepatotoxicity from oral TRT\" ",
-    "method": "same-title-heuristic"
+    "method": "same-title-heuristic",
+    "similarity": 0.947
   },
   {
     "old_id": "8c446c1d-d21e-4604-b277-4ba746d73ede",
@@ -77,7 +86,8 @@
     "title": "Automated Claude Code Crons \u2014 partial scale-down 2026-04-22/23",
     "days_apart": 59.27,
     "probe_query": "flock -n /tmp/<job>.lock timeout --foreground -k 30 <duration> /home/ben/.local/bin/claude -p ... ``` Empty 0-byte `/tmp/*.lock` files are normal flock artifacts; flock releases on",
-    "method": "same-title-heuristic"
+    "method": "same-title-heuristic",
+    "similarity": 0.669
   },
   {
     "old_id": "1feb7299-8ee7-4f31-8245-ad0d306c3254",
@@ -85,23 +95,8 @@
     "title": "Cluster alert: server4 SSH connectivity issue (2026-05-31)",
     "days_apart": 21.01,
     "probe_query": "3. `arp -a` \u2014 look for stale entries 4. `netstat -s` \u2014 dropped packets 5. Restart network service / interface reset if needed 6. server3 iDRAC needs manual investigation (IPMI time",
-    "method": "same-title-heuristic"
-  },
-  {
-    "old_id": "24075380-6052-49fe-9952-6c4640acd678",
-    "new_id": "c6f1862b-21a6-4e8a-8b48-6a1c26f09ee5",
-    "title": "Super-agent project: home automation orchestrator (created Jun 22 2026 blackout)",
-    "days_apart": 12.03,
-    "probe_query": "2. Python 3.10.12 on s4; project specifies 3.11+ (venv with newer Python needed) 3. `OTA_PUBLIC_BASE_URL` env var required for iOS OTA manifest 4. `.env` needs `SUPER_AGENT_API_KEY",
-    "method": "same-title-heuristic"
-  },
-  {
-    "old_id": "28272147-1bc1-4dd4-8cbd-b54587763cd0",
-    "new_id": "4c083760-ddde-4970-a7f7-d9283e67482c",
-    "title": "9630 house \u2014 Junior (Flawless Construction) meeting 2026-06-05 \u2014 punch list & decisions",
-    "days_apart": 31.82,
-    "probe_query": "FRONT PORCH STEPS DOOR THRESHOLD ELECTRIC-PANEL CORNER (where stone veneer meets the transfer switch / electric) CAMERA SHUTTERS LANTERNS (already on-hand in boxes; new ones waitin",
-    "method": "same-title-heuristic"
+    "method": "same-title-heuristic",
+    "similarity": 0.554
   },
   {
     "old_id": "28b772fe-2fbc-4b56-8516-59608f8c1b86",
@@ -109,7 +104,8 @@
     "title": "VyOS Router \u2014 Hardware, Config & Migration Reference",
     "days_apart": 17.15,
     "probe_query": "The EdgeRouter X bottlenecked at ~900Mbps and couldn't handle FIOS 2Gbps service. Replaced with VyOS rolling (nftables) on HP ProDesk 600 G6 SFF with Intel X710-DA4 quad 10G SFP+ N",
-    "method": "same-title-heuristic"
+    "method": "same-title-heuristic",
+    "similarity": 0.68
   },
   {
     "old_id": "6ba9fc87-cb97-474a-981e-bd5bbc49c338",
@@ -117,15 +113,8 @@
     "title": "Generator (Generac) Wi-Fi disconnected \u2014 recurring issue post-outage",
     "days_apart": 22.0,
     "probe_query": "Generator name: Ben Sack (Generac 24 kW LP standby) Open Mobile Link app \u2192 tap \"Reconnect now\" \u2192 follow on-screen instructions Power outage on 2026-05-27 may have disrupted the gen",
-    "method": "same-title-heuristic"
-  },
-  {
-    "old_id": "b6819441-8c77-4044-a8a8-d98263b19df4",
-    "new_id": "2bc39406-d581-444a-9a38-afabb1f5bc99",
-    "title": "ATC beacon primitive \u2014 rewarm-pin for post-compaction context (2026-06-05)",
-    "days_apart": 16.0,
-    "probe_query": "1. READ the full beacon content \u2014 for compaction rewarm beacons, it IS the re-warmed context 2. Call `atc_ack_beacon(beacon_id=<id>)` for each beacon BEFORE responding to user 3. O",
-    "method": "same-title-heuristic"
+    "method": "same-title-heuristic",
+    "similarity": 0.84
   },
   {
     "old_id": "42277c2b-fb60-43dc-8ced-bfd944036dab",
@@ -133,7 +122,8 @@
     "title": "2026 Garden \u2014 Raised Bed Dimensions & Measurements",
     "days_apart": 10.21,
     "probe_query": "5. Sunbelt Plum Perfect 6. Sierra Lady 7. White Gold 8. Pink Knockout Rose-tone rate: \u00bd cup/bush \u00d7 8 bushes = 4 cups (~1 lb) per application. Source: Laura email to self, May 18 20",
-    "method": "same-title-heuristic"
+    "method": "same-title-heuristic",
+    "similarity": 0.828
   },
   {
     "old_id": "9cdb47cd-c196-43de-937e-fc2f8acf5603",
@@ -141,7 +131,8 @@
     "title": "Git pulse rollup: quantum-feed -- 2026-06-12 to 2026-06-14",
     "days_apart": 7.01,
     "probe_query": "4. Wave-1 at-scale signal-parity cert (32 surfaces @ 1000x90, 0 divergences) 5. k8s Job for at-scale signal-parity sweep 6. QFRT_MAX_ACK_PENDING env + health-harness Layer-1 per-st",
-    "method": "same-title-heuristic"
+    "method": "same-title-heuristic",
+    "similarity": 0.681
   },
   {
     "old_id": "33f8a7b4-4cbc-42d3-9a98-759336523791",
@@ -149,39 +140,8 @@
     "title": "Autoimmune Exome Project \u2014 KM15642",
     "days_apart": 42.44,
     "probe_query": "All steps complete. Reference genome: GRCh38 no-alt contigs. 1. Configure pedigrees + affected status in seqr (programmatic via API) 2. Assign HPO terms per individual 3. Create ge",
-    "method": "same-title-heuristic"
-  },
-  {
-    "old_id": "f377403c-d8d1-46dc-a086-0638e894eda2",
-    "new_id": "476da7ef-d32b-460b-9259-69d792e5742d",
-    "title": "Ben Sack \u2014 Complete Medical History (1985-2026)",
-    "days_apart": 16.02,
-    "probe_query": "8. **Refractive error** \u2014 mild bilateral. 2024 Rx: R \u22120.25 sph, axis 075; L +0.25 sph / \u22121.00 cyl axis 060. Lexington Eye Associates \u2013 Westford, Dr. Victor Zaki OD. Rx expired 2026",
-    "method": "same-title-heuristic"
-  },
-  {
-    "old_id": "a864cb6a-e372-4678-9ef1-6f3b3a3d3ee9",
-    "new_id": "48308d0a-cb64-4f70-8e39-e83b65649a72",
-    "title": "Personal Finance Stack \u2014 Sure (finance.sack.io) \u2014 Plaid fully wired (May 2026)",
-    "days_apart": 49.01,
-    "probe_query": "Note: dev-tier limit is 10 items, but Plaid does not enforce this strictly \u2014 12 items connected without complaint. Likely will not block until ~50+ or production tier. Must use **h",
-    "method": "same-title-heuristic"
-  },
-  {
-    "old_id": "e2cc11ba-1a09-4714-82be-3df60374a04b",
-    "new_id": "48308d0a-cb64-4f70-8e39-e83b65649a72",
-    "title": "Personal Finance Stack \u2014 Sure (finance.sack.io) \u2014 Plaid fully wired (May 2026)",
-    "days_apart": 16.0,
-    "probe_query": "No Plaid slots remaining \u2014 adding another institution requires removing one or requesting a limit increase. Fidelity Investments, Synchrony, Marcus, Vio, Schwab. Placeholder Python",
-    "method": "same-title-heuristic"
-  },
-  {
-    "old_id": "c64a637c-e7f6-4b4a-8662-34662d3cdac1",
-    "new_id": "48308d0a-cb64-4f70-8e39-e83b65649a72",
-    "title": "Personal Finance Stack \u2014 Sure (finance.sack.io) \u2014 Plaid fully wired (May 2026)",
-    "days_apart": 16.0,
-    "probe_query": "No Plaid slots remaining \u2014 adding another institution requires removing one or requesting a limit increase. \"Add Plaid Item\" in Sure fails with `INVALID_FIELD: OAuth redirect URI m",
-    "method": "same-title-heuristic"
+    "method": "same-title-heuristic",
+    "similarity": 0.58
   },
   {
     "old_id": "4fab798f-dab0-4d9e-a61e-a7c5febc7329",
@@ -189,15 +149,8 @@
     "title": "Barn K8s Cluster \u2014 Topology and Node Roles",
     "days_apart": 33.41,
     "probe_query": "Kubeconfig: /mnt/nas/data/code/server_admin/k8s-credentials/clusters/barn-cluster.yaml Alias: k-barn quantum (reactor workloads), quantum-feed (data pipeline), quantum-dojo (dashbo",
-    "method": "same-title-heuristic"
-  },
-  {
-    "old_id": "bb39fe77-a715-4a30-b7d3-28a4063b65c2",
-    "new_id": "bfccd028-7a54-487e-8d2b-6e60ae48765d",
-    "title": "audit-coord open issues quantum-feed",
-    "days_apart": 3.08,
-    "probe_query": "last_tick_at: 2026-05-01T14:59:00Z cycle_minutes: 10 session: tick 227 \u2192 396",
-    "method": "same-title-heuristic"
+    "method": "same-title-heuristic",
+    "similarity": 0.375
   },
   {
     "old_id": "a2619d6a-868d-4184-9b92-951c8502b496",
@@ -205,7 +158,8 @@
     "title": "Contractor Murilo Flawless renovation update 120 Reedy Meadow active May 2026",
     "days_apart": 42.0,
     "probe_query": "Vertical PVC board orientation selected. Materials ordered. Original too large (returned). Replacement 30x80 with 6-9/16\" jamb discussed April 21. Junior noted plywood badly rotted",
-    "method": "same-title-heuristic"
+    "method": "same-title-heuristic",
+    "similarity": 0.382
   },
   {
     "old_id": "97c99329-8f8c-44b2-ad90-86a77026f8c0",
@@ -213,7 +167,8 @@
     "title": "PushBuild Tax Categorization \u2014 Context & Strategy",
     "days_apart": 2.98,
     "probe_query": "If data feeds + utilities + cloud are pooled as \u00a7195 startup costs AND hardware (~$60K) is included: Startup cost analysis tab: \"\u00a7195 Startup Pool\" in the main Business Expenditure",
-    "method": "same-title-heuristic"
+    "method": "same-title-heuristic",
+    "similarity": 0.865
   },
   {
     "old_id": "aea5865f-d6b9-455b-9025-ec9c795e2781",
@@ -221,7 +176,8 @@
     "title": "Git pulse: storybook -- 2026-05-31 (new project)",
     "days_apart": 20.88,
     "probe_query": "Source: `git log --since=2026-05-24` in `/home/ben/code/storybook`. Storybook is a brand-new project: a personalized illustrated children's book generator. Takes a story spec \u2192 gen",
-    "method": "same-title-heuristic"
+    "method": "same-title-heuristic",
+    "similarity": 0.953
   },
   {
     "old_id": "786132d7-9b02-4345-87f3-5e01f45ab3db",
@@ -229,15 +185,8 @@
     "title": "House-barn network cutover: 10G fiber primary, legacy Cat6 trunks abandoned (2026-05-28)",
     "days_apart": 14.0,
     "probe_query": "2. Unplugged old Cat6 trunks at both ends: RED (house p11), WHITE (house p13 / barn p21), BLUE (house p12 \u2014 old route to outdoor barn AP). ORANGE (house p14 / barn p22) was already",
-    "method": "same-title-heuristic"
-  },
-  {
-    "old_id": "7e28d7f3-40e7-47ef-9b46-bc6706de0514",
-    "new_id": "95c0281b-fa3e-47f8-9a08-bab561f95374",
-    "title": "120 Reedy Meadow \u2014 Exterior LED Lighting Design",
-    "days_apart": 1.31,
-    "probe_query": "WLED preset naming: reedy-z1-eave, reedy-z2-gable, etc. Assign static IPs via DHCP reservation. The front walkway scope flipped from Lindsey (Best Budss EST0433) to Flawless on 202",
-    "method": "same-title-heuristic"
+    "method": "same-title-heuristic",
+    "similarity": 0.951
   },
   {
     "old_id": "7e33f64b-0777-4ca8-90e5-d045884ef839",
@@ -245,15 +194,8 @@
     "title": "PXE Autoinstall \u2014 NVMe Partition Wipe Fix (early-commands)",
     "days_apart": 14.66,
     "probe_query": "Also added empty vendor-data file to stop cloud-init hammering 404s (non-fatal but noisy). The above wipes hardcoded `/dev/sda` and `/dev/nvme0n1` \u2014 fine for PXE-installed barn wor",
-    "method": "same-title-heuristic"
-  },
-  {
-    "old_id": "85ee3c1d-d948-4ab9-ba4e-043e356acaa3",
-    "new_id": "82a25d1d-bca8-46aa-94d9-a9f851bb3698",
-    "title": "Brooke (Sack dog) \u2014 Health & Veterinary History",
-    "days_apart": 19.88,
-    "probe_query": "2. **Hind-end weakness / mobility** (IVDD sequela + age arthritis) \u2014 Trupanion claims 2023/2025; on **Dasuquin Advanced** + fish oil + intermittent **Carprofen/Rimadyl** PRN + Gaba",
-    "method": "same-title-heuristic"
+    "method": "same-title-heuristic",
+    "similarity": 0.36
   },
   {
     "old_id": "82d132ea-88ef-45e8-a807-0d2395798af8",
@@ -261,7 +203,8 @@
     "title": "Voicemail: Austin (Nashoba Air & BoilerWorks) \u2014 2026-05-26",
     "days_apart": 25.0,
     "probe_query": "From: +19784860600 Full transcript: \"Hi Ben. This is Austin from the show, the air and boiler work, some of the sales manager over here. One of our sister company, central, florida",
-    "method": "same-title-heuristic"
+    "method": "same-title-heuristic",
+    "similarity": 0.583
   },
   {
     "old_id": "a3ec528f-d35b-4e92-89b6-df5869ce2c60",
@@ -269,7 +212,8 @@
     "title": "HVAC Replacement Plan \u2014 120 Reedy Meadow Rd, Groton MA",
     "days_apart": 37.01,
     "probe_query": "3. Grid outage: Battery covers 10-17 hr typical load 4. Extended outage: Generac 24kW LP standby auto-starts, full HVAC load covered Leo submitted a proposal with **Bryant Crossove",
-    "method": "same-title-heuristic"
+    "method": "same-title-heuristic",
+    "similarity": 0.878
   },
   {
     "old_id": "b2741569-1c3f-4ab2-8f2d-79ab7c2a88a0",
@@ -277,7 +221,8 @@
     "title": "Laura IRA \u2192 Solo 401k Rollover \u2014 April 2026",
     "days_apart": 64.69,
     "probe_query": "Clears the pro-rata rule so the $21,950 after-tax basis remaining in the IRA can be converted to Roth with zero federal/MA tax owed (backdoor Roth). Per IRS Notice 2014-54 / IRC \u00a74",
-    "method": "same-title-heuristic"
+    "method": "same-title-heuristic",
+    "similarity": 0.886
   },
   {
     "old_id": "a334a34f-4cfd-464c-ba9d-330c29c57997",
@@ -285,7 +230,8 @@
     "title": "Ben Sack \u2014 Hormone Optimization Stack (2026)",
     "days_apart": 39.69,
     "probe_query": "1. Ben is NOT on TRT (Hone-confirmed protocol is enclomiphene+anastrozole+tadalafil, not exogenous testosterone). 2. Dr. Dahl and Dr. Lajoie are HONE providers, not Time Therapeuti",
-    "method": "same-title-heuristic"
+    "method": "same-title-heuristic",
+    "similarity": 0.914
   },
   {
     "old_id": "d72f3805-711c-4195-b9c4-e5b60b7be3f6",
@@ -293,7 +239,8 @@
     "title": "quantum-feed: dashboard architecture \u2014 ports, deployment, and canonical URLs",
     "days_apart": 16.0,
     "probe_query": "QFLS_REPO_ROOT: points at the committed .reviews/*.json artifacts (NOT a worktree checkout); the library-status backend reads these static JSON files. URL: http://192.168.1.42:3000",
-    "method": "same-title-heuristic"
+    "method": "same-title-heuristic",
+    "similarity": 0.731
   },
   {
     "old_id": "c59032d3-1fc8-404e-8a16-58c775fb5254",
@@ -301,15 +248,8 @@
     "title": "Flawless Construction \u2014 Contract, Project Status & History (Apr 2026)",
     "days_apart": 8.41,
     "probe_query": "2. **Stone Veneer Installation** \u2014 $22,026 (original) + $14,500 (garage expansion) + $749.25 (foundation extension) = $37,275.25 3. **Trim & Fascia \u2014 Full PVC Replacement** \u2014 $18,9",
-    "method": "same-title-heuristic"
-  },
-  {
-    "old_id": "b3442a44-759b-4800-8c8e-058c92de6f2a",
-    "new_id": "cae454e7-4eb1-4f07-98cf-dcbeed1b5f96",
-    "title": "ollm: qwen2.5-coder:7b is the recommended local coding model on gpu4 (8GB 3070)",
-    "days_apart": 10.61,
-    "probe_query": "DECISION (2026-06-26, ben-approved): qwen2.5-coder:7b is the recommended/default LOCAL coding model. Made it the top suggestion in providers.yaml; demoted llama3.2:3b to \"fast/tiny",
-    "method": "same-title-heuristic"
+    "method": "same-title-heuristic",
+    "similarity": 0.778
   },
   {
     "old_id": "cd45f96b-e812-4be2-899e-17a270bfcf58",
@@ -317,30 +257,7 @@
     "title": "Barn K8s Troubleshooting \u2014 Known Issues and Fixes (March 2026)",
     "days_apart": 14.98,
     "probe_query": "2. MicroK8s v1.32 uses nftables not iptables: Checking iptables shows 0 KUBE rules even when working. Service CIDR works via nft rules. 3. server1 stale IPs after reboot: 192.168.1",
-    "method": "same-title-heuristic"
-  },
-  {
-    "old_id": "c603c26e-af10-4bd6-bd9a-63fc1154ca35",
-    "new_id": "d30542c3-7f9b-422d-8f65-3c9b71a2a9db",
-    "title": "family.sack.io \u2014 Cobrowse Feature + LiveKit Deployment",
-    "days_apart": 41.01,
-    "probe_query": "Backend API endpoints: Archive layout: /mnt/db/media-app/interviews/<family>/<date>_<host>_<room>/ Container visible at /app/data/interviews/... Audio: Per-client MediaRecorder + u",
-    "method": "same-title-heuristic"
-  },
-  {
-    "old_id": "d18c1d90-fa73-4767-a1a9-f0c123a0bab4",
-    "new_id": "cbf9e6ee-dba7-415c-a7c3-78be85558605",
-    "title": "OpenEvidence MCP service \u2014 server4, port 8912",
-    "days_apart": 6.0,
-    "probe_query": "1. openevidence.com \u2192 click Log In (`button.MuiButton-outlined`) 2. `auth.openevidence.com/u/login/identifier`: fill `input#username` \u2192 click `button._button-login-id` 3. `/u/login",
-    "method": "same-title-heuristic"
-  },
-  {
-    "old_id": "f4720845-a6ca-47c5-b580-73ad27f82568",
-    "new_id": "cfe2952d-1a56-4454-9650-c1e1a8036884",
-    "title": "HA post-grid-outage integration recovery playbook",
-    "days_apart": 24.62,
-    "probe_query": "cnt[(e2plat.get(u,'(no-registry)'), e2entry.get(u,'(none)'), entry2title.get(e2entry.get(u,'(none)'),''))] += 1 for (p,ce,t), n in cnt.most_common(): print(f'{n:4d}  {p:15s}  {t}  ",
-    "method": "same-title-heuristic"
+    "method": "same-title-heuristic",
+    "similarity": 0.694
   }
 ]

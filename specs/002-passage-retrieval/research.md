@@ -1785,3 +1785,55 @@ only add failure modes to a number already known exactly. ⚠️ Stored runs bef
 was available and I nearly missed it — `doc_count: 3` and `sections: 20` were
 both in the same response.
 
+
+---
+
+## R-24 — the supersession rule's precision was a confound in its own evaluation (2026-08-03) [002/FR-118]
+
+R-22 reported replacement@1 of 39.5% and I queued "fix retrieval" off it. Before
+attacking the number I checked what it was measuring, and it was partly measuring
+my own bad edges.
+
+**Word overlap within the 43 pairs: median 0.66 — most really are rewrites — but
+10 of 43 shared under 30% of their words.** `Brooke (Sack dog) — Health &
+Veterinary History`, two memos 20 days apart at **0.04** overlap, is two
+different vet visits filed under one title. The FR-118 docstring said "same title
+is not the same claim and this rule cannot tell"; that was true and I shipped it
+anyway. **Superseding those hid memos that nothing had replaced.**
+
+⇒ Added a `--min-similarity 0.35` floor. 43 edges → **29**, min 0.36, median 0.78.
+
+| same probe design | 43 edges | 29 edges |
+|---|---|---|
+| replacement @1 (`passages`) | 39.5% | **51.7%** |
+| replacement top-5 | 69.8% | 72.4% |
+| **neither returned** | 18.6% | **13.8%** |
+| superseded still returned | 0 | **0** |
+
+⚠️ **NOT an apples-to-apples delta — the edge SETS differ, so these are different
+questions.** The honest reading is arithmetic: 43 × 0.395 ≈ 17 successes,
+29 × 0.517 ≈ 15. **The 14 removed edges contributed ~2, a ~14% rate.** They were
+close to unanswerable by construction — no retrieval system can rank a
+"replacement" first when the pair is not a replacement.
+
+⇒ ⭐ **A rule's precision silently sets the ceiling of the metric used to judge
+the system it feeds.** I was one step from spending the evening tuning retrieval
+against a target that was ~30% noise of my own making.
+
+### The asymmetry that sets the default
+
+Wrongly superseding **hides** a memo and the caller cannot tell — search simply
+stops returning it. Wrongly **not** superseding leaves a stale memo findable, and
+the replacement is findable too, so a reader sees both and can judge. ⇒ The
+threshold is biased hard toward not superseding, and `--revoke` exists so the
+whole heuristic is reversible (scoped to this script's `actor`, so it can never
+clear an edge an agent asserted deliberately).
+
+### Where supersession stands
+
+`passages` 51.7% @1 / 72.4% top-5 / 13.8% neither; `document` 31.0% / 65.5% /
+27.6%. **The passage path is markedly better at surfacing a replacement** —
+consistent with R-20, and further support for FR-117's rank-by-passage.
+⚠️ 51.7% is still not good, and it is now a genuine retrieval target rather than
+an artefact.
+

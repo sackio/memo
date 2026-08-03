@@ -92,6 +92,9 @@ def main() -> int:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--min-days", type=float, default=1.0)
+    ap.add_argument("--min-similarity", type=float, default=0.35,
+                    help="minimum word-overlap (Jaccard) between old and new. "
+                         "Below it they share a TITLE, not a CLAIM.")
     ap.add_argument("--apply", action="store_true")
     ap.add_argument("--revoke", action="store_true",
                     help="clear valid_until and delete edges written by this "
@@ -116,6 +119,7 @@ def main() -> int:
 
     edges, skipped_recent, skipped_same, skipped_noprobe = [], 0, 0, 0
     skipped_recent_pair = 0
+    skipped_dissimilar = 0
     for title, members in groups.items():
         if len(members) < 2:
             continue
@@ -146,6 +150,25 @@ def main() -> int:
             if pair_days < args.min_days:
                 skipped_recent_pair += 1
                 continue
+            # ⛔ SAME TITLE IS NOT THE SAME CLAIM, AND NOW THE RULE CAN TELL.
+            # Measured on the first 43 edges: median word overlap 0.66 — most
+            # pairs really are rewrites — but **10 of 43 shared under 30% of
+            # their words**. `Brooke (Sack dog) — Health & Veterinary History`
+            # at 0.04, twenty days apart, is two different vet visits filed
+            # under one title. Superseding that does not update anything; it
+            # HIDES a memo nobody replaced.
+            #
+            # ⭐ THE ASYMMETRY DECIDES THE DEFAULT. Wrongly superseding hides
+            # information and the caller cannot tell — search simply stops
+            # returning it. Wrongly NOT superseding leaves a stale memo
+            # findable, and the newer one is findable too, so a reader can see
+            # both and judge. ⇒ **Bias hard toward not superseding.**
+            a = set((old["content"] or "").lower().split())
+            b = set((newest["content"] or "").lower().split())
+            sim = (len(a & b) / len(a | b)) if (a and b) else 0.0
+            if sim < args.min_similarity:
+                skipped_dissimilar += 1
+                continue
             probe = _excerpt(old["content"] or "", title)
             if probe is None:
                 skipped_noprobe += 1
@@ -155,6 +178,7 @@ def main() -> int:
                 "days_apart": round(((newest["created_at"] or 0)
                                      - (old["created_at"] or 0)) / 86400.0, 2),
                 "probe_query": probe, "method": "same-title-heuristic",
+                "similarity": round(sim, 3),
             })
 
     print(f"title groups: {sum(1 for v in groups.values() if len(v) > 1)} "
@@ -162,6 +186,8 @@ def main() -> int:
     print(f"  skipped, GROUP span < {args.min_days}d (burst duplicates): {skipped_recent}")
     print(f"  skipped, PAIR < {args.min_days}d apart inside a wide group: "
           f"{skipped_recent_pair}")
+    print(f"  skipped, word-overlap < {args.min_similarity} "
+          f"(shares a TITLE, not a CLAIM): {skipped_dissimilar}")
     print(f"  skipped, byte-identical (a DEDUPE problem, not supersession): "
           f"{skipped_same}")
     print(f"  skipped, no usable body probe: {skipped_noprobe}")
