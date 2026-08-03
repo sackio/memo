@@ -517,4 +517,21 @@ the prefix question is settled, not before.
       those 53 tokens**, so a bare-query measurement reads ~34% low and any token figure
       predating 2026-08-02 17:33 EDT is a bare-query figure. [002/FR-111]
 
+- [ ] **T287** — Decide whether retrieval is required to be **set-stable**, and state the
+      answer in the spec either way. Measured in R-14: asking 25 titles 5× each, the
+      target's own rank never varied (0/25) but **the returned 10-id list varied on 11/25
+      (44%)**. Retrieval is rank-stable and not set-stable. Confirmed independently by
+      three replicates of the same 95 repair queries: rank-1 55/56/56, absent 10/10/11,
+      both flips at a rank boundary.
+      ⭐ **The bench barely notices this — a 1-2 count wobble in 95 — but the bench only
+      ever asks about ONE document's rank. Every product surface asks about the SET.**
+      `memo_context` budget packing, dedup, and any citation list can therefore differ
+      between two identical `/recall` calls with the same top hit. Whether that is a
+      defect or an acceptable property of ANN search is a decision, not a measurement,
+      and the spec currently claims **nothing in either direction** — which is the actual
+      problem, since it means no implementation can be wrong.
+      ⚠️ Do not "fix" this before deciding: forcing a total order (e.g. tie-break by id)
+      buys reproducibility and may cost relevance, and nobody has measured which ties are
+      real ties versus float noise. **Establish the requirement first.** [002/FR-113]
+
 **Final gate**: `speckit-trace --strict` (repo-wide, all of 001 + 002)
