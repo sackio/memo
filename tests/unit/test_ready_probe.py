@@ -41,8 +41,17 @@ def test_health_stays_up_and_says_nothing_about_the_read_path(client):
 
 
 def test_ready_reports_ready_on_a_working_store(client):
-    """POSITIVE CONTROL — required, but on its own it proves nothing."""
-    r = client.get("/ready")
+    """POSITIVE CONTROL — required, but on its own it proves nothing.
+
+    ⚠️ GENEROUS TIMEOUT ON PURPOSE, and the reason is a real property rather
+    than flakiness: on a COLD store the first touch creates the schema and the
+    vec0 tables, which took >5s in a loaded container and made the default
+    `timeout_s=5.0` return 503. **That 503 is CORRECT** — a store still building
+    its schema is genuinely not ready to serve — so the fix is to ask the
+    question this test means to ask ("does a WORKING store report ready?")
+    rather than to loosen the endpoint's default and lose the cold-start signal.
+    """
+    r = client.get("/ready?timeout_s=60")
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["status"] == "ready"

@@ -150,7 +150,8 @@ def resolve_target(name: str, url: str, container: str | None) -> dict:
         code = ("import sys,json;sys.path.insert(0,'/app/src');"
                 "from memo.config import settings as s;"
                 "print(json.dumps({k:getattr(s,k,None) for k in "
-                "('embedding_model','embedding_dimensions','embedding_base_url')}))")
+                "('embedding_model','embedding_dimensions','embedding_base_url',"
+                "'memo_retrieval_path')}))")
         last_err = None
         for _ in range(4):  # docker exec on this host DOES also intermittently return nothing
             r = subprocess.run(["docker", "exec", container, "python3", "-c", code],
@@ -160,7 +161,14 @@ def resolve_target(name: str, url: str, container: str | None) -> dict:
                     d = json.loads(r.stdout.strip())
                     out["resolved"] = {"model": d.get("embedding_model"),
                                        "dims": d.get("embedding_dimensions"),
-                                       "url": d.get("embedding_base_url")}
+                                       "url": d.get("embedding_base_url"),
+                                       # ⛔ WHICH INDEX ANSWERED. Two context_fit
+                                       # runs on one build can differ purely
+                                       # because this flipped, and without it
+                                       # recorded the delta reads as a code
+                                       # change. Same shape as R-14's
+                                       # "incumbent".
+                                       "retrieval_path": d.get("memo_retrieval_path")}
                 except Exception:
                     out["resolved"] = {"raw": r.stdout.strip()[:200]}
                 break
@@ -369,7 +377,7 @@ def _score_answer_band(url, path, items, docs_by_id, freq, limit, budget):
     four hours. `/context` is a property of the BUILD, so it is measured once per
     target in `task_context_fit`.
     """
-    n = right1 = in_top1 = in_topk = failures = missing = ambiguous = 0
+    n = right1 = in_top1 = in_topk = in_topk_doc = failures = missing = ambiguous = 0
     for it in items:
         if it["id"] not in docs_by_id:
             missing += 1
@@ -402,12 +410,27 @@ def _score_answer_band(url, path, items, docs_by_id, freq, limit, budget):
             in_top1 += 1
         if any(it["answer"] in t for t in texts):
             in_topk += 1
+        # ⭐⭐ SAME HITS, GRADED ON THE FULL DOCUMENT INSTEAD OF THE SPAN.
+        # `/search-passages` returns BOTH `passage.text` AND the complete
+        # `document.content`, so "did the answer come back" has two honest
+        # answers and MY GRADING CHOICE WOULD OTHERWISE DECIDE THE HEADLINE:
+        #   - grade the span  -> what passage retrieval BUYS you, if the caller
+        #                        reads the span (which is the entire point:
+        #                        fewer tokens for the same answer)
+        #   - grade the doc   -> what the caller ACTUALLY RECEIVES, since the
+        #                        full text is on the wire regardless
+        # Reporting one of these and not the other is an argument disguised as a
+        # measurement. Both are recorded; the GAP between them is the finding.
+        docs_text = [((h.get("document", h) or {}).get("content") or "")
+                     for h in hits]
+        if any(it["answer"] in t for t in docs_text):
+            in_topk_doc += 1
     return {"n": n, "pinned": len(items), "missing": missing,
             # ⛔ Separate from `missing`: the document is here, the QUESTION is no
             # longer gradeable because the literal stopped being unique.
             "ambiguous": ambiguous, "failures": failures,
             "right_doc_top1": right1, "answer_in_top1": in_top1,
-            "answer_in_topk": in_topk}
+            "answer_in_topk": in_topk, "answer_in_topk_fulldoc": in_topk_doc}
 
 
 def task_answer_recall(url: str, path: str, per_band: int, seed: int,
@@ -450,6 +473,12 @@ def task_answer_recall(url: str, path: str, per_band: int, seed: int,
             # Pair with context_fit.answer_in_context_pct on the SAME sample —
             # the difference is what was retrieved and then truncated away.
             "answer_in_topk_pct": pct("answer_in_topk"),
+            # ⭐ The same hits graded on the full document text the API also
+            # returns. On the `document` path these are identical by
+            # construction; on `passages` the gap is what the span costs.
+            "answer_in_topk_fulldoc_pct": pct("answer_in_topk_fulldoc"),
+            "span_cost_pt": (round(pct("answer_in_topk_fulldoc")
+                                   - pct("answer_in_topk"), 2) if ok else None),
             # ⛔ control: the questions must have been asked AND gradeable. Zero
             # answers over a real sample is a RESULT; zero because every literal
             # went ambiguous is an instrument failure wearing its face.
@@ -488,6 +517,7 @@ def task_context_fit(url: str, per_band: int, seed: int, sample=None,
            else _draw_bands(docs, "answer_recall", per_band, seed))
     n = in_ctx = failures = missing = ambiguous = trunc = 0
     toks, ndocs, dups, matched = [], [], [], []
+    dup_titles, sec_counts = [], []
     for b in src:
         for it in b["items"]:
             if it["id"] not in docs_by_id:
@@ -510,9 +540,19 @@ def task_context_fit(url: str, per_band: int, seed: int, sample=None,
             ndocs.append(ctx.get("doc_count") or 0)
             matched.append(ctx.get("matched_count") or 0)
             trunc += 1 if ctx.get("truncated") else 0
-            # Sections are "## <title> (score: …)" blocks; count repeated bodies.
+            # ⛔ COMPARE BODIES, NOT WHOLE SECTIONS. Each block is
+            # "## <title> (score: 0.83)\n<body>", and two copies of one memo get
+            # DIFFERENT scores — so byte-equality on the whole section misses
+            # exactly the duplicates it exists to find, and reports a
+            # near-zero rate that reads as "no redundancy". Strip the header line.
             secs = [s.strip() for s in body.split("\n## ") if s.strip()]
-            dups.append(len(secs) - len({s for s in secs}))
+            bodies = [s.split("\n", 1)[1].strip() if "\n" in s else s
+                      for s in secs]
+            titles = [s.split("\n", 1)[0].split(" (score:")[0].strip()
+                      for s in secs]
+            dups.append(len(bodies) - len(set(bodies)))
+            dup_titles.append(len(titles) - len(set(titles)))
+            sec_counts.append(len(secs))
     mean = lambda xs: round(sum(xs) / len(xs), 2) if xs else None
     return {"task": "context_fit", "token_budget": budget,
             "pinned_sample": sample.get("sample_id") if sample else None,
@@ -525,7 +565,13 @@ def task_context_fit(url: str, per_band: int, seed: int, sample=None,
             # ⚠️ `truncated` counts responses that hit the ceiling — the budget
             # bound the answer, rather than the corpus running out of matches.
             "truncated_pct": round(100 * trunc / n, 2) if n else None,
+            # ⚠️ Both are LOWER BOUNDS on redundancy: they catch exact repeats
+            # only, and the corpus's real problem is NEAR-duplicates (203
+            # title-groups, 524 memos, 212k tokens). A near-copy that differs by
+            # one line is counted as two distinct answers here.
             "duplicate_sections_mean": mean(dups),
+            "duplicate_titles_mean": mean(dup_titles),
+            "sections_mean": mean(sec_counts),
             "budget_used_pct": round(100 * (sum(toks) / len(toks)) / budget, 1)
             if toks else None,
             "control_ok": n > 0,
@@ -1001,7 +1047,9 @@ def main() -> int:
             if isinstance(v, dict) and v.get("status") == "ok":
                 print(f"  {name:3} answer_recall  {path:10} "
                       f"right-doc {v['right_doc_top1_pct']}% · "
-                      f"ANSWER in top-k {v['answer_in_topk_pct']}%"
+                      f"ANSWER in span {v['answer_in_topk_pct']}% / "
+                      f"in full doc {v['answer_in_topk_fulldoc_pct']}% "
+                      f"(span costs {v['span_cost_pt']}pt)"
                       + (f" · {v['total_ambiguous']} ungradeable"
                          if v.get("total_ambiguous") else ""))
         cf = r.get("context_fit")

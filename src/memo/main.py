@@ -411,14 +411,59 @@ async def memo_context(
     # Embed all queries concurrently
     embedding_list = await asyncio.gather(*[embeddings.embed_query(q) for q in all_queries])
 
-    # Determine search function based on scope
-    if scope == "global" or db_path is None:
-        async def _search(emb):
-            return await db.search(db_path=None, embedding=emb, **search_kwargs)
-    elif scope == "all":
+    # ⭐⭐ RANK BY PASSAGE, DELIVER THE DOCUMENT. [002/FR-117]
+    #
+    # Measured 2026-08-03 on the pinned sample (research.md R-20), 256 questions
+    # whose answer is a literal carried by exactly one memo:
+    #
+    #   path        ranks right doc   answer in SPAN   answer in FULL DOC
+    #   document          74.5%            95.8%             95.8%
+    #   passages          84.0%            77.3%             98.7%
+    #
+    # ⇒ Passage retrieval is the best RETRIEVER and the worst DELIVERER. It
+    # locates the right memo ~10pt more often, and the memo it finds contains the
+    # answer 98.7% of the time — but the SPAN it matched misses the answer 21pt
+    # of the time, because the chunk that matches the query and the chunk holding
+    # the fact are frequently different chunks of the same document.
+    # ⇒ So take the ranking and discard the span. The dedupe below already keys
+    # on document id, so several passages of one memo collapse to its best score
+    # and what gets packed is the whole document. This is the same narrowing
+    # `/search` already does for the passages path (FR-113).
+    #
+    # ⛔ Until now `memo_context` called `db.search` DIRECTLY and never consulted
+    # `settings.memo_retrieval_path`. The setting governed `/search` while the
+    # endpoint agents actually consume ignored it — so the better index existed,
+    # was measured, and was unreachable from the surface that matters.
+    use_passages = settings.memo_retrieval_path == "passages"
+
+    if scope == "all":
+        # ⚠️ No passage equivalent for the multi-path merge, so this stays on
+        # document search REGARDLESS of the setting. Recorded rather than
+        # silently inherited: a caller passing scope="all" gets a different
+        # retrieval path than the same caller passing scope="global", and
+        # nothing in the response would otherwise say so.
         paths = list({db.global_path(), db._resolve_path(db_path)})
         async def _search(emb):
             return await db.search_multi(paths, embedding=emb, **search_kwargs)
+    elif use_passages:
+        target = None if (scope == "global" or db_path is None) else db_path
+        async def _search(emb):
+            # ⛔ include_superseded is KEYWORD. `_sync_search_passages` takes
+            # `overfetch: int = 8` before it, and passing it positionally lands
+            # it in the overfetch slot — which yielded k=0, zero hits, HTTP 200,
+            # on every query, with the supersede test still green (FR-115).
+            # `search_passages` calls `_resolve_path` itself — pass the raw
+            # target rather than resolving twice.
+            return await db.search_passages(
+                target, emb,
+                limit=search_kwargs["limit"],
+                min_score=search_kwargs["min_score"],
+                tags=search_kwargs["tags"],
+                after=search_kwargs["after"], before=search_kwargs["before"],
+                min_tokens=None, max_tokens=None)
+    elif scope == "global" or db_path is None:
+        async def _search(emb):
+            return await db.search(db_path=None, embedding=emb, **search_kwargs)
     else:
         async def _search(emb):
             return await db.search(db_path=db_path, embedding=emb, **search_kwargs)

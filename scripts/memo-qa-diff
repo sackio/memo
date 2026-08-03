@@ -41,7 +41,7 @@ import json
 import sys
 from pathlib import Path
 
-CFG_FIELDS = ("model", "dims", "url")
+CFG_FIELDS = ("model", "dims", "url", "retrieval_path")
 
 
 def load(p: str) -> dict:
