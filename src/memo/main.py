@@ -487,9 +487,34 @@ async def memo_context(
     parts: list[str] = []
     total_tokens = 0
     truncated = False
+    # ⭐ DEDUPE BEFORE PACKING. [002/FR-119]
+    #
+    # The corpus holds 203 same-title groups covering 524 memos and ~212k tokens
+    # of duplicated text — cross-host writes from before the 2026-06-29
+    # single-global refactor, plus repeated checkpoint/pin memos. Measured:
+    # 87-89% of /context calls hit the token ceiling and only ~6 of ~10 matched
+    # memos are delivered, so a budget spent twice on one fact costs a DIFFERENT
+    # memo its place in the response.
+    #
+    # ⛔ EXACT text equality only, deliberately. A similarity threshold would
+    # collapse memos that merely look alike, and the failure is SILENT and
+    # UNRECOVERABLE from the caller's side: they receive a confident answer with
+    # the distinguishing memo removed and nothing saying it existed. Near-dupes
+    # are the bigger prize and need a rule that can be checked, not a cutoff.
+    # ⚠️ So this is a LOWER BOUND on the waste, and is meant to be.
+    #
+    # Whitespace-normalised because a trailing newline is not a different memo.
+    seen_bodies: set[str] = set()
+    duplicates_dropped = 0
 
     for item in ranked:
         doc = item["document"]
+        body_key = " ".join((doc.get("content") or "").split())
+        if body_key and body_key in seen_bodies:
+            # Same text, already packed at an equal-or-better score. Dropping it
+            # frees budget for a memo that says something else.
+            duplicates_dropped += 1
+            continue
         title = doc.get("title") or doc["id"]
         tags_str = (", ".join(doc["tags"]) + " ") if doc["tags"] else ""
         section = f"## {title} {tags_str}(score: {item['score']:.2f})\n{doc['content']}\n"
@@ -497,6 +522,10 @@ async def memo_context(
         if total_tokens + section_tokens > token_budget:
             truncated = True
             continue
+        # ⚠️ Recorded only once it actually FITS. Marking it seen on the skip
+        # path would suppress a later, smaller copy that would have fitted —
+        # turning a budget miss into a permanent omission.
+        seen_bodies.add(body_key)
         parts.append(section)
         total_tokens += section_tokens
 
@@ -528,6 +557,10 @@ async def memo_context(
         "token_count": total_tokens,
         "doc_count": len(parts),
         "matched_count": len(ranked),
+        # ⭐ Observable, or the fix is unfalsifiable. A dedupe that silently
+        # collapses sections is indistinguishable from a corpus that had no
+        # duplicates — and those two want opposite next actions.
+        "duplicates_dropped": duplicates_dropped,
         "truncated": truncated,
     }
 

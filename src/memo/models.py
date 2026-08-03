@@ -90,6 +90,9 @@ class ContextResponse(BaseModel):
     # this, doc_count:0 reads as "the corpus has nothing on your query" whether
     # or not anything matched — the response could not report its own absence.
     matched_count: int = 0
+    # Byte-identical (whitespace-normalised) memos collapsed before packing.
+    # Defaulted so existing callers and stored responses stay valid. [002/FR-119]
+    duplicates_dropped: int = 0
     truncated: bool
 
 

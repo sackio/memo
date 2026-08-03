@@ -1627,3 +1627,63 @@ Concern (b), supersession, remains **inert** rather than unmeasured: `supersede_
 is 0 rows and `valid_until` is NULL for all 8,014 documents (R-19). The edges must
 be regenerated before FR-115 can do anything at all.
 
+
+---
+
+## R-21 — FR-117 measured: +3.2pt delivered answers from FEWER tokens, and a second noise floor appears (2026-08-03) [002/FR-117]
+
+Run `qa-2026-08-03T212452Z` against baseline `qa-2026-08-03T204109Z`. Same build,
+same pinned sample, same 251 gradeable questions; the only change is
+`memo_retrieval_path: document → passages` plus FR-117 teaching `/context` to
+read that setting.
+
+| `/context` @ 4k budget | before | after |
+|---|---|---|
+| **answer delivered** | 87.65% | **90.84%** (+3.2) |
+| tokens per call | 3688.2 | **3670.8** |
+| documents packed | 6.22 | **5.20** |
+| matched (pre-pack) | 10.0 | 10.0 |
+| responses hitting the ceiling | 86.5% | 93.6% |
+
+⭐ **It delivers MORE answers from LESS content and FEWER documents.** That is
+the shape Ben asked for — *not more, not less* — rather than a recall win bought
+with tokens. Packing 5.2 documents instead of 6.22 and answering 3.2pt more often
+means the documents it now chooses are simply the right ones.
+
+⚠️ **Truncation went UP (86.5% → 93.6%) and that is consistent, not contrary.**
+Better-ranked candidates are more often worth packing, so the budget binds
+harder. The ceiling is being hit by *good* candidates now.
+
+### ⛔ TWO OF MY OWN PREDICTIONS WERE WRONG
+
+**1. The "shrinking candidate pool" I flagged did not happen.** I predicted
+passage `limit=10` would dedupe to fewer than 10 distinct documents and starve
+the packer. `matched_count_mean` is **10.0 in both runs**. `_sync_search_passages`
+already carries `overfetch: int = 8` and fetches `limit × 8` passages before
+collapsing to `limit` documents — the concern was handled by code that was
+already there, and the parameter I had previously mis-passed *positionally*
+(FR-115) is the very one that prevents it.
+
+**2. ⭐ A SECOND NOISE FLOOR, WHICH R-17's FIX DOES NOT COVER.** The
+`/search-passages` path moved **84.0 → 81.65** (right-doc) and **98.65 → 96.3**
+(answer in full doc) across these two runs — on **identical pinned questions,
+with no code change touching that path**. `MEMO_RETRIEVAL_PATH` governs `/search`
+and `/context`, not `/search-passages`.
+
+⇒ **Pinning the questions removed SAMPLING noise; it cannot remove the system's
+own NONDETERMINISM.** T287 already measured this and I failed to connect it:
+v2's returned id-list varies across identical repeated queries in 3 of 25 cases.
+That is enough to move an aggregate rate by ~2pt.
+
+⇒ **So the floor for this instrument is now ~2.4pt, not ~0**, and the +3.2pt
+headline clears it but not by much. ⚠️ **Do not quote a sub-2.5pt delta from this
+harness as a result until T287 is resolved** — and note that T287 has been sitting
+open as "undecided AS A REQUIREMENT" while quietly setting the precision of every
+number this project produces.
+
+### The product surface, for the record
+
+With `retrieval_path=passages`, `/search` (the path v1 callers use) now scores
+**right-doc 84.3%, answer present 99.0%** — the best of any configuration
+measured, because it ranks by passage and returns the whole document.
+
