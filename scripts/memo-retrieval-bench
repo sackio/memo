@@ -282,12 +282,38 @@ def main() -> int:
     # The depth belongs in the HEADER, not in the reader's memory. `rank-1` and
     # `top-5` name their own cutoffs; `absent` does not, and it is the column with
     # the largest movement across model changes.
+    # ⭐ A RESULT CARRYING FAILURES DOES NOT PRINT A CLEAN HEADLINE.
+    #
+    # This table used to report `rank-1` and `absent` with no marker, and the
+    # failure count lived in a separate paragraph below. That makes the
+    # contamination RECOVERABLE but not VISIBLE: a reader who takes the number
+    # off this table gets a figure that silently counts never-asked queries as
+    # retrieval misses, and nothing forces the second look.
+    #
+    # Measured 2026-08-02: server4 wedged mid-run and the passage census took
+    # 81 timeouts, 79 of them in a 70-minute window. Every one is inside
+    # `absent`. The `!` column is what stops that number being quoted bare.
+    # (Same fix as the `embeddings` seat putting scope INTO their verdict
+    # string rather than into a DM — a caveat that is not adjacent to the
+    # number protects only the people who go looking for it.)
+    any_fail = any(b.get("query_failures") for b in res["bands"])
+    unknown = any("query_failures" not in b for b in res["bands"])
     absent_col = f"absent@{res['limit']}"
+    flag_col = "!" if (any_fail or unknown) else ""
     print(f"{'band':>12} {'n':>3} {'rank-1':>7} {'top-5':>6} "
-          f"{absent_col:>10} {'median':>7}")
+          f"{absent_col:>10} {'median':>7} {flag_col:>6}")
     for b in res["bands"]:
+        if "query_failures" not in b:
+            flag = "  ?"          # cannot say; predates the counter
+        elif b["query_failures"]:
+            flag = f" +{b['query_failures']}f"   # this many `absent` never ran
+        else:
+            flag = ""
         print(f"{b['band']:>12} {b['n']:3} {b['rank1']:7} {b['top5']:6} "
-              f"{b['absent']:10} {str(b['median_score']):>7}")
+              f"{b['absent']:10} {str(b['median_score']):>7} {flag:>6}")
+    if any_fail or unknown:
+        print(f"{'':>12} {'':>3} {'':>7} {'':>6} {'':>10} {'':>7} "
+              f"{'^ absent includes queries that never ran'}")
     # ⚠️ `.get(key, 0)` would make a MISSING field read as a measured zero — the
     # same defect this field was added to fix, one level up. An artifact written
     # before `query_failures` existed cannot say whether any query failed, and
