@@ -1010,3 +1010,34 @@ this series that can state that at all. R-09 and R-10 predate the counter, so th
 `absent` columns are mixtures of misses and queries that never ran and **cannot be
 decomposed after the fact**. Do not read this run as the dirtier one for reporting
 the number that the others could not.
+
+### R-13 coda — ⚠️ SC-102 has quietly become ambiguous, and nobody has said so
+
+SC-102 reads: *"**no** size band regresses against its **pre-change** rank-1 rate."*
+
+That was unambiguous when written. It is not any more, because the corpus has moved
+encoder **twice** since the criterion was set — 3-small → 3-large (R-09) → qwen3 (R-10) →
+qwen3+prefix (R-13). "Pre-change" now names at least three different states, and the
+verdict flips depending on which one is chosen:
+
+| reading of "pre-change" | short-band verdict on the document path |
+|---|---|
+| vs 3-large (R-09) | **REGRESSES** — −5.3 / −11.1 / −7.9 |
+| vs bare qwen3 (R-10) | **IMPROVES** — +11.4 / +22.4 / +17.9 |
+| vs the passage path on the same build | **not yet measured** — that run is unfinished |
+
+⛔ **Do not pick one and report SC-102.** The criterion exists to catch the passage index
+making short memos harder to find — a comparison between the two RETRIEVAL PATHS on ONE
+build. Every comparison in R-13 is between two ENCODERS on one path, which is a different
+question wearing the same numbers.
+
+⇒ **SC-102 is UNEVALUATED as of R-13, and will stay so until the passage half of the census
+lands.** Recorded here because the alternative is that someone later picks whichever
+baseline gives the answer they need, in complete good faith, with three defensible options
+available. **A criterion whose baseline has drifted is not a criterion until the baseline is
+re-stated.**
+
+📌 The same hazard applies to SC-101 in the other direction and does not bite: its bar is an
+absolute rate (≥80%), not a delta, so it survives an encoder change unchanged. **Absolute
+bars are portable across encoders; delta bars are not.** Worth remembering when writing the
+next one.
