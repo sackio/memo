@@ -1,0 +1,775 @@
+{
+  "schema": 1,
+  "run_id": "2026-08-03T153656Z",
+  "label": "v2 on 3-large@3072 + passages vs v1 3-small@1536 \u2014 first post-rebuild baseline",
+  "git": {
+    "sha": "f355078",
+    "dirty": false
+  },
+  "seed": 7,
+  "per_band": 60,
+  "targets": [
+    {
+      "name": "v1",
+      "url": "http://server4:8000",
+      "container": "memo",
+      "reachable": true,
+      "resolved": {
+        "model": "openai/text-embedding-3-small",
+        "dims": 1536,
+        "url": null
+      },
+      "search_paths": {
+        "document": "http 404",
+        "passages": "http 404",
+        "v1-search": "present"
+      },
+      "corpus": {
+        "n": 7921,
+        "ge_1000": 1890,
+        "ge_2000": 395
+      }
+    },
+    {
+      "name": "v2",
+      "url": "http://localhost:8091",
+      "container": "memo-v2",
+      "reachable": true,
+      "resolved": {
+        "model": "openai/text-embedding-3-large",
+        "dims": 3072,
+        "url": "https://openrouter.ai/api/v1"
+      },
+      "search_paths": {
+        "document": "present",
+        "passages": "present",
+        "v1-search": "present"
+      },
+      "corpus": {
+        "n": 7336,
+        "ge_1000": 1761,
+        "ge_2000": 405
+      }
+    }
+  ],
+  "results": {
+    "v1": {
+      "primary_path": "v1-search",
+      "paths_present": [
+        "v1-search"
+      ],
+      "own_title": {
+        "v1-search": {
+          "task": "own_title",
+          "path": "v1-search",
+          "seed": 7,
+          "per_band": 60,
+          "bands": [
+            {
+              "band": "0-200",
+              "n": 60,
+              "rank1": 45,
+              "top5": 59,
+              "absent": 0,
+              "failures": 0,
+              "pool": 1294,
+              "p50_ms": 423.3,
+              "p90_ms": 515.0
+            },
+            {
+              "band": "200-500",
+              "n": 60,
+              "rank1": 41,
+              "top5": 55,
+              "absent": 3,
+              "failures": 0,
+              "pool": 2541,
+              "p50_ms": 377.5,
+              "p90_ms": 502.7
+            },
+            {
+              "band": "500-1000",
+              "n": 60,
+              "rank1": 39,
+              "top5": 49,
+              "absent": 8,
+              "failures": 0,
+              "pool": 2137,
+              "p50_ms": 368.7,
+              "p90_ms": 448.8
+            },
+            {
+              "band": "1000-2000",
+              "n": 60,
+              "rank1": 26,
+              "top5": 39,
+              "absent": 20,
+              "failures": 0,
+              "pool": 1445,
+              "p50_ms": 385.2,
+              "p90_ms": 482.3
+            },
+            {
+              "band": "2000-",
+              "n": 60,
+              "rank1": 9,
+              "top5": 28,
+              "absent": 27,
+              "failures": 0,
+              "pool": 389,
+              "p50_ms": 364.3,
+              "p90_ms": 449.4
+            }
+          ],
+          "total_n": 300,
+          "total_rank1": 160,
+          "unweighted_rank1_pct": 53.33,
+          "total_failures": 0,
+          "control_ok": true,
+          "status": "ok"
+        },
+        "elapsed_s": 120.1
+      },
+      "content_query": {
+        "v1-search": {
+          "task": "content_query",
+          "path": "v1-search",
+          "seed": 7,
+          "per_band": 60,
+          "bands": [
+            {
+              "band": "0-200",
+              "n": 60,
+              "rank1": 53,
+              "top5": 57,
+              "absent": 3,
+              "failures": 0,
+              "pool": 494
+            },
+            {
+              "band": "200-500",
+              "n": 60,
+              "rank1": 40,
+              "top5": 49,
+              "absent": 9,
+              "failures": 0,
+              "pool": 1602
+            },
+            {
+              "band": "500-1000",
+              "n": 60,
+              "rank1": 25,
+              "top5": 42,
+              "absent": 13,
+              "failures": 0,
+              "pool": 1882
+            },
+            {
+              "band": "1000-2000",
+              "n": 60,
+              "rank1": 17,
+              "top5": 28,
+              "absent": 26,
+              "failures": 0,
+              "pool": 1428
+            },
+            {
+              "band": "2000-",
+              "n": 60,
+              "rank1": 12,
+              "top5": 18,
+              "absent": 40,
+              "failures": 0,
+              "pool": 366
+            }
+          ],
+          "total_n": 300,
+          "total_rank1": 147,
+          "unweighted_rank1_pct": 49.0,
+          "total_failures": 0,
+          "control_ok": true,
+          "status": "ok"
+        },
+        "elapsed_s": 128.3
+      },
+      "set_stability": {
+        "task": "set_stability",
+        "path": "v1-search",
+        "n_requested": 25,
+        "n_ran": 25,
+        "replicates": 3,
+        "rank1_varied": 0,
+        "id_list_varied": 0,
+        "control_ok": true,
+        "status": "ok",
+        "elapsed_s": 34.6
+      },
+      "api_surface": {
+        "task": "api_surface",
+        "routes": [
+          "/admin/access-stats",
+          "/admin/leak-incidents",
+          "/admin/recount-tokens",
+          "/auto-store",
+          "/context",
+          "/documents",
+          "/documents/{doc_id}",
+          "/documents/{doc_id}/copy",
+          "/documents/{doc_id}/move",
+          "/health",
+          "/index",
+          "/search"
+        ],
+        "search_shape": {
+          "document": {
+            "error": "HTTPError"
+          },
+          "passages": {
+            "error": "HTTPError"
+          },
+          "v1-search": {
+            "container": "list",
+            "row_keys": [
+              "document",
+              "score"
+            ],
+            "doc_keys": [
+              "content",
+              "created_at",
+              "id",
+              "metadata",
+              "tags",
+              "title",
+              "token_count",
+              "updated_at"
+            ]
+          }
+        },
+        "control_ok": true,
+        "status": "ok",
+        "elapsed_s": 0.7
+      }
+    },
+    "v2": {
+      "primary_path": "document",
+      "paths_present": [
+        "document",
+        "passages",
+        "v1-search"
+      ],
+      "own_title": {
+        "document": {
+          "task": "own_title",
+          "path": "document",
+          "seed": 7,
+          "per_band": 60,
+          "bands": [
+            {
+              "band": "0-200",
+              "n": 60,
+              "rank1": 46,
+              "top5": 57,
+              "absent": 2,
+              "failures": 0,
+              "pool": 1216,
+              "p50_ms": 484.9,
+              "p90_ms": 735.4
+            },
+            {
+              "band": "200-500",
+              "n": 60,
+              "rank1": 47,
+              "top5": 58,
+              "absent": 0,
+              "failures": 0,
+              "pool": 2293,
+              "p50_ms": 479.0,
+              "p90_ms": 758.4
+            },
+            {
+              "band": "500-1000",
+              "n": 60,
+              "rank1": 43,
+              "top5": 55,
+              "absent": 3,
+              "failures": 0,
+              "pool": 2007,
+              "p50_ms": 455.1,
+              "p90_ms": 854.8
+            },
+            {
+              "band": "1000-2000",
+              "n": 60,
+              "rank1": 34,
+              "top5": 52,
+              "absent": 6,
+              "failures": 0,
+              "pool": 1306,
+              "p50_ms": 472.7,
+              "p90_ms": 720.0
+            },
+            {
+              "band": "2000-",
+              "n": 60,
+              "rank1": 9,
+              "top5": 26,
+              "absent": 31,
+              "failures": 0,
+              "pool": 399,
+              "p50_ms": 460.0,
+              "p90_ms": 727.1
+            }
+          ],
+          "total_n": 300,
+          "total_rank1": 179,
+          "unweighted_rank1_pct": 59.67,
+          "total_failures": 0,
+          "control_ok": true,
+          "status": "ok"
+        },
+        "passages": {
+          "task": "own_title",
+          "path": "passages",
+          "seed": 7,
+          "per_band": 60,
+          "bands": [
+            {
+              "band": "0-200",
+              "n": 60,
+              "rank1": 46,
+              "top5": 57,
+              "absent": 2,
+              "failures": 0,
+              "pool": 1216,
+              "p50_ms": 875.8,
+              "p90_ms": 1229.4
+            },
+            {
+              "band": "200-500",
+              "n": 60,
+              "rank1": 46,
+              "top5": 58,
+              "absent": 1,
+              "failures": 0,
+              "pool": 2293,
+              "p50_ms": 651.6,
+              "p90_ms": 912.7
+            },
+            {
+              "band": "500-1000",
+              "n": 60,
+              "rank1": 39,
+              "top5": 50,
+              "absent": 7,
+              "failures": 0,
+              "pool": 2007,
+              "p50_ms": 692.6,
+              "p90_ms": 1046.9
+            },
+            {
+              "band": "1000-2000",
+              "n": 60,
+              "rank1": 41,
+              "top5": 55,
+              "absent": 3,
+              "failures": 0,
+              "pool": 1306,
+              "p50_ms": 718.1,
+              "p90_ms": 952.7
+            },
+            {
+              "band": "2000-",
+              "n": 60,
+              "rank1": 26,
+              "top5": 44,
+              "absent": 15,
+              "failures": 0,
+              "pool": 399,
+              "p50_ms": 703.2,
+              "p90_ms": 1129.1
+            }
+          ],
+          "total_n": 300,
+          "total_rank1": 198,
+          "unweighted_rank1_pct": 66.0,
+          "total_failures": 0,
+          "control_ok": true,
+          "status": "ok"
+        },
+        "v1-search": {
+          "task": "own_title",
+          "path": "v1-search",
+          "seed": 7,
+          "per_band": 60,
+          "bands": [
+            {
+              "band": "0-200",
+              "n": 60,
+              "rank1": 46,
+              "top5": 57,
+              "absent": 2,
+              "failures": 0,
+              "pool": 1216,
+              "p50_ms": 431.8,
+              "p90_ms": 722.7
+            },
+            {
+              "band": "200-500",
+              "n": 60,
+              "rank1": 47,
+              "top5": 58,
+              "absent": 0,
+              "failures": 0,
+              "pool": 2293,
+              "p50_ms": 437.5,
+              "p90_ms": 751.6
+            },
+            {
+              "band": "500-1000",
+              "n": 60,
+              "rank1": 43,
+              "top5": 55,
+              "absent": 3,
+              "failures": 0,
+              "pool": 2007,
+              "p50_ms": 423.1,
+              "p90_ms": 734.4
+            },
+            {
+              "band": "1000-2000",
+              "n": 60,
+              "rank1": 34,
+              "top5": 52,
+              "absent": 6,
+              "failures": 0,
+              "pool": 1306,
+              "p50_ms": 469.5,
+              "p90_ms": 716.8
+            },
+            {
+              "band": "2000-",
+              "n": 60,
+              "rank1": 9,
+              "top5": 26,
+              "absent": 31,
+              "failures": 0,
+              "pool": 399,
+              "p50_ms": 467.6,
+              "p90_ms": 738.9
+            }
+          ],
+          "total_n": 300,
+          "total_rank1": 179,
+          "unweighted_rank1_pct": 59.67,
+          "total_failures": 0,
+          "control_ok": true,
+          "status": "ok"
+        },
+        "elapsed_s": 522.3
+      },
+      "content_query": {
+        "document": {
+          "task": "content_query",
+          "path": "document",
+          "seed": 7,
+          "per_band": 60,
+          "bands": [
+            {
+              "band": "0-200",
+              "n": 60,
+              "rank1": 52,
+              "top5": 60,
+              "absent": 0,
+              "failures": 0,
+              "pool": 472
+            },
+            {
+              "band": "200-500",
+              "n": 60,
+              "rank1": 41,
+              "top5": 57,
+              "absent": 1,
+              "failures": 0,
+              "pool": 1449
+            },
+            {
+              "band": "500-1000",
+              "n": 60,
+              "rank1": 28,
+              "top5": 46,
+              "absent": 7,
+              "failures": 0,
+              "pool": 1760
+            },
+            {
+              "band": "1000-2000",
+              "n": 60,
+              "rank1": 14,
+              "top5": 33,
+              "absent": 21,
+              "failures": 0,
+              "pool": 1290
+            },
+            {
+              "band": "2000-",
+              "n": 60,
+              "rank1": 11,
+              "top5": 21,
+              "absent": 33,
+              "failures": 0,
+              "pool": 345
+            }
+          ],
+          "total_n": 300,
+          "total_rank1": 146,
+          "unweighted_rank1_pct": 48.67,
+          "total_failures": 0,
+          "control_ok": true,
+          "status": "ok"
+        },
+        "passages": {
+          "task": "content_query",
+          "path": "passages",
+          "seed": 7,
+          "per_band": 60,
+          "bands": [
+            {
+              "band": "0-200",
+              "n": 60,
+              "rank1": 51,
+              "top5": 58,
+              "absent": 1,
+              "failures": 0,
+              "pool": 472
+            },
+            {
+              "band": "200-500",
+              "n": 60,
+              "rank1": 37,
+              "top5": 57,
+              "absent": 1,
+              "failures": 0,
+              "pool": 1449
+            },
+            {
+              "band": "500-1000",
+              "n": 60,
+              "rank1": 35,
+              "top5": 53,
+              "absent": 4,
+              "failures": 0,
+              "pool": 1760
+            },
+            {
+              "band": "1000-2000",
+              "n": 60,
+              "rank1": 39,
+              "top5": 56,
+              "absent": 3,
+              "failures": 0,
+              "pool": 1290
+            },
+            {
+              "band": "2000-",
+              "n": 60,
+              "rank1": 30,
+              "top5": 45,
+              "absent": 11,
+              "failures": 0,
+              "pool": 345
+            }
+          ],
+          "total_n": 300,
+          "total_rank1": 192,
+          "unweighted_rank1_pct": 64.0,
+          "total_failures": 0,
+          "control_ok": true,
+          "status": "ok"
+        },
+        "v1-search": {
+          "task": "content_query",
+          "path": "v1-search",
+          "seed": 7,
+          "per_band": 60,
+          "bands": [
+            {
+              "band": "0-200",
+              "n": 60,
+              "rank1": 52,
+              "top5": 60,
+              "absent": 0,
+              "failures": 0,
+              "pool": 472
+            },
+            {
+              "band": "200-500",
+              "n": 60,
+              "rank1": 41,
+              "top5": 57,
+              "absent": 1,
+              "failures": 0,
+              "pool": 1449
+            },
+            {
+              "band": "500-1000",
+              "n": 60,
+              "rank1": 28,
+              "top5": 46,
+              "absent": 7,
+              "failures": 0,
+              "pool": 1760
+            },
+            {
+              "band": "1000-2000",
+              "n": 60,
+              "rank1": 14,
+              "top5": 33,
+              "absent": 21,
+              "failures": 0,
+              "pool": 1290
+            },
+            {
+              "band": "2000-",
+              "n": 60,
+              "rank1": 11,
+              "top5": 21,
+              "absent": 33,
+              "failures": 0,
+              "pool": 345
+            }
+          ],
+          "total_n": 300,
+          "total_rank1": 146,
+          "unweighted_rank1_pct": 48.67,
+          "total_failures": 0,
+          "control_ok": true,
+          "status": "ok"
+        },
+        "elapsed_s": 495.3
+      },
+      "set_stability": {
+        "task": "set_stability",
+        "path": "document",
+        "n_requested": 25,
+        "n_ran": 25,
+        "replicates": 3,
+        "rank1_varied": 0,
+        "id_list_varied": 2,
+        "control_ok": true,
+        "status": "ok",
+        "elapsed_s": 37.7
+      },
+      "api_surface": {
+        "task": "api_surface",
+        "routes": [
+          "/admin/access-stats",
+          "/admin/leak-incidents",
+          "/admin/passage-indexed-ids",
+          "/admin/recount-tokens",
+          "/answer-loop-audit",
+          "/auditor/actions",
+          "/auditor/sweep",
+          "/auto-store",
+          "/constitution/proposals",
+          "/constitution/propose",
+          "/constitution/resolve",
+          "/context",
+          "/documents",
+          "/documents/{doc_id}",
+          "/documents/{doc_id}/as-of",
+          "/documents/{doc_id}/copy",
+          "/documents/{doc_id}/current",
+          "/documents/{doc_id}/move",
+          "/events",
+          "/health",
+          "/hooks/instructions-loaded",
+          "/hooks/post-compact",
+          "/hooks/pre-compact",
+          "/hooks/session-end",
+          "/hooks/session-start",
+          "/hooks/session-stop",
+          "/index",
+          "/injection-log",
+          "/injection-set",
+          "/log-query",
+          "/providers",
+          "/recall",
+          "/reconcile/infra-change",
+          "/search",
+          "/search-documents",
+          "/search-passages",
+          "/store",
+          "/supersede"
+        ],
+        "search_shape": {
+          "document": {
+            "container": "list",
+            "row_keys": [
+              "document",
+              "score"
+            ],
+            "doc_keys": [
+              "content",
+              "created_at",
+              "id",
+              "metadata",
+              "tags",
+              "title",
+              "token_count",
+              "updated_at"
+            ]
+          },
+          "passages": {
+            "container": "list",
+            "row_keys": [
+              "document",
+              "passage",
+              "score"
+            ],
+            "doc_keys": [
+              "class",
+              "constitution_meta",
+              "content",
+              "created_at",
+              "derived_from",
+              "expires_at",
+              "id",
+              "injection_mode",
+              "metadata",
+              "provenance",
+              "reopenability",
+              "scope",
+              "tags",
+              "time_scope",
+              "title",
+              "token_count",
+              "updated_at",
+              "valid_from",
+              "valid_until"
+            ]
+          },
+          "v1-search": {
+            "container": "list",
+            "row_keys": [
+              "document",
+              "score"
+            ],
+            "doc_keys": [
+              "content",
+              "created_at",
+              "id",
+              "metadata",
+              "tags",
+              "title",
+              "token_count",
+              "updated_at"
+            ]
+          }
+        },
+        "control_ok": true,
+        "status": "ok",
+        "elapsed_s": 5.3
+      }
+    }
+  }
+}

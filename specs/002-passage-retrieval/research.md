@@ -1210,3 +1210,83 @@ either proposed one, and the passage index earns its place on 3-large and not on
 2000+ (18.8% → 46.9%). It is the wrong upgrade *for a system that already chunks*.
 ⛔ **Does not evaluate** anything outside title-recall and the 30-item mid-document fact set
 — no multi-turn, no negation, no cross-lingual, no recency-weighted retrieval.
+
+## R-15 — v1 measured at last, and the encoder is doing almost none of the work
+
+2026-08-03. First comparison that includes **v1**, the service the fleet actually
+uses. `bench/results/qa-2026-08-03T153656Z.json`, n=60/band, seed 7, 300 queries
+per cell, **0 query failures in any cell**.
+
+⛔ **R-14's "incumbent" was a v2 build.** v1 had never been benchmarked — the
+harness called `/search-documents`, which v1 does not expose, so its documented
+example 404'd every query and printed rank-1 = 0 for every band. That reads as
+"v1 retrieves nothing" and means "the bench never asked it anything." Fixed in
+`4a02c30`. **Every conclusion R-14 drew about "the cutover" was drawn against the
+wrong baseline.**
+
+### own_title — searching a memo's exact title
+
+| band | v1 3-small | v2 3-large docs | v2 3-large passages |
+|---|---|---|---|
+| 0-200 | 75.0 | 76.7 | 76.7 |
+| 200-500 | 68.3 | 78.3 | 76.7 |
+| 500-1000 | 65.0 | 71.7 | 65.0 |
+| 1000-2000 | 43.3 | 56.7 | 68.3 |
+| **2000+** | **15.0** | **15.0** | **43.3** |
+| **TOTAL** | **53.3** | **59.7** | **66.0** |
+
+### content_query — a mid-body excerpt as the query, which is what callers actually do
+
+| band | v1 3-small | v2 3-large docs | v2 3-large passages |
+|---|---|---|---|
+| 0-200 | 88.3 | 86.7 | 85.0 |
+| 200-500 | 66.7 | 68.3 | 61.7 |
+| 500-1000 | 41.7 | 46.7 | 58.3 |
+| 1000-2000 | 28.3 | 23.3 | 65.0 |
+| 2000+ | 20.0 | 18.3 | 50.0 |
+| **TOTAL** | **49.0** | **48.7** | **64.0** |
+
+### ⭐ THE FINDING: the passage index is the whole story; the encoder is ~a no-op
+
+**On realistic content queries the encoder upgrade buys NOTHING — 49.0 → 48.7,
+and it is NEGATIVE in both long bands** (1000-2000: 28.3→23.3; 2000+: 20.0→18.3).
+**On own_title the 2000+ band does not move at all: 15.0 → 15.0.**
+
+⇒ ***Every long-document gain in this project comes from CHUNKING, not from the
+encoder.*** 3-small + passages was never measured, and on this evidence it is the
+configuration most likely to be both cheapest and near-best. **We are currently
+paying 3-large prices for a component that is not visibly earning them.**
+
+📌 **The cheap decisive experiment, now one command:** run v2 on **3-small@1536 +
+passages**. If it lands near 64%, the encoder is unnecessary. `memo-qa-suite`
+plus `memo-qa-diff` exist precisely so this costs a re-embed and a diff rather
+than an argument.
+
+⚠️ **Why own_title alone could never have shown this.** It is unrealistically
+easy — nobody searches by pasting a title — and it is the only task this project
+had until today. On own_title the encoder looks worth +6.4pt. On the realistic
+task it is worth −0.3. **A benchmark everything passes cannot discriminate, and
+we had been treating the easy one as the whole picture.**
+
+### Caveats, stated rather than argued away
+
+⛔ **The totals are UNWEIGHTED means of five band rates with n fixed per band, so
+corpus composition cannot affect them BY CONSTRUCTION.** Do not defend or attack
+them with a corpus-mix argument — the design already excluded it. (`embeddings`,
+2026-08-03, correcting exactly that error made here.)
+⚠️ **The live confound is WITHIN-band difficulty**: v1 holds 7,921 memos and v2
+7,336, so "band 2000+" is not the same documents on both sides. n and seed do
+nothing about it. **Corpus parity is the next thing to fix, and it is the reason
+the v1-vs-v2 columns deserve less confidence than the v2-vs-v2 ones**, which
+share a corpus exactly.
+⚠️ n=60/band: a 25pt band swing is ~15 documents. The per-band figures will be
+quoted alone and deserve a wider interval than the totals.
+
+### Two secondary results
+
+⚠️ **SET-STABILITY REGRESSED.** v1 varied its returned id list 0/25; v2 varied
+2/25 (rank-1 stable on both, 3 replicates). T287 is still a requirements question
+and is still undecided — but v2 is now measurably the less reproducible of the
+two, which was not previously known.
+✅ **API surface: 26 routes added, NONE removed.** No endpoint a v1 caller depends
+on has disappeared, so the cutover carries no route-level breakage.
