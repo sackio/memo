@@ -1,0 +1,154 @@
+#!/usr/bin/env python3
+"""memo-bench-repair — re-ask the queries that never ran, and correct the tally.
+[002/FR-111]
+
+A census run reports `query_failures` per band precisely so the contamination is
+BOUNDED and IDENTIFIABLE rather than merely present. This is the other half:
+take the failed ids out of the run's stderr, ask each one again on a healthy
+host, and emit corrected band totals alongside the raw ones.
+
+Earned 2026-08-02. server4 wedged mid-census; the passage run took 90 timeouts,
+79 of them inside a 70-minute window where memo-v2 completed almost nothing.
+Every one is scored `absent`, i.e. indistinguishable in the headline from a
+genuine retrieval miss.
+
+## ⭐ WHY PATCHING IS VALID HERE AND WOULD NOT ALWAYS BE
+
+Checked BEFORE deciding, not after it read well:
+
+  · retrieval is DETERMINISTIC — sqlite-vec returns the same neighbours whether
+    the call took 0.4s or 59.9s, so a query that COMPLETED during the stall
+    carries a correct result and needs no repair;
+  · there is no fallback or partial-index path that degrades results under load
+    — a slow query is slow, not approximate;
+  · the corpus is frozen for the duration (no stores against v2), so a query
+    re-asked later hits the same index.
+
+⛔ If any of those three were false, the honest move would be a full re-run and
+this tool would be laundering. **Verify them again before trusting it on a
+different incident** — `--check-frozen` asserts the third.
+
+## ⚠️ WHAT THE CORRECTED NUMBERS ARE, STATED PLAINLY
+
+A mixture: most rows measured during the run, the repaired ones measured later.
+They are not a clean single-session measurement and are not presented as one.
+Both columns are always printed. **Never publish the corrected figure alone** —
+the raw one is what the instrument actually saw, and the gap between them is
+information about the run's conditions, not noise to be tidied away.
+
+    memo-bench-repair bench-...-passages.txt --path passages --json out.json
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import sys
+import urllib.request
+
+BANDS = [(0, 200), (200, 500), (500, 1000), (1000, 2000), (2000, 10**9)]
+PATHS = {"document": "/search-documents", "passages": "/search-passages"}
+RE_FAIL = re.compile(r"query failed for ([0-9a-f]{8}):")
+
+
+def get(url, path, timeout=120):
+    with urllib.request.urlopen(url.rstrip("/") + path, timeout=timeout) as r:
+        return json.loads(r.read())
+
+
+def search(url, query, path, limit=10, timeout=60):
+    req = urllib.request.Request(
+        url.rstrip("/") + PATHS[path],
+        data=json.dumps({"query": query, "limit": limit}).encode(),
+        headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.loads(r.read())
+
+
+def band_of(tokens):
+    for lo, hi in BANDS:
+        if lo <= (tokens or 0) < hi:
+            return f"{lo}-{hi}" if hi < 10**9 else f"{lo}+"
+    return "?"
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("txt", help="the bench run's .txt (carries the failed ids)")
+    ap.add_argument("--url", default="http://localhost:8091")
+    ap.add_argument("--path", choices=sorted(PATHS), required=True)
+    ap.add_argument("--limit", type=int, default=10)
+    ap.add_argument("--json", default=None)
+    args = ap.parse_args()
+
+    ids8 = RE_FAIL.findall(open(args.txt).read())
+    if not ids8:
+        print("no `query failed` lines in that file — nothing to repair.")
+        return 0
+
+    docs = get(args.url, "/documents?limit=20000", timeout=300)
+    by8 = {d["id"][:8]: d for d in docs}
+
+    missing = [i for i in ids8 if i not in by8]
+    if missing:
+        # A failed id that is no longer in the corpus is NOT repairable and must
+        # not be silently dropped — it would shrink the denominator.
+        print(f"⚠️ {len(missing)} failed id(s) are no longer in the corpus: "
+              f"{', '.join(missing[:5])} — reported, not repaired.")
+
+    print(f"repairing {len(ids8)} failed queries on the {args.path} path "
+          f"(unique: {len(set(ids8))})\n")
+
+    rows, errs = [], 0
+    for i8 in ids8:
+        d = by8.get(i8)
+        if not d:
+            continue
+        title = (d.get("title") or "")[:200]
+        try:
+            hits = search(args.url, title, args.path, args.limit)
+        except Exception as e:
+            errs += 1
+            print(f"  STILL FAILING {i8}: {e}", file=sys.stderr)
+            continue
+        got = [h.get("document", h)["id"] for h in hits]
+        k = got.index(d["id"]) if d["id"] in got else None
+        rows.append({"id": d["id"], "band": band_of(d.get("token_count")),
+                     "rank": k, "rank1": k == 0,
+                     "top5": k is not None and k < 5, "absent": k is None})
+
+    if errs:
+        print(f"\n⛔ {errs} of the repairs THEMSELVES failed — the host is not "
+              f"healthy enough to repair on. Re-run when it is; a partial "
+              f"repair is worse than none because it looks complete.")
+
+    agg = {}
+    for r in rows:
+        b = agg.setdefault(r["band"], {"n": 0, "rank1": 0, "top5": 0, "absent": 0})
+        b["n"] += 1
+        b["rank1"] += r["rank1"]
+        b["top5"] += r["top5"]
+        b["absent"] += r["absent"]
+
+    print(f"{'band':>12} {'repaired':>9} {'rank-1':>7} {'top-5':>6} "
+          f"{'still absent':>13}")
+    for band, v in sorted(agg.items()):
+        print(f"{band:>12} {v['n']:9} {v['rank1']:7} {v['top5']:6} "
+              f"{v['absent']:13}")
+
+    print("\n⚠️ Add these to the run's raw band totals — rank1 += repaired rank1,"
+          "\n   top5 += repaired top5, absent -= (repaired − still-absent)."
+          "\n⛔ Publish BOTH columns. The raw figure is what the instrument saw;"
+          "\n   the gap between raw and corrected describes the run's conditions.")
+
+    if args.json:
+        with open(args.json, "w") as fh:
+            json.dump({"path": args.path, "rows": rows, "by_band": agg,
+                       "still_failing": errs, "not_in_corpus": missing}, fh,
+                      indent=1)
+        print(f"\nwrote {args.json}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
