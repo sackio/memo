@@ -1741,3 +1741,47 @@ never clear an edge an agent asserted deliberately.
 ⇒ ⭐ **A summary that prints the extremes in one direction hides the failure at
 the other end.** The examples were sorted by `days_apart` descending.
 
+
+---
+
+## R-23 — FR-119's exact-match dedupe is a near no-op, and the metric that said otherwise was measuring markdown (2026-08-03) [002/FR-119]
+
+Run `qa-2026-08-03T223023Z`, v2 with dedupe AND the 43 supersessions live.
+
+**`server_duplicates_dropped_mean = 0.03` per call.** FR-119 fires on ~3% of
+`/context` requests. Delivery stayed at 90.84% — unchanged from R-21, before
+either change. ⇒ **Exact-duplicate dedupe buys essentially nothing.**
+
+That is a real negative result about my own change, and it does not mean the
+corpus is clean: 203 title-groups still hold 524 memos and ~212k tokens. **The
+redundancy is NEAR-duplicate, and an exact-equality rule cannot see it.** The
+rule was chosen deliberately over a similarity threshold, because a threshold
+drops memos that merely look alike and the failure is silent and unrecoverable
+from the caller's side. That reasoning stands; the yield does not.
+
+### ⛔ The metric that contradicted it was structurally wrong the whole time
+
+`duplicate_sections_mean` reported **0.35** duplicate bodies per response while
+the server reported **0.03** dropped — a 10× disagreement, in the impossible
+direction (exact duplicates cannot survive an exact-match dedupe).
+
+**Cause: it recovered "sections" by splitting the packed output on `\n## `. But
+memos ARE markdown and carry their own `## ` subheadings.** One response with
+`doc_count: 3` parsed as **20 sections**, and the "duplicates" it counted were
+coincidentally-equal sub-blocks of ordinary memo text.
+
+⚠️ **I had already "fixed" this metric once today** — for comparing whole
+sections including their differing `(score: 0.83)` headers. That fix was correct
+and irrelevant: it made a structurally wrong instrument marginally less wrong
+and left it measuring the same wrong thing.
+
+⇒ **Deleted rather than repaired.** `duplicates_dropped` is reported by the
+server from DOCUMENT IDENTITY; re-deriving it by parsing formatted output can
+only add failure modes to a number already known exactly. ⚠️ Stored runs before
+`qa-2026-08-03T223023Z` carry the old field and it should not be quoted.
+
+⭐ Same family as R-18's `df`-growth-as-throughput and the `ps` elapsed column:
+**a correct-looking instrument answering an adjacent question.** The tell here
+was available and I nearly missed it — `doc_count: 3` and `sections: 20` were
+both in the same response.
+

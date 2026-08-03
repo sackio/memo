@@ -542,7 +542,7 @@ def task_context_fit(url: str, per_band: int, seed: int, sample=None,
            else _draw_bands(docs, "answer_recall", per_band, seed))
     n = in_ctx = failures = missing = ambiguous = trunc = 0
     toks, ndocs, dups, matched = [], [], [], []
-    dup_titles, sec_counts = [], []
+    dropped = []   # server-reported dedupe, independent of any bundled change
     for b in src:
         for it in b["items"]:
             if it["id"] not in docs_by_id:
@@ -564,20 +564,26 @@ def task_context_fit(url: str, per_band: int, seed: int, sample=None,
             toks.append(ctx.get("token_count") or 0)
             ndocs.append(ctx.get("doc_count") or 0)
             matched.append(ctx.get("matched_count") or 0)
+            # ⭐ ATTRIBUTION. Delivery moves for many reasons at once — here,
+            # dedupe AND 43 newly-superseded memos landed together. This field
+            # is reported by the server for the dedupe specifically, so its
+            # effect stays readable inside a bundled change. `None` means the
+            # build predates FR-119, which is NOT the same as zero duplicates.
+            dropped.append(ctx.get("duplicates_dropped"))
             trunc += 1 if ctx.get("truncated") else 0
-            # ⛔ COMPARE BODIES, NOT WHOLE SECTIONS. Each block is
-            # "## <title> (score: 0.83)\n<body>", and two copies of one memo get
-            # DIFFERENT scores — so byte-equality on the whole section misses
-            # exactly the duplicates it exists to find, and reports a
-            # near-zero rate that reads as "no redundancy". Strip the header line.
-            secs = [s.strip() for s in body.split("\n## ") if s.strip()]
-            bodies = [s.split("\n", 1)[1].strip() if "\n" in s else s
-                      for s in secs]
-            titles = [s.split("\n", 1)[0].split(" (score:")[0].strip()
-                      for s in secs]
-            dups.append(len(bodies) - len(set(bodies)))
-            dup_titles.append(len(titles) - len(set(titles)))
-            sec_counts.append(len(secs))
+            # ⛔ THE OUTPUT-SIDE DUPLICATE COUNTER IS DELETED, NOT FIXED.
+            # It split the packed markdown on "\n## " to recover sections — but
+            # memos ARE markdown and carry their own `## ` subheadings, so one
+            # 3-document response parsed as TWENTY sections and the "duplicates"
+            # it reported were coincidentally-equal sub-blocks. It disagreed with
+            # the server by 10x (0.35 vs 0.03) and the server was right.
+            # ⚠️ I had already "fixed" this metric once — for comparing whole
+            # sections including their differing score headers — which made a
+            # structurally wrong instrument marginally less wrong and left it
+            # measuring the same wrong thing.
+            # ⇒ `duplicates_dropped` is reported by the server from DOCUMENT
+            # IDENTITY. Re-deriving it by parsing formatted output is strictly
+            # worse: it can only add failure modes to a number already known.
     mean = lambda xs: round(sum(xs) / len(xs), 2) if xs else None
     return {"task": "context_fit", "token_budget": budget,
             "pinned_sample": sample.get("sample_id") if sample else None,
@@ -590,13 +596,15 @@ def task_context_fit(url: str, per_band: int, seed: int, sample=None,
             # ⚠️ `truncated` counts responses that hit the ceiling — the budget
             # bound the answer, rather than the corpus running out of matches.
             "truncated_pct": round(100 * trunc / n, 2) if n else None,
-            # ⚠️ Both are LOWER BOUNDS on redundancy: they catch exact repeats
-            # only, and the corpus's real problem is NEAR-duplicates (203
-            # title-groups, 524 memos, 212k tokens). A near-copy that differs by
-            # one line is counted as two distinct answers here.
-            "duplicate_sections_mean": mean(dups),
-            "duplicate_titles_mean": mean(dup_titles),
-            "sections_mean": mean(sec_counts),
+            # ⚠️ A LOWER BOUND on redundancy: exact repeats only, while the
+            # corpus's real problem is NEAR-duplicates (203 title-groups, 524
+            # memos, 212k tokens). A near-copy differing by one line counts as
+            # two distinct answers here — which is why 0.03/call is a finding
+            # about the RULE, not evidence the corpus is clean.
+            # ⛔ `None` means the build predates FR-119. NOT the same as zero.
+            "server_duplicates_dropped_mean": (
+                mean([d for d in dropped if d is not None])
+                if any(d is not None for d in dropped) else None),
             "budget_used_pct": round(100 * (sum(toks) / len(toks)) / budget, 1)
             if toks else None,
             "control_ok": n > 0,
@@ -1166,7 +1174,7 @@ def main() -> int:
                   f"{cf['answer_in_context_pct']}% · {cf['context_tokens_mean']} "
                   f"tok ({cf['budget_used_pct']}% of budget) · "
                   f"{cf['context_docs_mean']} docs, "
-                  f"{cf['duplicate_sections_mean']} dup · "
+                  f"{cf['server_duplicates_dropped_mean']} deduped/call · "
                   f"truncated {cf['truncated_pct']}%")
         for task in ("own_title", "content_query"):
             tr = r.get(task) or {}
