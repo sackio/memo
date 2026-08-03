@@ -33,10 +33,35 @@ services:
       # A config knob that silently ignores the file it is written in is worse
       # than no knob. Override for a one-off run with an explicit
       # `EMBEDDING_MODEL=... docker compose up` if ever needed.
-      EMBEDDING_MODEL: qwen3-embedding-4b
-      EMBEDDING_DIMENSIONS: 2560
-      EMBEDDING_BASE_URL: http://192.168.1.5:31536/v1
-      EMBEDDING_API_KEY: not-required-lan-service
+      # ⛔⛔ THE WIDTH IS THE ONLY THING STOPPING SILENT CROSS-SPACE MIXING, AND
+      # THE WIDTH IS A PARAMETER. Measured on a scratch vec0 table 2026-08-03:
+      # a `float[2560]` column REJECTS a 3072 vector on BOTH insert and query
+      # (`OperationalError: Dimension mismatch ...`). That is why moving between
+      # qwen3@2560 and 3-large@3072 fails loudly instead of mis-ranking.
+      #
+      # ⚠️ That protection is an ACCIDENT OF ARITHMETIC, NOT A DESIGN.
+      # `text-embedding-3-large` serves arbitrary output widths by truncation,
+      # so a future `EMBEDDING_DIMENSIONS: 2560` here would write 3-large vectors
+      # into a qwen3-shaped store WITH NO ERROR ON EITHER SIDE — and cosine
+      # between two models is meaningless, so every neighbour returned would be
+      # confidently wrong with nothing raised and nothing logged.
+      # ⇒ **Two different models at the SAME width is the unrecoverable case.**
+      # Keep 3-large at its NATIVE 3072 (Ben's call 2026-07-31, and the reason he
+      # gave was safety, not quality). Never set a truncated width to "match"
+      # an existing table. (`embeddings` seat raised this 2026-08-03.)
+      #
+      # ⛔ ALL FOUR LINES ARE REQUIRED. Omitting the URL/key does NOT fall back
+      # to OpenRouter — `config.py`'s DEFAULTS were changed to the qwen3 LAN
+      # service on 2026-08-01 (`embedding_base_url` defaults to
+      # http://192.168.1.5:31536/v1). So a "removed" setting silently
+      # re-selects qwen3 while this file still reads `3-large`, and the mismatch
+      # surfaces only as a dimension error at write time — if you are lucky.
+      # ⇒ **A code default that moved is not a fallback; it is a different
+      # config wearing the word "default".**
+      EMBEDDING_MODEL: openai/text-embedding-3-large
+      EMBEDDING_DIMENSIONS: 3072
+      EMBEDDING_BASE_URL: https://openrouter.ai/api/v1
+      EMBEDDING_API_KEY: ${OPENROUTER_API_KEY}
       MEMO_CONDUCTOR_PROVIDER: ${MEMO_CONDUCTOR_PROVIDER:-atc}
       MEMO_AGENT_CONTROLLER_PROVIDER: ${MEMO_AGENT_CONTROLLER_PROVIDER:-agents_supervisor}
       MEMO_V2_VERSION: 2.0.0-alpha1
