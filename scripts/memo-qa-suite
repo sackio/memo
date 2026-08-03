@@ -53,6 +53,8 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import random
+import re
 import subprocess
 import sys
 import time
@@ -202,15 +204,15 @@ def _toks(d):
 # depressing every score. (Same shape as `failures` vs `absent`, already here.)
 
 
-def _pool_own_title(docs, lo, hi):
-    """Eligible (doc, query) pairs for own_title in one band."""
-    return [(d, (d.get("title") or "")[:200])
+def _pool_own_title(docs, lo, hi, ctx=None):
+    """Eligible (doc, query, extra) triples for own_title in one band."""
+    return [(d, (d.get("title") or "")[:200], {})
             for d in docs
             if lo <= _toks(d) < hi and (d.get("title") or "").strip()]
 
 
-def _pool_content_query(docs, lo, hi):
-    """Eligible (doc, query) pairs for content_query in one band.
+def _pool_content_query(docs, lo, hi, ctx=None):
+    """Eligible (doc, query, extra) triples for content_query in one band.
 
     ⛔ Skips documents whose excerpt would be mostly the title again (short
     memos), because scoring those would quietly re-run own_title under a new name.
@@ -231,11 +233,233 @@ def _pool_content_query(docs, lo, hi):
             continue
         if title and title[:40].lower() in excerpt.lower():
             continue  # would be own_title wearing a different name
-        pool.append((d, excerpt))
+        pool.append((d, excerpt, {}))
     return pool
 
 
-POOLS = {"own_title": _pool_own_title, "content_query": _pool_content_query}
+# ------------------------------------------- task: answer recall / context fit
+#
+# ⭐⭐ THE TWO TASKS ABOVE MEASURE RETRIEVAL. BEN ASKED ABOUT SOMETHING ELSE.
+#
+# Ben, 2026-08-03: *"ground truth … ensuring that we're returning efficient
+# context, not more not less than agents need."* `own_title` and `content_query`
+# both score **did the right document rank first** — which is not the question an
+# agent has. An agent asks *what port is the ATC broker on*, and is served or not
+# served by whether **the answer is in the text that came back**. A build can rank
+# the right document first and still hand back a passage that does not contain the
+# fact, or pack the fact out of the response to fit a token budget.
+#
+# ⭐ FREE SUPERVISION, NO LLM JUDGE: use memos containing a **distinctive literal**
+# — an IP, a MAC, a phone number, a dollar amount. The literal is the answer, and
+# checking for it is exact string containment. No labelling, no model in the loop,
+# nothing to drift. (An LLM judge would have been the obvious move and would have
+# made every future re-run incomparable to this one.)
+#
+# ⛔ THE LITERAL MUST BE UNIQUE IN THE CORPUS. If two memos carry the same IP, a
+# hit on the wrong memo contains the right string and scores as correct — the
+# probe would be measuring string frequency and reporting it as accuracy.
+# ⛔ AND UNIQUENESS IS A PROPERTY OF THE CORPUS BEING SCORED, NOT OF THE ONE THE
+# SAMPLE WAS MINTED FROM. v2 holds 88 documents v1 does not; a literal unique in
+# v1 may not be unique in v2. So uniqueness is RE-CHECKED at scoring time against
+# the live corpus and violations are excluded and counted, never scored.
+# ⛔ AND THE LITERAL MUST NOT APPEAR IN THE QUERY. The query is built from the
+# title plus the words leading up to the literal, with the literal stripped —
+# then asserted absent. Otherwise the probe measures echo, not recall.
+#
+# ⇒ THE THREE NUMBERS, and why all three are needed:
+#   `right_doc_top1`   the old metric, kept side by side so the gap is visible
+#   `answer_in_topk`   the answer came back at all           → GROUND TRUTH
+#   `answer_in_context` it survived /context's token budget  → RIGHT-SIZED
+# **`answer_in_topk` − `answer_in_context` is the answer the agent retrieved and
+# then had truncated away** — the "not less than agents need" half, measured.
+# `context_tokens` is the other half: what it cost to deliver.
+
+ANSWER_PATTERNS = [
+    # ⚠️ Deliberately few and deliberately strict. A wide pattern list looks more
+    # thorough and produces a pool of false positives that scores like a result.
+    ("ipv4", re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}(?::\d{2,5})?\b")),
+    ("mac", re.compile(r"\b(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}\b")),
+    ("phone", re.compile(r"\+1\d{10}\b")),
+    ("money", re.compile(r"\$\s?\d[\d,]{2,}(?:\.\d{2})?")),
+]
+
+
+def _literals(text: str):
+    """Extract candidate answer literals. Validates IPv4 octets, because
+    `0.3.7.1`-shaped version strings are otherwise indistinguishable."""
+    out = []
+    for kind, rx in ANSWER_PATTERNS:
+        for m in rx.finditer(text):
+            tok = m.group(0)
+            if kind == "ipv4":
+                host = tok.split(":")[0]
+                if any(not p.isdigit() or int(p) > 255 for p in host.split(".")):
+                    continue
+            out.append((kind, tok, m.start()))
+    return out
+
+
+def _prepare_answer(docs) -> dict:
+    """Count how many DOCUMENTS carry each literal, once, for the whole corpus."""
+    freq: dict[str, int] = {}
+    for d in docs:
+        for _, tok, _ in set((k, t, 0) for k, t, _ in
+                             _literals(d.get("content") or "")):
+            freq[tok] = freq.get(tok, 0) + 1
+    return {"freq": freq}
+
+
+def _pool_answer_recall(docs, lo, hi, ctx):
+    freq = ctx["freq"]
+    pool = []
+    for d in docs:
+        if not (lo <= _toks(d) < hi):
+            continue
+        body = (d.get("content") or "").strip()
+        title = (d.get("title") or "").strip()
+        if not title:
+            continue
+        for kind, tok, pos in _literals(body):
+            if freq.get(tok, 0) != 1:
+                continue                      # not unique → cannot be graded
+            if tok in title:
+                continue                      # the query would carry the answer
+            lead = body[max(0, pos - 140):pos].replace("\n", " ").strip()
+            query = f"{title} {lead}".strip()[:200]
+            query = query.replace(tok, "").strip()
+            if tok in query or len(query) < 40:
+                continue                      # ⛔ asserted, not assumed
+            pool.append((d, query, {"answer": tok, "answer_kind": kind}))
+            break                             # one question per document
+    return pool
+
+
+def _passage_text(hit) -> str:
+    """The span a passage hit actually delivers. Falls back to the document only
+    when there is no passage — and a silent fallback is exactly the confound the
+    caller is avoiding, so it is recorded per-hit rather than assumed."""
+    p = hit.get("passage")
+    if isinstance(p, dict) and (p.get("text") or "").strip():
+        return p["text"]
+    if isinstance(p, str) and p.strip():
+        return p
+    return (hit.get("document", hit) or {}).get("content") or ""
+
+
+def _score_answer_band(url, path, items, docs_by_id, freq, limit, budget):
+    """Grade one band: did the ANSWER come back, and did it survive the budget."""
+    n = right1 = in_top1 = in_topk = in_ctx = failures = missing = ambiguous = 0
+    ctx_tokens, ctx_docs, ctx_trunc = [], [], 0
+    for it in items:
+        if it["id"] not in docs_by_id:
+            missing += 1
+            continue
+        # ⛔ Re-check uniqueness against THIS corpus — see the note above.
+        if freq.get(it["answer"], 0) != 1:
+            ambiguous += 1
+            continue
+        n += 1
+        try:
+            hits = _post(url, CANDIDATE_PATHS[path],
+                         {"query": it["query"], "limit": limit})
+            ctx = _post(url, "/context",
+                        {"query": it["query"], "token_budget": budget})
+        except Exception:
+            failures += 1
+            continue
+        # ⛔ ON THE PASSAGES PATH, GRADE THE PASSAGE — NOT THE PARENT DOCUMENT.
+        # Reading `document.content` here would hand every passage hit the FULL
+        # document text, so `answer_in_topk` would collapse to recall@k and score
+        # identically on both paths BY CONSTRUCTION. The probe would then be
+        # unable to see the one thing passage retrieval changes — whether the
+        # SPAN that came back carries the fact — and would report that blindness
+        # as "no difference". What an agent receives is the passage.
+        texts = [(_passage_text(h) if path == "passages"
+                  else ((h.get("document", h) or {}).get("content") or ""))
+                 for h in hits]
+        ids = [(h.get("document", h) or {}).get("id") for h in hits]
+        if ids and ids[0] == it["id"]:
+            right1 += 1
+        if texts and it["answer"] in texts[0]:
+            in_top1 += 1
+        if any(it["answer"] in t for t in texts):
+            in_topk += 1
+        body = ctx.get("content") or "" if isinstance(ctx, dict) else ""
+        if it["answer"] in body:
+            in_ctx += 1
+        if isinstance(ctx, dict):
+            ctx_tokens.append(ctx.get("token_count") or 0)
+            ctx_docs.append(ctx.get("doc_count") or 0)
+            ctx_trunc += 1 if ctx.get("truncated") else 0
+    return {"n": n, "pinned": len(items), "missing": missing,
+            # ⛔ Separate from `missing`: the document is here, the QUESTION is no
+            # longer gradeable because the literal stopped being unique.
+            "ambiguous": ambiguous, "failures": failures,
+            "right_doc_top1": right1, "answer_in_top1": in_top1,
+            "answer_in_topk": in_topk, "answer_in_context": in_ctx,
+            "context_tokens_mean": round(sum(ctx_tokens) / len(ctx_tokens), 1)
+            if ctx_tokens else None,
+            "context_docs_mean": round(sum(ctx_docs) / len(ctx_docs), 2)
+            if ctx_docs else None,
+            "context_truncated": ctx_trunc}
+
+
+def task_answer_recall(url: str, path: str, per_band: int, seed: int,
+                       sample=None, limit: int = 10,
+                       budget: int = 4000) -> dict:
+    """Ground truth + context fit. See the block above ANSWER_PATTERNS."""
+    if sample is not None and "answer_recall" not in (sample.get("tasks") or {}):
+        return {"task": "answer_recall", "path": path, "status": "could_not_run",
+                "why": f"pinned sample {sample.get('sample_id')} has no "
+                       f"answer_recall questions — extend it with --mint-sample",
+                "control_ok": False}
+    docs = _get(url, "/documents?limit=20000")
+    docs_by_id = {d["id"]: d for d in docs}
+    freq = _prepare_answer(docs)["freq"]
+    if sample is not None:
+        src_bands = sample["tasks"]["answer_recall"]["bands"]
+        sample_id = sample.get("sample_id")
+    else:
+        src_bands = _draw_bands(docs, "answer_recall", per_band, seed)
+        sample_id = None
+    bands = []
+    for b in src_bands:
+        scored = _score_answer_band(url, path, b["items"], docs_by_id, freq,
+                                    limit, budget)
+        scored["band"] = b["band"]
+        scored["pool"] = b.get("pool")
+        bands.append(scored)
+    ok = [b for b in bands if b["n"]]
+    def pct(key):
+        return round(100 * sum(b[key] / b["n"] for b in ok) / len(ok), 2) if ok else None
+    tok = [b["context_tokens_mean"] for b in bands if b["context_tokens_mean"]]
+    return {"task": "answer_recall", "path": path, "seed": seed,
+            "per_band": per_band, "pinned_sample": sample_id,
+            "token_budget": budget, "bands": bands,
+            "total_n": sum(b["n"] for b in bands),
+            "total_pinned": sum(b["pinned"] for b in bands),
+            "total_missing": sum(b["missing"] for b in bands),
+            "total_ambiguous": sum(b["ambiguous"] for b in bands),
+            "total_failures": sum(b["failures"] for b in bands),
+            "right_doc_top1_pct": pct("right_doc_top1"),
+            "answer_in_top1_pct": pct("answer_in_top1"),
+            "answer_in_topk_pct": pct("answer_in_topk"),
+            "answer_in_context_pct": pct("answer_in_context"),
+            # ⭐ The headline: retrieved, then truncated away before delivery.
+            "truncation_loss_pt": (round(pct("answer_in_topk")
+                                         - pct("answer_in_context"), 2)
+                                   if ok else None),
+            "context_tokens_mean": round(sum(tok) / len(tok), 1) if tok else None,
+            # ⛔ control: the questions must have been asked AND gradeable. Zero
+            # answers over a real sample is a RESULT; zero because every literal
+            # went ambiguous is an instrument failure wearing its face.
+            "control_ok": bool(ok),
+            "status": "ok" if ok else "could_not_run"}
+
+
+POOLS = {"own_title": _pool_own_title, "content_query": _pool_content_query,
+         "answer_recall": _pool_answer_recall}
+PREPARE = {"answer_recall": _prepare_answer}
 
 
 def _score_band(url, path, items, corpus_ids, limit, timed=False):
@@ -284,14 +508,15 @@ def _band_label(lo, hi):
 def _draw_bands(docs, task, per_band, seed):
     """Draw a fresh stratified sample — used to MINT a pinned file, and as the
     fallback when no pinned sample is supplied."""
-    import random
     rng = random.Random(seed)
+    ctx = PREPARE[task](docs) if task in PREPARE else None
     out = []
     for lo, hi in BANDS:
-        pool = POOLS[task](docs, lo, hi)
+        pool = POOLS[task](docs, lo, hi, ctx)
         sample = rng.sample(pool, min(per_band, len(pool)))
         out.append({"band": _band_label(lo, hi), "pool": len(pool),
-                    "items": [{"id": d["id"], "query": q} for d, q in sample]})
+                    "items": [dict(id=d["id"], query=q, **extra)
+                              for d, q, extra in sample]})
     return out
 
 
@@ -303,6 +528,13 @@ def _run_recall_task(task, url, path, per_band, seed, sample=None, limit=10):
     only correct for minting, and is recorded as `pinned_sample: null` so a
     reader can tell the two apart. ⛔ Do NOT compare a drawn run to a pinned one.
     """
+    if sample is not None and task not in (sample.get("tasks") or {}):
+        # ⛔ Not a zero. The pinned file predates this task; it has no questions
+        # to ask, which is a different fact from asking them and getting nothing.
+        return {"task": task, "path": path, "status": "could_not_run",
+                "why": f"pinned sample {sample.get('sample_id')} has no "
+                       f"{task} questions — extend it with --mint-sample",
+                "control_ok": False}
     docs = _get(url, "/documents?limit=20000")
     corpus_ids = {d["id"] for d in docs}
     if sample is not None:
@@ -448,7 +680,7 @@ def task_api_surface(url: str) -> dict:
 
 # ------------------------------------------------------------- sample minting
 def mint_sample(path: Path, url: str, per_band: int, seed: int,
-                stamp: str) -> int:
+                stamp: str, check_url: str | None = None) -> int:
     """Draw one stratified sample and freeze it as the question set.
 
     ⭐ **Mint from the corpus the builds are SYNCED TO, not from a candidate.**
@@ -458,22 +690,75 @@ def mint_sample(path: Path, url: str, per_band: int, seed: int,
 
     ⚠️ Re-minting resets the baseline. Every stored result names the sample it
     used (`run.sample.id`); `memo-qa-diff` refuses to subtract across two ids.
+
+    ⭐ **EXTENDING IS ADDITIVE-ONLY, AND THAT IS ENFORCED HERE RATHER THAN ASKED
+    FOR IN A COMMENT.** A new task needs questions minted for it, but re-drawing
+    the EXISTING tasks would change them silently: v1 is live and takes writes, so
+    the same seed over tomorrow's corpus draws a different sample (that is R-17).
+    Two runs would then carry the same `sample_id` and different questions — the
+    exact failure the id exists to prevent. So an extend adds tasks the file does
+    not have, never touches the ones it does, and refuses if asked to.
+    ⇒ `sample_id` means "these questions", and stays valid for every task both
+    runs actually ran. A task absent from the sample is `could_not_run`, and a
+    missing task is never a zero.
     """
     docs = _get(url, "/documents?limit=20000")
     if not docs:
         print(f"✗ {url} returned no documents — refusing to mint an empty sample",
               file=sys.stderr)
         return 1
-    out = {"schema": 1, "sample_id": f"s-{stamp}", "created_utc": stamp,
-           "minted_from": {"url": url, "corpus_n": len(docs)},
-           "git": git_state(), "seed": seed, "per_band": per_band, "tasks": {}}
-    for task in ("own_title", "content_query"):
+    existing = None
+    if path.exists():
+        existing = json.loads(path.read_text())
+        print(f"extending {path} ({existing.get('sample_id')}) — existing tasks "
+              f"are NOT redrawn: {', '.join(sorted(existing.get('tasks') or {}))}")
+    if existing:
+        out = existing
+        out.setdefault("revisions", [{"rev": 1, "created_utc":
+                                      out.get("created_utc"), "added":
+                                      sorted(out.get("tasks") or {})}])
+    else:
+        out = {"schema": 2, "sample_id": f"s-{stamp}", "created_utc": stamp,
+               "minted_from": {"url": url, "corpus_n": len(docs)},
+               "git": git_state(), "seed": seed, "per_band": per_band,
+               "tasks": {}, "revisions": []}
+    added = []
+    for task in ("own_title", "content_query", "answer_recall"):
+        if task in out["tasks"]:
+            print(f"  {task}: kept as-is "
+                  f"({sum(len(b['items']) for b in out['tasks'][task]['bands'])} "
+                  f"questions)")
+            continue
         bands = _draw_bands(docs, task, per_band, seed)
-        out["tasks"][task] = {"bands": bands}
+        out["tasks"][task] = {"bands": bands, "minted_utc": stamp,
+                              "minted_from": {"url": url, "corpus_n": len(docs)}}
+        added.append(task)
+        if task == "answer_recall" and check_url:
+            # ⛔ A question must be gradeable on EVERY build it will be scored on,
+            # or the builds are scored over different question sets and the totals
+            # will not say so. A literal unique in v1 need not be unique in v2 —
+            # v2 holds 88 documents v1 does not. Drop those here, ONCE, rather
+            # than letting each target drop its own at run time.
+            other = _get(check_url, "/documents?limit=20000")
+            ofreq = _prepare_answer(other)["freq"]
+            dropped = 0
+            for b in bands:
+                keep = [i for i in b["items"] if ofreq.get(i["answer"], 0) <= 1]
+                dropped += len(b["items"]) - len(keep)
+                b["items"] = keep
+            out["tasks"][task]["uniqueness_checked_against"] = {
+                "url": check_url, "corpus_n": len(other), "dropped": dropped}
+            print(f"  {task}: dropped {dropped} not-unique-on-{check_url}")
         n = sum(len(b["items"]) for b in bands)
         thin = [b["band"] for b in bands if len(b["items"]) < per_band]
         print(f"  {task}: {n} questions across {len(bands)} bands"
               + (f"  ⚠️ under-filled: {', '.join(thin)}" if thin else ""))
+    if existing and not added:
+        print("nothing to add — sample unchanged")
+        return 0
+    if existing:
+        out["revisions"].append({"rev": len(out["revisions"]) + 1,
+                                 "created_utc": stamp, "added": added})
     # ⛔ A sample whose questions are not unique would score the same document
     # twice and quietly weight it double.
     for task, spec in out["tasks"].items():
@@ -489,7 +774,8 @@ def mint_sample(path: Path, url: str, per_band: int, seed: int,
 
 
 # ------------------------------------------------------------------- runner
-TASKS = ("own_title", "content_query", "set_stability", "api_surface")
+TASKS = ("own_title", "content_query", "answer_recall", "set_stability",
+         "api_surface")
 
 
 def main() -> int:
@@ -502,6 +788,9 @@ def main() -> int:
     ap.add_argument("--per-band", type=int, default=60)
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--stability-n", type=int, default=25)
+    ap.add_argument("--token-budget", type=int, default=4000,
+                    help="/context budget for answer_recall (both builds default "
+                         "to 4000; changing it changes what is being measured)")
     ap.add_argument("--tasks", default=",".join(TASKS))
     ap.add_argument("--label", default="", help="free-text note stored with the run")
     ap.add_argument("--out", default=None)
@@ -511,6 +800,9 @@ def main() -> int:
     ap.add_argument("--mint-sample", metavar="PATH", default=None,
                     help="draw a fresh stratified sample from --mint-from and "
                          "write it as a pinned question file, then exit")
+    ap.add_argument("--mint-check", default=None,
+                    help="second corpus answer literals must ALSO be unique in "
+                         "(default: --v2-url). Pass 'none' to skip.")
     ap.add_argument("--mint-from", default=None,
                     help="corpus to mint from (default: --v1-url, the corpus both "
                          "builds are synced to)")
@@ -520,7 +812,9 @@ def main() -> int:
 
     if args.mint_sample:
         return mint_sample(Path(args.mint_sample), args.mint_from or args.v1_url,
-                           args.per_band, args.seed, stamp)
+                           args.per_band, args.seed, stamp,
+                           check_url=(None if (args.mint_check or '').lower()=='none'
+                                      else (args.mint_check or args.v2_url)))
 
     sample = None
     if args.sample and args.sample.lower() != "none":
@@ -587,6 +881,10 @@ def main() -> int:
                     r = {p: task_content_query(url, p, args.per_band, args.seed,
                                                sample)
                          for p in paths}
+                elif task == "answer_recall":
+                    r = {p: task_answer_recall(url, p, args.per_band, args.seed,
+                                               sample, budget=args.token_budget)
+                         for p in paths}
                 elif task == "set_stability":
                     r = task_set_stability(url, primary, args.stability_n, args.seed)
                 elif task == "api_surface":
@@ -607,6 +905,18 @@ def main() -> int:
 
     for name in ("v1", "v2"):
         r = run["results"].get(name, {})
+        ar = r.get("answer_recall") or {}
+        for path, v in (ar.items() if isinstance(ar, dict)
+                        and "task" not in ar else []):
+            if isinstance(v, dict) and v.get("status") == "ok":
+                print(f"  {name:3} answer_recall  {path:10} "
+                      f"right-doc {v['right_doc_top1_pct']}% · "
+                      f"ANSWER in top-k {v['answer_in_topk_pct']}% · "
+                      f"in /context {v['answer_in_context_pct']}% "
+                      f"(lost to budget {v['truncation_loss_pt']}pt) · "
+                      f"{v['context_tokens_mean']} tok/call"
+                      + (f" · {v['total_ambiguous']} ungradeable"
+                         if v.get("total_ambiguous") else ""))
         for task in ("own_title", "content_query"):
             tr = r.get(task) or {}
             for path, v in (tr.items() if isinstance(tr, dict)

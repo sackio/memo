@@ -2480,6 +2480,1603 @@
           ]
         }
       ]
+    },
+    "answer_recall": {
+      "bands": [
+        {
+          "band": "0-200",
+          "pool": 17,
+          "items": [
+            {
+              "id": "08b0efb7-0d8e-4b8f-a711-fdebeb8f57f4",
+              "query": "K8s barn cluster: worker IP gotchas + WAVE-1 rule (2026-06-17) ## Worker IP mapping (easy to confuse) - **worker22**:",
+              "answer": "192.168.0.32",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "e1a32a83-70b8-4ff2-981a-758f610d9dc0",
+              "query": "Barn Heat Pump \u2014 Deep Cleaning Overdue reference: Greg Solomon's unit at Mattakesett (Edgartown MV) cost $888 for 5 heads + 1 condenser, assessed as fair-to-good market pricing (~",
+              "answer": "$158",
+              "answer_kind": "money"
+            },
+            {
+              "id": "48d419a3-ed9f-4e02-85c8-f933983f7c51",
+              "query": "Amazon refund \u2014 SABRENT 4-Drive NVMe to PCIe 3.0 (order #114-0238200-7440244) ENT 4-Drive NVMe M.2 SSD to PCIe 3.0 adapter.  Order #: 114-0238200-7440244 Item: SABRENT 4-Drive NVMe M.2 SSD to PCIe 3.0",
+              "answer": "$137.30",
+              "answer_kind": "money"
+            },
+            {
+              "id": "bf4928cc-ffa9-4093-83bf-56da028a0796",
+              "query": "Quantum-Feed \u2014 Documentation Site (qf-docs) Feed \u2014 Documentation Site (qf-docs)  mdBook documentation site served via Docker.  ## Access - **Port**: 8080 - **URLs**: localhost:8080 or",
+              "answer": "192.168.1.42:8080",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "6975805e-af1e-4302-b770-e7d7525f665c",
+              "query": "Aloha-server relay: FastAPI WebSocket reverse-tunnel on server4 Repo: `/mnt/nas/data/code/aloha-server` Service: FastAPI app on server4 at `",
+              "answer": "127.0.0.1:8088",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "d4ab77ce-fef9-410b-a2aa-0a85974dfda3",
+              "query": "Health subscription spend: Ro and Hone Health # Health subscription spend: Ro and Hone Health  Health subscriptions audit (2026-07-07): - Ro (ro.co):",
+              "answer": "$20,668",
+              "answer_kind": "money"
+            },
+            {
+              "id": "f8561355-a35a-40f6-9d4b-c1bac83216c5",
+              "query": "Delivery: ECOWITT Wittboy Weather Station GW2001 \u2014 arriving today Jun 15 i IoT Hub   - WS90 7-in-1 Outdoor Solar Powered Weather Sensor   - 915 MHz, supports WU/WeatherCloud/Wow/Ecowitt servers Quanti",
+              "answer": "$195.99",
+              "answer_kind": "money"
+            },
+            {
+              "id": "20bac0fd-c182-4044-8e56-de0e917e77f8",
+              "query": "Invoice: Anthropic Claude Max plan x2 \u2014 $425.00 total (2026-06-07) d on 2026-06-07 (billing Jun 7\u2013Jul 7, 2026).  ## Receipt 1 \u2014 bsack@pushbuild.com receipt_number=2548-0829-9122 invoice=TBQRY5SZ-0002",
+              "answer": "$212.50",
+              "answer_kind": "money"
+            },
+            {
+              "id": "abf5e1f2-7e57-41e0-8dc8-3152bf30016e",
+              "query": "Propane Refill Locations Near Groton MA (120 Reedy Meadow) , Groton: ~5 mi from home, dedicated propane distributor, per-gallon metered refills. RECOMMENDED for Ben's preference. - U-Haul Nashua NH (",
+              "answer": "+16038885371",
+              "answer_kind": "phone"
+            },
+            {
+              "id": "a18a437d-dd97-411b-bb61-7dd9b49bea36",
+              "query": "Endless Energy: Jason personalized HVAC solutions link (2026-06-04) # Endless Energy \u2014 Jason personalized solutions  2026-06-04: Jason (Endless Energy, work mobile",
+              "answer": "+15085001581",
+              "answer_kind": "phone"
+            },
+            {
+              "id": "3af9cd82-4a07-41f7-a88e-33c84399aa12",
+              "query": "worker15 Hardware Failure (2026-04-17) ycles):  - Smart plug ON (last state change via cluster-heal cycle) - No MAC in ARP on any LAN host (office or server4) - No DHCP lease for",
+              "answer": "192.168.0.24",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "7c677def-7ce1-467c-8487-a1158632a9d5",
+              "query": "Airbnb Trip: Nashua NH -- Jun 22-24 2026 *: HMREDJ4MZA  **Check-in**: Monday Jun 22 after 2:00 PM **Check-out**: Wednesday Jun 24 by 11:00 AM **Guests**: 2 adults, 1 pet **Total**:",
+              "answer": "$495",
+              "answer_kind": "money"
+            },
+            {
+              "id": "44eacab5-1531-42c7-a2ed-0d30faf11371",
+              "query": "Appointment: Papalia Home Services technician \u2014 TODAY Jun 15, 12pm-4pm Papalia Home Services technician arriving TODAY, Monday June 15 between 12:00 PM and 4:00 PM.  Source: SMS from",
+              "answer": "+19784873937",
+              "answer_kind": "phone"
+            },
+            {
+              "id": "6d19960d-f78f-41a3-bcc6-56d5683a8cc4",
+              "query": "BofA transfer $250 scheduled (May 15 2026) Bank of America transfer scheduled 2026-05-15: - Item #: 612778296 - Amount:",
+              "answer": "$250.00",
+              "answer_kind": "money"
+            },
+            {
+              "id": "2620bc8f-236b-440f-9320-e55f3659917d",
+              "query": "Cluster status: worker2 down + recovery (2026-06-01) ## Status (from cluster-heal sessions 2026-06-01) - **Cluster**: 51/52 nodes Ready (98.1% operational) - **worker2** (",
+              "answer": "192.168.0.11",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "5d501848-2def-402c-bb2c-e50e88e517ec",
+              "query": "Green Lawn Sprinkler Company - Service Invoice #89720 (2026-06-26) Green Lawn Sprinkler Company, Inc. (Chelmsford MA) service invoice:  - Invoice #: 89720 - Service: Zone B service call, 1.5hr @ $205/",
+              "answer": "$307.50",
+              "answer_kind": "money"
+            },
+            {
+              "id": "4abc9787-f928-4002-837c-3d9bb93ecd7f",
+              "query": "Wells Fargo Bryant card approved \u2014 0% APR HVAC financing (2026-07-07) said the offer link 'still works, try if you want' despite rep saying it expired May 31. Card is for financing NetZero HVAC instal",
+              "answer": "$37,148,",
+              "answer_kind": "money"
+            }
+          ]
+        },
+        {
+          "band": "200-500",
+          "pool": 68,
+          "items": [
+            {
+              "id": "15420b66-65c8-4bd8-8bc0-5a814db78332",
+              "query": "Amazon shipment: Greenhouse panels (XISOCO), Bosch jig saw blades, EPDM screws \u2014 Jun 27 2026 Jig Saw Blades (qty 1) \u2014 $8.91 - BCP Fasteners #10 x 1/2in Stainless Steel EPDM Sealing Washers (100 pack)",
+              "answer": "$223.57",
+              "answer_kind": "money"
+            },
+            {
+              "id": "92b40e99-d80b-49a4-a40f-82b63b800062",
+              "query": "VyOS Dual-WAN Policy Routing \u2014 Table 10 (Spectrum) Details ules: 5002 and 5006 cover outbound-interface eth1 and eth6 respectively - Existing hairpin DNAT rule: DST-NAT-1020, src=192.168.0.0/23, dst=",
+              "answer": "74.104.230.49:443",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "035f0fc2-feea-4079-99c2-65671cc45cb8",
+              "query": "UFW Drift Cleanup \u2014 2026-04-22 oved three stale allow-rules while verifying the first-class-citizen UFW model (memo fd424a65) across the LAN. server4: removed `allow from",
+              "answer": "10.10.10.0",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "70b4f883-47ab-44eb-a791-b002c95b4415",
+              "query": "Garden Squirrel Exclusion \u2014 Twinwall Polycarbonate Barrier Project urement status (as of 6/25/2026): - Amazon XISOCO: 24-pack ($112.99) + 12-pack ($63.16) + EPDM washers \u00d73 ($25.35) + Bosch blade ($8.",
+              "answer": "$210.41",
+              "answer_kind": "money"
+            },
+            {
+              "id": "c79a933a-771e-4c91-adf1-f554fc8bf12b",
+              "query": "Exterior stair handrail research: 2-3 riser sloping, black metal, July 2026 aranteed, only 1 left at time of check). - Zimtown 2-3 step picket (Walmart 537727134): $69.99. - Meranti aluminum 4' (B09CK",
+              "answer": "$103.95",
+              "answer_kind": "money"
+            },
+            {
+              "id": "9eca7ebf-b973-4ce1-bcfd-dfbdd4198365",
+              "query": "PushBuild Client \u2014 Helen Di / Abridge Cultural Consultants (FY2025) 025 Revenue Summary | | Amount | |-|--------| | Gross revenue | $588.00 | | Transaction fees (Stripe/bank) | $18.92 | | **Net revenu",
+              "answer": "$569.08",
+              "answer_kind": "money"
+            },
+            {
+              "id": "f2c70bed-9364-493c-81fd-6dd866c48235",
+              "query": "Fidelity browser macro: status, known bugs, and saved credentials n/.config/finance-secrets/fidelity.env (mode 600)  PORTFOLIO SNAPSHOT (2026-07-10, positions + avg cost basis only; lots deferred): -",
+              "answer": "$1,045,154",
+              "answer_kind": "money"
+            },
+            {
+              "id": "0315ef28-2936-44f4-9808-9450ce42df7d",
+              "query": "Shopping recommendation: Rachio 3 16-Zone Smart Sprinkler Controller eed 11-12) - Weather Intelligence (rain/wind/freeze/saturation skips) - 4.6/5 from 12,062 reviews  ## Alternatives considered - B08",
+              "answer": "$285.28",
+              "answer_kind": "money"
+            },
+            {
+              "id": "4866412a-7cc4-4cea-9275-67bf597cdadc",
+              "query": "Container Registry Sync \u2014 3-Server Crane Infrastructure :32000) | Docker registry:2 | Primary \u2014 push here | | server5 (192.168.1.42:32000) | MicroK8s built-in registry addon | Mirror | | server3 (",
+              "answer": "192.168.1.26:32000",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "f5f79ef4-338e-4ac6-a9c8-cb2ea4b4fac0",
+              "query": "HA media integrations \u2014 Kodi, Samsung TV, Fire Stick setup and dashboard ## Kodi instances - Bedroom:",
+              "answer": "192.168.1.102",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "22d2d611-0a34-40a0-9d57-c3bdd4a96868",
+              "query": "Meli\u00e1 La Perla finance check-in reminder pin \u2014 fire Tue 7/28 AM 4 activity for La Perla charges - Expected states:   - **Good (a):** $1,696.06 posted 7/21 + $562 REFUND from Meli\u00e1 within a few days =",
+              "answer": "$1,134",
+              "answer_kind": "money"
+            },
+            {
+              "id": "40d8da0b-58bb-4269-b90f-eec0bf41fc61",
+              "query": "NAS IP assignment: VyOS DHCP reservation swap for X520 to get 192.168.1.207 nas: 192.168.1.207 \u2192 1c:86:0b:39:6e:5b (X520 eth4) \u2190 NEW - nas-eth0-1g: 192.168.0.183 \u2192 00:11:32:bd:cf:9f (eth0 onboard) \u2190 N",
+              "answer": "192.168.1.11",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "054452f3-6035-4384-b861-f69a2ac239d4",
+              "query": "2025 U.S. Government Obligations % \u2014 Fidelity & iShares Funds (State Tax Exemption) Bond ETF | TLT | 99.64% | iShares |  ### Application \u2014 Ben's Trading Account ****5532 (X84-975532), 2025 Return  Tot",
+              "answer": "$10,528.02",
+              "answer_kind": "money"
+            },
+            {
+              "id": "6c4d6fe9-73e3-4a55-a12d-ee23bad699e1",
+              "query": "Email \u2014 Garvee: Warranty invoice sent for portable AC JHS-A019J-05KR-D3 (2026-07-08) f8881d`)  *Invoice content sent:* - Order #113-2602083-0653019 - Nov 25 2025, on behalf of Pushbuild LLC - Item: 8,",
+              "answer": "$129.99",
+              "answer_kind": "money"
+            },
+            {
+              "id": "b9eb090f-0504-49b1-a599-e11a7f018a3c",
+              "query": "Groton Property Tax \u2014 Town of Groton Mailing & FY2026 Q4 ld | Value | |---|---| | Pay to | Town of Groton | | Address | PO Box 444, Reading, MA 01867-0644 |  ## FY2026 Q4 \u2014 Bill #3552  - Amount: **",
+              "answer": "$4,155.96",
+              "answer_kind": "money"
+            },
+            {
+              "id": "3d161966-3cd6-4eba-84d7-39ccbe964a92",
+              "query": "OAuth Server Tooling \u2014 oauth.pushbuild.com pts/oauth-server` (on NAS, shared across all servers) - **Port**: 8085 (default) - **Nginx proxy**: `https://oauth.pushbuild.com` \u2192 `http://",
+              "answer": "192.168.1.199:8085",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "6d51fcf9-f47a-49c2-b28f-e25f20d266af",
+              "query": "Plantry app rename + domains (2026-07-21) \u2014 was 'pantry' c domains (nginx session cloned the pantry.* vhosts exactly, incl auth-gating + LE certs, 2026-07-21):   * plantry.pushbuild.com \u2192 web app (",
+              "answer": "127.0.0.1:8792",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "b52cb50f-c9ab-4957-bad5-df7112b4ec81",
+              "query": "VyOS stale config lock \u2014 incident pattern + fix (2026-05-21) ethernet eth0 description test-fix discard ```  ## Resolution status (2026-05-21) Deferred \u2014 Ben instructed to skip and authorize HA to use",
+              "answer": "192.168.0.149",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "fa5efbd4-2155-4ca4-9d2f-be9e8be867c7",
+              "query": "Flawless Renovation Payments: CO#6 Walkway + CO#7 Back Porch Rail ss-co-walkway-bar*`. Ben paid before countersigning (SMS approval covered it, signature line blank).  **CO#7 \u2014 Back Porch Railings lab",
+              "answer": "$715.00",
+              "answer_kind": "money"
+            },
+            {
+              "id": "7f1f857d-c082-43d3-9397-2913cf5c2b01",
+              "query": "Ben vehicle fleet \u2014 current and historical nder - Registration: renewed Dec 2025 ($60 fee); next renewal ~late 2027 (MA passenger = 2-yr) - Excise: 2026 Groton bill $65.73, valuation",
+              "answer": "$2,629,",
+              "answer_kind": "money"
+            },
+            {
+              "id": "9575d928-8c28-4459-8274-afcad13a7ec0",
+              "query": "Aquarium 55g freshwater \u2014 pending light/feeder upgrade cart (June 2026) g Aqueon Versa-Top covers and upgrading lights + feeder for Home Assistant integration as of June 2026.  **Cart staged (not yet",
+              "answer": "$233.87",
+              "answer_kind": "money"
+            },
+            {
+              "id": "454abf26-78f4-474c-8834-4110beca1033",
+              "query": "sfw_guest WiFi hardening \u2014 locked decisions + nfcapd NetFlow collector (2026-07-13) f 2026-07-13)  - `nfdump` installed (apt) on server4 - Default packaged `nfdump.service` DISABLED (it was competing",
+              "answer": "0.0.0.0:2055",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "649f22aa-9ce8-4398-bdfa-97fdd75b9e88",
+              "query": "worker4 \u2014 OS_NO_SERVICES, manual iLO needed (2026-05-09+) 4 entered OS_NO_SERVICES after SSH failures - Smart plug offline \u2014 automated power cycle not possible - Home Assistant briefly unreachable (",
+              "answer": "192.168.1.199:8123",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "abb4fd93-f9d5-4e7e-ae3e-0fb78df4efc4",
+              "query": "Workers 45-46 Provisioned \u2014 April 2026 # Workers 45-46 Provisioned  Date: 2026-04-04  ## Worker 45 - **IP**:",
+              "answer": "192.168.0.68",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "2492d14c-86a3-4745-8953-b397c358800f",
+              "query": "Massachusetts Vehicle Excise Tax \u2014 Rate & Depreciation Schedule | 40% | | 3 years old | 25% | | 4+ years old | 10% (floor) |  ## Worked examples  - New vehicle, $49,200 MSRP \u2192 assessed $44,316 \u2192 excis",
+              "answer": "$1,108",
+              "answer_kind": "money"
+            },
+            {
+              "id": "88dcb278-ffe7-4c2e-a3f4-c96eb3ebfea0",
+              "query": "Household recurring charges analysis - 2026-07-09 Full recurring charges audit run 2026-07-09 against all Sure accounts (8 cards + 8 depository + 1 mortgage/lease).  ## Key findings - ~",
+              "answer": "$221",
+              "answer_kind": "money"
+            },
+            {
+              "id": "5bcd8b36-5172-4278-94ba-66ce50fb60a3",
+              "query": "TOZO A1 Bluetooth auto-switch setup \u2014 office workstation (May 2026) ## TOZO A1 Auto-connect Audio Routing \u2014 office machine  **Device:** TOZO A1 earbuds, MAC `",
+              "answer": "58:FC:C6:B4:C5:1D",
+              "answer_kind": "mac"
+            },
+            {
+              "id": "d8441087-0986-4510-980c-464f2e079ee9",
+              "query": "Server4 PSU \u2014 750W/1100W Wattage Mismatch (Dell R720) -pull the 750W - Swapping requires shutting down server4 first (nginx, Omada, memo, phony, docker services go offline) - iDRAC available at",
+              "answer": "192.168.0.53",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "c4ad291a-cc8d-47b2-a0da-d7c1213a10a6",
+              "query": "Brother HL-L2405W monochrome laser printer \u2014 office TN830XL (2-pack ordered with printer, ~$26.99). Generic TN730 toner available for ~$10-15 per 3000 pages as alternative. - Purchase price: ~",
+              "answer": "$133.32",
+              "answer_kind": "money"
+            },
+            {
+              "id": "cdf3fac1-2af6-4c3a-8c25-ff5a311586b6",
+              "query": "Laura's 2026 Rose Inventory \u2014 2025 Bare-Root Orders # Laura's Rose Inventory \u2014 Bare-Root Orders (March 2025)  Two online nursery orders placed same day \u2014 **March 23, 2025** \u2014 total **8 roses,",
+              "answer": "$372.54",
+              "answer_kind": "money"
+            },
+            {
+              "id": "59242160-5e55-4856-a23c-8de4c2025f6c",
+              "query": "domains MCP: Cloudflare token missing Zone.DNS:Read \u2014 list_dns_records fails egistrars (Namecheap, GoDaddy, Route53) are unaffected.  ## Domains MCP current state (as of Jun 2 2026) - Container: `doma",
+              "answer": "0.0.0.0:8831",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "fc4782b8-9653-44e5-b444-e08b4c3ee477",
+              "query": "Fiverr competitor intelligence \u2014 14 gig deep-dives 2. basitdotali / ThinkBuilt Solutions LLC \u2014 explicitly registered LLC, US/UK/EU clients, paid-discovery Basic ($150 Zoom audit) \u2192 $1,250 \u2192",
+              "answer": "$2,500,",
+              "answer_kind": "money"
+            },
+            {
+              "id": "d4f102c9-f59c-4e43-9f0c-64916a25cdd3",
+              "query": "tinytuya LAN deviceScan misses 192.168.0.x devices \u2014 use Omada MAC\u2192IP instead Discovered 2026-07-08 during Tuya fleet migration: the Black+Decker AC was at",
+              "answer": "192.168.0.209",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "afeb1b02-2c66-416e-ac3a-006fd0f9fe04",
+              "query": "Claude usage warn-state: admin crossed 85% week of 2026-06-08 kill's hard rule. ATC posts stay warning-priority while any acct >85% (that's fine, no spam). - admin credits ARE on ($8.94 bal / $250 cap",
+              "answer": "$148.81",
+              "answer_kind": "money"
+            },
+            {
+              "id": "757b8f60-739a-4c18-8af5-48dae37d5f63",
+              "query": "buffet-buster: v0.20.0: price-gated celebration, auto-resize money text, richer money FX, photo record (1038ec1) to keep score' line when no price. - AutoSizeMoney: one-line money text that shrinks to",
+              "answer": "$12,345.67",
+              "answer_kind": "money"
+            },
+            {
+              "id": "80ca327c-29db-424d-873a-55d037c43dfc",
+              "query": "eBay order \u2014 2\u00d7 Crucial P3 1TB NVMe SSDs from vintagepcpro (2026-04-20, delivered 2026-04-23) 3.0 3D NAND NVMe M.2 SSD (CT1000P3SSD8, up to 3500 MB/s) \u00d7 **2** - **Item ID:** 406870979145 - **Order #:*",
+              "answer": "$220.00",
+              "answer_kind": "money"
+            },
+            {
+              "id": "bf7dfb4c-4df8-48bd-993d-33858e5865b5",
+              "query": "Household net worth and cash burn (as of mid-July 2026) d   * Laura's Individual-TOD account: ~$497k (biggest taxable account; hers, not Ben's) - Crypto: ~$135k (all Trezor cold storage)   * BTC ~",
+              "answer": "$113",
+              "answer_kind": "money"
+            },
+            {
+              "id": "0a2c572b-b867-4e55-b315-2ce6139608ca",
+              "query": "Worker IP Range \u2014 192.168.0.10-126 Reserved for K8s Workers 6) 23 non-worker devices moved from 192.168.0.x to 192.168.1.x: - 4 iDRAC controllers \u2192 192.168.1.120-122, .126 - 7 Kidde smart detectors \u2192",
+              "answer": "192.168.1.132",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "9b2ae9d2-74e0-4a91-ae64-beb53f632b17",
+              "query": "SMS \u2014 Matley Companies (Sean Kelley): scheduled arrival Wed Sep 16 (2026-07-09) hem (Kim replied re: pool openings today, discussing scheduling for the closing). The Sean Kelley auto-scheduled SMS fro",
+              "answer": "+19784648587",
+              "answer_kind": "phone"
+            },
+            {
+              "id": "7ae133a2-ac5c-431a-b119-554571da192e",
+              "query": "Phony HVAC and house proxy targets: contacts and group configurations 1030), Austin/Show HVAC (+19784860600), Four Seasons Comfort (+19788474240 / David Bennett), Jay Moody HVAC (+19785934125), Carl @",
+              "answer": "+19788574482",
+              "answer_kind": "phone"
+            },
+            {
+              "id": "0b87a95e-49e8-421e-bd7f-d2215f076b9b",
+              "query": "Garden squirrel barrier: FINAL BOM decided \u2014 flat smooth twinwall polycarbonate, 24\" x 124 lin-ft ing wood top rail - Already have lumber + screws  Recommended option: ThermaGlas 4mm clear twinwall 24",
+              "answer": "$108.45",
+              "answer_kind": "money"
+            },
+            {
+              "id": "adf1353c-74cb-4110-98c3-9f93df26c9dc",
+              "query": "Household Liquor & Wine Preferences \u2014 NH Liquor Outlet Nashua (May 2026) ## Source NH Liquor & Wine Outlet, Store 50, Nashua NH. Receipt dated 5/26/2026 4:24 PM (cashier James). 14 bottles, ~",
+              "answer": "$216",
+              "answer_kind": "money"
+            },
+            {
+              "id": "e7e0ff04-4f76-4ddc-bf9b-4c6e7a81d8dd",
+              "query": "\u2b50 spec 006 FR-001 dry-run: LIVE signal count = 3,012 (not ~2,100 \u2014 that was exact at 05-30; +913 June-era). Canonical mongo = s5:27017 via k8s secret; two decoy empty mongos named. url}' | base64 -d`.",
+              "answer": "192.168.1.57:30017",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "9b29b208-cb94-4b80-8086-ad36edbb71ef",
+              "query": "Murilo Flawless \u2014 Pricing Rate Ladder (Apr 2026) | | Lindsey | Murilo (you) | Murilo (small-area normal) | |---|---|---|---| | Rate | $27/sf | $24/sf | $29/sf (mid) | | Total at 280 SF | ~",
+              "answer": "$7,560",
+              "answer_kind": "money"
+            },
+            {
+              "id": "dc7beb14-4950-4716-9678-dc9b55c965de",
+              "query": "CloudX investment \u2014 Series A+ due diligence, deadline Jun 15 2026 ut APP $650\u2192$500\" citation in deck is ACCURATE (not false as first-pass flagged) \u2014 JPM held $650 Nov 2025, $500 into spring 2026, rais",
+              "answer": "$515",
+              "answer_kind": "money"
+            },
+            {
+              "id": "7bfb0049-9ced-47d5-aec6-cf54311c02d8",
+              "query": "Wayfair order lookups: use Gmail, not the browser (anti-bot CAPTCHA) hen read.  ## Example (2026-05-20 order #4671824212) 3 line items, $371.84 total: a 22\" matte-black dusk-to-dawn outdoor wall light",
+              "answer": "$139.99",
+              "answer_kind": "money"
+            },
+            {
+              "id": "6190f707-2cc1-4f26-b712-c82de0bae491",
+              "query": "Amazon order #114-7399027-0851422 \u2014 arriving June 1 ## Amazon Order #114-7399027-0851422  **Ordered**: 2026-05-30 **Shipped**: 2026-05-31 **ETA**: Arriving June 1, 2026 **Total**:",
+              "answer": "$128.40",
+              "answer_kind": "money"
+            },
+            {
+              "id": "27186013-f6bb-44b0-92d7-dd4abd84b0f3",
+              "query": "Laura BWH 403(b) excess contribution \u2014 decided to let it ride to let it ride rather than pursue the ROE. Reasoning: - $2,334 grows tax-deferred to ~$9,000 over 20 years at 7% - \"Double tax\" penalty =",
+              "answer": "$630",
+              "answer_kind": "money"
+            },
+            {
+              "id": "26e4d983-bde5-401e-a4cb-f9744dd8b12d",
+              "query": "genomics-assets.sack.io \u2014 static asset hosting for genomics deliverables Credentials:** admin / HiScore-f80f1993 (HTTP basic auth; LAN is exempt via RFC1918 allowlist) **Static server:** isolated Dock",
+              "answer": "127.0.0.1:8911",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "6d57f70f-7ae7-4846-ae1f-9c6fedb8125a",
+              "query": "Contact: Gregory Solomon MD \u2014 heat pump maintenance exchange (2026-06-03) lean Heat Pumps: - Invoice #11467, Service date Apr 27 2026, Address: 493 Katama Rd B8, Edgartown MA 02539 - 1 interior head (",
+              "answer": "$192",
+              "answer_kind": "money"
+            },
+            {
+              "id": "4f72d24d-3e0c-40a0-8834-0515772649a8",
+              "query": "LED walkway outdoor install \u2014 12V PSU + WLED controller picks (2026-05-09) e Foods by Jun 7, 2026. Replacement order initiated. - Return: Amazon Business return (QR code + Whole Foods dropoff)  **Orig",
+              "answer": "$230.58",
+              "answer_kind": "money"
+            },
+            {
+              "id": "fa4d2c4a-e2c6-47f4-9568-4090fa690efc",
+              "query": "Omada Controller \u2014 server4 instance details TP-Link Omada controller running on server4.  **URLs:** - HTTPS: https://192.168.1.168:8043 - HTTP: http://",
+              "answer": "192.168.1.168:8088",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "74cf92bd-cf47-47c6-bfe0-dc4fa2c86a80",
+              "query": "Order: Wayfair #4671824212 \u2014 porch/garage lanterns (2026-05-20) fair   **Items**: 3 (lanterns for front porch and garage) \u2014 product names rendered as images in email, not readable as text   **Subtotal",
+              "answer": "$349.97",
+              "answer_kind": "money"
+            },
+            {
+              "id": "e4210ed1-e686-4ea7-8779-514e308fdb39",
+              "query": "Email \u2014 Chris Hartson (Lamco): needs site visit before finalizing Carrier alt pricing (2026-07-02) ence: - 6/17: Chris's initial Bosch IDS Premium DF quote at $52,910 net. - 6/17: Ben's substantive co",
+              "answer": "$36,648,",
+              "answer_kind": "money"
+            },
+            {
+              "id": "f21c25d9-3561-4464-8a20-8b9a3fa87b34",
+              "query": "Pi KVM testers: both directions confirmed working (2026-06-04) in ST7789VW 240x240 SPI + 5-way joystick + 3 keys. Camera: LEEKWI/Arducam IMX519 16MP autofocus. IP: 192.168.0.235 (DHCP placeholder). MA",
+              "answer": "b8:27:eb:b4:47:4e",
+              "answer_kind": "mac"
+            },
+            {
+              "id": "78253dbc-15ca-400e-ae9c-642bbf5644da",
+              "query": "SMS/VM \u2014 Mike (Dean garage doors): HD install measurements \u2014 handled (2026-07-02) Mike from Dean (Home Depot garage door install measurements) \u2014 thread handled.  Timeline (2026-07-02): - 11:47Z voicem",
+              "answer": "+14013906434",
+              "answer_kind": "phone"
+            },
+            {
+              "id": "f5948cc1-4624-4da5-a661-6f61836d4315",
+              "query": "quantum-feed: #002 DATA COMPLETE \u2014 2,849-ticker universe backfilled to ~2009 (e10f283b) rror \u2192 Unclassified); (2) sane-cap-vs-continuity ordering \u2014 eps path now sane-checked AFTER basis resolution \u2192 G",
+              "answer": "$1,429",
+              "answer_kind": "money"
+            },
+            {
+              "id": "320213eb-fc6f-40c1-8e85-a9d9a775cab9",
+              "query": "Voicemail: Dean (Adus Energy) \u2014 fiber optic cable pull (Apr 16, 2026) Apr 16, 2026)  **Caller**: Dean, from \"Adus Energy\" (or similar \u2014 transcription may have garbled name) **Callback**: 508-978-6664",
+              "answer": "+18175679920",
+              "answer_kind": "phone"
+            },
+            {
+              "id": "bc56046a-68ba-4b71-aab0-7dde614fca5a",
+              "query": "Email \u2014 Consumers Credit Union: $700 deposit from Laura into joint Rewards Checking (2026-07-26) emails on 2026-07-26 (~15:08 + ~15:17 PDT), same transaction: - \"We deposited your payment\" (msg 19fa08",
+              "answer": "$700.00",
+              "answer_kind": "money"
+            }
+          ]
+        },
+        {
+          "band": "500-1000",
+          "pool": 101,
+          "items": [
+            {
+              "id": "5a7c611a-62dd-4f0b-bac8-6b21dda87816",
+              "query": "Life insurance \u2014 Ben & Laura Sack (Brighthouse, $1M each) | 2015-03-31 \u2192 2045-03-31 | | Final expiry | 2080-03-27 | | First-year premium | $98.01/mo (incl. $69/yr policy fee) | | Min face amount |",
+              "answer": "$100,000",
+              "answer_kind": "money"
+            },
+            {
+              "id": "fff5980a-3e8e-4a37-80ff-d699038618e3",
+              "query": "Router B (Spectrum failover, EdgeRouter) \u2014 current state Router B's PTP IP is only routable via VyOS eth6)  ## VyOS-side wiring (confirmed)  ``` VyOS eth6: 10.99.99.1/30 (PTP to Router B)   hw-id:",
+              "answer": "98:b7:85:24:15:a0",
+              "answer_kind": "mac"
+            },
+            {
+              "id": "ffdc2f49-2156-4cbd-ad71-da3d0dd09905",
+              "query": "HVAC BOM street-price audit \u2014 3 tiers \u2014 Jun 27 2026 Jun 27 2026. Hardware-only floor pricing for 120 Reedy Meadow Rd, Groton MA HVAC replacement bids.  ## Tier Totals (Equipment + Common BOM ~",
+              "answer": "$3,855",
+              "answer_kind": "money"
+            },
+            {
+              "id": "16878af1-8fa8-4de7-8e6c-9ede1761b7a6",
+              "query": "HVAC \u2014 Four Seasons Comfort Estimate #2680 review (2026-07-19/20) ns, net of NEHPA -$650/zone)  | Combo | Total net | |---|---| | Trane DF (Z1) + Trane HP (Z2) | $37,416 | | Trane HP (Z1) + Trane HP (",
+              "answer": "$36,654",
+              "answer_kind": "money"
+            },
+            {
+              "id": "2f8be8ae-5f49-4cff-9b6d-7d680057d6cc",
+              "query": "Home Depot Orders \u2014 120 Reedy Meadow Exterior Project separate later order; see sliding-door memo) - Shutters (11 pairs): arriving April 13, 2026  ## Order #WK23951555 (May 4, 2026) **Total:**",
+              "answer": "$952.44",
+              "answer_kind": "money"
+            },
+            {
+              "id": "137269d4-f566-45d7-b2e6-07c684f793ed",
+              "query": "Smartwatch shortlist for Ben - Android + HA + comprehensive health metrics (2026-07-08) real-world - HA: via Samsung Health -> Health Connect (Android 14+) -> HA community integration (NOT first-party",
+              "answer": "$549.99",
+              "answer_kind": "money"
+            },
+            {
+              "id": "5d8c7fdb-748e-4689-a74d-28cec66459e4",
+              "query": "mind Phase 2 COMPLETE \u2014 full self-improving toolkit live (2026-07-21) credibility}. claim_eval now NAS-FIRST (market/nas_reader.py DuckDB reads /mnt/nas/data/quantum/replay/ts-sorted flatfiles \u2014 valid",
+              "answer": "$326.95",
+              "answer_kind": "money"
+            },
+            {
+              "id": "0af36c9d-eff0-4705-ae64-0c97eda8e2ea",
+              "query": "HVAC Replacement \u2014 Quote Search (May 2026) 15 to reschedule (voicemail) - **Status**: \u26a0\ufe0f NEEDS REPLY \u2014 call Holly back to confirm Thu 10am or 12pm - Source: Voicemail RE9eb1e4fa from",
+              "answer": "+18883063893",
+              "answer_kind": "phone"
+            },
+            {
+              "id": "d70b1ee5-f176-4801-9c21-cb280cc32298",
+              "query": "OctoPrint Pi Zero 2 W \u2014 Setup & Access toward HDMI side on Pi Zero - **cam2 (side view)**: ustreamer port 8081, OctoPrint primary camera   - OctoPrint configured: stream=`http://",
+              "answer": "127.0.0.1:8081",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "e9215dba-9a23-4631-a207-2953a80b3611",
+              "query": "BJ's-via-DoorDash trip 2026-07-30 $78.87 \u2014 DOUBLE-ORDER DAY (both in-store + delivery) carrots, cabbage, buffalo chicken, Wilde chips \u2014 all doubled  **Day total across both channels**: **$61.72 (in-st",
+              "answer": "$140.59",
+              "answer_kind": "money"
+            },
+            {
+              "id": "da76285f-e376-4307-aa09-82defab16e06",
+              "query": "Costco trip \u2014 2025-04-28 NASHUA #307 ($418.26, 29 items) 30 - **Warehouse:** NASHUA #307, Nashua NH 03060 - **Whse 307 / Trn 302** - **Payment:** Visa, $418.26 - **Items sold:** 29 - **Subtotal:**",
+              "answer": "$417.84",
+              "answer_kind": "money"
+            },
+            {
+              "id": "b2de1364-3b68-4ab3-a15d-bd7f201088ef",
+              "query": "book-137-regime-v1 frozen sleeve weights \u2014 and why GLD arrives 1.32x larger than each equity name quity name.**  Assuming GLD comes in at the same 0.31728 as the others is WRONG and understates it by",
+              "answer": "$371.90",
+              "answer_kind": "money"
+            },
+            {
+              "id": "bda60860-db48-4382-a98b-a813df3d3356",
+              "query": "Phony\u2192ATC SMS bridge: end-to-end flow + to_number webhook matchType (2026-05-26) . Bridge agent received channel event \u2713 2. Routed to `network` based on 'please ack to network' phrasing \u2713 3. Sent `pho",
+              "answer": "+16177779999",
+              "answer_kind": "phone"
+            },
+            {
+              "id": "5199d994-4e93-41d1-beef-a4cfd6ced39c",
+              "query": "Generator WiFi lost \u2014 reconnect needed (2026-05-30) nosis (updated from 2026-05-30 event)  CURRENT STATUS (as of 2026-06-27 investigation): - Generac MAC: 00:21:7e:a4:58:9e, DHCP reservation:",
+              "answer": "192.168.0.225",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "1afd9b53-c938-4ebc-9b3c-b5a4ae963f14",
+              "query": "Sack household portfolio strategy suite \u2014 Portfolio Lab + retirement overlay + options income (2026-07-10) tput is a sized menu Ben executes manually at Fidelity.  ## Household portfolio snapshot (Ben",
+              "answer": "$2,000,132",
+              "answer_kind": "money"
+            },
+            {
+              "id": "e2b7e61b-1ab6-404c-ae54-07834ce06e1f",
+              "query": "server4 kube-apiserver needs explicit --advertise-address .168.0.168:16443` entry which is NOT a real IP on server4 \u2014 server4's actual addresses are 192.168.1.168 (eno1, primary LAN) plus barn NICs",
+              "answer": "192.168.0.106",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "e4f8d4ad-97b2-468f-8bc6-22e21b68d892",
+              "query": "AppLovin (APP) weekly brief for Mary Ann Sack: Vol. III sent 2026-07-01 \u2014 evidence-based rec, Wednesday cadence ### Vol. III (2026-07-01) \u2014 OUT-OF-CYCLE, SENT BY REQUEST - **Trigger:** APP surged +11.",
+              "answer": "$574",
+              "answer_kind": "money"
+            },
+            {
+              "id": "78c366c9-9aab-413a-805a-a3959be273ea",
+              "query": "quantum-predict \u2014 current architecture and dashboard (2026-05-20/21) ngest.pid`, `/tmp/qp-embed.pid`, `/tmp/qp-correlate.pid`, `/tmp/qp-api.pid`  ## Dashboard - `qp-api` serves on port **9181** - URL:",
+              "answer": "192.168.1.199:9181",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "f52334c4-fa82-4b49-9851-9bce1b655e2e",
+              "query": "trade-surface dashboard STOOD UP LIVE \u2014 running processes (delta on beacon f0980942) OXY_TARGET=http://localhost:8731 baked at BUILD). Log /tmp/qfweb-trade-3000.log. URL http://192.168.1.42:3000/trade",
+              "answer": "100.68.35.97:3000",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "db36fa78-26af-4c75-b867-ff31be6ed599",
+              "query": "barnsouth camera \u2014 garden gate view, RTSP snapshot method (works despite no HA integration) ORD=' .env | sed -E 's/^[^=]*=//; s/^[\"'\"'\"']//; s/[\"'\"'\"']$//') timeout 20 ffmpeg -y -nostdin -rtsp_transpo",
+              "answer": "192.168.1.254:554",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "a6885100-ff6f-4f3b-bd4f-b9bd22594dae",
+              "query": "pi-zerocam \u2014 Pi Zero W v1 hardware correction + new deployment (2026-06-05) stalls, and CPU performance expectations.  ## Deployment details (2026-06-05)  | Field | Value | |---|---| | Hostname | pi-z",
+              "answer": "192.168.1.18",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "42ac7bbe-7ef0-4c27-84d6-336445038b97",
+              "query": "Vehicle inspection tracker \u2014 Kia (JUNE cycle, next due 6/30/2027) + Tesla (Nov, ~11/30/2026) nspection due by 11/30/2026 (schedule it)\". - EVs still need the annual MA safety inspection (emissions = O",
+              "answer": "$35,",
+              "answer_kind": "money"
+            },
+            {
+              "id": "34d931d3-03be-4a3f-92b1-8a5b65591aa2",
+              "query": "Ben's MacBook (macbook-ben): VPN SSH access + HDMI-audio auto-mute guard ss over OpenVPN When Ben is off-LAN, his MacBook connects to the EdgeRouter OpenVPN (10.8.0.0/24). Common name `macbook-ben` \u2192",
+              "answer": "10.8.0.10",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "197b0480-0fc6-4725-a0bf-37242d325858",
+              "query": "quantum-feed: tools added 2026-07-09 (sweep, selfheal, completeness, universes) tem mounts per host (nfs/noise filtered, rootfs prefix stripped)    - s5 ZFS: zpool list for each pool (ONLINE status)",
+              "answer": "192.168.1.57:30379",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "66d9c360-89db-4072-bcf5-72204cdd8af9",
+              "query": "Best Budss Landscaping LLC \u2014 Contacts & Project History nt or check (personal Venmo flagged for high-amount service payments)  ---  ## Project 1 \u2014 Back Patio (May 2025)  **Estimate:** EST0391 \u2014 **",
+              "answer": "$16,350",
+              "answer_kind": "money"
+            },
+            {
+              "id": "d330e362-ce5f-45c3-ad79-c4c57f3ba88f",
+              "query": "Senville mini-split HA integration \u2014 blocked at cloud auth (2026-05-19) order #111-6551173-5057825). Senville-branded but Midea-OEM internals. - **LAN**: static DHCP mapping `minisplit-barn` at 192.16",
+              "answer": "a0:68:1c:48:ec:de",
+              "answer_kind": "mac"
+            },
+            {
+              "id": "f2537ab0-bad7-4852-8454-3d67e4d26489",
+              "query": "\u26a0\ufe0f LIVE DEFECT: broker dashboard attributes positions by UNDERLYING \u2014 forward-test equity folded into Ben's books (book 2 overstated 13.7x) on the dividend correction; alpaca offered to write it.  ##",
+              "answer": "$520,193.94",
+              "answer_kind": "money"
+            },
+            {
+              "id": "8dab4c96-31f2-47c0-8e8c-e4899cfe0e31",
+              "query": "slapp/emulator gotcha \u2014 Private DNS (DoT) silently breaks Cognito/HTTPS; SPAN creds are valid ctly like an auth or app problem; it was DNS.  FIX: `adb shell settings put global private_dns_mode off` (",
+              "answer": "10.0.2.3",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "f8ff3751-bdf3-4c3d-b145-e14a40aa4c5a",
+              "query": "MacBook agent post-blackout auth-wedge: expired CLAUDE_CODE_OAUTH_TOKEN \u2192 401 every turn (diagnosis traps + /login fix) it, but proc 5218 still had it set, so the resume/exec path needs auditing to co",
+              "answer": "192.168.1.215:4999",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "ac4e9f4b-6728-43e8-8619-821d7db7a362",
+              "query": "slapp: SPAN UI automation via adb + Android 14 MITM CA gotchas x new-session -d -s slapp_mitm \"mitmdump -p 8082 -w /tmp/slapp_flows.mitm\"` - Set emulator proxy: `adb shell settings put global http_pro",
+              "answer": "10.0.2.2:8082",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "50cfae75-148d-4f79-8b43-b75b1f5e5fe8",
+              "query": "Travel: LAURA \u2014 Southwest MHT\u2194BWI (ATV8FS) \u2014 Bethesda, Jul 29\u201331 2026 ogan. ~45\u201355 min drive from 120 Reedy Meadow. - Rapid Rewards #: 20643181941 \u00b7 Ticket #: 5262174742255 - Fare: Choice \u00b7 Booked 06/",
+              "answer": "$326.80",
+              "answer_kind": "money"
+            },
+            {
+              "id": "07fcdc2b-69c2-4e02-bdcd-4599c3e69c6e",
+              "query": "LED walkway outdoor install \u2014 12V PSU + WLED controller picks (2026-05-09) 2026-07-21. - **Channels**: HAS plenty \u2014 3\u00d7 hunhun 10-packs = 30\u00d7 6.6ft (2m) = 60m, incl milky covers + end caps + clips (ord",
+              "answer": "$205.47",
+              "answer_kind": "money"
+            },
+            {
+              "id": "b57a5330-7894-4bd9-95d7-111d8a2ab2c8",
+              "query": "nginx server4: site config include glob is `site:*` \u2014 .bak files ARE loaded as live config o `conf/` dir and the live `/home/ben/nginx.conf/`. They are the source of the recurring `nginx: [warn] confl",
+              "answer": "0.0.0.0:443",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "453c6ebf-f58f-4ca0-98f2-6e6d1ce9f15b",
+              "query": "Pico KVM \u2014 bidirectional verification 2026-06-04, Pico serial-to-role mapping, UART stray-NUL artifact t, type ben-from-a, Enter \u2192 tester-b HDMI showed Login incorrect and fresh login prompt  ## Video",
+              "answer": "192.168.1.230:8080",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "ed7c6346-35fd-480f-baa7-337709ddd488",
+              "query": "Pushbuild LLC Amazon spending \u2014 10-year YTD history (2017\u20132026) r Gross Spending  | Year | Pushbuild Gross | Notes | |------|----------------|-------| | 2017 | ~$1,400 | Early year, low volume | | 201",
+              "answer": "$19,500",
+              "answer_kind": "money"
+            },
+            {
+              "id": "3817c265-c2ca-4e78-95c8-8d58ab5c0e06",
+              "query": "Laura Work MacBook \u2014 Reference om in known_hosts)  ## Network - See memo \"Laura Work MacBook \u2014 Network & SSH Access\" for full network/SSH details - SSH: `ssh -p 22 -J ben@",
+              "answer": "192.168.1.254:4999",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "92229f8b-2d3e-47be-9c10-366a553a63b6",
+              "query": "Inkling ad-profitability model (2026-07-23) upsell (biggest), (2) conversion (landing+creative beat 2.5%), (3) repeat/LTV. ## Connects to: pricing work ($49 retail doubled margin to ~",
+              "answer": "$24,",
+              "answer_kind": "money"
+            },
+            {
+              "id": "40cfd1bc-6267-465c-8dcd-cc3c99bd6103",
+              "query": "Sol-Ark ESS System \u2014 120 Reedy Meadow (TOU Arbitrage) r if 3 techs needed - Permit: Groton E-25-416 - Placed in service: 2025-11-25 - Total project cost: $50,084.63  ## Invoices - Dec 15, 2025:",
+              "answer": "$7,375.69",
+              "answer_kind": "money"
+            },
+            {
+              "id": "ee423409-90e2-47d0-a53a-d1225cc7c6f8",
+              "query": "Assistant Inbox Sweep \u2014 2026-07-31 \u2014 AM ten: 0 (this checkpoint only)  Flagged working set (open): 40  THE TWO NEW ITEMS 1. Amex \"We've received your payment\", acct ending 91006 \u2014",
+              "answer": "$2,000.00",
+              "answer_kind": "money"
+            },
+            {
+              "id": "12f6a2bb-1bb7-43ac-87b1-c1cc22b2d04a",
+              "query": "Assistant Inbox Sweep \u2014 2026-07-23 \u2014 PM as such. `gmail_get_thread` showed Ben replied from `family@sack.io` 33 min after receipt on 7/21 \u2014 **PAID $8,946.30 EFT** (Inv #125 + CO#8",
+              "answer": "$300,",
+              "answer_kind": "money"
+            },
+            {
+              "id": "3289b3e5-4b9c-45ec-a595-b79dbeadac0c",
+              "query": "Unibrowse remote-connections + per-tab server binding (2026-05-30 feat/remote-connections) # XFF (X-Forwarded-For) handling - Trust XFF when the immediate peer is loopback OR a docker-bridge peer (con",
+              "answer": "172.27.0.1",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "fb51a115-9ed2-482b-a7bf-f3bd91623308",
+              "query": "mind+finance portfolio round \u2014 paper-tracked trade list (2026-07-21) (1,054 sh) \u2014 de-concentration anchor, tax-free 2. \u00a7475 IVV\u2192RSP ~$62k (290 sh) 3. SPY put-spread hedge \u2014 Sep-18 695/650 (~$1,425, 59",
+              "answer": "$21,075,",
+              "answer_kind": "money"
+            },
+            {
+              "id": "d7d745db-9d64-47c8-9457-dde8465adaca",
+              "query": "worker4 K8s node \u2014 K8S_NOT_READY, smart plug offline (2026-05-21) 23 bound to **localhost only**. So `curl http://192.168.1.168:8123` fails from any remote host. Fix: change docker-compose port bindin",
+              "answer": "0.0.0.0:8123",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "1736e18e-6c96-4d62-bc3e-8ad6c2353a85",
+              "query": "Email \u2014 Jonathan Lemoine (Walley's HVAC): Detailed reply to Ben's 4 Qs re Trane 5HCL9 proposal (2026-07-03) l depth. Ben should factor into eval alongside other 4-5 bidders.  Working set of HVAC bidde",
+              "answer": "$41,886",
+              "answer_kind": "money"
+            },
+            {
+              "id": "06a8b706-b2b8-49a7-acb8-2f6cb56381d1",
+              "query": "120 Reedy Meadow \u2014 Contractor Bid Status pe - **Status:** Not selected. Never submitted COI.  ### Top Quality Boston \u2014 Vill Santos - **Email:** vill@topqualityboston.com - **Bid:**",
+              "answer": "$187,026.84",
+              "answer_kind": "money"
+            },
+            {
+              "id": "c710fc3c-b959-4ba5-a543-344c20a7134e",
+              "query": "Locality-ladder Phase 1 (2026-07-16): redis-payload mechanism, data-gravity 1.6\u00d7, ~3.5GB/seat, VIP pod-IP rule pod consumers only.** Instances: (1) redis-solo VIP 10.152.183.175 unreachable from s5 ho",
+              "answer": "10.152.183.151",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "69585790-679a-4284-96fd-d31a69ac35e8",
+              "query": "qf-nats-ws-bridge WS TRANSPORT PROVING-TEST = \u2705 PASSED 7/7 (2026-06-27, quantum-dashboard; cluster cross-confirmed from spec = quantum-planner.  WHAT WAS PROVEN (live pod qf-nats-ws-bridge-b778fd574/r",
+              "answer": "192.168.1.42:30308",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "b2a87921-57c4-4c7c-9a41-24692eb64c66",
+              "query": "Crypto portfolio: holdings, files, and Sure integration rezor-derived, NOT hot wallets): - BTC: ~$113,327 - ETH & Tokens (ETH/LINK/SOL): ~$21,784 - TOTAL: ~$135,111 (+63.6% unrealized; cost basis",
+              "answer": "$80,518",
+              "answer_kind": "money"
+            },
+            {
+              "id": "725bc483-9e2c-425c-8cae-9901610cbeb4",
+              "query": "Form 5500-EZ \u2014 Pushbuild Capital Trust Annual Filing Assets | Ending Assets | Filed | Method | PostGrid ID | |------|-----------------|---------------|-------|--------|-------------| | 2024 |",
+              "answer": "$289,133",
+              "answer_kind": "money"
+            },
+            {
+              "id": "be671250-6759-4cd4-9392-995e2397021a",
+              "query": "SENT \u2014 Paradisus complaint email (billing/bedding/departure), awaiting reply (2026-07-25) on:** they followed every instruction, paid for the HIGHEST tier (Reserve), were **overcharged ~25%** (the $56",
+              "answer": "$2,258",
+              "answer_kind": "money"
+            },
+            {
+              "id": "71cd87c1-c8b7-4c1f-800b-955002f9f19c",
+              "query": "Anti-spoof rule final form \u2014 multicast/broadcast L2 whitelist added 2026-07-13 l 5 soak nodes saw drop_counter tick +1 simultaneously at 02:04 2026-07-12. Identified 2026-07-13 via ANTISPOOF-DROP kern",
+              "answer": "192.168.10.23",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "09bbb8f7-8ae3-47a2-9c44-51bf16fa0c79",
+              "query": "Validation-pipeline RESUME v6-DELTA-7 (GLOBAL) \u2014 2026-06-28 02:26 \u2014 \u00a72.3.7 RATIFICATION LANDED (commit 52498264, F-CONST-027); gate GREEN DED:  \u2705 \u00a72.3.7 RATIFIED \u2014 spec-proposer (agent a9f2a7a4) commi",
+              "answer": "2.3.7.1",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "6d4e50b6-9c61-4d41-89ab-bd8ce1ce1670",
+              "query": "Fiverr market research \u2014 top lanes & pricing data an start $109, premium $500\u2013765. Emerging, high AI demand. 2. **SaaS MVP build** \u2014 11,000+ results, median $109, premium up to $3,060 (mean",
+              "answer": "$407,",
+              "answer_kind": "money"
+            },
+            {
+              "id": "006f9097-ee50-44c4-8b6b-27c1dcc6f55b",
+              "query": "Flawless Construction \u2014 Final Payment ($8,946.30) 2026-07-21 8 (see Gmail msg `19f76f25d26bea0a` \u2014 \"Payment for Invoice #124 sent \u2014 receipt attached\") - Murilo's Payment Summary on Invoice #125 showed",
+              "answer": "$17,293",
+              "answer_kind": "money"
+            },
+            {
+              "id": "faf02ac6-3e05-4e76-8855-186f3b08b798",
+              "query": "WLED exterior LED lighting \u2014 120 Reedy Meadow (2026) ut stage (hybrid-wired workaround) \u2014 RMA'd. **Replacement GLEDOPTO Elite is now installed + commissioned.** - Replacement controller: MAC **",
+              "answer": "70:4b:ca:42:c6:2c",
+              "answer_kind": "mac"
+            },
+            {
+              "id": "8b10aa59-2409-4795-b195-279ded6afdc4",
+              "query": "laurasack.com \u2014 private staging/preview environment (setup + promote/teardown) icly indexed/discoverable. - **Production (LIVE, unchanged):** https://laurasack.com \u2192 host nginx proxies to `laurasite-w",
+              "answer": "127.0.0.1:28580",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "3598023d-9d6e-45e2-b288-dd3035486f1d",
+              "query": "Costco Nashua trip 2026-07-01 \u2014 chickpeas + paper goods + cadence restock Costco Wholesale #307 Nashua NH (311 Daniel Webster Hwy) trip 2026-07-01 at 13:34, Visa *6637 chip-read. Member 111813351592.",
+              "answer": "$342.92",
+              "answer_kind": "money"
+            },
+            {
+              "id": "d71c915f-7918-46d5-8b21-37129e777337",
+              "query": "quantum-predict: iter34: partial 12.5h holdout \u2014 Outcome C, MSTR-only \\$1.5-1.8k/24h real (4f56516) t on the partial 12.5h dataset; iter-35 will rerun on full 24h.  Per-market test-window PnL (locked",
+              "answer": "$1,110,",
+              "answer_kind": "money"
+            },
+            {
+              "id": "a72c2d77-ea54-4fa0-913e-c7cdc812bae8",
+              "query": "genmon-pi \u2014 Generac genmon monitor box (Pi + PintSize USB kit), provisioned 2026-07-16 ox** for Ben (electric+servers collaboration, 2026-07-15/16). NO LONGER a cable-tester.  - **Host:** hostname `ge",
+              "answer": "192.168.1.35",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "a6f64c36-7e35-4ea6-94fb-c62233889139",
+              "query": "pantry \u2462 PowerSync \u2014 STAGE 1b DONE, sync backend LIVE (2026-07-20) ser_id=person) via GET /auth/powersync-token; JWKS at /auth/jwks.json (both live+deployed).  PENDING: nginx vhost pantry-sync.pushbui",
+              "answer": "127.0.0.1:8791",
+              "answer_kind": "ipv4"
+            }
+          ]
+        },
+        {
+          "band": "1000-2000",
+          "pool": 109,
+          "items": [
+            {
+              "id": "c1dfa6c3-89fc-4e95-bbce-d0a6d90747c6",
+              "query": "okarcher.com \u2014 static-homepage fallback (no-DB mode, 2026-04-19) and was aborted mid-validate.  ## Current runtime  - **Container**: `archer.static-homepage` (image `nginx:alpine`) - **Runs on**: serv",
+              "answer": "127.0.0.1:5912",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "04bd3d96-9ff5-4fc6-b510-400cb72cd95d",
+              "query": "memo-public-mcp at memo.pushbuild.com \u2014 OAuth umbrella + per-user secrets (2026-06-29) voked independently.  ## Topology ``` Claude.ai web \u2192 https://memo.pushbuild.com (nginx + LE TLS, *.pushbuild.com",
+              "answer": "127.0.0.1:8901",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "ce1abf0f-318a-461c-87e5-7c15cb225854",
+              "query": "Business & professional liability \u2014 Sack (Hartford CANCELLED Oct 2025, D&O undocumented) Ready\" \u2014 final premium audit on 46SBAZH0361 | | **2025-11-26** | Hartford Electronic Refund Notification (bill",
+              "answer": "$746.80",
+              "answer_kind": "money"
+            },
+            {
+              "id": "79f4b7cd-5e0d-4024-8b6a-d890d5514011",
+              "query": "GELD meter/service demarcation + published fees \u2014 REFERENCE ONLY (meter swap COMPLETE, project done 2026-07-28) ished.  ## REFERENCE \u2014 PUBLISHED RESIDENTIAL CHARGES & FEES ``` Temporary Service",
+              "answer": "$800.00",
+              "answer_kind": "money"
+            },
+            {
+              "id": "359e9b5a-4ee3-4b46-8c6c-3c09d6ea1010",
+              "query": "Fiber spec FINAL + FS QUOTE SENT \u2014 armored non-metallic; unarmored recommendation RETRACTED [v4] g (disclosed to Ben, NOT recommended) If no vendor builds non-metallic pre-term at \u2265350 ft: **Amazon YU",
+              "answer": "$689.99",
+              "answer_kind": "money"
+            },
+            {
+              "id": "993b2e79-efce-430b-a17b-f4eb85082e2d",
+              "query": "Groton Water Expansion \u2014 does 120 Reedy Meadow qualify? (analysis 2026-07-28) -| | Total capital | $17.63M | $16.78M | | **Groton's share** | **$5.57M** | **$12.92M** | | Groton 30-yr DWSRF monthly (0",
+              "answer": "$15,500",
+              "answer_kind": "money"
+            },
+            {
+              "id": "81947b24-a6f9-4960-87f8-414e150ed854",
+              "query": "PushBuild 2019\u20132026 \u2014 Business Expense Google Sheet Reference 57 | | Cloud/AI (OpenAI/Anthropic/Google/Azure) | $2,196 | $4,978 | $7,174 | | Groton Electric (gross, deduplicated) | $4,489* | $10,240*",
+              "answer": "$14,729",
+              "answer_kind": "money"
+            },
+            {
+              "id": "dead30a5-dde3-4d86-83db-ad5ebc5dfc0d",
+              "query": "Quantum-Reactor K8s Operations Guide r5:27017 (192.168.1.42) | Primary data store (quantum_reactor DB) | | Redis | server5:6379 | Queue broker (backtests, scans) | | InfluxDB |",
+              "answer": "192.168.1.199:8086",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "7e1cf87d-7d5f-4215-90b0-bd246c920a11",
+              "query": "VyOS DHCP repo vs live drift \u2014 backlog after 2026-04-23 sync ove from repo or rename to reolink_basestation.)  ### C) Duplicate-MAC anomaly (carried into repo by the sync)  Live VyOS has the same MAC",
+              "answer": "bc:35:1e:75:9b:45",
+              "answer_kind": "mac"
+            },
+            {
+              "id": "b822ba9f-38ea-4308-a6b6-792a6d685fa9",
+              "query": "Barn K8s HA Migration \u2014 dqlite Control Plane Voters (current + history) commands  Current voter set: ``` ssh server3 'sudo microk8s status | head' ``` Should show: ``` datastore master nodes: 192.168.",
+              "answer": "192.168.1.26:19001",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "2483c0a0-855f-4545-a719-acfa24598bc3",
+              "query": "HA: Lovelace storage-mode dashboards CAN be edited without a restart (websocket lovelace/config/save) + garage camera fix 2026-08-03 onfig entry via the CONFIG FLOW REST API (no   restart), pointed at",
+              "answer": "127.0.0.1:5000",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "ff6db753-e548-4ca3-b70c-773333522791",
+              "query": "[\u26a0\ufe0f DASHBOARD PORTS CORRECTED 2026-06-19 \u2192 unified :3000; library backend :8742 NOT :8732] quantum-data DASHBOARD 2026-06-12 (DATA+LIBRARY pages, master @05d6466f) \u2014 topology superseded by 7d5b0678 fa",
+              "answer": "192.168.1.42:8731",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "4856d195-0811-4673-aa1f-f604251adea8",
+              "query": "Walkway LED bench test \u2014 DONE 2026-05-09 (Elite has dead V+ output, hybrid wiring workaround in place) nch until RMA.  ## Hardware on the bench  - **Controller**: GLEDOPTO Elite 4-Channel ESP32 WLED,",
+              "answer": "70:4b:ca:42:99:ac",
+              "answer_kind": "mac"
+            },
+            {
+              "id": "1221e0a7-14ea-437c-8eee-57edba2ad22f",
+              "query": "Verify what you DEPEND on, not the nearest cheap fact \u2014 and use EXTERNAL anchors, because internal consistency cannot detect a uniform error (1,002,806.23) \u2014 proving the stamp carries the PRIOR sessio",
+              "answer": "$4,235",
+              "answer_kind": "money"
+            },
+            {
+              "id": "abe10557-7c84-4c56-bd19-2537eb865fe9",
+              "query": "\u2b50\u2b50 NAV #49\u2192#50 RESPAWN HANDOFF \u2014 AROON campaign next; 4 attests banked; .20 tender pending en shape = \"only sweep red\" (the known frontier), ~152 suites/2637 tests.  === \ud83c\udfaf #50 JOB: the AROONOSC+AROON",
+              "answer": "12.8.10.21",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "f708eda9-3984-4db7-9c22-201b1a093cce",
+              "query": "pantry app: build/deploy/test ops (2026-07-20) (\"household\" key) \u2014 testing that logs meals/applies a diet plan/discards mutates Ben's real data; force-stop app then GET/modify/PUT http://",
+              "answer": "192.168.1.168:8792",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "5dbf02ca-eca4-4903-902a-bc7932b1b84f",
+              "query": "Coinbase lock \u2014 authoritative figures: 0.4658 BTC stuck (NOT 0.5428); finance holds NO wallet/on-chain data **No wallet-side or on-chain data whatsoever.** Plaid covers bank/card only. The two rows in",
+              "answer": "$113,327.04",
+              "answer_kind": "money"
+            },
+            {
+              "id": "0fce7886-ea49-4a5f-a295-9cf3d126fc3f",
+              "query": "\u26a0\ufe0f 2026-07-29: forward test SUSPENDED (emitter deleted, not just unscheduled). Ben ruled LEAVE the position. om freeze params.  ## Account verified intact (10:18 ET) RSP 1,344 sh + all 7 option legs u",
+              "answer": "$188,532.34",
+              "answer_kind": "money"
+            },
+            {
+              "id": "c311f205-6142-4d19-a5f2-996ec01f2320",
+              "query": "Matley Pool Service \u2014 Relationship & History d) | | 2021-09-01, 10-19, 10-23 | Closing + follow-up | | | | 2022-04-25 | Opening | | | | 2022-04/05 | **Saltwater conversion estimate** |",
+              "answer": "$1,460",
+              "answer_kind": "money"
+            },
+            {
+              "id": "a183321a-a3a2-4202-90b5-01b63ba53775",
+              "query": "Sourcery \u2014 undercut-landscape: businesses we can spin up from the GovGraph (2026-05-26) govtech vendor sales teams + PE roll-ups. Spin-up Low-Med. 2. **National gov contact directory** \u2014 undercut Powe",
+              "answer": "$16,900",
+              "answer_kind": "money"
+            },
+            {
+              "id": "e20a379a-578e-4f30-877d-1b7f8c4624b9",
+              "query": "Flawless CO \u2014 walkway +$2,291 + barn stain $2,935 approved 2026-07-01 # Flawless CO \u2014 walkway +",
+              "answer": "$2,291.23",
+              "answer_kind": "money"
+            },
+            {
+              "id": "3fb710db-1e50-429e-a5f5-255c6709230f",
+              "query": "Veranda Fence \u2014 Selection + Pricing Audit (2026-05-04) | (HD has range $25-30) | within retail \u2705 | | Single 5' gate | 1 | $165 | (typical $150-200) | within retail \u2705 | | Double 8' gate | 1 set |",
+              "answer": "$330",
+              "answer_kind": "money"
+            },
+            {
+              "id": "ac856bbd-c02b-49e9-8324-f822bc26d2db",
+              "query": "HA outdoor lights \u2014 sunset schedule + dog-door vibration boost + iota integration d5cb18 | eWeLink | | outside barn | switch.outside_barn | Kasa (HS200, 192.168.1.173) | | shed outside | switch.shed_o",
+              "answer": "192.168.1.105",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "a2e5cca6-9b17-4903-8af6-b84d6d951371",
+              "query": "PushBuild \u00a7475(f) deduction-utilization strategy \u2014 RESOLVED to Scenario 1 (2026-07-10) amendment) vs \u00a7195 (defer to commencement) at 2026 prep. - **Home-office biz-use% INCONSISTENT**: memo 16.67% vs",
+              "answer": "$610",
+              "answer_kind": "money"
+            },
+            {
+              "id": "3b3106f5-77de-48f5-9815-f86ee420f6da",
+              "query": "NordVPN credentials \u2014 account token + service creds (regenerated 2026-07-30 after auth-storm) ed how to tell them apart cheaply, and the answer for that incident:  - Old token \u2192 **401** from FIOS (`74",
+              "answer": "153.66.157.220",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "6356bb0d-59a8-48a2-8a13-07c443d26dc7",
+              "query": "Server primary-IP durability \u2014 three-layer pattern + pool-grab lesson (2026-06-03) t** \u2014 without `macaddress:` in the netplan bond config, the kernel assigns a fresh random locally-administered MAC ea",
+              "answer": "6e:20:b9:33:ad:71",
+              "answer_kind": "mac"
+            },
+            {
+              "id": "653e3173-a332-42cc-92b3-87269bb8c88d",
+              "query": "Canada Dry pricing \u2014 Amazon Fresh wins steady-state (2026-05-04) ) - Estimated consumption: ~400-500 cans/year combined regular + zero (from memo trip cadence) - Current Shaw's average: $0.55/can \u00d7 45",
+              "answer": "$248",
+              "answer_kind": "money"
+            },
+            {
+              "id": "88686057-bca9-46ee-859d-dd31a9cbfd23",
+              "query": "Camera outages 2026-08-02: three distinct causes, partitioned by DHCP reservation status rying the fix)** - `camera.gardenback_fluent` (192.168.0.196) \u2014 flapping: `unavailable` 13:49 while `idle` at 1",
+              "answer": "192.168.1.39",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "95c19248-b897-4d99-a8c1-e791ef94fa78",
+              "query": "Basement appliance inventory \u2014 4 fridge/freezers numbered for outage planning freezer based on dimensions - NOT in Ben's order history \u2014 came with the house  ## Home Depot order history  - **W61997786",
+              "answer": "$635.38",
+              "answer_kind": "money"
+            },
+            {
+              "id": "82b30fbc-d3e9-4d4b-a17c-dc5921c17a7a",
+              "query": "HA indoor lights \u2014 sunset schedule + warm mode + manual dim + camera privacy Pre-sunset daytime (noon to sunset-20min) \u2192 do nothing, leave as user has them  ## Camera plug details - switch.kitchen_cam",
+              "answer": "192.168.0.215",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "ea5611a7-ab13-4b51-a6d8-30caaec4fdb0",
+              "query": "HVAC reconciliation 2026-06-25 \u2014 post-blackout fold-in (Sol-Ark + 3 new quotes + GELD correction) 85) | | Nashoba 2026 (Lennox) [NEW] | $39,123 | 3T+2T / 19.0 / 10.0 | mixed 97%+80% | 2yr / 10yr | no",
+              "answer": "$43,630",
+              "answer_kind": "money"
+            },
+            {
+              "id": "9a5c2a59-1f9c-414c-bf77-048d73bb0339",
+              "query": "120 Reedy Meadow \u2014 Project Document Reference preadsheets/d/1mGo25haTsLBcherNVUHQcaJYTzFsCvJAp21UIScMcDE/edit  **Tabs:** 1. **Summary** \u2014 All scopes with low/high ranges. PROJECT TOTAL:",
+              "answer": "$93,864",
+              "answer_kind": "money"
+            },
+            {
+              "id": "fa8faddb-eef2-4f9f-8024-1a85fccb3c33",
+              "query": "Microk8s worker rejoin procedure \u2014 lock files, TLS, ARP ce 192.168.0.<XX> lladdr <correct-worker-MAC> dev <dev> nud permanent ```  Worker MACs (from EdgeRouter static mappings): - worker10 (.19):",
+              "answer": "b0:22:7a:1e:2b:0c",
+              "answer_kind": "mac"
+            },
+            {
+              "id": "eb2872b7-7efb-49bd-8fad-b8f2f424f673",
+              "query": "Flawless CO4 + CO5 \u2014 Signed & Paid (2026-05-07) ign PDF Ben emailed 5/4)  ## CO5 \u2014 Porch Frame Rebuild + PVC Skirting \u2014 $4,912.00  | Item | Qty | Amount | |---|---|---| | Demolition | 1 |",
+              "answer": "$197.00",
+              "answer_kind": "money"
+            },
+            {
+              "id": "458d2093-0be8-4daa-8b3f-92b0731dfca7",
+              "query": "travel agent \u2014 verified API/tool inventory (SerpAPI flights+hotels, no-key APIs, dead ends) `, plus a ~60-day `price_history` array. That last part is the whole game: it turns \"this fare is $765\" into",
+              "answer": "$470",
+              "answer_kind": "money"
+            },
+            {
+              "id": "6d02ae18-1b40-495a-b71b-08d83763f73a",
+              "query": "Barn renovation 2020-2021 \u2014 120 Reedy Meadow, Groton MA \u2014 overview + timeline ritative figure for insurance re-underwriting + tax depreciation.   ## COST SUMMARY - Squared Away Home Improvements (GC,",
+              "answer": "$25,460",
+              "answer_kind": "money"
+            },
+            {
+              "id": "0e9161bb-e605-46b6-a83d-7e7100afc184",
+              "query": "LED System \u2014 Color Decision + Controller Architecture (May 2026) to test single-strip behavior in the channel before committing to the long-term controller architecture. Strip + Elite + 12V PSU + WAGO",
+              "answer": "$155",
+              "answer_kind": "money"
+            },
+            {
+              "id": "3fc09054-c527-4091-ac2b-1c01ff913ca2",
+              "query": "Laura pool-deck lounge chairs \u2014 RECOMMENDED Ciokea pair $219.99; awaiting her yes (v3, 2026-08-02, OPEN) lute worst but we tend to like to get it if it breaks after a couple years we'll get another\"*",
+              "answer": "$480",
+              "answer_kind": "money"
+            },
+            {
+              "id": "46a378e4-0976-462a-aece-f8af90d841ae",
+              "query": "Four rules for asserting and recording: don't ship a guess \u00b7 one query away \u00b7 name the mechanism \u00b7 beware market-wide claims \u2014 two independent derivations agreeing beat either alone. alpaca derived $5",
+              "answer": "$537",
+              "answer_kind": "money"
+            },
+            {
+              "id": "426a5a01-000d-4618-99f2-de586e639469",
+              "query": "United car-seat claim IAD55659D \u2014 SUBMITTED 2026-08-02 18:11Z; follow-up Aug 8 Ababy order UB79135, 2026-02-21**: Mesa\u00ae V3 Savannah **$349.99**, alongside Cruz V3 stroller, bassinet, stand, organizer,",
+              "answer": "$1,987.76",
+              "answer_kind": "money"
+            },
+            {
+              "id": "dcdd5a72-1f64-40da-9d1b-00240a3dc291",
+              "query": "Mary Ann AppLovin exit-strategy tool \u2014 mom.sack.io (delivered 2026-07-24) returns the rate on the FIRST dollar of gain = **27.75%** (fed 15% + NIIT +   MD state/county, below the Moore threshold). Usi",
+              "answer": "$380",
+              "answer_kind": "money"
+            },
+            {
+              "id": "fc5c2ae3-6a32-4cc1-b634-44a339999c5e",
+              "query": "Laura Sack \u2014 Clinical Timeline / Encounter History **Dermatology office visit (Laura confirmed)** \u2014 Adult & Pediatric Dermatology, 526 Main St Ste 302, Acton MA; CPT 99213 (established pt);",
+              "answer": "$151.28",
+              "answer_kind": "money"
+            },
+            {
+              "id": "714248a8-620b-485d-8790-f06f32e9cb18",
+              "query": "Groton \u2014 GELD tariff, NO residential demand charge, HH excludes heat pumps ligibility/structure, especially before Ben claims it.  ## Ben's load, for calibration ~**81,722 kWh/yr** (Apr 2025\u2013May 2026)",
+              "answer": "$863",
+              "answer_kind": "money"
+            },
+            {
+              "id": "d2901063-6de4-4ba8-ae94-9b55356cf43c",
+              "query": "ui-eye v0.2 \u2014 built, deployed on 2 machines, architecture + hard-won rules (2026-07-27) in the repo (it is desktop config, not code). `rm` it to revert. See [[chrome-at-spi-linux-two-levers]] lever 3.",
+              "answer": "192.168.1.168:9101",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "6769bbd7-14f4-423b-b669-ea631fd03522",
+              "query": "POLYGON ACCOUNT ENTITLEMENT MAP + qf-feed realtime stand-up (2026-07-08, Ben-directed via nav; empirically probed). qf-f processors+1 options-discovery+metrics server+reporter). Recover from git pre-r",
+              "answer": "198.44.194.133",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "f0a5a621-7120-4249-80d4-5f6fe9507428",
+              "query": "Shaw's grocery channel \u2014 Laura's primary in-person source (corrected) esting separate payment lanes) - Donation amounts called out as their own line  ## Sample shop (Apr 26 2026, Store 3510 Nashua) -",
+              "answer": "$184.97",
+              "answer_kind": "money"
+            },
+            {
+              "id": "754f2b78-b7d8-4edc-ae3a-0a09bcc341c1",
+              "query": "SPAN install scheduled + panels sourced + Sol-Ark peak-shaving lesson (2026-06-11) \u2014 120 Reedy Meadow -06-11 via deep comparison sweep (shopping agent):** beats every online vendor on both SKUs. Cheap",
+              "answer": "$7,534",
+              "answer_kind": "money"
+            },
+            {
+              "id": "2b59097e-3dba-4636-8890-a87fa336b37a",
+              "query": "Phony SMS Proxy \u2014 Routing, Slugs, and Contact Codes 2026)  | Slug | Number | Name | |------|--------|------| | {murilo} | +19785699797 | Murilo Vieira (Flawless Construction) | | {pabliny} |",
+              "answer": "+17816085690",
+              "answer_kind": "phone"
+            },
+            {
+              "id": "bdeb6e38-c1fb-44e5-990e-53ac4daa875d",
+              "query": "Cable Tester System \u2014 Network Cable Validation 2P (eth1) | Role | |------|------------|------|------------|------| | pi5-cable-a | 192.168.1.244 | 192.168.1.230 (MAC 88:a2:9e:ca:b4:20) |",
+              "answer": "10.99.88.5",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "66bb2b0b-ecdd-4374-8d64-33db17ae3828",
+              "query": "Self-hosted ASR (whisper) on barn \u2014 state, decisions and traps as of 2026-08-02 01:00 EDT uded), NOT the $0.65 our skills used to claim \u2014 I fixed ~/.claude/skills/transcribe-{audio,video}/SKILL.md wit",
+              "answer": "$247",
+              "answer_kind": "money"
+            },
+            {
+              "id": "9c979d7a-b279-465f-8660-fca3e840f867",
+              "query": "Super-agent phone WS flap \u2014 hairpin NAT root cause + split-horizon DNS / connectBest / reboot-flush fix ns (WAN IP \u2192 back \u2192 nginx) and NAT-loopback destabilises long-lived WS. Proven by layer isolatio",
+              "answer": "192.168.0.109:443",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "e7069fd4-eb86-4ec7-813a-3bfb0f8a87f7",
+              "query": "Linode Relay Server (173.255.233.16) tent tunnel between relay and server4:  | Endpoint | WireGuard IP | Public Key | |----------|-------------|------------| | relay (Linode) |",
+              "answer": "10.100.0.1",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "5a6c7841-09a8-4ab6-8af6-9dd2697fc4f3",
+              "query": "HP OfficeJet Pro 8020 \u2014 Device Reference, CUPS & Known Issues SNMP**: community `public`, read-only, enabled  ## Access Points - **EWS web UI**: http://192.168.1.129/ (or https) - **IPP print**: ipps:",
+              "answer": "192.168.1.129:631",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "9f202994-7a5b-4e40-82fd-078cf08035b4",
+              "query": "Sack crypto holdings (CoinTracker) \u2014 captured + loaded into Sure 2026-07-12 uite (memo 1afd9b53).  ## \u2b50 BTC TAX-LOSS HARVEST \u2014 EXECUTED 2026-07-20 (a realized 2026 tax event) Ben harvested the underwa",
+              "answer": "$12,750",
+              "answer_kind": "money"
+            },
+            {
+              "id": "8a8686d6-054e-45e7-a8d6-524f5dad5384",
+              "query": "Barn K8s Cluster \u2014 Topology and Node Roles cluster-heal-server4. Workers periodically refresh and may get the stale IP.  API endpoints (live): 192.168.1.42:16443, 192.168.1.26:16443,",
+              "answer": "192.168.1.236:16443",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "bd58256c-9e36-459c-9e3f-2361b3eb9fb7",
+              "query": "Host-level DNS fault presents as \"that agent's service is down\" \u2014 libuv threadpool saturation (2026-08-03 server4 incident) r4 (2-min: load/procs/conntrack/mem + probes @1.1.1.1 direct, @127.0.0.53 ho",
+              "answer": "1.1.1.1:443",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "cc289c5f-0350-46a1-9ef1-de9d001f6027",
+              "query": "Barn thermal control \u2014 server-room heat-recovery fans (IMPLEMENTED 2026-05-21) rn), outside temp from `state_attr('weather.forecast_home','temperature')` (T_out). - `switch.sr_exhaust` \u2014 Kasa HS100 @",
+              "answer": "50:c7:bf:1a:c7:d2",
+              "answer_kind": "mac"
+            },
+            {
+              "id": "19f8f066-d843-4f50-8c1f-084ebd767f33",
+              "query": "Power Outage 2026-05-27 \u2014 ATS Burned, Current Grid Status he Breen & Sullivan tech is on site. - **Generac Power Plan extended warranty** is unfilled / not enrolled (offer doc on file, 5/7/10 yr at",
+              "answer": "$535",
+              "answer_kind": "money"
+            },
+            {
+              "id": "c34461e0-9792-4797-bbec-bca6fd008bfc",
+              "query": "Sol-Ark cloud integration + archiver \u2014 HammondAutomationHub (May 2026) `load_power`.  ## Physical inverters Two Sol-Ark inverters on the LAN, both 15 kW, paralleled. VyOS static mappings: - solark-inv",
+              "answer": "192.168.1.158",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "087e1cb8-d417-4960-b1ed-81c7a931056e",
+              "query": "120 Reedy Meadow \u2014 June 22\u201324 2026 Power-Outage Prep Plan (SPAN install) kWh/day in real sun = ~25\u201335% of freezer draw; extends coverage ~78h \u2192 ~100h+. Bonus margin only. - Minor: big-freezer iota tem",
+              "answer": "192.168.1.125",
+              "answer_kind": "ipv4"
+            }
+          ]
+        },
+        {
+          "band": "2000-",
+          "pool": 67,
+          "items": [
+            {
+              "id": "e76d7563-8985-4ce9-a216-e65bb00a9b4b",
+              "query": "Electrical panels inventory \u2014 120 Reedy Meadow main + sub (2026-06-06) PN-1-00800 \u00d7 2):** - Retail (Elliott / CSE Solar / Sun Supply): $3,500-3,600 each = **$7,000-7,200** for two - eBay new (multiple",
+              "answer": "$1,900",
+              "answer_kind": "money"
+            },
+            {
+              "id": "99ed1f85-6040-4d8b-90e0-4fb16a51ed2b",
+              "query": "Whole Foods (Westford) in-store trip history \u2014 Nov 2025 to Apr 2026 SON:** in-memory at end of session \u2014 also captured in this memo's per-trip section.  ## Lifetime totals (this 5-month window) - **13",
+              "answer": "$1,386.55",
+              "answer_kind": "money"
+            },
+            {
+              "id": "83f26022-8074-4b58-8f56-322d5c834006",
+              "query": "Costco trip history \u2014 backfill via API (2026-05-02) eab5484`, `da76285f`, `3bdacacd`).  ## Summary by period  | Date | Total | Items | Savings | Barcode | |---|---|---|---|---| | 2025-02-21 |",
+              "answer": "$123.42",
+              "answer_kind": "money"
+            },
+            {
+              "id": "32ee1d1a-5375-472a-ac0f-cad81fc428b1",
+              "query": "Sallyann 95 \u2014 Research: People & Relationships d, \"screwing up whatever retirement planning he had.\" - She saved the marriage's retirement with one act: insisting Larry take out a large (",
+              "answer": "$800,000",
+              "answer_kind": "money"
+            },
+            {
+              "id": "3dd26786-5b99-47e6-a60a-2759b7d6146d",
+              "query": "HVAC session state \u2014 as of 2026-08-03 (install 8/17, promo email sent, awaiting Chris's reply) dark, no reset) \u2014 5 min with the installed panel.  ## Session infrastructure  - \u2705 **phony webhooks RESOLV",
+              "answer": "+15088537900",
+              "answer_kind": "phone"
+            },
+            {
+              "id": "f7614200-8d37-4295-ac98-89b8dad23412",
+              "query": "Home Assistant Power Plug Mappings and Power Cycling Guide rver | Transport | URL | |--------|-----------|-----| | server4 (local) | SSE | `http://localhost:3002/mcp/sse` | | server5 | SSE | `http://",
+              "answer": "192.168.1.168:3002",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "7e28d7f3-40e7-47ef-9b46-bc6706de0514",
+              "query": "120 Reedy Meadow \u2014 Exterior LED Lighting Design eferred \u2014 verify availability)** - BTF-Lighting SK6812 RGBW IP65 2700K | Check btf-lighting.com for ASIN | ~$45-50/5m | Qty: ~55 reels | **~",
+              "answer": "$2,475",
+              "answer_kind": "money"
+            },
+            {
+              "id": "9fee1a7b-1a7a-4a06-8422-2797ee548e52",
+              "query": "Sprinkler/Irrigation System \u2014 120 Reedy Meadow (Green Lawn Sprinkler Co.) history  | Date | Inv # | What | Cost | |------|-------|------|------| | 2017-09-08 | 52138 | Service call \u2014 replaced irrigati",
+              "answer": "$195.00",
+              "answer_kind": "money"
+            },
+            {
+              "id": "a314656c-8114-4926-9061-edee463f942a",
+              "query": "fishtank-ato-cycling-automation \u2014 HA entity surface & parameters nsor.fishtank_leak_moisture` (device 00843de9) \u00b7 `..._drain/water_cloud_connection` (Kasa liveness). - `sensor.fishtank_temperature` \u2014",
+              "answer": "192.168.1.169:4982",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "2b5d806e-9b20-4e36-a0ff-f7d86b42f6a5",
+              "query": "fishtank-purchase-history \u2014 equipment &amp; order log (2018\u21922026, full sweep) ishtank@sack.io): 10 Amano $52.99, 10 assorted Racer nerite $48.99, 5 assorted Mystery snails $13.99, 10 Malaysian trumpet",
+              "answer": "$130.96",
+              "answer_kind": "money"
+            },
+            {
+              "id": "244b8e1b-8eae-4dfb-9251-f3e999624e13",
+              "query": "2025 Personal Tax Return \u2014 Ben & Laura Sack (Full Detail) xx-xx-9235  ---  ## AS-FILED FIGURES (TurboTax, April 14, 2026)  | Item | Amount | |---|---| | AGI | **$476,735** | | Total federal tax | **",
+              "answer": "$69,812",
+              "answer_kind": "money"
+            },
+            {
+              "id": "89bb5aa5-1f40-41fb-9abc-d60c051d819f",
+              "query": "Shopping habits \u2014 rolling summary (living memo) munication UX is better.  **NH Liquor Outlet Store 50 Nashua** \u2014 border-run for tax-free wine/liquor, ~$200-220/trip.   Recent: 2026-05-26 (",
+              "answer": "$216.40",
+              "answer_kind": "money"
+            },
+            {
+              "id": "aa69bb97-c061-42ef-9c0d-9c70c3ad72d5",
+              "query": "finance session parked-state \u2014 2026-08-02 (post-respawn re-ground) \u2014 `114-8007368-2754600` (issued 7/16, credit_by 7/23)    - **YAUGIN fiber optic termination $37.27 \u2014 `114-0104399-7005855`** \u2190 ordere",
+              "answer": "$118.94",
+              "answer_kind": "money"
+            },
+            {
+              "id": "92fda2c7-54d3-4175-b04c-3133206b5061",
+              "query": "quantum-feed DATA (part 2): exhaustive units map falsifies year-alignment; odd-lot discriminator REFUTES ITSELF; intraday worst-window tool; stress cost table 2026 quotes $0.0499). Use the per-ticker",
+              "answer": "$127.04",
+              "answer_kind": "money"
+            },
+            {
+              "id": "b5937f75-7bc5-42f7-97d0-6c5fd9322714",
+              "query": "buffet-buster seat state \u2014 durable re-grounding (current as of 2026-08-02) PRIMARY \u2014 invite-only web app at https://buffetbuster.com, FastAPI + vanilla-JS SPA, runs on server4 as systemd `buffetbuster",
+              "answer": "127.0.0.1:8920",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "462b2dd8-8285-4471-b3f7-8516ad47ba83",
+              "query": "Grocery shopping responsibility \u2014 Claude owns it f26022` (16 trips). - **Whole Foods (Westford in-store pickup, FOPO)** \u2014 via Amazon FOPO SSR HTML. Backfilled in memo `99ed1f85` (13 trips,",
+              "answer": "$1,386",
+              "answer_kind": "money"
+            },
+            {
+              "id": "054d9757-090c-4fc2-bce5-6718c2dbd8be",
+              "query": "HVAC Replacement \u2014 Quote Search (May 2026, refreshed 5/18) LP furnaces | $37,148.22 | **$36,648** | Dual-fuel | **CURRENT LEADER** | | **Net Zero #4765 AE** | Bryant Crossover + 10kW + 8kW strips |",
+              "answer": "$33,900.43",
+              "answer_kind": "money"
+            },
+            {
+              "id": "c59032d3-1fc8-404e-8a16-58c775fb5254",
+              "query": "Flawless Construction \u2014 Contract, Project Status & History (Apr 2026) der + 7\" base + polymeric sand). Awaiting Murilo supplier confirmation. - **Fence:** Veranda selected ($2,751.60 materials + $1,92",
+              "answer": "$4,671.60",
+              "answer_kind": "money"
+            },
+            {
+              "id": "1deadfa4-b84f-4a64-9cd9-c9bd694aa4a8",
+              "query": "9630 Reedy Meadow \u2014 Full punch list for Junior (rebuilt 2026-07-08) way extra + barn stain: PAID 7/1 ($5,225 EFT conf 10346236) - CO#7 porch railings (front porch materials, HD cost + 10% GC fee): PAI",
+              "answer": "$715",
+              "answer_kind": "money"
+            },
+            {
+              "id": "6dc00eba-86c0-4d61-82ec-bdf1cc2bc729",
+              "query": "Barn Data Center \u2014 Infrastructure Inventory (March 2026) sfer above was performed to free space; monitor going forward   ## Worker Updates (March 2026)  ### New Workers Provisioned - **worker17** (",
+              "answer": "192.168.0.26",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "b7f9664c-2bd5-411a-8415-415adaedab81",
+              "query": "120 Reedy Meadow \u2014 Contractor Bid Comparison (Full Detail) s, rollers, hinges, all mounting hardware - Reconnect existing opener (if compatible \u2014 no new opener included) - Labor: $2,300 | Materials:",
+              "answer": "$5,380",
+              "answer_kind": "money"
+            },
+            {
+              "id": "b632b164-0435-44bd-b81f-388a49b8308c",
+              "query": "Book 2 \"Thematic Sector Rotation\" \u2014 \u2705 EXECUTED 2026-07-23 09:41 EDT, $4,235 net debit (both spreads filled, under $4,350 cap). (Was APPROVED; now FILLED.) Paper, Sep-18-2026 expiry, \u00d75, proposed by `f",
+              "answer": "$742.50",
+              "answer_kind": "money"
+            },
+            {
+              "id": "28272147-1bc1-4dd4-8cbd-b54587763cd0",
+              "query": "9630 house \u2014 Junior (Flawless Construction) meeting 2026-06-05 \u2014 punch list & decisions painting completion (~7/12) - Final walkthrough (10%, $8,646) triggers after final punch-list - Total remaining",
+              "answer": "$42,687",
+              "answer_kind": "money"
+            },
+            {
+              "id": "4da0cf61-d491-425c-afe6-8776c996661e",
+              "query": "Git pulse: mind \u2014 2026-08-01 overage, - `7cfd059` 2026-08-01 \u2014 feat(usage): per-call receipts for every OpenRouter call \u2014 model and tokens, never dollars     Ben traced",
+              "answer": "$133.52",
+              "answer_kind": "money"
+            },
+            {
+              "id": "6eefd592-3bc4-4f42-b71d-07071adaee6a",
+              "query": "alpaca session owns the `mind` paper account \u2014 handoff, durable backstops, PAPER-LOCK layer 3, Reg-T finding (2026-07-21) -2x) version. HONEST LIMIT: the decomposition does NOT cleanly resolve \u2014 Reg-T",
+              "answer": "$50,780,",
+              "answer_kind": "money"
+            },
+            {
+              "id": "db7e6c7c-e37b-4a8f-8959-d33b2b899998",
+              "query": "Murilo / Flawless Construction \u2014 Contract Review & Scope Issues $2.75 | $11,550 | | Wooden Siding Removal & Stone Veneer | 1 Ea | $22,026 | $22,026 | | Portico Construction (above sliding door) | 1 Ea",
+              "answer": "$4,675",
+              "answer_kind": "money"
+            },
+            {
+              "id": "c20549f2-6265-4c16-baec-c30f5f4f9c12",
+              "query": "Net Zero HVAC Quotes \u2014 #4765 all-electric + #4819 dual-fuel (2026-05-27) e comparison (original quotes)  | | #4765 All-Electric | #4819 Dual-Fuel | Delta | |---|---|---|---| | Z1 system | $8,634.34 |",
+              "answer": "$1,328.58",
+              "answer_kind": "money"
+            },
+            {
+              "id": "95c0281b-fa3e-47f8-9a08-bab561f95374",
+              "query": "120 Reedy Meadow \u2014 Exterior LED Lighting Design ---  ## Whole-House Shopping Cart (Amazon, April 2026)  **Controllers** - GLEDOPTO ESP32 PWM WLED | ASIN: B0DP9H9WCL | $21.49 | Qty: 16 | **",
+              "answer": "$343.84",
+              "answer_kind": "money"
+            },
+            {
+              "id": "485ead47-a59f-463d-a60f-3139f4903046",
+              "query": "Barn cluster network performance \u2014 post-migration speed-test matrix (2026-06-01) 68.1.207 192.168.1.207 dev enp65s0 src 192.168.0.109 uid 1000  $ ss -tn dst 192.168.1.207 dport 2049 ESTAB 0      0",
+              "answer": "192.168.1.207:2049",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "a679be23-fb0d-461a-b2db-ebdc7df8a59d",
+              "query": "Whole Foods Fresh delivery (UFF) trip history \u2014 Mar\u2013Nov 2025 backfill starting 2025-11-18, see memo `99ed1f85`). **Account:** Amazon family@sack.io. All payments via AMEX ****1006. **Aggregate:** 14 o",
+              "answer": "$1,236.41",
+              "answer_kind": "money"
+            },
+            {
+              "id": "4ece8c71-041b-415d-b78d-cc355f83fe5d",
+              "query": "GELD utility profile + 2026 HVAC incentives reality (Sacks @ 120 Reedy Meadow) n IOU **Heating fuel:** **LPG (propane)** \u2014 not natural gas **Existing solar/battery:** Sol-Ark hybrid inverter installed",
+              "answer": "$15,025",
+              "answer_kind": "money"
+            },
+            {
+              "id": "df08714a-f7d9-49d8-ac94-8534f5720ce5",
+              "query": "Frigate NVR Setup on Server4 t usable. Must use the USB version.  **Recommended purchase**: Google Coral USB Accelerator (Google model G950-01456-01) - **B07R53D12W** \u2014",
+              "answer": "$149.99",
+              "answer_kind": "money"
+            },
+            {
+              "id": "c1227cbd-1602-4308-8ad0-5911ae401c9e",
+              "query": "Murilo Contract \u2014 MA Law, Insurance, Warranty & Terms Analysis ## PAYMENT SCHEDULE \u2014 PUSH BACK ON 60% AT START  **Current terms:** 10% deposit / 60% at start / 30% at completion  60% at project start",
+              "answer": "$60,946",
+              "answer_kind": "money"
+            },
+            {
+              "id": "3ec7e927-71b9-440c-9515-2af184e3c8a5",
+              "query": "Ben's purchasing profile (rolling) ay 20 / May 26).  ### eBay \u2014 used / refurb hardware - **vintagepcpro** (PURPLE_STAR rated seller) \u2014 used for Crucial P3 1TB NVMe SSDs (\u00d72 @",
+              "answer": "$110,",
+              "answer_kind": "money"
+            },
+            {
+              "id": "608182e6-dcc1-4693-94a7-1c8a7dc511c8",
+              "query": "Propane usage history + heating load calc \u2014 120 Reedy Meadow (pricing basis RESOLVED: market-rate) .04 | | 2022-11-14 | 477.2 | $3.079 | $1,491.92 | | 2023-01-19 | 495.1 | $3.479 | $1,744.06 | | **202",
+              "answer": "$1,446.60",
+              "answer_kind": "money"
+            },
+            {
+              "id": "26005881-11ae-4739-8c08-17a2cc9a7070",
+              "query": "Shaw's trip history \u2014 complete 4.5-year backfill (2021-2026) haws/parse.py` (handles both 2021-2022 `no-reply@status.shaws.com` and modern `family@sack.io` formats).  ## Lifetime totals - **106 trips,",
+              "answer": "$13,880.82",
+              "answer_kind": "money"
+            },
+            {
+              "id": "b88db1bd-5e0a-4214-b210-e062cb94187b",
+              "query": "Sack family insurance \u2014 MASTER INDEX (all lines, rev. 2026-07-22 deep sweep) 0375164 | via MGB employer | calendar year | [[sack-family-insurance-current-coverage]] | | **Pet (Brooke)** | Trupanion |",
+              "answer": "$191.91",
+              "answer_kind": "money"
+            },
+            {
+              "id": "6b919f26-ac63-4672-b92e-000a7134e0f9",
+              "query": "Nashoba Air & BoilerWorks \u2014 2025 service history + 6 estimates (Feb 2025, expired) 554** | Zone board + dampers only | EWC zone panel + 2 zone dampers (no thermostats) | Use with existing furnace; 5yr",
+              "answer": "$2,440.40",
+              "answer_kind": "money"
+            },
+            {
+              "id": "4a51c981-37b9-4518-8049-ef1887b7ed68",
+              "query": "Sallyann 95 \u2014 Research: Martha's Vineyard w screen lest Bobby get asthma.\"  ### Larry's Navy Way Regret  - When Stanley was still building, he offered the last house on Navy Way for",
+              "answer": "$175,000",
+              "answer_kind": "money"
+            },
+            {
+              "id": "2630337f-75b0-4ba2-81d9-9d5f1a03928f",
+              "query": "Master bathroom shower leak \u2014 diagnosis + scope options (2026-07-08) &B** (GE Silicone II) \u2014 2-3 tubes @ ~$5/tube - **Aqua Mix Sealer's Choice Gold** (~$45/qt) \u2014 penetrating grout+tile sealer - Pump s",
+              "answer": "$10,",
+              "answer_kind": "money"
+            },
+            {
+              "id": "dd3a5a7b-6096-49c1-bb7b-7e2c1c928c26",
+              "query": "Endless Energy Proposal \u2014 Jason Comtois (2026-06-04, Mantel #72304) all-electric variant despite explicit ask)  | | **Premium Option (Daikin)** | **Plus Option (Bryant)** | |---|---|---| | **Total fin",
+              "answer": "$54,370.18",
+              "answer_kind": "money"
+            },
+            {
+              "id": "19c746fa-c654-4a00-af21-9e965ef47c44",
+              "query": "Dell iDRAC Management \u2014 All Servers NIC Mode | Auth Method | Web UI | |--------|-------|-----|----------|-----|----------|-------------|--------| | server1 | **R810** | 11th |",
+              "answer": "192.168.1.126",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "c87d87e7-80be-4bf5-9aaf-0f84d78280b6",
+              "query": "quantum-predict: qp-orderer-maker: Phase 1 paper-trade daemon shipped (402ee84) t 30min - Mid band 0.05-0.95, 0% maker fee (takerOnly:true markets)  Risk caps (env-tunable): - max_open_orders=10, max_",
+              "answer": "$50,",
+              "answer_kind": "money"
+            },
+            {
+              "id": "630472c3-645e-4e4a-995b-ae7831c013d1",
+              "query": "PushBuild Tax Categorization \u2014 Context & Strategy minimal expenses ($3,302) | | 2024 | $588 | ~minimal | Per prior session records | | 2025 | $588 | +$49 | **CONFIRMED (filed 2026)**: only",
+              "answer": "$539",
+              "answer_kind": "money"
+            },
+            {
+              "id": "5f11bf0e-3586-4596-b6f6-e228caa56a1f",
+              "query": "Garage door order H3481-304457 \u2014 Clopay GALLERY, Nashua HD (placed 2026-06-29) ($0) - **Haul Away:** 2 doors  ## Pricing  | Line item | Per | Qty | Subtotal | |---|---|---|---| | Custom-built door (Mo",
+              "answer": "$2,102.70",
+              "answer_kind": "money"
+            },
+            {
+              "id": "85ee3c1d-d948-4ab9-ba4e-043e356acaa3",
+              "query": "Brooke (Sack dog) \u2014 Health & Veterinary History -condition lifetime deductible; office/exam fees + sales tax are NOT covered** (standard Trupanion exclusions). Direct-billing works \u2014 paid",
+              "answer": "$276.40",
+              "answer_kind": "money"
+            },
+            {
+              "id": "ba75f283-4371-4cca-98e0-c17c8ddcbbcc",
+              "query": "quantum-assistant: Discovery Architecture & Pipeline \u2014 Comprehensive Summary (2026-05-21) [78c043ef] 6, F-EDGE-043]  | Host(s) | Role | |---|---| | **server5** \u2014 workhorse | MongoDB, Redis (`redis-sol",
+              "answer": "10.152.183.166:6379",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "618f08bc-a627-40fb-966c-36847c1629ec",
+              "query": "Laura Work MacBook \u2014 Reference TY` \u2014 read-only inspectable via `sqlite3 -readonly`) - **Not reachable from home LAN** \u2014 only over VPN tunnel  ## VPN \u2014 Cisco Secure Client",
+              "answer": "5.1.14.145",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "cfacb228-ca99-43db-8551-337ab6081116",
+              "query": "Network and Router Topology \u2014 Pre-VyOS EdgeRouter Era [HISTORICAL] IOS/Home)**: EdgeRouter ER-X (MT7621/MIPS), firmware v3.0.0 at 192.168.1.1, port 4999 SSH. WAN on eth1 (1000 Mbps). FIOS gigabit, pub",
+              "answer": "108.49.197.105",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "1249d28d-f86e-43ee-89af-1e2b7386542f",
+              "query": "Disability insurance \u2014 Ben & Laura Sack (MetLife IDI \"Income Guard\") k (issue age 30, male, nonsmoker) | | Effective date | **2015-05-15** (policy anniversary = 5/15) | | Monthly benefit, total disabi",
+              "answer": "$13,500",
+              "answer_kind": "money"
+            },
+            {
+              "id": "171a247c-f497-4ba6-8b10-ad885f31f8b1",
+              "query": "Magill Reunion \u2014 Paradisus Pro Tips (Reddit-sourced, shareable for WhatsApp group) (2026-07-07) ea turtles at Akumal if snorkel booked \u2014 enforcement is real.  ## \ud83c\udfa1 EXCURSIONS - *Xcaret Park:* xcaret.c",
+              "answer": "$161",
+              "answer_kind": "money"
+            },
+            {
+              "id": "aad847a6-1491-46e9-beff-b159cc1f1a10",
+              "query": "Hot Tub Equipment & Parts \u2014 Essential Hot Tubs Syracuse / Strong Spas 6-2111 nt-limiting fuses B35 | equipment-bay photo |  ## Purchase  - **Date:** 2019-07-10 - **Amazon Order #:** 113-8951748-005784",
+              "answer": "$5,417.69",
+              "answer_kind": "money"
+            },
+            {
+              "id": "396eed27-d69e-41b3-9654-dafc96a177c4",
+              "query": "United damaged car-seat claim IAD55659D \u2014 \u2705 SUBMITTED 2026-07-29 22:26 EDT (status: Received) check \u2192 2673 Filbert St, San Francisco CA 94123 (Dan Sack). Receipt verified: Mesa V3 Savannah, qty 1, $34",
+              "answer": "$899.99",
+              "answer_kind": "money"
+            },
+            {
+              "id": "ef28fb55-906a-4ef4-acaf-e70ddfafc0eb",
+              "query": "DiBacco Plumbing \u2014 Ralph Site Visit (2026-06-03) + Adversarial Analysis D muni at **~10\u00a2/kWh** effective via Sol-Ark TOU arbitrage, with battery to absorb peak.  **Same January load at our rate struct",
+              "answer": "$480,",
+              "answer_kind": "money"
+            },
+            {
+              "id": "b1eaa449-15e6-464a-b47e-acb3dd5f3e80",
+              "query": "Jay Moody HVAC Quote \u2014 Bosch $51,894 / Bryant Crossover $44,670 + electrical options (2026-05-19) e | |---|---|---| | Z1 (basement+1st) | Bosch 3T IDS Ultra condenser R-454B | $11,000 | | Z1 | Bosch 3",
+              "answer": "$11,985",
+              "answer_kind": "money"
+            },
+            {
+              "id": "0b6e92f0-9c42-40b2-befa-f0938bd0b5a5",
+              "query": "Twilio Group MMS \u2014 Working Configuration & Architecture (April 2026) mo: `CH26d599ab6b494052a752c6d2745325c7` \u2192 slug `{9954-grp}`, 3 participants (Phony projectedAddress=+18578167225 + Ben +1301237963",
+              "answer": "+19173829954",
+              "answer_kind": "phone"
+            },
+            {
+              "id": "03ed8d79-a429-4a16-b227-e6df9de67d7a",
+              "query": "Barn/growroom WiFi loss 2026-08-01: PROVEN \u2014 the barn AP's cable became the house\u2194barn trunk on 07-05 (house p12), so restoring the parked 10G fiber IS the WiFi fix. Plus 7 assumed mechanisms that die",
+              "answer": "127.0.0.1:27217",
+              "answer_kind": "ipv4"
+            },
+            {
+              "id": "2aae195d-0406-4cb3-8baa-76f5ed43a709",
+              "query": "Business & Capital Expense Categorization Project \u2014 PushBuild LLC 2019\u20132026 | | 2020 | $16,775 | $36 | -$81,372 | De Minimis Safe Harbor Election (\u00a71.263(a)-1(f)); heavy repairs ($28,812) | | 2021 | $",
+              "answer": "$39,163",
+              "answer_kind": "money"
+            },
+            {
+              "id": "619a6c7c-9784-492c-a9b5-2475cd9c5efa",
+              "query": "shopping session parked-state + delivery ledger \u2014 OPEN: Laura chairs + blanket, Ben x2 numbered asks (v9, 2026-08-03) construction text checked on three listings). Length was never the constraint \u2014 Fa",
+              "answer": "$1,214.15",
+              "answer_kind": "money"
+            },
+            {
+              "id": "d4527769-21f2-4d8a-97c6-a7751ce314ba",
+              "query": "BJ's Wholesale trip history \u2014 4 orders since Nov 2025 s 11/30/2026. **Home club:** Nashua, NH. **Period:** 2025-11-30 \u2192 2026-02-13 (~2.5 months active). **Total:** 4 orders + membership signup,",
+              "answer": "$449.52",
+              "answer_kind": "money"
+            }
+          ]
+        }
+      ],
+      "minted_utc": "2026-08-03T190614Z",
+      "minted_from": {
+        "url": "http://server4:8000",
+        "corpus_n": 7937
+      },
+      "uniqueness_checked_against": {
+        "url": "http://localhost:8091",
+        "corpus_n": 8014,
+        "dropped": 1
+      }
     }
-  }
+  },
+  "revisions": [
+    {
+      "rev": 1,
+      "created_utc": "2026-08-03T184827Z",
+      "added": [
+        "content_query",
+        "own_title"
+      ]
+    },
+    {
+      "rev": 2,
+      "created_utc": "2026-08-03T190614Z",
+      "added": [
+        "answer_recall"
+      ]
+    }
+  ]
 }
