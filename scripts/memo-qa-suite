@@ -590,6 +590,28 @@ def task_context_fit(url: str, per_band: int, seed: int, sample=None,
             "total_n": n, "total_missing": missing,
             "total_ambiguous": ambiguous, "total_failures": failures,
             "answer_in_context_pct": round(100 * in_ctx / n, 2) if n else None,
+            # ⭐⭐ THE COST METRIC. Ben, 2026-08-03: *"the more precise
+            # information we can give to LLMs the less we spend."*
+            #
+            # ⛔ EVERY OTHER NUMBER IN THIS SUITE REWARDS SPENDING MORE. A packer
+            # that fills its budget scores identically to one that answers in a
+            # tenth of the tokens, so "better" has silently meant "more tokens"
+            # for the whole project. Measured at the time this was added: 3,671
+            # tokens for 0.908 answers ≈ 4,043 tokens PER ANSWER DELIVERED —
+            # to return, in the common case, an IP address.
+            #
+            # ⚠️ Deliberately tokens ÷ ANSWERS, not tokens ÷ CALLS. Dividing by
+            # calls rewards a build that returns nothing: zero tokens, perfect
+            # score. Dividing by answers delivered makes silence expensive,
+            # which is the direction that matches what a caller actually buys.
+            # ⛔ So a build that spends FEWER tokens and delivers FEWER answers
+            # does NOT automatically win here — read it beside
+            # `answer_in_context_pct`, never alone. R-25 is the cautionary case:
+            # span windowing cut tokens AND cut answers, and on a
+            # tokens-per-call metric it would have looked like an improvement.
+            "tokens_per_answer_delivered": (
+                round((sum(toks) / len(toks)) / (in_ctx / n), 1)
+                if (toks and n and in_ctx) else None),
             "context_tokens_mean": mean(toks),
             "context_docs_mean": mean(ndocs),
             "matched_count_mean": mean(matched),
@@ -1175,6 +1197,7 @@ def main() -> int:
                   f"tok ({cf['budget_used_pct']}% of budget) · "
                   f"{cf['context_docs_mean']} docs, "
                   f"{cf['server_duplicates_dropped_mean']} deduped/call · "
+                  f"⭐ {cf['tokens_per_answer_delivered']} tok/ANSWER · "
                   f"truncated {cf['truncated_pct']}%")
         for task in ("own_title", "content_query"):
             tr = r.get(task) or {}
