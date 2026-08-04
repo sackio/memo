@@ -379,12 +379,26 @@ def _sync_store(db_path: str, content: str, title: str | None, tags: list[str],
 
 def _sync_update(db_path: str, doc_id: str, content: str | None, title: str | None,
                  tags: list[str] | None, metadata: dict | None,
-                 embedding: list[float] | None) -> dict | None:
+                 embedding: list[float] | None,
+                 expect_content: str | None = None) -> dict | None:
     conn = _get_or_create_conn(db_path)
     row = conn.execute("SELECT * FROM documents WHERE id = ?", (doc_id,)).fetchone()
     if row is None:
         return None
     existing = _row_to_dict(row)
+
+    # ⛔ OPTIMISTIC-CONCURRENCY GUARD FOR APPEND. [v0.4.0]
+    # An append is read-modify-write across two round trips, so two concurrent
+    # appends silently drop one — the newer write carries the older's base text.
+    # The caller passes the content it read; if the row moved underneath, REFUSE
+    # rather than overwrite.
+    # ⚠️ This exists because the bug it accompanies was a SILENT no-op that
+    # reported success. Replacing one invisible data loss with another would
+    # have been the wrong fix.
+    if expect_content is not None and existing["content"] != expect_content:
+        return {"conflict": True, "id": doc_id,
+                "reason": "content changed between read and write",
+                "current_updated_at": existing["updated_at"]}
 
     new_content = content if content is not None else existing["content"]
     new_title = title if title is not None else existing["title"]
@@ -631,9 +645,18 @@ async def get(db_path: str | None, doc_id: str) -> dict | None:
 
 async def update(db_path: str | None, doc_id: str, content: str | None, title: str | None,
                  tags: list[str] | None, metadata: dict | None,
-                 embedding: list[float] | None) -> dict | None:
+                 embedding: list[float] | None,
+                 expect_content: str | None = None) -> dict | None:
+    """`expect_content` is an optimistic-concurrency guard for append. [v0.4.0]
+
+    An append is read-modify-write, so two concurrent appends can silently drop
+    one. Passing the content the caller read makes that collision VISIBLE —
+    `_sync_update` returns `{"conflict": True}` instead of overwriting. Silence
+    is the failure this whole change exists to remove.
+    """
     path = _resolve_path(db_path)
-    return await asyncio.to_thread(_sync_update, path, doc_id, content, title, tags, metadata, embedding)
+    return await asyncio.to_thread(_sync_update, path, doc_id, content, title,
+                                   tags, metadata, embedding, expect_content)
 
 
 async def delete(db_path: str | None, doc_id: str) -> bool:

@@ -156,11 +156,36 @@ async def memo_update(
     title: str | None = None,
     tags: list[str] | None = None,
     metadata: dict[str, Any] | None = None,
+    append: str | None = None,
     db_path: str | None = None,
 ) -> dict | None:
     """Update an existing memo by ID. Only provided fields are changed.
 
     If content is updated, the embedding and token_count are recomputed automatically.
+
+    ⭐ `append` adds text to the END of the existing content, re-embedding the
+    result. [v0.4.0]
+
+    ⛔ WHY IT EXISTS. Callers were already passing `append=` — it was not a
+    parameter, the MCP layer silently DISCARDED the unknown kwarg, and
+    `memo_update` then ran with every field None: a no-op that still bumped
+    `updated_at` and returned `updated: true`. Reported by `agents` 2026-08-03
+    mid corpus-migration, reproduced here in one call. **Any invented parameter
+    name behaved this way; `append` is simply the one people reached for.**
+    ⇒ The fix is not a guard. It is to make the call people were already making
+    do the thing they meant.
+
+    ⛔ APPENDS VERBATIM — no separator is inserted. If you want a newline, send
+    one. A silently injected character is the same class of surprise as the bug
+    this replaces, and a write API should be predictable before it is convenient.
+
+    ⛔ `append` and `content` together is REFUSED, not merged. One replaces and
+    one extends; guessing which the caller meant is how a write API loses data.
+
+    ⚠️ Append is read-modify-write, so a concurrent append could drop one side.
+    The read content is passed back as a compare-and-set guard: if the memo
+    changed underneath, this returns `{updated: false, reason: "conflict"}`
+    rather than overwriting. Re-read and re-apply.
 
     Returns the updated memo with `updated: true`. If the ID matched nothing,
     returns `{updated: false, reason: "not_found", requested_id: <id>}` —
@@ -170,6 +195,21 @@ async def memo_update(
     is gone.
     """
     await _reject_leaked_tool_call(content, tags, "memo_update")
+
+    expect_content = None
+    if append is not None:
+        if content is not None:
+            return {"updated": False, "reason": "ambiguous_content_and_append",
+                    "detail": "`content` replaces and `append` extends. Send one. "
+                              "Guessing which you meant is how a write API loses data.",
+                    "requested_id": id}
+        current = await db.get(db_path, id)
+        if current is None:
+            return {"updated": False, "reason": "not_found", "requested_id": id}
+        expect_content = current.get("content") or ""
+        # ⛔ Verbatim — no separator injected. See the docstring.
+        content = expect_content + append
+
     embedding = await embeddings.embed(content) if content is not None else None
     result = await db.update(
         db_path=db_path,
@@ -179,7 +219,16 @@ async def memo_update(
         tags=tags,
         metadata=metadata,
         embedding=embedding,
+        expect_content=expect_content,
     )
+    if isinstance(result, dict) and result.get("conflict"):
+        # ⚠️ A LOUD refusal. The bug this replaces was a silent no-op reporting
+        # success; overwriting a concurrent append would be the same data loss
+        # with a different cause.
+        return {"updated": False, "reason": "conflict", "requested_id": id,
+                "detail": "the memo changed between read and write; re-read and "
+                          "re-apply your append",
+                "current_updated_at": result.get("current_updated_at")}
     await db.log_query_async(
         db_path, "update", query=title or id, tags=tags or [],
         result_ids=[id] if result is not None else [], user_agent="mcp:memo_update")
@@ -595,16 +644,38 @@ async def update_document(doc_id: str, req: UpdateRequest, request: Request):
         )
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
-    embedding = await embeddings.embed(req.content) if req.content is not None else None
+    # ⭐ append: same semantics as the MCP tool — verbatim, mutually exclusive
+    # with content, and compare-and-set so a concurrent append is REFUSED rather
+    # than silently overwritten. [v0.4.0]
+    new_content, expect_content = req.content, None
+    if req.append is not None:
+        if req.content is not None:
+            raise HTTPException(
+                status_code=422,
+                detail="`content` replaces and `append` extends — send one, not both")
+        current = await db.get(req.db_path, doc_id)
+        if current is None:
+            raise HTTPException(status_code=404, detail="Memo not found")
+        expect_content = current.get("content") or ""
+        new_content = expect_content + req.append
+
+    embedding = await embeddings.embed(new_content) if new_content is not None else None
     result = await db.update(
         db_path=req.db_path,
         doc_id=doc_id,
-        content=req.content,
+        content=new_content,
         title=req.title,
         tags=req.tags,
         metadata=req.metadata,
         embedding=embedding,
+        expect_content=expect_content,
     )
+    if isinstance(result, dict) and result.get("conflict"):
+        # 409, not a silent overwrite. The bug this accompanies was a no-op that
+        # reported success; losing a concurrent append would be the same class.
+        raise HTTPException(
+            status_code=409,
+            detail="memo changed between read and write; re-read and re-apply")
     if result is None:
         raise HTTPException(status_code=404, detail="Memo not found")
     return Document(**result)

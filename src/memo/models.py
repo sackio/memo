@@ -55,6 +55,9 @@ class UpdateRequest(BaseModel):
     title: str | None = None
     tags: list[str] | None = None
     metadata: dict[str, Any] | None = None
+    # Appends VERBATIM to existing content — no separator injected. Mutually
+    # exclusive with `content`; sending both is refused, not merged. [v0.4.0]
+    append: str | None = None
     db_path: str | None = None
 
 
