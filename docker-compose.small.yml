@@ -37,7 +37,13 @@ services:
       - memo_v2_small_data:/data
     environment:
       DEFAULT_DB_PATH: /data/memo.db
-      PORT: ${MEMO_V2_SMALL_PORT:-8092}
+      # ⛔ 8092 IS TAKEN by `inkling` (127.0.0.1:8092), and 8093/8094 by
+      # inkling-staging and friends. This service binds 0.0.0.0, and a wildcard
+      # bind cannot coexist with a loopback bind on the same port — so it
+      # crash-looped 8 times before `system` spotted it. Hard-coded rather than
+      # `${VAR:-default}` for the same reason as the embedding settings above:
+      # a port that silently moves is a port that silently collides again.
+      PORT: 8095
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
       # ⛔ ALL FOUR REQUIRED, and hard-coded rather than `${VAR:-default}`.
       # This host's shell exports EMBEDDING_MODEL=…-3-small and
@@ -56,7 +62,7 @@ services:
       MEMO_AGENT_CONTROLLER_PROVIDER: ${MEMO_AGENT_CONTROLLER_PROVIDER:-agents_supervisor}
       MEMO_V2_VERSION: 2.0.0-alpha1-small
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:${MEMO_V2_SMALL_PORT:-8092}/health')"]
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8095/health')"]
       interval: 300s
       timeout: 10s
       retries: 3
