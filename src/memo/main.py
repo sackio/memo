@@ -74,6 +74,41 @@ _LEAK_MARKER = "</content>"
 _LEAK_FRAGMENTS = ("<parameter name=", "<tags>", "</invoke>")
 
 
+def _log_phantom_fields(req, endpoint: str, doc_id: str | None = None,
+                        user_agent: str | None = None) -> None:
+    """Record any field a caller sent that this API does not have. [Ben, 2026-08-05]
+
+    ⛔ IT DOES NOT REJECT, DELIBERATELY. Ben: *"better for backwards compatibility
+    and live integration to not let it fail if they pass phantom parameters but we
+    should log what's getting passed."* A 422 would break live callers to punish a
+    harmless typo; the caller keeps working and the mistake stops being invisible.
+
+    ⚠️ THIS IS THE DETECTOR FOR THE BUG THAT PRODUCED v0.4.0. `append=` was sent for
+    weeks, dropped before the handler saw it, and the update ran with every field
+    None — a no-op that bumped `updated_at` and returned `updated: true`. Nothing
+    anywhere recorded that a parameter had been discarded. **The fix for `append`
+    was one parameter; this is the fix for the next one.**
+
+    ⚠️ SCOPE, STATED SO NOBODY READS MORE INTO A QUIET LOG THAN IT MEANS: this sees
+    only what reaches the HTTP layer. **MCP tool calls are validated against the
+    Python signature by FastMCP and unknown kwargs are dropped upstream of here**,
+    so an MCP caller's phantom parameter still vanishes silently and this log
+    stays empty. ⇒ **An empty phantom log is NOT evidence that nobody is passing
+    phantom parameters** — it is evidence about the HTTP path only.
+    """
+    extra = getattr(req, "model_extra", None) or {}
+    if not extra:
+        return
+    # Log keys and value TYPES, never values: a phantom field on a write endpoint
+    # may carry the very content the caller meant to store.
+    shape = ", ".join(f"{k}:{type(v).__name__}" for k, v in sorted(extra.items()))
+    print(f"PHANTOM-FIELD {endpoint}"
+          f"{f' doc={doc_id}' if doc_id else ''}"
+          f"{f' ua={user_agent}' if user_agent else ''}"
+          f" ignored={{{shape}}} — accepted and DISCARDED; this call did not do what "
+          f"the caller thinks it did", flush=True)
+
+
 async def _reject_leaked_tool_call(content: str | None, tags: list[str] | None,
                                     endpoint: str = "unknown",
                                     user_agent: str | None = None,
@@ -573,6 +608,8 @@ async def health():
 
 @app.post("/documents", response_model=StoreResponse)
 async def store_document(req: StoreRequest, request: Request):
+    _log_phantom_fields(req, "POST /documents",
+                        user_agent=request.headers.get("user-agent"))
     try:
         await _reject_leaked_tool_call(
             req.content, req.tags, "POST /documents",
@@ -636,6 +673,8 @@ async def get_document(doc_id: str, db_path: str | None = Query(default=None)):
 
 @app.patch("/documents/{doc_id}", response_model=Document)
 async def update_document(doc_id: str, req: UpdateRequest, request: Request):
+    _log_phantom_fields(req, "PATCH /documents/{id}", doc_id,
+                        user_agent=request.headers.get("user-agent"))
     try:
         await _reject_leaked_tool_call(
             req.content, req.tags, "PATCH /documents/{id}",
@@ -705,6 +744,7 @@ async def move_document(doc_id: str, req: CopyMoveRequest):
 
 @app.post("/search", response_model=list[SearchResult])
 async def search_documents(req: SearchRequest, request: Request = None):
+    _log_phantom_fields(req, "POST /search")
     # Timed around the work, logged AFTER the response is built. [v0.3.8]
     # ⛔ The log must never delay or fail the query it records — see
     # db.log_query's docstring. This is live fleet infrastructure.
@@ -882,6 +922,7 @@ async def auto_store(req: AutoStoreRequest):
 
 @app.post("/context", response_model=ContextResponse)
 async def context_documents(req: ContextRequest):
+    _log_phantom_fields(req, "POST /context")
     result = await memo_context(
         query=req.query,
         token_budget=req.token_budget,

@@ -1,5 +1,31 @@
 from typing import Any
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
+
+
+class PermissiveRequest(BaseModel):
+    """Request base that ACCEPTS unknown fields rather than rejecting them — and
+    whose whole point is that the endpoint then LOGS them. [Ben, 2026-08-05]
+
+    ⛔ WHY NOT `extra="forbid"`. Ben's call, verbatim: *"better for backwards
+    compatibility and live integration to not let it fail if they pass phantom
+    parameters but we should log what's getting passed."* This API has live
+    callers across four hosts and an MCP layer in front of it; a 422 on an
+    unrecognised field would break integrations that work today, to punish a
+    mistake that costs nothing to tolerate.
+
+    ⚠️ BUT TOLERATING IT SILENTLY IS THE BUG THAT PRODUCED v0.4.0. `append=` was
+    passed for weeks, discarded before it reached the handler, and `memo_update`
+    then ran with every field None — a no-op that bumped `updated_at` and
+    returned `updated: true`. **Accepting an unknown field quietly and accepting
+    it loudly differ only in the log line, and that line is the entire
+    difference between a typo and a fortnight of silent no-ops.**
+
+    ⇒ Subclassing this is not sufficient on its own: the endpoint must call
+    `_log_phantom_fields`. A model that collects extras nobody reads is the same
+    silence with more machinery.
+    """
+
+    model_config = ConfigDict(extra="allow")
 
 
 class Document(BaseModel):
@@ -13,7 +39,7 @@ class Document(BaseModel):
     updated_at: float
 
 
-class StoreRequest(BaseModel):
+class StoreRequest(PermissiveRequest):
     content: str
     title: str | None = None
     tags: list[str] = []
@@ -33,7 +59,7 @@ class Filters(BaseModel):
     max_tokens: int | None = None
 
 
-class SearchRequest(BaseModel):
+class SearchRequest(PermissiveRequest):
     query: str
     limit: int = 10
     min_score: float | None = None
@@ -50,7 +76,7 @@ class SearchResult(BaseModel):
     score: float
 
 
-class UpdateRequest(BaseModel):
+class UpdateRequest(PermissiveRequest):
     content: str | None = None
     title: str | None = None
     tags: list[str] | None = None
@@ -61,7 +87,7 @@ class UpdateRequest(BaseModel):
     db_path: str | None = None
 
 
-class ContextRequest(BaseModel):
+class ContextRequest(PermissiveRequest):
     query: str
     token_budget: int = 4000
     queries: list[str] = []          # additional search angles run in parallel
