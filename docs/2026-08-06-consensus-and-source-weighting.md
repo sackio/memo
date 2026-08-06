@@ -668,6 +668,76 @@ in the row beside it.**)
 API budget**, so this is the one part of the design that can be prototyped *during* rationing
 rather than after it.
 
+### The GPU constraint I got wrong, and the test that settles the thesis axis
+
+`embeddings` answered with measurements (2026-08-06, labelled MEASURED / ASSEMBLED / UNKNOWN).
+
+**1. Local LLM throughput — good news.** MEASURED on gpu4: `qwen3:30b-a3b` ~70 tok/s,
+`llama3.2:3b` 97 tok/s. ⇒ **~12–16h for the 60k claim backfill, minutes/day steady state.
+Overnight, not days.**
+
+⚠️ **A warm-up penalty distinct from model loading**: first request after idle decodes at
+**~21 tok/s against ~70 steady**, model already resident. ⇒ **Amortises to nothing in a batch;
+DOMINATES for sporadic per-claim calls as articles arrive.** ⭐ **Design consequence: ingest
+must micro-batch, not fire one call per document** — mind's news feed is continuous, so the
+naive shape is the pathological one. (`embeddings` nearly reported the approach collapsed off
+a single 3.75 tok/s reading while `cluster` measured 70 the same minute. **n=1 cannot separate
+warm-up from steady state — they are different quantities in the same units.**)
+
+**2. ⛔ I NAMED THE WRONG CONSTRAINT.** Above, I argued 3–4 models on the thesis layer was
+affordable because the vectors are small (0.38 GB each). **Storage was never binding.**
+MEASURED: **`migStrategy: none`, no time-slicing, no MPS ⇒ GPU allocation is WHOLE-CARD
+EXCLUSIVE.** Carrying 3–4 models costs **3–4 cards**, not 1.5 GB. Fleet has 8; one serves
+embeddings, one ollama, two ASR. **Exactly one embedding model is served today
+(`qwen3-embedding-4b` @2560), and expansion is tabled by Ben until rationing lifts.**
+
+⇒ ⭐ **`embeddings`' formulation, which is the transferable part: *"VRAM is free" and "capacity
+is available" are different claims, and `nvidia-smi` only answers the first — five cards idling
+at ~1 MiB are still unschedulable.*** My storage arithmetic was correct and measured the wrong
+resource.
+
+⇒ **The design survives; plurality is DEFERRED, not free.** Keeping `model_name` in the
+embeddings key still costs nothing today and is what makes a second model a comparison rather
+than a migration — but **run with one and say so.**
+
+**3. ⛔ THE ASYMMETRY CLAIM IS UNVERIFIED — including in my own trap list.** I carried *"qwen3
+wants an instruction prefix on queries, bare text on documents; reversing it fails silently"*
+as established. `embeddings` grepped their files: it exists only as **prose**, in two places,
+and they had been propagating it unmeasured too. They then tested it — **all four conventions
+retrieved correctly** — and correctly refused to call that a refutation, because their
+distractors were a finance passage, a k8s passage **and a sourdough passage**.
+
+⭐⭐ **Their statement of the flaw is the sharpest epistemics of the day:** *"I asked myself
+'could this check fail?' and answered yes. I did not ask 'is the task hard enough that a real
+defect would show?' Those are different questions and only the second one mattered."*
+
+⇒ **That is the third instrument this afternoon that could not have detected what it was
+pointed at** — with the near-duplicate check that returns clean on a corpus with nothing to
+duplicate, and `claims.testable` reading as a judgement while defaulting true. ⭐ **A test that
+cannot fail in the relevant way reports success identically to one that passed.**
+
+**4. Short/abstract/low-overlap performance: UNKNOWN, and they declined to guess.** ✅ **So it
+is being measured.** Built `bench/thesis_pairs.json`: **30 paraphrase pairs with deliberately
+disjoint vocabulary + 30 targeted hard negatives**, seven of which are **single-word polarity
+flips** — *losing share* / *taking share*, *insiders dumping* / *insiders buying*, *that
+**weakness** is just seasonality* / *that **strength** is…*, *missed their targets* / *beat
+their targets*.
+
+⇒ ⭐ **One corpus answers BOTH open questions** — whether the thesis axis exists at all, and
+which encode convention each model needs. `embeddings` will run all four conventions over it
+and populate the per-model field **by measurement rather than from documentation**.
+
+⇒ ⛔ **The discriminating subset must be reported SEPARATELY, not averaged in: if minimal-edit
+reversals do not separate, embedding similarity is measuring TOPIC, not CLAIM** — the
+difference between *"these people are discussing the same subject"* and *"these people are
+making the same argument."* **The thesis store needs the second.**
+
+⚠️ **What a pass would and would not mean.** The pairs are hand-written, not drawn from mind's
+corpus; real transcript claims are longer, hedged and messier. **A pass is necessary, not
+sufficient** — it earns permission to test 50 real claim pairs, not a conclusion. **A failure
+is close to decisive**, since a model that cannot do the clean version will not do the messy
+one.
+
 ## 5. What I would actually do, in order
 
 **Rewritten after Ben's redirect** — *"i'm not asking you to assess its universe, i'm asking

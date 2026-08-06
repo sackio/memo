@@ -1,0 +1,240 @@
+{
+  "purpose": "Decide whether market theses expressed in different vocabulary cluster together under embedding similarity. This is the load-bearing assumption of the mind knowledge-base design (docs/2026-08-06-consensus-and-source-weighting.md): if paraphrases of one thesis do not outrank lexically-similar decoys, the thesis axis is noise and the design falls back to ticker and creator.",
+  "author": "memo",
+  "date": "2026-08-06",
+  "for": "embeddings — to run against whatever is currently served (qwen3-embedding-4b @2560 as of today)",
+
+  "how_to_score": [
+    "Embed every `a` and `b` and every decoy independently, as DOCUMENTS (not queries) unless testing the asymmetry separately.",
+    "For each pair: rank all other texts in the file by cosine similarity to `a`. Record the rank of its true partner `b`.",
+    "PRIMARY METRIC: recall@1 — fraction of pairs where `b` is the nearest neighbour of `a` among all candidates.",
+    "SECONDARY: mean reciprocal rank, and recall@5.",
+    "REPORT ALSO: for each pair, whether any decoy outranked the true partner, and which. That is the diagnostic, not the score.",
+    "Run a->b and b->a separately. Asymmetric results are themselves a finding."
+  ],
+
+  "why_the_decoys_matter": "The easy version of this test is trivially passed and proves nothing. Every decoy here is designed to SHARE VOCABULARY with a pair while meaning something different, or to mean something adjacent while sharing no vocabulary. If the model ranks by surface overlap it will fail specifically on these, and that failure is the whole point of running it.",
+
+  "interpretation": {
+    "recall@1 >= 0.8": "thesis axis is real; proceed with clustering as designed",
+    "recall@1 0.5-0.8": "usable only with LLM canonicalization at ingest first, then re-test on the canonical forms",
+    "recall@1 < 0.5": "thesis clustering by embedding does not work on this text; fall back to ticker + creator axes, or make canonicalization mandatory and re-test",
+    "caveat": "These are hand-written by an LLM, not drawn from mind's real corpus. A pass here is necessary, not sufficient — real transcript claims are longer, messier, and hedged. Treat a pass as permission to test on 50 real claim pairs from mind, not as the answer."
+  },
+
+  "pairs": [
+    {"id": 1,  "topic": "datacenter capex deceleration",
+     "a": "Capex is peaking.",
+     "b": "Hyperscalers are pulling back on datacenter spend."},
+
+    {"id": 2,  "topic": "rates higher for longer",
+     "a": "The Fed isn't cutting this year.",
+     "b": "Policy stays restrictive well into next year."},
+
+    {"id": 3,  "topic": "margin compression from input costs",
+     "a": "Input costs are eating into gross margin.",
+     "b": "They can't pass through the raw materials increase."},
+
+    {"id": 4,  "topic": "inventory glut",
+     "a": "Channel inventory is bloated.",
+     "b": "Distributors are sitting on way too much unsold product."},
+
+    {"id": 5,  "topic": "consumer weakness at low end",
+     "a": "The low-income consumer is tapped out.",
+     "b": "Trade-down behaviour is showing up in the basket data."},
+
+    {"id": 6,  "topic": "AI monetization skepticism",
+     "a": "Nobody has shown me revenue from any of this AI spend.",
+     "b": "The return on these GPU purchases still hasn't materialized."},
+
+    {"id": 7,  "topic": "short squeeze setup",
+     "a": "The float is heavily shorted and borrow is expensive.",
+     "b": "This thing is set up to rip if anyone has to cover."},
+
+    {"id": 8,  "topic": "guidance sandbagging",
+     "a": "Management lowballed the guide on purpose.",
+     "b": "That outlook is deliberately beatable next quarter."},
+
+    {"id": 9,  "topic": "China demand weakness",
+     "a": "Their China business is deteriorating.",
+     "b": "Mainland demand came in materially below plan."},
+
+    {"id": 10, "topic": "dilution risk",
+     "a": "They're going to have to raise capital.",
+     "b": "Cash burn means an equity offering is coming."},
+
+    {"id": 11, "topic": "multiple compression",
+     "a": "The multiple has room to come down a lot further.",
+     "b": "It's still trading at a premium it no longer deserves."},
+
+    {"id": 12, "topic": "supply constraint easing",
+     "a": "The shortage is over.",
+     "b": "Lead times have normalized back to pre-pandemic levels."},
+
+    {"id": 13, "topic": "regulatory overhang lifting",
+     "a": "The antitrust cloud is clearing.",
+     "b": "Once the DOJ case resolves, that discount goes away."},
+
+    {"id": 14, "topic": "competitive share loss",
+     "a": "They're losing share to a cheaper competitor.",
+     "b": "The low-cost entrant is taking their customers."},
+
+    {"id": 15, "topic": "buyback support",
+     "a": "The repurchase program is putting a floor under it.",
+     "b": "Company's been buying its own stock aggressively on weakness."},
+
+    {"id": 16, "topic": "energy demand from compute",
+     "a": "Power is the real bottleneck for AI buildout.",
+     "b": "You can't energize these datacenters fast enough — the grid is the constraint."},
+
+    {"id": 17, "topic": "credit deterioration",
+     "a": "Charge-offs are rising faster than they guided.",
+     "b": "Loan losses are running ahead of reserves."},
+
+    {"id": 18, "topic": "product cycle strength",
+     "a": "The refresh cycle is stronger than people think.",
+     "b": "Upgrade demand for the new model is running hot."},
+
+    {"id": 19, "topic": "insider selling signal",
+     "a": "Insiders have been dumping.",
+     "b": "The executives are unloading shares at a pace that should worry you."},
+
+    {"id": 20, "topic": "reshoring beneficiary",
+     "a": "They win from manufacturing coming back onshore.",
+     "b": "Domestic production buildout flows straight to their order book."},
+
+    {"id": 21, "topic": "obsolescence risk",
+     "a": "Their core product is getting disrupted.",
+     "b": "The technology they sell is on its way to being replaced."},
+
+    {"id": 22, "topic": "seasonal softness misread",
+     "a": "That weakness is just seasonality, not a trend.",
+     "b": "People are extrapolating a normal soft quarter into a thesis."},
+
+    {"id": 23, "topic": "pricing power intact",
+     "a": "They raised prices and nobody left.",
+     "b": "Demand held up through the increase — that's real pricing power."},
+
+    {"id": 24, "topic": "customer concentration risk",
+     "a": "Too much of their revenue comes from one buyer.",
+     "b": "If that single large account walks, the whole model breaks."},
+
+    {"id": 25, "topic": "FX headwind",
+     "a": "The strong dollar is hurting reported results.",
+     "b": "Currency translation is masking underlying growth."},
+
+    {"id": 26, "topic": "labor cost pressure",
+     "a": "Wage inflation is structural here, not transitory.",
+     "b": "They're going to keep paying up for staff and it won't reverse."},
+
+    {"id": 27, "topic": "accounting quality concern",
+     "a": "The earnings quality is poor.",
+     "b": "Too much of that profit is non-cash and adjusted away."},
+
+    {"id": 28, "topic": "TAM skepticism",
+     "a": "The addressable market is smaller than the bulls claim.",
+     "b": "That opportunity size assumes adoption that isn't going to happen."},
+
+    {"id": 29, "topic": "management credibility loss",
+     "a": "This team has missed their own targets three times running.",
+     "b": "You can't trust what the CEO says about next year anymore."},
+
+    {"id": 30, "topic": "acquisition speculation",
+     "a": "Somebody's going to buy them.",
+     "b": "At this valuation they're a takeout candidate."}
+  ],
+
+  "decoys": [
+    {"id": "d1",  "text": "Capex spending on the new stadium is running over budget.",
+     "targets": 1, "trap": "shares 'capex' and 'spend' with pair 1, entirely unrelated domain"},
+
+    {"id": "d2",  "text": "Datacenter REITs are a crowded long right now.",
+     "targets": 1, "trap": "shares 'datacenter', opposite implication"},
+
+    {"id": "d3",  "text": "The Fed cut rates three times this year.",
+     "targets": 2, "trap": "near-identical vocabulary to pair 2, OPPOSITE claim"},
+
+    {"id": "d4",  "text": "Gross margin expanded on better input costs.",
+     "targets": 3, "trap": "same words as pair 3, opposite direction"},
+
+    {"id": "d5",  "text": "Inventory turns improved and the channel is clean.",
+     "targets": 4, "trap": "same subject as pair 4, opposite state"},
+
+    {"id": "d6",  "text": "High-income consumers are still spending freely.",
+     "targets": 5, "trap": "adjacent subject, different segment and direction"},
+
+    {"id": "d7",  "text": "AI revenue came in ahead of every estimate on the street.",
+     "targets": 6, "trap": "same topic as pair 6, opposite conclusion"},
+
+    {"id": "d8",  "text": "The float is small because most shares are locked up by insiders.",
+     "targets": 7, "trap": "shares 'float', different mechanism entirely"},
+
+    {"id": "d9",  "text": "Management raised guidance well above consensus.",
+     "targets": 8, "trap": "same vocabulary as pair 8, opposite action"},
+
+    {"id": "d10", "text": "European demand came in materially below plan.",
+     "targets": 9, "trap": "near-identical phrasing to pair 9b, DIFFERENT GEOGRAPHY — tests whether the entity survives"},
+
+    {"id": "d11", "text": "They're going to have to raise prices.",
+     "targets": 10, "trap": "near-identical phrasing to pair 10a, completely different meaning of 'raise'"},
+
+    {"id": "d12", "text": "The multiple expanded as sentiment improved.",
+     "targets": 11, "trap": "same words as pair 11, opposite direction"},
+
+    {"id": "d13", "text": "Lead times are stretching out again as orders surge.",
+     "targets": 12, "trap": "same subject as pair 12, opposite state"},
+
+    {"id": "d14", "text": "A new antitrust investigation was just opened against them.",
+     "targets": 13, "trap": "same subject as pair 13, opposite direction of the overhang"},
+
+    {"id": "d15", "text": "They're taking share from a cheaper competitor.",
+     "targets": 14, "trap": "MINIMAL EDIT of pair 14a, reverses who is winning — the hardest decoy in the set"},
+
+    {"id": "d16", "text": "The company suspended its buyback to preserve cash.",
+     "targets": 15, "trap": "same subject as pair 15, opposite action"},
+
+    {"id": "d17", "text": "Power costs are falling as renewables come online.",
+     "targets": 16, "trap": "shares 'power', unrelated implication for compute buildout"},
+
+    {"id": "d18", "text": "Reserves were built well ahead of any loss trend.",
+     "targets": 17, "trap": "same subject as pair 17, opposite conclusion"},
+
+    {"id": "d19", "text": "Insiders have been buying aggressively in the open market.",
+     "targets": 19, "trap": "MINIMAL EDIT of pair 19, reverses the direction"},
+
+    {"id": "d20", "text": "Offshoring to lower-cost regions is accelerating.",
+     "targets": 20, "trap": "same subject as pair 20, opposite direction"},
+
+    {"id": "d21", "text": "Their core product just won a major design award.",
+     "targets": 21, "trap": "same subject as pair 21, unrelated implication"},
+
+    {"id": "d22", "text": "That strength is just seasonality, not a trend.",
+     "targets": 22, "trap": "MINIMAL EDIT of pair 22a — 'weakness' to 'strength'. Tests whether polarity survives at all."},
+
+    {"id": "d23", "text": "They raised prices and volumes collapsed.",
+     "targets": 23, "trap": "same opening clause as pair 23a, opposite outcome"},
+
+    {"id": "d24", "text": "Revenue is well diversified across thousands of accounts.",
+     "targets": 24, "trap": "same subject as pair 24, opposite state"},
+
+    {"id": "d25", "text": "The weak dollar is flattering reported results.",
+     "targets": 25, "trap": "MINIMAL EDIT of pair 25a, reverses the mechanism"},
+
+    {"id": "d26", "text": "Wage pressure is easing as the labor market loosens.",
+     "targets": 26, "trap": "same subject as pair 26, opposite direction"},
+
+    {"id": "d27", "text": "Earnings quality is excellent — almost all of it converts to free cash flow.",
+     "targets": 27, "trap": "same subject as pair 27, opposite assessment"},
+
+    {"id": "d28", "text": "The addressable market is far larger than the bears claim.",
+     "targets": 28, "trap": "MINIMAL EDIT of pair 28a, bulls to bears and smaller to larger"},
+
+    {"id": "d29", "text": "This team has beaten their own targets three times running.",
+     "targets": 29, "trap": "MINIMAL EDIT of pair 29a, missed to beaten"},
+
+    {"id": "d30", "text": "Somebody's going to sue them.",
+     "targets": 30, "trap": "MINIMAL EDIT of pair 30a, buy to sue"}
+  ],
+
+  "note_on_the_hard_cases": "Decoys d15, d19, d22, d25, d28, d29, d30 are single-word or single-phrase edits that REVERSE meaning while preserving nearly all vocabulary. If the model cannot separate these from true paraphrases, then embedding similarity is measuring topic rather than claim — which for a thesis store is the difference between 'these people are talking about the same subject' and 'these people are making the same argument'. The design needs the second. Report performance on this subset separately; it is more informative than the headline number."
+}
