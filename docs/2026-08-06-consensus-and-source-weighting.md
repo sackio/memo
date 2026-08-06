@@ -581,6 +581,53 @@ clustering documents.** *"Capex is peaking"* and *"hyperscalers are pulling back
 spend"* are one thesis in no shared vocabulary. Judge that by eye on real data before building
 a trend layer on top of it.
 
+### Pluggability — "can different vectorizations, scorings and searches be deployed"
+
+Ben, 10:44. Yes, and the split that makes it tractable:
+
+⭐ **EMBEDDINGS ARE STORED. SCORES ARE COMPUTED.** Be *generous* with scoring variants and
+*deliberate* with embedding variants — the cost profiles are nothing alike.
+
+**Scoring and search cost nothing to keep plural.** They are query-time functions over the
+same rows: `vector_only`, `bm25_only`, `rrf`, `hybrid_weighted`, whatever gets tried. Nothing
+is persisted, so a bad ranker costs an afternoon rather than a reindex. This is also the only
+honest way to hold "don't presume the signal" — an unvalidated weight (groton's RRF, our R-25)
+should be *one selectable option*, never the baked default.
+
+**Vectorization is the expensive side, and the asymmetry is large enough to decide the
+design** (float32, computed 2026-08-06):
+
+| layer | rows | dim 1536 | dim 3072 |
+|---|--:|--:|--:|
+| **claims / theses** | 61,333 | **0.38 GB** | 0.75 GB |
+| article chunks (1/article) | ~2.49M | 15.3 GB | 30.6 GB |
+| article chunks (3/article) | ~7.5M | 45.9 GB | 91.8 GB |
+
+⇒ ⭐ **40–240× cheaper to carry N models on the thesis layer than on the chunk layer — and the
+thesis layer is exactly where the interesting clustering happens.** So: **several models on
+claims/theses, one model on article chunks, chosen deliberately.** (int8 quantization divides
+each figure by 4 if the chunk layer ever needs a second model.)
+
+```
+embeddings   chunk_id|claim_id, model_name, vec     ← model_name is part of the KEY
+```
+**Model name is part of the key, not a global setting.** Every query names the model it wants;
+nothing is implicitly *the* embedding. That single choice is what makes side-by-side possible
+instead of a migration each time.
+
+⭐ **Plurality is worthless without a compare view** — same query, two or three
+configurations, results side by side. Otherwise five deployed methods are five times the
+surface area and no more knowledge: options with no way to prefer one. ⚠️ **Deliberately NOT
+an eval harness** — no ground truth, nothing resolved (Ben put resolution out of scope). The
+trader is the judge; the tool's job is making the comparison cheap. Given "don't presume the
+signal," by-eye comparison is the honest instrument rather than a weaker substitute for one.
+
+⛔ **Footgun, named because it has bitten this fleet: encoding asymmetry fails SILENTLY.**
+Some models want an instruction prefix on the query and bare text on the document (qwen3);
+symmetric models want neither. Mixing them up does not error — it returns plausible,
+slightly-wrong neighbours indefinitely. ⇒ **Each registered model needs its own encode-query
+and encode-document path, plus a fixed sanity check that a document retrieves itself.**
+
 ## 5. What I would actually do, in order
 
 **Rewritten after Ben's redirect** — *"i'm not asking you to assess its universe, i'm asking
