@@ -495,6 +495,54 @@ able to see.
 until it demonstrably does not) · cross-source copy detection · anything touching ranker
 weights.
 
+### Thesis and trend are two objects, not one
+
+Ben, 10:41, on what the read surface should carry: *"thesis and trends things like that."*
+
+**Thesis** = the assertion: direction, horizon, the ticker(s) it touches. This is mind's
+`claims` and it exists.
+
+**Trend splits in two, and only one of them is worth building:**
+
+| | what it says | value |
+|---|---|---|
+| **ticker volume** | "NVDA is loud today" | burst detection, cheap, largely visible already |
+| ⭐ **thesis spread** | "'hyperscaler capex is peaking' went from 3 creators to 19 in four days" | **the thing a trader cannot get anywhere else** |
+
+⇒ **Volume tells you something is loud; spread tells you which *argument* is winning.** Thesis
+spread is the entire reason the thesis index exists, and it is only reachable once claims are
+clustered by assertion rather than by document similarity.
+
+⛔ **Schema consequence — and it corrects my own earlier sketch, which keyed clusters on
+ticker.** Cluster **theses first, then attach tickers.** A macro thesis ("rates stay higher
+through Q3", "capex is peaking") spans many tickers; keying clusters on ticker shreds it into
+fragments that each look too small to notice. **Ticker remains a hard filter for retrieval; it
+must not be the partition key for clustering.**
+
+```
+thesis_clusters   id, centroid, first_seen, label
+cluster_members   cluster_id, claim_id, creator_id, ts
+cluster_tickers   cluster_id, ticker, weight        ← many-to-many, derived
+```
+
+**Trend is a time series over `cluster_members`, counted in DISTINCT CREATORS, not claims.**
+One creator posting the same thesis nine times is not a trend. ⭐ This is the distinct-source
+point again, and it bites hardest here: **trend is precisely where repetition masquerades as
+momentum.**
+
+**Baselines are per-cluster, not global** — 3→19 creators is a move; a perennial thesis going
+40→45 is noise. Same logic as measuring burst against a ticker's own history.
+
+⭐ **The counter-thesis falls out for free**, which answers Ben's "counterfactuals to a
+thesis": the opposing argument is just the nearest cluster with opposite direction over the
+same tickers. Nothing extra to build once theses are clustered — and it is surfaced as a
+neighbour, not folded into a score.
+
+⚠️ **The part I would prototype before believing any of this: clustering theses is harder than
+clustering documents.** *"Capex is peaking"* and *"hyperscalers are pulling back on datacenter
+spend"* are one thesis in no shared vocabulary. Judge that by eye on real data before building
+a trend layer on top of it.
+
 ## 5. What I would actually do, in order
 
 **Rewritten after Ben's redirect** — *"i'm not asking you to assess its universe, i'm asking
