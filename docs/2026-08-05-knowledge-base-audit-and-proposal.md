@@ -75,8 +75,20 @@ Ranked by value ÷ cost. **P1–P2 are Ben's stated efficiency directive; P3 is 
 argue for hardest.**
 
 ### P1 — Hybrid keyword + vector retrieval · *small, low risk*
-Dense vectors are **worst on literals**, and literals — IPs, ports, model names, codes — are
-most of what memo is asked for. sqlite FTS5 is already available in-process.
+
+⭐ **There is a proof, and it is a better argument than my empirical one.** *"On the Theoretical
+Limitations of Embedding-Based Retrieval"* (arXiv **2508.21038**): for a fixed embedding dimension
+`d`, there exist top-k document **combinations** that a single-vector model cannot return — no
+matter how good the model or how large `d`. The formal handle is the **sign-rank of the
+query-relevance matrix**; exact representation of a binary relevance matrix `A` requires at least
+`rank_±(2A − 1) − 1` dimensions. Their **LIMIT** benchmark is deliberately trivial and
+state-of-the-art models still fail it.
+⚠️ **The proof binds SINGLE-VECTOR models. Sparse and multi-vector methods are not subject to it.**
+⇒ **This makes hybrid a structural fix rather than an optimisation:** the dense leg has a ceiling
+that is a property of the representation, and the sparse leg is the way past it.
+
+Empirically the same direction: dense vectors are **worst on literals**, and literals — IPs, ports,
+model names, codes — are most of what memo is asked for. sqlite FTS5 is already in-process.
 📌 **Read `groton`'s working RRF first** (`/mnt/nas/data/code/projects/groton/src/search.py`)
 rather than writing a second one. ⚠️ Their mechanics are sound; their **weights are unvalidated
 by their own account**, so take the structure and not the constants.
@@ -88,6 +100,10 @@ The right memo is **rank-1 ~96% of the time**; the packer still fills 4k with ~6
 when the top hit dominates.
 ⛔ **Do not trim inside memos — R-25 measured that at −8.8pt. Return FEWER MEMOS, not smaller
 pieces.**
+📌 **Companion, from HN: result diversification** (`Pyversity`, 86 pts). *"Stop when the top hit
+dominates"* and *"do not return six near-duplicates"* are **two different fixes** for the same
+symptom, and after the corpus cleanup collapsed 223 identical groups it is clear which failure we
+actually have. Worth measuring both legs separately.
 
 ### P3 — An evaluation harness that can come out negative · *medium; the one that matters*
 `dojo`'s framing is the argument, and it is better than mine: build the fixed query set **not
@@ -183,7 +199,52 @@ either.
 
 ---
 
-## 7. Decisions I need
+## 7. A shared *package* — which is not the thing I argued against
+
+Ben, 2026-08-05 21:03: *"a kind of generalized core knowledge base package that groups all these
+things together and more, that could then be redeployed and used by groton, mind, dojo and the
+memo system itself."*
+
+⭐ **This is a different proposal from §5's first row and my answer is different.** What I argued
+against was a **platform**: one store, one schema, configured per seat. A **library** that owns no
+data model is the opposite shape, and the audit's own evidence supports it — the four seats do not
+disagree about *storage*, they each independently lack the *same instruments*.
+
+⇒ **The line is: share what operates on RESULTS and CONVENTIONS. Never share what owns the DATA
+MODEL.**
+
+### ✅ Shareable — no seat has to change how it stores anything
+
+| component | why it ports | who wants it today |
+|---|---|---|
+| **Eval harness** — pinned time-invariant question set, noise floor from repeat runs, positive-control runner | takes `(query → ranked ids)` and an answer key; indifferent to the store behind it | **all four**; `groton` and `dojo` said so unprompted |
+| **Fusion + rerank** — RRF, diversification | operates on two ranked lists | `groton` has it, memo needs it, `dojo` has neither |
+| **Drift check** — `stat` vs recorded `source_bytes`/`source_mtime` | already written, one stat per file | memo; any corpus mirroring files |
+| **Provenance + lifecycle vocabulary** — `source_host`, `source_mtime`, `status`/`parked_by`/`reverses_when`, `unaudited` as a written value | a **spec plus validators**, not a schema | memo (landed), `embeddings` (adopted 08-05) |
+| **The "would anything notice?" checklist** — as a lint over jobs and guards | a review question, not code | fleet-wide |
+
+### ⛔ NOT shareable — these are where the seats genuinely differ
+
+| | why it cannot generalise |
+|---|---|
+| **The store** | 8k / 305k / 2.2M docs; sqlite-vec vs DuckDB vs pgvector. A 250× span is not a config flag. |
+| **Supersession semantics** | validity windows (`groton`) vs decaying fields (`mind`) vs **frozen, no supersession at all** (`dojo`). Three different models; a shared one would be wrong for at least two. |
+| **Chunking** | a memo, a town document, a news chunk and a strategy record are not the same unit. |
+| **Ranking weights** | ⛔ **must be fitted per corpus.** `groton`'s authority prior is admittedly a guess; `mind`'s recency weighting is untuned. **Shipping shared constants would propagate one seat's unvalidated numbers to three more** — the exact laundering `dojo` refuses when it declines to copy another seat's in-flight result. |
+
+⚠️ **The honest risk, stated because it is the one that would sink this:** a shared package is a
+**coupling**. Today each seat's mistakes are its own. After adoption, a change to fusion or to the
+harness lands in four corpora at once — and per §2, **none of them can currently detect that
+retrieval got worse.** ⇒ **Sequencing is not optional: the harness must exist and have a measured
+noise floor at a seat BEFORE that seat adopts anything else from the package.** Shared code without
+shared measurement multiplies the failure this whole document is about.
+
+⇒ **Recommended shape, if Ben wants it:** a small library — no service, no daemon, no schema — that
+each project imports and calls with its own retrieval function. **Start with the harness alone, at
+one seat.** It is the piece with a demonstrated record of changing a decision (§2), the piece two
+seats asked for unprompted, and the only one whose value does not depend on the others existing.
+
+## 8. Decisions I need
 
 1. **Order:** P1+P2 (Ben's stated directive, small, measurable) before P3 (the harness), or P3
    first so P1/P2 can be measured properly? ⭐ **I lean P3-lite first** — without a baseline,
@@ -192,6 +253,9 @@ either.
    Worth it, or park until something needs it?
 3. **Cross-seat work** (pinning groton's sample) — that is another project's time as well as
    mine.
+4. **The shared package (§7)** — build it as a library starting with the harness at one seat, or
+   leave each project to its own? ⚠️ If yes, the sequencing constraint in §7 is the part I would
+   hold to: **no seat adopts shared code before it can measure its own retrieval.**
 
 ⚠️ All of it is currently **parked under the token drought** except what Ben has explicitly
 released.
