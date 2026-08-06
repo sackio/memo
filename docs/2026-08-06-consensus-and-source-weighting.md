@@ -628,6 +628,46 @@ symmetric models want neither. Mixing them up does not error — it returns plau
 slightly-wrong neighbours indefinitely. ⇒ **Each registered model needs its own encode-query
 and encode-document path, plus a fixed sanity check that a document retrieves itself.**
 
+### Lightweight LLM reasoning at ingest — and it de-risks the load-bearing piece
+
+Ben, 10:52: *"we can also likely incorporate very lightweight LLM reasoning during ingestion —
+we recently deployed an open source LLM… they also handle the embedding model."* (`embeddings`
+seat owns both; queried 2026-08-06, reply pending.)
+
+⭐ **This is the fix for the risk flagged as load-bearing.** Thesis clustering fails because
+*"capex is peaking"* and *"hyperscalers are pulling back on datacenter spend"* are one thesis
+with **no shared vocabulary** — embeddings bridge that unreliably. **A light LLM pass that
+rewrites each claim into a canonical assertion makes them cluster trivially**, and it is a
+short per-claim call, well within a local model.
+
+⇒ **It converts "prototype this before building on it" from an open risk into a tractable
+prompt-engineering problem.**
+
+**Ingest passes worth a local model, in value order:**
+
+1. ⭐ **Thesis normalization** — canonical rewrite. Decides whether the thesis axis exists.
+2. **Horizon extraction** — "by Friday" / "this quarter" / "eventually" → a structured window,
+   **or explicitly none**. Currently absent on 49.8% and blocking nothing.
+3. **Ticker / entity extraction** — mind's entity path scored **`NYT` at z=4.1 above a real
+   +17% earnings move**. Distinguishing a company from a publication fixes a live wrong answer.
+4. **Claim segmentation** on transcripts — one video makes many assertions and the boundaries
+   determine everything downstream.
+
+⛔ **What NOT to use it for at ingest: anything deciding how *important* something is.**
+Normalizing an assertion is structure; scoring it is presuming the signal. Same line as above.
+
+⚠️ **The real risk: canonical rewriting is lossy, and the normalizer becomes a dependency.**
+Change the prompt or the model and every cluster shifts underneath — old and new claims stop
+clustering with each other, silently. ⇒ **Always keep the raw claim text. Treat the canonical
+form as derived and regenerable, stamped with the model + prompt version that produced it.**
+Then a normalizer change is a reindex rather than an invisible drift. (This is the same
+discipline as `model_name` in the embeddings key: **whatever produced a derived value belongs
+in the row beside it.**)
+
+✅ **And it is cheap in the way that currently matters: local inference does not consume the
+API budget**, so this is the one part of the design that can be prototyped *during* rationing
+rather than after it.
+
 ## 5. What I would actually do, in order
 
 **Rewritten after Ben's redirect** — *"i'm not asking you to assess its universe, i'm asking
