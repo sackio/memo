@@ -23,7 +23,24 @@ Ben revived that seat on 08-03; what is live there is the token drought, same as
 That is a sharper argument than my stance-vs-sentiment reframe from the scout pass, and it
 generalizes past sentiment into a rule that decides the whole design:
 
-⭐ **STORE WHAT THE READER CANNOT RECONSTRUCT. DERIVE EVERYTHING ELSE.**
+⭐ **KEEP THE CHUNK. DON'T PRECOMPUTE CONCLUSIONS THE CHUNK ALREADY SUPPORTS.**
+
+⚠️ **This was stated as "store what the reader cannot reconstruct" in the first two drafts,
+and that phrasing is wrong in a way worth recording, because I then acted on the wrong
+version twice.** It uses one word — *store* — for two different decisions:
+
+| decision | what it asks | answer |
+|---|---|---|
+| **What is worth keeping at all?** | is this article/memo/chunk worth the shelf space? | **that is what mind's scan is for** — reconstructibility has nothing to do with it |
+| **What do we hang off it once kept?** | does this scalar earn its schema? | **the rule above** |
+
+Read as the first, the rule argues against keeping raw material because a model *could* read
+it — which is nonsense, and is the reading Ben corrected. The rule governs **derived
+annotations only.** Content whose conclusions are reconstructible is precisely the content
+worth storing; that reconstructibility is the entire reason to keep it.
+
+⇒ **Restated: the vectorized chunk, when retrieved, can be read by an LLM to draw the
+conclusion. So keep the chunk and skip the scalar.**
 
 A precomputed scalar is only worth its storage, its staleness risk, and its schema if the
 model reading the retrieved text could not have worked it out itself. Sentiment fails that
@@ -45,9 +62,18 @@ That is the general form of the argument and it is better than "the model can do
 Deriving fails loudly; a partially-populated column fails silently, in the safe-looking
 direction.
 
-Applying the rule signal by signal:
+⇒ **And the resolution is to drop the column, not to backfill it.** The scalar is *redundant
+with the chunk it hangs off* — the article is stored, and an LLM reading it can draw the same
+conclusion better and in light of the actual question. That redundancy is also why 7%
+coverage survived so long unnoticed: **nothing depended on the column until a consumer did,**
+and by then it read as authoritative. ⚠️ I argued the opposite (backfill to 100%) for one
+message; that was wrong, and it is recorded here because "make the broken signal complete"
+is the more natural instinct than "delete the signal you didn't need."
 
-| Signal | Reconstructible by the model from what it retrieved? | Verdict |
+**Applied to annotations we might hang off a stored chunk — never to whether the chunk itself
+is worth keeping:**
+
+| Candidate annotation | Reconstructible from the retrieved chunk? | Verdict |
 |---|---|---|
 | Sentiment / tone | **Yes** — and better, and question-relative | **derive** |
 | Stance on a specific claim | **Yes**, given the text | **derive** |
@@ -226,10 +252,11 @@ cascade as the worked example.
    corpus today this correctly reports "1 effective source" and stops the rest of the
    programme before it starts. **A consensus feature built on a 4-publisher feed would have
    looked like it worked.**
-2. **Fix mind's sentiment NULL-reads-as-neutral hazard** — not a consensus feature at all,
-   but it is live, it is silent, and another seat nearly traded on it. Either populate the
-   column or make absence explicit at the consumer. mind owns this; flagged here because it
-   is the sharpest instance of §1 in the fleet.
+2. **Retire mind's sentiment scalar, or make its absence explicit** — not a consensus feature
+   at all, but it is live, it is silent, and another seat nearly traded on it. The column is
+   redundant with the stored chunk (§1), so removing it loses nothing; if it stays,
+   `unscored` must be distinguishable from `neutral` at the consumer. mind owns this;
+   flagged here because it is the sharpest instance of §1 in the fleet.
 3. **Provenance / transmission chains for memo** (§4). Record who asserted a claim and from
    whom. Additive, no oracle, no ranking impact, and it addresses a failure memo
    demonstrably has.
