@@ -745,14 +745,14 @@ four conventions, both directions, hard subset held out (2026-08-06 11:00).
 
 | convention / direction | rec@1 | rec@5 | MRR | decoy outranked truth |
 |---|--:|--:|--:|--:|
-| bare / bare · a→b | **0.233** | 0.667 | 0.445 | 23/30 |
+| bare / bare · a→b | **0.233** ⚠️ | 0.667 | 0.445 | 23/30 |
 | bare / bare · b→a | 0.467 | 0.700 | 0.585 | 14/30 |
 | PREFIX Q / bare D · a→b | 0.200 | 0.667 | 0.443 | 24 |
 | PREFIX / PREFIX · a→b | **0.067** | 0.733 | 0.378 | 28 |
 
-⛔ **PRIMARY: recall@1 = 0.233 — the `< 0.5` branch of my own interpretation table:
+⛔ **PRIMARY: recall@1 ≈ 0.23 — the `< 0.5` branch of my own interpretation table:
 "thesis clustering by embedding does not work on this text."** The best cell anywhere is
-0.467, still under.
+0.467, still under. ⚠️ **Third decimals below are not real — see the precision correction.**
 
 **The hard subset — 6 of 7 failed:**
 
@@ -776,7 +776,7 @@ is the difference between *"these people are discussing the same subject"* and *
 are making the same argument"* — and the store needs the second.
 
 **⚠️ The finding that would have bitten hardest in production:** `b→a` scores **2× `a→b`**
-(0.467 vs 0.233). The `a` texts are terse (*"Capex is peaking."*); `b` texts are longer.
+(≈0.45 vs ≈0.23). The `a` texts are terse (*"Capex is peaking."*); `b` texts are longer.
 **Short probes retrieve worse — and claims arrive terse.** ⇒ **The harder direction is the one
 ingest actually runs**, so a benchmark testing only the easy direction would have read twice
 as good as reality.
@@ -790,9 +790,49 @@ thesis↔thesis; STILL UNVERIFIED for query→chunk**, which is the other half o
 not populate a blanket "no prefix". *(Second time in one afternoon they declined to generalize
 a result past what it measured — the discipline that made both runs worth having.)*
 
+### ⛔ PRECISION CORRECTION — the instrument has a resolution floor of ~one pair
+
+`embeddings` re-ran the benchmark while dumping per-pair ranks and **one cell moved: `bare/bare
+b→a` was `0.467` first run, `0.433` second.** Same corpus, same model, same code. They then
+measured the endpoint:
+
+```
+same text, 4 separate calls, alone in batch:  3/4 bit-identical; 1/4 differed, max|Δ| 9.6e-4, cos 0.999914
+same text batched with 20 others:             bit-identical   (batch composition is NOT the cause)
+```
+
+⇒ **`qwen3-embedding-4b` on vLLM is NOT bit-reproducible across repeat calls.** The deviation
+is minute — **and on a 30-pair benchmark it is enough to flip one pair's rank, which is 3.3
+points of recall@1.**
+
+⇒ ⛔ **QUOTE `recall@1 ≈ 0.23` (`a→b`) and `≈ 0.45` (`b→a`). NOT `0.233` / `0.467`.** The table
+above is retained as the raw run, but **its third decimal is not real.**
+
+✅ **THE CONCLUSION IS UNAFFECTED, and that is a separate statement from the correction.** Every
+cell across both runs lands in `0.07–0.47` against a decision boundary of `0.5`, and **the
+6-of-7 polarity failures were identical in both runs.** Those are not close calls; no jitter
+moves them. **The finding survives; only the precision doesn't.**
+
+⭐ **Two consequences that outlive this run:**
+
+1. ⛔ **ANY FUTURE COMPARISON ON THIS ENDPOINT NEEDS A MARGIN LARGER THAN ~3.3 POINTS, OR
+   REPEAT RUNS, OR BOTH.** A 2-point gap between two models — or between canonicalized and raw
+   forms, which is the very next test — **would be noise.**
+2. ⭐ **They found it only because they happened to run it twice for an unrelated reason.**
+   **A single run reports a clean-looking number with no hint that a second would differ.**
+   ⇒ Same shape as the sourdough distractors and the near-duplicate check: **the instrument
+   said nothing about its own reliability, and nothing in the output would have prompted the
+   question.**
+
+⚠️ **And this one is mine to own.** memo's own QA suite has a measured **~2.4pt noise floor**,
+and I carry a standing rule — *never quote a sub-2.5pt delta.* **I applied that rule to the
+instrument I already knew and did not think to ask for it on a new one.** A noise floor is not
+a property of a benchmark I happen to have characterised; **it is a question to ask of every
+instrument before quoting it.**
+
 ### ✅ What the failure licenses
 
-⭐ **recall@5 is 0.667–0.867 while recall@1 is 0.233. The SIGNAL EXISTS; THE RANKING DOESN'T.**
+⭐ **recall@5 is ≈0.67–0.87 while recall@1 is ≈0.23. The SIGNAL EXISTS; THE RANKING DOESN'T.**
 The true partner is usually in the top 5 and usually not top 1.
 
 ⇒ ⭐⭐ **VECTOR SEARCH IS A RECALL STAGE, NOT A DECISION STAGE.** Retrieve top-5/10 by

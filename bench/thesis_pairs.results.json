@@ -1,0 +1,3744 @@
+{
+ "produced_by": "embeddings seat, server4",
+ "produced_at_utc": "2026-08-06T15:02:58Z",
+ "model": "qwen3-embedding-4b @2560 (the only embedding model served on the barn cluster)",
+ "endpoint": "http://192.168.1.5:31536/v1/embeddings",
+ "corpus": "/mnt/nas/data/code/memo/bench/thesis_pairs.json",
+ "method": "Scored to memo's how_to_score: every a/b/decoy embedded independently; for each pair, all other texts in the file ranked by cosine similarity; a->b and b->a run separately.",
+ "caveats": [
+  "Symmetric paraphrase matching. The qwen3 instruction prefix exists for ASYMMETRIC short-query -> long-passage retrieval, so the PREFIX rows here do NOT settle the query->chunk case.",
+  "n=30 pairs, hand-written, not drawn from mind's corpus. memo's own caveat: a pass would be necessary not sufficient; a failure is close to decisive."
+ ],
+ "results": {
+  "bare_Q/bare_D ab": {
+   "recall_at_1": 0.2333,
+   "recall_at_5": 0.6667,
+   "mrr": 0.4447,
+   "per_pair": [
+    {
+     "pair": 1,
+     "topic": "datacenter capex deceleration",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.6052,
+     "outranked_by": [
+      "dd1"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 2,
+     "topic": "rates higher for longer",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.5536,
+     "outranked_by": [
+      "dd3"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 3,
+     "topic": "margin compression from input costs",
+     "rank_of_true_partner": 4,
+     "sim_true": 0.6152,
+     "outranked_by": [
+      "dd4",
+      "b14",
+      "a14"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 4,
+     "topic": "inventory glut",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.6659,
+     "outranked_by": [
+      "dd5"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 5,
+     "topic": "consumer weakness at low end",
+     "rank_of_true_partner": 8,
+     "sim_true": 0.5375,
+     "outranked_by": [
+      "b14",
+      "dd6",
+      "a14",
+      "a24",
+      "a3",
+      "a27",
+      "dd15"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 6,
+     "topic": "AI monetization skepticism",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.5992,
+     "outranked_by": [
+      "dd7"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 7,
+     "topic": "short squeeze setup",
+     "rank_of_true_partner": 13,
+     "sim_true": 0.5074,
+     "outranked_by": [
+      "dd8",
+      "a19",
+      "b30",
+      "b15",
+      "b17",
+      "a11",
+      "a27",
+      "a4",
+      "b11",
+      "a28",
+      "a12",
+      "b19"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 8,
+     "topic": "guidance sandbagging",
+     "rank_of_true_partner": 34,
+     "sim_true": 0.454,
+     "outranked_by": [
+      "dd9",
+      "b7",
+      "b5",
+      "b22",
+      "b14",
+      "a11",
+      "a28",
+      "b30",
+      "a19",
+      "a5",
+      "b24",
+      "a30",
+      "a18",
+      "a7",
+      "dd15",
+      "a4",
+      "b25",
+      "dd10",
+      "b9",
+      "a14",
+      "a27",
+      "dd30",
+      "a12",
+      "dd5",
+      "b11",
+      "dd20",
+      "a21",
+      "a17",
+      "a15",
+      "b17",
+      "b15",
+      "a13",
+      "dd23"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 9,
+     "topic": "China demand weakness",
+     "rank_of_true_partner": 8,
+     "sim_true": 0.5273,
+     "outranked_by": [
+      "a14",
+      "dd15",
+      "dd23",
+      "b19",
+      "a27",
+      "b21",
+      "a21"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 10,
+     "topic": "dilution risk",
+     "rank_of_true_partner": 8,
+     "sim_true": 0.5376,
+     "outranked_by": [
+      "dd11",
+      "dd1",
+      "a30",
+      "b30",
+      "dd30",
+      "a1",
+      "b18"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 11,
+     "topic": "multiple compression",
+     "rank_of_true_partner": 8,
+     "sim_true": 0.5712,
+     "outranked_by": [
+      "b30",
+      "b14",
+      "a14",
+      "dd28",
+      "b5",
+      "a28",
+      "dd15"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 12,
+     "topic": "supply constraint easing",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.6447,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 13,
+     "topic": "regulatory overhang lifting",
+     "rank_of_true_partner": 11,
+     "sim_true": 0.5442,
+     "outranked_by": [
+      "dd14",
+      "b1",
+      "b14",
+      "a12",
+      "dd5",
+      "a21",
+      "b12",
+      "a1",
+      "dd26",
+      "dd20"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 14,
+     "topic": "competitive share loss",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.7867,
+     "outranked_by": [
+      "dd15"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 15,
+     "topic": "buyback support",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.546,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 16,
+     "topic": "energy demand from compute",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.661,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 17,
+     "topic": "credit deterioration",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.6657,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 18,
+     "topic": "product cycle strength",
+     "rank_of_true_partner": 4,
+     "sim_true": 0.5275,
+     "outranked_by": [
+      "dd5",
+      "b5",
+      "b22"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 19,
+     "topic": "insider selling signal",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.7849,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 20,
+     "topic": "reshoring beneficiary",
+     "rank_of_true_partner": 3,
+     "sim_true": 0.4696,
+     "outranked_by": [
+      "dd21",
+      "dd20"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 21,
+     "topic": "obsolescence risk",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.7098,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 22,
+     "topic": "seasonal softness misread",
+     "rank_of_true_partner": 7,
+     "sim_true": 0.501,
+     "outranked_by": [
+      "dd22",
+      "b8",
+      "dd25",
+      "a12",
+      "a18",
+      "b5"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 23,
+     "topic": "pricing power intact",
+     "rank_of_true_partner": 3,
+     "sim_true": 0.6792,
+     "outranked_by": [
+      "dd23",
+      "dd11"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 24,
+     "topic": "customer concentration risk",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.6559,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 25,
+     "topic": "FX headwind",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.5803,
+     "outranked_by": [
+      "dd25"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 26,
+     "topic": "labor cost pressure",
+     "rank_of_true_partner": 3,
+     "sim_true": 0.5172,
+     "outranked_by": [
+      "dd26",
+      "b25"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 27,
+     "topic": "accounting quality concern",
+     "rank_of_true_partner": 12,
+     "sim_true": 0.5381,
+     "outranked_by": [
+      "dd27",
+      "a24",
+      "b17",
+      "a17",
+      "a3",
+      "a19",
+      "b15",
+      "a14",
+      "b30",
+      "a5",
+      "b25"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 28,
+     "topic": "TAM skepticism",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.6001,
+     "outranked_by": [
+      "dd28"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 29,
+     "topic": "management credibility loss",
+     "rank_of_true_partner": 12,
+     "sim_true": 0.468,
+     "outranked_by": [
+      "dd29",
+      "dd1",
+      "a17",
+      "dd10",
+      "b15",
+      "dd3",
+      "a11",
+      "b8",
+      "b7",
+      "dd13",
+      "b17"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 30,
+     "topic": "acquisition speculation",
+     "rank_of_true_partner": 3,
+     "sim_true": 0.6478,
+     "outranked_by": [
+      "dd30",
+      "b7"
+     ],
+     "hard_decoy_won": []
+    }
+   ]
+  },
+  "bare_Q/bare_D ba": {
+   "recall_at_1": 0.4333,
+   "recall_at_5": 0.7,
+   "mrr": 0.5682,
+   "per_pair": [
+    {
+     "pair": 1,
+     "topic": "datacenter capex deceleration",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.6052,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 2,
+     "topic": "rates higher for longer",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.5536,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 3,
+     "topic": "margin compression from input costs",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.6152,
+     "outranked_by": [
+      "dd11"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 4,
+     "topic": "inventory glut",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.6659,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 5,
+     "topic": "consumer weakness at low end",
+     "rank_of_true_partner": 26,
+     "sim_true": 0.5375,
+     "outranked_by": [
+      "dd15",
+      "a14",
+      "b14",
+      "a30",
+      "b30",
+      "a4",
+      "b21",
+      "a19",
+      "a11",
+      "b18",
+      "dd5",
+      "b11",
+      "a21",
+      "a8",
+      "b25",
+      "a24",
+      "b15",
+      "b19",
+      "dd23",
+      "b7",
+      "b4",
+      "b22",
+      "a13",
+      "a18",
+      "b1"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 6,
+     "topic": "AI monetization skepticism",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.5992,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 7,
+     "topic": "short squeeze setup",
+     "rank_of_true_partner": 32,
+     "sim_true": 0.5074,
+     "outranked_by": [
+      "a30",
+      "dd30",
+      "b30",
+      "b22",
+      "a8",
+      "a12",
+      "a11",
+      "dd15",
+      "a21",
+      "b14",
+      "a19",
+      "b5",
+      "dd21",
+      "b18",
+      "b19",
+      "b11",
+      "dd1",
+      "a14",
+      "a13",
+      "dd14",
+      "b24",
+      "b21",
+      "b8",
+      "a24",
+      "a5",
+      "b15",
+      "b2",
+      "b17",
+      "b25",
+      "a18",
+      "a1"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 8,
+     "topic": "guidance sandbagging",
+     "rank_of_true_partner": 37,
+     "sim_true": 0.454,
+     "outranked_by": [
+      "a11",
+      "b22",
+      "b30",
+      "dd29",
+      "a22",
+      "dd28",
+      "b7",
+      "a30",
+      "b29",
+      "dd22",
+      "dd5",
+      "b18",
+      "a28",
+      "b2",
+      "dd15",
+      "a13",
+      "dd30",
+      "b28",
+      "dd9",
+      "a1",
+      "a12",
+      "a14",
+      "b14",
+      "a17",
+      "b11",
+      "b21",
+      "a29",
+      "b5",
+      "b12",
+      "b17",
+      "dd12",
+      "a18",
+      "a27",
+      "a21",
+      "b15",
+      "dd25"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 9,
+     "topic": "China demand weakness",
+     "rank_of_true_partner": 7,
+     "sim_true": 0.5273,
+     "outranked_by": [
+      "dd10",
+      "b14",
+      "a28",
+      "a11",
+      "b18",
+      "a14"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 10,
+     "topic": "dilution risk",
+     "rank_of_true_partner": 3,
+     "sim_true": 0.5376,
+     "outranked_by": [
+      "a19",
+      "b19"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 11,
+     "topic": "multiple compression",
+     "rank_of_true_partner": 8,
+     "sim_true": 0.5712,
+     "outranked_by": [
+      "b30",
+      "a14",
+      "b15",
+      "b5",
+      "a19",
+      "b19",
+      "b21"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 12,
+     "topic": "supply constraint easing",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.6447,
+     "outranked_by": [
+      "dd13"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 13,
+     "topic": "regulatory overhang lifting",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.5442,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 14,
+     "topic": "competitive share loss",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.7867,
+     "outranked_by": [
+      "dd15"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 15,
+     "topic": "buyback support",
+     "rank_of_true_partner": 13,
+     "sim_true": 0.546,
+     "outranked_by": [
+      "dd19",
+      "dd16",
+      "a19",
+      "b19",
+      "b11",
+      "dd15",
+      "a14",
+      "b30",
+      "a30",
+      "b5",
+      "a27",
+      "b14"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 16,
+     "topic": "energy demand from compute",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.661,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 17,
+     "topic": "credit deterioration",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.6657,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 18,
+     "topic": "product cycle strength",
+     "rank_of_true_partner": 29,
+     "sim_true": 0.5275,
+     "outranked_by": [
+      "a30",
+      "b14",
+      "b21",
+      "dd13",
+      "b5",
+      "a12",
+      "dd15",
+      "b23",
+      "a23",
+      "dd14",
+      "dd12",
+      "a14",
+      "dd10",
+      "a21",
+      "dd11",
+      "dd5",
+      "a10",
+      "dd28",
+      "dd21",
+      "dd19",
+      "b7",
+      "b11",
+      "dd1",
+      "b9",
+      "a17",
+      "a11",
+      "a1",
+      "a28"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 19,
+     "topic": "insider selling signal",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.7849,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 20,
+     "topic": "reshoring beneficiary",
+     "rank_of_true_partner": 3,
+     "sim_true": 0.4696,
+     "outranked_by": [
+      "dd13",
+      "b12"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 21,
+     "topic": "obsolescence risk",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.7098,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 22,
+     "topic": "seasonal softness misread",
+     "rank_of_true_partner": 28,
+     "sim_true": 0.501,
+     "outranked_by": [
+      "b7",
+      "a30",
+      "a28",
+      "a8",
+      "b30",
+      "b8",
+      "a11",
+      "dd28",
+      "dd30",
+      "dd9",
+      "b5",
+      "b25",
+      "b11",
+      "a12",
+      "b14",
+      "a18",
+      "a19",
+      "b18",
+      "a27",
+      "dd12",
+      "a13",
+      "b28",
+      "b24",
+      "b19",
+      "dd15",
+      "a21",
+      "b15"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 23,
+     "topic": "pricing power intact",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.6792,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 24,
+     "topic": "customer concentration risk",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.6559,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 25,
+     "topic": "FX headwind",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.5803,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 26,
+     "topic": "labor cost pressure",
+     "rank_of_true_partner": 3,
+     "sim_true": 0.5172,
+     "outranked_by": [
+      "b2",
+      "dd11"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 27,
+     "topic": "accounting quality concern",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.5381,
+     "outranked_by": [
+      "dd27"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 28,
+     "topic": "TAM skepticism",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.6001,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 29,
+     "topic": "management credibility loss",
+     "rank_of_true_partner": 29,
+     "sim_true": 0.468,
+     "outranked_by": [
+      "b19",
+      "b21",
+      "a21",
+      "a27",
+      "a19",
+      "a1",
+      "b8",
+      "b2",
+      "a24",
+      "dd1",
+      "b15",
+      "b11",
+      "dd9",
+      "a2",
+      "dd23",
+      "a9",
+      "a14",
+      "a17",
+      "dd13",
+      "a30",
+      "b10",
+      "dd30",
+      "b7",
+      "b22",
+      "a11",
+      "a13",
+      "dd16",
+      "b24"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 30,
+     "topic": "acquisition speculation",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.6478,
+     "outranked_by": [
+      "b11"
+     ],
+     "hard_decoy_won": []
+    }
+   ]
+  },
+  "PREFIX_Q/bare_D ab": {
+   "recall_at_1": 0.2,
+   "recall_at_5": 0.6667,
+   "mrr": 0.4434,
+   "per_pair": [
+    {
+     "pair": 1,
+     "topic": "datacenter capex deceleration",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.4209,
+     "outranked_by": [
+      "dd1"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 2,
+     "topic": "rates higher for longer",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.4601,
+     "outranked_by": [
+      "dd3"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 3,
+     "topic": "margin compression from input costs",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.4481,
+     "outranked_by": [
+      "dd4"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 4,
+     "topic": "inventory glut",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.5042,
+     "outranked_by": [
+      "dd5"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 5,
+     "topic": "consumer weakness at low end",
+     "rank_of_true_partner": 9,
+     "sim_true": 0.3722,
+     "outranked_by": [
+      "b14",
+      "dd6",
+      "a24",
+      "a27",
+      "a3",
+      "a14",
+      "a17",
+      "dd15"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 6,
+     "topic": "AI monetization skepticism",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.4748,
+     "outranked_by": [
+      "dd7"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 7,
+     "topic": "short squeeze setup",
+     "rank_of_true_partner": 38,
+     "sim_true": 0.2915,
+     "outranked_by": [
+      "dd8",
+      "a19",
+      "b10",
+      "a10",
+      "b15",
+      "a27",
+      "a28",
+      "dd19",
+      "b17",
+      "a11",
+      "b19",
+      "a3",
+      "b11",
+      "a4",
+      "a17",
+      "a25",
+      "b30",
+      "dd15",
+      "a14",
+      "b14",
+      "a24",
+      "dd1",
+      "a12",
+      "b22",
+      "dd23",
+      "a5",
+      "dd25",
+      "a15",
+      "dd28",
+      "b24",
+      "dd20",
+      "dd3",
+      "a8",
+      "dd30",
+      "b27",
+      "dd2",
+      "dd27"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 8,
+     "topic": "guidance sandbagging",
+     "rank_of_true_partner": 39,
+     "sim_true": 0.2755,
+     "outranked_by": [
+      "dd9",
+      "b14",
+      "b9",
+      "a27",
+      "dd10",
+      "a5",
+      "a19",
+      "a17",
+      "a11",
+      "b30",
+      "b29",
+      "b17",
+      "dd23",
+      "a7",
+      "b22",
+      "a28",
+      "a15",
+      "a14",
+      "b24",
+      "b5",
+      "b7",
+      "dd15",
+      "dd1",
+      "b19",
+      "b13",
+      "b15",
+      "dd30",
+      "dd14",
+      "a4",
+      "dd25",
+      "a29",
+      "b11",
+      "a24",
+      "dd20",
+      "dd18",
+      "a30",
+      "a23",
+      "a3"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 9,
+     "topic": "China demand weakness",
+     "rank_of_true_partner": 9,
+     "sim_true": 0.4096,
+     "outranked_by": [
+      "a14",
+      "dd23",
+      "dd15",
+      "a21",
+      "b19",
+      "a24",
+      "a27",
+      "b21"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 10,
+     "topic": "dilution risk",
+     "rank_of_true_partner": 6,
+     "sim_true": 0.419,
+     "outranked_by": [
+      "dd11",
+      "dd1",
+      "a1",
+      "b3",
+      "a30"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 11,
+     "topic": "multiple compression",
+     "rank_of_true_partner": 42,
+     "sim_true": 0.307,
+     "outranked_by": [
+      "b7",
+      "dd12",
+      "b5",
+      "b30",
+      "b14",
+      "a8",
+      "b22",
+      "a15",
+      "b24",
+      "b8",
+      "a14",
+      "dd24",
+      "dd15",
+      "dd28",
+      "a24",
+      "a28",
+      "a7",
+      "a18",
+      "dd3",
+      "a5",
+      "b9",
+      "dd29",
+      "b18",
+      "a4",
+      "a1",
+      "b17",
+      "dd18",
+      "a30",
+      "b15",
+      "dd9",
+      "a29",
+      "b13",
+      "a19",
+      "dd10",
+      "b19",
+      "b2",
+      "dd26",
+      "dd8",
+      "dd30",
+      "dd20",
+      "b28"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 12,
+     "topic": "supply constraint easing",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.4683,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 13,
+     "topic": "regulatory overhang lifting",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.4179,
+     "outranked_by": [
+      "dd14"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 14,
+     "topic": "competitive share loss",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.6076,
+     "outranked_by": [
+      "dd15"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 15,
+     "topic": "buyback support",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.392,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 16,
+     "topic": "energy demand from compute",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.587,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 17,
+     "topic": "credit deterioration",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.4954,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 18,
+     "topic": "product cycle strength",
+     "rank_of_true_partner": 5,
+     "sim_true": 0.3287,
+     "outranked_by": [
+      "dd22",
+      "a22",
+      "b22",
+      "dd29"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 19,
+     "topic": "insider selling signal",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.5739,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 20,
+     "topic": "reshoring beneficiary",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.3657,
+     "outranked_by": [
+      "dd20"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 21,
+     "topic": "obsolescence risk",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.496,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 22,
+     "topic": "seasonal softness misread",
+     "rank_of_true_partner": 14,
+     "sim_true": 0.3294,
+     "outranked_by": [
+      "dd22",
+      "dd25",
+      "b8",
+      "a1",
+      "a18",
+      "a27",
+      "b29",
+      "b5",
+      "b12",
+      "a12",
+      "a14",
+      "a11",
+      "b15"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 23,
+     "topic": "pricing power intact",
+     "rank_of_true_partner": 3,
+     "sim_true": 0.5495,
+     "outranked_by": [
+      "dd23",
+      "dd11"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 24,
+     "topic": "customer concentration risk",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.4933,
+     "outranked_by": [
+      "dd24"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 25,
+     "topic": "FX headwind",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.3983,
+     "outranked_by": [
+      "dd25"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 26,
+     "topic": "labor cost pressure",
+     "rank_of_true_partner": 3,
+     "sim_true": 0.3699,
+     "outranked_by": [
+      "dd26",
+      "b25"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 27,
+     "topic": "accounting quality concern",
+     "rank_of_true_partner": 11,
+     "sim_true": 0.3757,
+     "outranked_by": [
+      "dd27",
+      "a24",
+      "a5",
+      "a17",
+      "b17",
+      "dd25",
+      "a3",
+      "a25",
+      "a9",
+      "a14"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 28,
+     "topic": "TAM skepticism",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.452,
+     "outranked_by": [
+      "dd28"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 29,
+     "topic": "management credibility loss",
+     "rank_of_true_partner": 6,
+     "sim_true": 0.3432,
+     "outranked_by": [
+      "dd29",
+      "dd1",
+      "dd3",
+      "a17",
+      "b8"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 30,
+     "topic": "acquisition speculation",
+     "rank_of_true_partner": 7,
+     "sim_true": 0.3598,
+     "outranked_by": [
+      "dd30",
+      "dd19",
+      "b7",
+      "a24",
+      "b15",
+      "b14"
+     ],
+     "hard_decoy_won": []
+    }
+   ]
+  },
+  "PREFIX_Q/bare_D ba": {
+   "recall_at_1": 0.3,
+   "recall_at_5": 0.7667,
+   "mrr": 0.5015,
+   "per_pair": [
+    {
+     "pair": 1,
+     "topic": "datacenter capex deceleration",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.4554,
+     "outranked_by": [
+      "dd2"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 2,
+     "topic": "rates higher for longer",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.3978,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 3,
+     "topic": "margin compression from input costs",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.49,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 4,
+     "topic": "inventory glut",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.5161,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 5,
+     "topic": "consumer weakness at low end",
+     "rank_of_true_partner": 6,
+     "sim_true": 0.4201,
+     "outranked_by": [
+      "dd15",
+      "a14",
+      "b14",
+      "a19",
+      "a11"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 6,
+     "topic": "AI monetization skepticism",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.4342,
+     "outranked_by": [
+      "a30"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 7,
+     "topic": "short squeeze setup",
+     "rank_of_true_partner": 31,
+     "sim_true": 0.277,
+     "outranked_by": [
+      "dd30",
+      "a30",
+      "a8",
+      "b30",
+      "a21",
+      "b22",
+      "a19",
+      "b19",
+      "dd18",
+      "b8",
+      "b21",
+      "b24",
+      "dd29",
+      "dd21",
+      "dd1",
+      "dd14",
+      "a15",
+      "b29",
+      "b17",
+      "a1",
+      "a11",
+      "a10",
+      "a18",
+      "b11",
+      "dd15",
+      "a24",
+      "a17",
+      "a12",
+      "a5",
+      "b13"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 8,
+     "topic": "guidance sandbagging",
+     "rank_of_true_partner": 43,
+     "sim_true": 0.311,
+     "outranked_by": [
+      "dd29",
+      "b29",
+      "b22",
+      "a11",
+      "b30",
+      "a22",
+      "a29",
+      "dd28",
+      "dd22",
+      "a14",
+      "dd15",
+      "a28",
+      "b7",
+      "a1",
+      "a17",
+      "b17",
+      "dd25",
+      "a21",
+      "b2",
+      "b28",
+      "dd9",
+      "b14",
+      "b12",
+      "a30",
+      "a27",
+      "dd30",
+      "a13",
+      "b21",
+      "b19",
+      "a18",
+      "dd26",
+      "dd5",
+      "dd13",
+      "a24",
+      "a25",
+      "dd1",
+      "dd18",
+      "a19",
+      "b5",
+      "b11",
+      "b15",
+      "b18"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 9,
+     "topic": "China demand weakness",
+     "rank_of_true_partner": 4,
+     "sim_true": 0.3782,
+     "outranked_by": [
+      "dd10",
+      "b23",
+      "b18"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 10,
+     "topic": "dilution risk",
+     "rank_of_true_partner": 3,
+     "sim_true": 0.4136,
+     "outranked_by": [
+      "a19",
+      "b19"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 11,
+     "topic": "multiple compression",
+     "rank_of_true_partner": 11,
+     "sim_true": 0.4063,
+     "outranked_by": [
+      "b30",
+      "a14",
+      "b15",
+      "b19",
+      "a19",
+      "dd15",
+      "b5",
+      "b21",
+      "b29",
+      "a28"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 12,
+     "topic": "supply constraint easing",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.4194,
+     "outranked_by": [
+      "dd13"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 13,
+     "topic": "regulatory overhang lifting",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.4071,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 14,
+     "topic": "competitive share loss",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.6012,
+     "outranked_by": [
+      "dd15"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 15,
+     "topic": "buyback support",
+     "rank_of_true_partner": 5,
+     "sim_true": 0.3782,
+     "outranked_by": [
+      "dd19",
+      "dd16",
+      "b19",
+      "a19"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 16,
+     "topic": "energy demand from compute",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.5421,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 17,
+     "topic": "credit deterioration",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.4924,
+     "outranked_by": [
+      "dd18"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 18,
+     "topic": "product cycle strength",
+     "rank_of_true_partner": 27,
+     "sim_true": 0.3485,
+     "outranked_by": [
+      "dd10",
+      "b23",
+      "b9",
+      "dd13",
+      "a30",
+      "b14",
+      "b21",
+      "dd14",
+      "dd15",
+      "dd21",
+      "a1",
+      "dd19",
+      "a12",
+      "a14",
+      "dd1",
+      "b5",
+      "dd28",
+      "a23",
+      "a10",
+      "dd6",
+      "a28",
+      "a21",
+      "dd12",
+      "dd5",
+      "dd23",
+      "dd11"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 19,
+     "topic": "insider selling signal",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.6194,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 20,
+     "topic": "reshoring beneficiary",
+     "rank_of_true_partner": 4,
+     "sim_true": 0.3668,
+     "outranked_by": [
+      "dd13",
+      "b12",
+      "b4"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 21,
+     "topic": "obsolescence risk",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.5252,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 22,
+     "topic": "seasonal softness misread",
+     "rank_of_true_partner": 25,
+     "sim_true": 0.3029,
+     "outranked_by": [
+      "b8",
+      "a28",
+      "dd28",
+      "a8",
+      "a18",
+      "b12",
+      "dd9",
+      "a11",
+      "b30",
+      "b5",
+      "dd12",
+      "a30",
+      "b25",
+      "b7",
+      "a27",
+      "a12",
+      "a19",
+      "b28",
+      "dd25",
+      "b24",
+      "b17",
+      "dd30",
+      "dd27",
+      "b18"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 23,
+     "topic": "pricing power intact",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.5167,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 24,
+     "topic": "customer concentration risk",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.4852,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 25,
+     "topic": "FX headwind",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.4481,
+     "outranked_by": [
+      "dd25"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 26,
+     "topic": "labor cost pressure",
+     "rank_of_true_partner": 3,
+     "sim_true": 0.4319,
+     "outranked_by": [
+      "b2",
+      "dd11"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 27,
+     "topic": "accounting quality concern",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.4196,
+     "outranked_by": [
+      "dd27"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 28,
+     "topic": "TAM skepticism",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.4598,
+     "outranked_by": [
+      "dd28"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 29,
+     "topic": "management credibility loss",
+     "rank_of_true_partner": 26,
+     "sim_true": 0.3193,
+     "outranked_by": [
+      "b19",
+      "b8",
+      "a1",
+      "a21",
+      "a27",
+      "a2",
+      "b2",
+      "b21",
+      "a19",
+      "dd9",
+      "a24",
+      "b10",
+      "b15",
+      "b12",
+      "dd16",
+      "a9",
+      "dd13",
+      "a17",
+      "a14",
+      "b24",
+      "dd1",
+      "a13",
+      "dd23",
+      "b26",
+      "a11"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 30,
+     "topic": "acquisition speculation",
+     "rank_of_true_partner": 4,
+     "sim_true": 0.4306,
+     "outranked_by": [
+      "b14",
+      "a11",
+      "b11"
+     ],
+     "hard_decoy_won": []
+    }
+   ]
+  },
+  "bare_Q/PREFIX_D ab": {
+   "recall_at_1": 0.2333,
+   "recall_at_5": 0.8667,
+   "mrr": 0.5068,
+   "per_pair": [
+    {
+     "pair": 1,
+     "topic": "datacenter capex deceleration",
+     "rank_of_true_partner": 3,
+     "sim_true": 0.4554,
+     "outranked_by": [
+      "dd1",
+      "a10"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 2,
+     "topic": "rates higher for longer",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.3978,
+     "outranked_by": [
+      "dd3"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 3,
+     "topic": "margin compression from input costs",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.49,
+     "outranked_by": [
+      "dd4"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 4,
+     "topic": "inventory glut",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.5161,
+     "outranked_by": [
+      "dd5"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 5,
+     "topic": "consumer weakness at low end",
+     "rank_of_true_partner": 3,
+     "sim_true": 0.4201,
+     "outranked_by": [
+      "dd6",
+      "b14"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 6,
+     "topic": "AI monetization skepticism",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.4342,
+     "outranked_by": [
+      "dd7"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 7,
+     "topic": "short squeeze setup",
+     "rank_of_true_partner": 49,
+     "sim_true": 0.277,
+     "outranked_by": [
+      "dd8",
+      "a12",
+      "a10",
+      "a19",
+      "a15",
+      "a4",
+      "b6",
+      "a28",
+      "b17",
+      "b19",
+      "b24",
+      "b10",
+      "b30",
+      "a27",
+      "a11",
+      "dd19",
+      "a24",
+      "dd28",
+      "b11",
+      "b14",
+      "b15",
+      "a17",
+      "dd15",
+      "a5",
+      "a14",
+      "a8",
+      "a2",
+      "dd25",
+      "dd23",
+      "b5",
+      "dd11",
+      "a25",
+      "b27",
+      "b26",
+      "b22",
+      "b4",
+      "a3",
+      "dd3",
+      "b1",
+      "b9",
+      "a30",
+      "dd27",
+      "a23",
+      "b28",
+      "dd30",
+      "dd1",
+      "dd14",
+      "dd16"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 8,
+     "topic": "guidance sandbagging",
+     "rank_of_true_partner": 17,
+     "sim_true": 0.311,
+     "outranked_by": [
+      "dd9",
+      "b14",
+      "a11",
+      "a5",
+      "b22",
+      "b24",
+      "b5",
+      "a17",
+      "a28",
+      "b7",
+      "a15",
+      "dd25",
+      "a23",
+      "b9",
+      "a30",
+      "dd10"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 9,
+     "topic": "China demand weakness",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.3782,
+     "outranked_by": [
+      "a14"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 10,
+     "topic": "dilution risk",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.4136,
+     "outranked_by": [
+      "dd11"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 11,
+     "topic": "multiple compression",
+     "rank_of_true_partner": 5,
+     "sim_true": 0.4063,
+     "outranked_by": [
+      "dd12",
+      "b30",
+      "b5",
+      "b8"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 12,
+     "topic": "supply constraint easing",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.4194,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 13,
+     "topic": "regulatory overhang lifting",
+     "rank_of_true_partner": 3,
+     "sim_true": 0.4071,
+     "outranked_by": [
+      "dd14",
+      "b1"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 14,
+     "topic": "competitive share loss",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.6012,
+     "outranked_by": [
+      "dd15"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 15,
+     "topic": "buyback support",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.3782,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 16,
+     "topic": "energy demand from compute",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.5421,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 17,
+     "topic": "credit deterioration",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.4924,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 18,
+     "topic": "product cycle strength",
+     "rank_of_true_partner": 5,
+     "sim_true": 0.3485,
+     "outranked_by": [
+      "dd22",
+      "a22",
+      "b6",
+      "b22"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 19,
+     "topic": "insider selling signal",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.6194,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 20,
+     "topic": "reshoring beneficiary",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.3668,
+     "outranked_by": [
+      "b6"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 21,
+     "topic": "obsolescence risk",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.5252,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 22,
+     "topic": "seasonal softness misread",
+     "rank_of_true_partner": 17,
+     "sim_true": 0.3029,
+     "outranked_by": [
+      "dd22",
+      "b8",
+      "dd25",
+      "a18",
+      "b5",
+      "a12",
+      "a1",
+      "a2",
+      "b15",
+      "a27",
+      "a25",
+      "a11",
+      "b11",
+      "b12",
+      "a26",
+      "b29"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 23,
+     "topic": "pricing power intact",
+     "rank_of_true_partner": 3,
+     "sim_true": 0.5167,
+     "outranked_by": [
+      "dd11",
+      "dd23"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 24,
+     "topic": "customer concentration risk",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.4852,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 25,
+     "topic": "FX headwind",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.4481,
+     "outranked_by": [
+      "dd25"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 26,
+     "topic": "labor cost pressure",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.4319,
+     "outranked_by": [
+      "dd26"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 27,
+     "topic": "accounting quality concern",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.4196,
+     "outranked_by": [
+      "dd27"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 28,
+     "topic": "TAM skepticism",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.4598,
+     "outranked_by": [
+      "dd28"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 29,
+     "topic": "management credibility loss",
+     "rank_of_true_partner": 12,
+     "sim_true": 0.3193,
+     "outranked_by": [
+      "dd29",
+      "b8",
+      "a17",
+      "dd3",
+      "dd1",
+      "b6",
+      "a9",
+      "dd10",
+      "b9",
+      "b26",
+      "a11"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 30,
+     "topic": "acquisition speculation",
+     "rank_of_true_partner": 4,
+     "sim_true": 0.4306,
+     "outranked_by": [
+      "dd30",
+      "b6",
+      "dd11"
+     ],
+     "hard_decoy_won": []
+    }
+   ]
+  },
+  "bare_Q/PREFIX_D ba": {
+   "recall_at_1": 0.3667,
+   "recall_at_5": 0.6667,
+   "mrr": 0.5126,
+   "per_pair": [
+    {
+     "pair": 1,
+     "topic": "datacenter capex deceleration",
+     "rank_of_true_partner": 4,
+     "sim_true": 0.4209,
+     "outranked_by": [
+      "dd2",
+      "b16",
+      "a6"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 2,
+     "topic": "rates higher for longer",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.4601,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 3,
+     "topic": "margin compression from input costs",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.4481,
+     "outranked_by": [
+      "dd11"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 4,
+     "topic": "inventory glut",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.5042,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 5,
+     "topic": "consumer weakness at low end",
+     "rank_of_true_partner": 12,
+     "sim_true": 0.3722,
+     "outranked_by": [
+      "b14",
+      "b11",
+      "b6",
+      "b21",
+      "b4",
+      "a11",
+      "dd15",
+      "a14",
+      "a19",
+      "b13",
+      "b30"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 6,
+     "topic": "AI monetization skepticism",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.4748,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 7,
+     "topic": "short squeeze setup",
+     "rank_of_true_partner": 39,
+     "sim_true": 0.2915,
+     "outranked_by": [
+      "a11",
+      "dd30",
+      "a30",
+      "b30",
+      "b8",
+      "b24",
+      "a10",
+      "b11",
+      "a12",
+      "b18",
+      "dd14",
+      "b22",
+      "dd18",
+      "b26",
+      "dd11",
+      "b21",
+      "b6",
+      "a5",
+      "b5",
+      "a21",
+      "dd15",
+      "a19",
+      "dd28",
+      "a8",
+      "a29",
+      "b19",
+      "b17",
+      "a18",
+      "a15",
+      "b14",
+      "a24",
+      "b29",
+      "a13",
+      "a23",
+      "a14",
+      "b28",
+      "b10",
+      "a1"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 8,
+     "topic": "guidance sandbagging",
+     "rank_of_true_partner": 57,
+     "sim_true": 0.2755,
+     "outranked_by": [
+      "dd22",
+      "dd29",
+      "b29",
+      "b22",
+      "b30",
+      "a22",
+      "dd28",
+      "a28",
+      "b28",
+      "a11",
+      "a29",
+      "dd9",
+      "a10",
+      "a27",
+      "a17",
+      "dd18",
+      "b11",
+      "a1",
+      "a13",
+      "b18",
+      "b5",
+      "b26",
+      "b2",
+      "a18",
+      "dd7",
+      "b7",
+      "b17",
+      "dd25",
+      "b6",
+      "a12",
+      "a25",
+      "dd5",
+      "a14",
+      "dd11",
+      "b21",
+      "b9",
+      "dd30",
+      "a2",
+      "dd26",
+      "dd15",
+      "a9",
+      "dd13",
+      "dd27",
+      "b19",
+      "b27",
+      "dd12",
+      "a30",
+      "b25",
+      "a21",
+      "b12",
+      "b24",
+      "b14",
+      "a20",
+      "dd10",
+      "b20",
+      "b10"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 9,
+     "topic": "China demand weakness",
+     "rank_of_true_partner": 3,
+     "sim_true": 0.4096,
+     "outranked_by": [
+      "dd10",
+      "b18"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 10,
+     "topic": "dilution risk",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.419,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 11,
+     "topic": "multiple compression",
+     "rank_of_true_partner": 41,
+     "sim_true": 0.307,
+     "outranked_by": [
+      "b30",
+      "b6",
+      "a14",
+      "b19",
+      "b5",
+      "dd11",
+      "dd15",
+      "a23",
+      "a19",
+      "b21",
+      "a28",
+      "b26",
+      "dd28",
+      "b13",
+      "a10",
+      "b18",
+      "dd23",
+      "dd6",
+      "dd14",
+      "a7",
+      "dd8",
+      "b4",
+      "a12",
+      "a27",
+      "a1",
+      "a9",
+      "a24",
+      "a21",
+      "a13",
+      "b27",
+      "a17",
+      "dd19",
+      "b10",
+      "b15",
+      "b8",
+      "a26",
+      "b14",
+      "b29",
+      "a15",
+      "a2"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 12,
+     "topic": "supply constraint easing",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.4683,
+     "outranked_by": [
+      "dd13"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 13,
+     "topic": "regulatory overhang lifting",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.4179,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 14,
+     "topic": "competitive share loss",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.6076,
+     "outranked_by": [
+      "dd15"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 15,
+     "topic": "buyback support",
+     "rank_of_true_partner": 10,
+     "sim_true": 0.392,
+     "outranked_by": [
+      "dd19",
+      "dd16",
+      "b19",
+      "a19",
+      "b11",
+      "dd15",
+      "b6",
+      "b5",
+      "dd8"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 16,
+     "topic": "energy demand from compute",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.587,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 17,
+     "topic": "credit deterioration",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.4954,
+     "outranked_by": [
+      "dd18"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 18,
+     "topic": "product cycle strength",
+     "rank_of_true_partner": 29,
+     "sim_true": 0.3287,
+     "outranked_by": [
+      "b23",
+      "a10",
+      "b21",
+      "dd13",
+      "dd14",
+      "dd11",
+      "a23",
+      "b5",
+      "b6",
+      "b9",
+      "dd12",
+      "b14",
+      "a12",
+      "b11",
+      "dd10",
+      "a17",
+      "dd6",
+      "a21",
+      "dd28",
+      "b24",
+      "a14",
+      "a28",
+      "b28",
+      "dd9",
+      "a1",
+      "b20",
+      "dd7",
+      "a11"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 19,
+     "topic": "insider selling signal",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.5739,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 20,
+     "topic": "reshoring beneficiary",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.3657,
+     "outranked_by": [
+      "dd13"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 21,
+     "topic": "obsolescence risk",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.496,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 22,
+     "topic": "seasonal softness misread",
+     "rank_of_true_partner": 18,
+     "sim_true": 0.3294,
+     "outranked_by": [
+      "b8",
+      "a28",
+      "a11",
+      "b6",
+      "b5",
+      "dd28",
+      "b24",
+      "a18",
+      "b28",
+      "b30",
+      "b11",
+      "dd22",
+      "dd12",
+      "a27",
+      "dd25",
+      "a30",
+      "dd30"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 23,
+     "topic": "pricing power intact",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.5495,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 24,
+     "topic": "customer concentration risk",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.4933,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 25,
+     "topic": "FX headwind",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.3983,
+     "outranked_by": [
+      "a26"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 26,
+     "topic": "labor cost pressure",
+     "rank_of_true_partner": 5,
+     "sim_true": 0.3699,
+     "outranked_by": [
+      "dd11",
+      "a23",
+      "b2",
+      "a10"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 27,
+     "topic": "accounting quality concern",
+     "rank_of_true_partner": 6,
+     "sim_true": 0.3757,
+     "outranked_by": [
+      "dd27",
+      "b6",
+      "b25",
+      "a24",
+      "b11"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 28,
+     "topic": "TAM skepticism",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.452,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 29,
+     "topic": "management credibility loss",
+     "rank_of_true_partner": 28,
+     "sim_true": 0.3432,
+     "outranked_by": [
+      "b19",
+      "b8",
+      "a2",
+      "a9",
+      "b11",
+      "a1",
+      "b26",
+      "b2",
+      "a19",
+      "b21",
+      "a10",
+      "a27",
+      "a21",
+      "dd9",
+      "dd13",
+      "a24",
+      "a6",
+      "b4",
+      "a17",
+      "a23",
+      "dd22",
+      "b10",
+      "dd16",
+      "dd7",
+      "a22",
+      "dd11",
+      "b1"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 30,
+     "topic": "acquisition speculation",
+     "rank_of_true_partner": 19,
+     "sim_true": 0.3598,
+     "outranked_by": [
+      "b11",
+      "dd15",
+      "b14",
+      "a10",
+      "b5",
+      "b8",
+      "a14",
+      "b19",
+      "dd11",
+      "b21",
+      "a11",
+      "a19",
+      "b6",
+      "dd14",
+      "b28",
+      "a28",
+      "dd28",
+      "b10"
+     ],
+     "hard_decoy_won": []
+    }
+   ]
+  },
+  "PREFIX_Q/PREFIX_D ab": {
+   "recall_at_1": 0.0667,
+   "recall_at_5": 0.7333,
+   "mrr": 0.3781,
+   "per_pair": [
+    {
+     "pair": 1,
+     "topic": "datacenter capex deceleration",
+     "rank_of_true_partner": 3,
+     "sim_true": 0.4102,
+     "outranked_by": [
+      "dd1",
+      "a10"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 2,
+     "topic": "rates higher for longer",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.434,
+     "outranked_by": [
+      "dd3"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 3,
+     "topic": "margin compression from input costs",
+     "rank_of_true_partner": 4,
+     "sim_true": 0.4413,
+     "outranked_by": [
+      "dd4",
+      "b14",
+      "a14"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 4,
+     "topic": "inventory glut",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.5146,
+     "outranked_by": [
+      "dd5"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 5,
+     "topic": "consumer weakness at low end",
+     "rank_of_true_partner": 4,
+     "sim_true": 0.3864,
+     "outranked_by": [
+      "dd6",
+      "b14",
+      "a27"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 6,
+     "topic": "AI monetization skepticism",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.4593,
+     "outranked_by": [
+      "dd7"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 7,
+     "topic": "short squeeze setup",
+     "rank_of_true_partner": 58,
+     "sim_true": 0.2307,
+     "outranked_by": [
+      "dd8",
+      "a10",
+      "a12",
+      "a15",
+      "a19",
+      "a4",
+      "dd19",
+      "dd15",
+      "a28",
+      "b19",
+      "b10",
+      "b15",
+      "b14",
+      "a14",
+      "b6",
+      "a27",
+      "dd23",
+      "a25",
+      "dd11",
+      "b17",
+      "dd28",
+      "dd25",
+      "a2",
+      "b11",
+      "a24",
+      "b30",
+      "a5",
+      "dd3",
+      "dd2",
+      "a17",
+      "a3",
+      "b24",
+      "b27",
+      "a11",
+      "dd27",
+      "b4",
+      "a8",
+      "dd1",
+      "b1",
+      "b26",
+      "dd16",
+      "dd4",
+      "a23",
+      "b8",
+      "dd6",
+      "b9",
+      "dd20",
+      "a30",
+      "b22",
+      "b29",
+      "dd30",
+      "b3",
+      "dd13",
+      "b13",
+      "b5",
+      "dd12",
+      "b21"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 8,
+     "topic": "guidance sandbagging",
+     "rank_of_true_partner": 37,
+     "sim_true": 0.2683,
+     "outranked_by": [
+      "dd9",
+      "a17",
+      "a5",
+      "b14",
+      "b9",
+      "a23",
+      "dd10",
+      "b29",
+      "dd25",
+      "dd23",
+      "a15",
+      "dd11",
+      "b13",
+      "b17",
+      "a4",
+      "a30",
+      "a27",
+      "a28",
+      "a14",
+      "dd15",
+      "b24",
+      "a10",
+      "b11",
+      "a29",
+      "dd18",
+      "b5",
+      "a11",
+      "b30",
+      "b15",
+      "a19",
+      "b26",
+      "b7",
+      "dd30",
+      "dd14",
+      "b19",
+      "dd1"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 9,
+     "topic": "China demand weakness",
+     "rank_of_true_partner": 4,
+     "sim_true": 0.3805,
+     "outranked_by": [
+      "dd23",
+      "a14",
+      "b19"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 10,
+     "topic": "dilution risk",
+     "rank_of_true_partner": 8,
+     "sim_true": 0.3915,
+     "outranked_by": [
+      "dd11",
+      "a23",
+      "a1",
+      "dd1",
+      "dd9",
+      "b3",
+      "b26"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 11,
+     "topic": "multiple compression",
+     "rank_of_true_partner": 18,
+     "sim_true": 0.2768,
+     "outranked_by": [
+      "dd12",
+      "b5",
+      "b24",
+      "a15",
+      "b8",
+      "b7",
+      "b30",
+      "a24",
+      "b22",
+      "b14",
+      "dd18",
+      "dd28",
+      "a28",
+      "dd24",
+      "a18",
+      "a5",
+      "a8"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 12,
+     "topic": "supply constraint easing",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.3939,
+     "outranked_by": [
+      "dd13"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 13,
+     "topic": "regulatory overhang lifting",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.4086,
+     "outranked_by": [
+      "dd14"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 14,
+     "topic": "competitive share loss",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.6081,
+     "outranked_by": [
+      "dd15"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 15,
+     "topic": "buyback support",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.3843,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 16,
+     "topic": "energy demand from compute",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.5778,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 17,
+     "topic": "credit deterioration",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.4713,
+     "outranked_by": [
+      "dd9"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 18,
+     "topic": "product cycle strength",
+     "rank_of_true_partner": 10,
+     "sim_true": 0.2767,
+     "outranked_by": [
+      "dd22",
+      "a22",
+      "dd25",
+      "b22",
+      "b8",
+      "b15",
+      "b16",
+      "a11",
+      "dd29"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 19,
+     "topic": "insider selling signal",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.5831,
+     "outranked_by": [
+      "dd19"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 20,
+     "topic": "reshoring beneficiary",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.373,
+     "outranked_by": [
+      "dd20"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 21,
+     "topic": "obsolescence risk",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.4889,
+     "outranked_by": [
+      "dd21"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 22,
+     "topic": "seasonal softness misread",
+     "rank_of_true_partner": 29,
+     "sim_true": 0.2491,
+     "outranked_by": [
+      "dd22",
+      "dd25",
+      "b8",
+      "a18",
+      "b15",
+      "dd18",
+      "b5",
+      "b29",
+      "a1",
+      "a12",
+      "a27",
+      "a25",
+      "a2",
+      "a24",
+      "b24",
+      "b28",
+      "a26",
+      "b27",
+      "b12",
+      "dd26",
+      "b21",
+      "dd13",
+      "a14",
+      "dd3",
+      "a4",
+      "a5",
+      "a11",
+      "a9"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 23,
+     "topic": "pricing power intact",
+     "rank_of_true_partner": 3,
+     "sim_true": 0.5385,
+     "outranked_by": [
+      "dd11",
+      "dd23"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 24,
+     "topic": "customer concentration risk",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.442,
+     "outranked_by": [
+      "dd24"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 25,
+     "topic": "FX headwind",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.4186,
+     "outranked_by": [
+      "dd25"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 26,
+     "topic": "labor cost pressure",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.3776,
+     "outranked_by": [
+      "dd26"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 27,
+     "topic": "accounting quality concern",
+     "rank_of_true_partner": 3,
+     "sim_true": 0.3815,
+     "outranked_by": [
+      "dd27",
+      "a5"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 28,
+     "topic": "TAM skepticism",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.4393,
+     "outranked_by": [
+      "dd28"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 29,
+     "topic": "management credibility loss",
+     "rank_of_true_partner": 6,
+     "sim_true": 0.329,
+     "outranked_by": [
+      "dd29",
+      "b8",
+      "dd1",
+      "dd3",
+      "a17"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 30,
+     "topic": "acquisition speculation",
+     "rank_of_true_partner": 15,
+     "sim_true": 0.3157,
+     "outranked_by": [
+      "dd30",
+      "dd19",
+      "a10",
+      "dd11",
+      "a23",
+      "b21",
+      "b6",
+      "a24",
+      "b15",
+      "b7",
+      "b26",
+      "dd16",
+      "a15",
+      "dd15"
+     ],
+     "hard_decoy_won": []
+    }
+   ]
+  },
+  "PREFIX_Q/PREFIX_D ba": {
+   "recall_at_1": 0.3667,
+   "recall_at_5": 0.7333,
+   "mrr": 0.5189,
+   "per_pair": [
+    {
+     "pair": 1,
+     "topic": "datacenter capex deceleration",
+     "rank_of_true_partner": 4,
+     "sim_true": 0.4102,
+     "outranked_by": [
+      "dd2",
+      "b16",
+      "a6"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 2,
+     "topic": "rates higher for longer",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.434,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 3,
+     "topic": "margin compression from input costs",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.4413,
+     "outranked_by": [
+      "dd11"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 4,
+     "topic": "inventory glut",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.5146,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 5,
+     "topic": "consumer weakness at low end",
+     "rank_of_true_partner": 3,
+     "sim_true": 0.3864,
+     "outranked_by": [
+      "b11",
+      "dd15"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 6,
+     "topic": "AI monetization skepticism",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.4593,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 7,
+     "topic": "short squeeze setup",
+     "rank_of_true_partner": 47,
+     "sim_true": 0.2307,
+     "outranked_by": [
+      "dd30",
+      "a30",
+      "a11",
+      "b30",
+      "b21",
+      "b8",
+      "b26",
+      "a21",
+      "dd29",
+      "b24",
+      "dd18",
+      "a10",
+      "a29",
+      "b29",
+      "a19",
+      "a8",
+      "a15",
+      "dd11",
+      "b11",
+      "b19",
+      "dd14",
+      "a5",
+      "dd15",
+      "a24",
+      "a18",
+      "dd24",
+      "b13",
+      "b22",
+      "b20",
+      "a12",
+      "dd21",
+      "dd28",
+      "b17",
+      "b6",
+      "dd1",
+      "a13",
+      "a17",
+      "b3",
+      "b10",
+      "a23",
+      "b27",
+      "b28",
+      "b18",
+      "a1",
+      "b4",
+      "b2"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 8,
+     "topic": "guidance sandbagging",
+     "rank_of_true_partner": 54,
+     "sim_true": 0.2683,
+     "outranked_by": [
+      "dd29",
+      "b29",
+      "a29",
+      "b30",
+      "dd22",
+      "dd28",
+      "a22",
+      "b22",
+      "a28",
+      "a14",
+      "a11",
+      "dd9",
+      "dd25",
+      "a25",
+      "b28",
+      "dd18",
+      "a27",
+      "dd15",
+      "dd7",
+      "b7",
+      "a18",
+      "a1",
+      "dd13",
+      "a13",
+      "a17",
+      "b20",
+      "b11",
+      "b19",
+      "b2",
+      "b5",
+      "dd26",
+      "a10",
+      "b17",
+      "a21",
+      "b9",
+      "b21",
+      "a20",
+      "b15",
+      "dd4",
+      "a2",
+      "a9",
+      "b26",
+      "dd30",
+      "a24",
+      "b14",
+      "b27",
+      "a3",
+      "dd5",
+      "dd19",
+      "dd11",
+      "dd1",
+      "b12",
+      "a5"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 9,
+     "topic": "China demand weakness",
+     "rank_of_true_partner": 3,
+     "sim_true": 0.3805,
+     "outranked_by": [
+      "dd10",
+      "b18"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 10,
+     "topic": "dilution risk",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.3915,
+     "outranked_by": [
+      "b19"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 11,
+     "topic": "multiple compression",
+     "rank_of_true_partner": 51,
+     "sim_true": 0.2768,
+     "outranked_by": [
+      "a14",
+      "b19",
+      "b30",
+      "b5",
+      "b6",
+      "dd15",
+      "a19",
+      "b29",
+      "b21",
+      "b13",
+      "a28",
+      "a23",
+      "dd28",
+      "b15",
+      "dd19",
+      "dd11",
+      "b26",
+      "dd16",
+      "a1",
+      "dd23",
+      "a21",
+      "b4",
+      "b27",
+      "a13",
+      "a10",
+      "a9",
+      "dd14",
+      "a24",
+      "dd6",
+      "dd8",
+      "a27",
+      "a30",
+      "b18",
+      "a15",
+      "b10",
+      "b8",
+      "b23",
+      "a2",
+      "a25",
+      "dd9",
+      "a7",
+      "dd25",
+      "b14",
+      "dd7",
+      "a4",
+      "a17",
+      "dd1",
+      "a12",
+      "a8",
+      "dd27"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 12,
+     "topic": "supply constraint easing",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.3939,
+     "outranked_by": [
+      "dd13"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 13,
+     "topic": "regulatory overhang lifting",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.4086,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 14,
+     "topic": "competitive share loss",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.6081,
+     "outranked_by": [
+      "dd15"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 15,
+     "topic": "buyback support",
+     "rank_of_true_partner": 5,
+     "sim_true": 0.3843,
+     "outranked_by": [
+      "dd19",
+      "dd16",
+      "b19",
+      "a19"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 16,
+     "topic": "energy demand from compute",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.5778,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 17,
+     "topic": "credit deterioration",
+     "rank_of_true_partner": 2,
+     "sim_true": 0.4713,
+     "outranked_by": [
+      "dd18"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 18,
+     "topic": "product cycle strength",
+     "rank_of_true_partner": 33,
+     "sim_true": 0.2767,
+     "outranked_by": [
+      "b23",
+      "b9",
+      "dd10",
+      "dd13",
+      "dd14",
+      "a10",
+      "b20",
+      "dd11",
+      "b21",
+      "a23",
+      "b6",
+      "dd6",
+      "dd1",
+      "a12",
+      "b11",
+      "dd7",
+      "dd12",
+      "a1",
+      "b14",
+      "b24",
+      "b5",
+      "a28",
+      "a14",
+      "a21",
+      "dd28",
+      "dd23",
+      "dd19",
+      "dd9",
+      "b4",
+      "b28",
+      "dd21",
+      "a17"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 19,
+     "topic": "insider selling signal",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.5831,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 20,
+     "topic": "reshoring beneficiary",
+     "rank_of_true_partner": 4,
+     "sim_true": 0.373,
+     "outranked_by": [
+      "dd13",
+      "b4",
+      "b12"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 21,
+     "topic": "obsolescence risk",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.4889,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 22,
+     "topic": "seasonal softness misread",
+     "rank_of_true_partner": 22,
+     "sim_true": 0.2491,
+     "outranked_by": [
+      "b8",
+      "a18",
+      "a28",
+      "dd12",
+      "a11",
+      "dd25",
+      "b5",
+      "dd28",
+      "b28",
+      "b30",
+      "b24",
+      "b6",
+      "a27",
+      "dd22",
+      "dd9",
+      "b12",
+      "a30",
+      "b27",
+      "b11",
+      "a8",
+      "b7"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 23,
+     "topic": "pricing power intact",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.5385,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 24,
+     "topic": "customer concentration risk",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.442,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 25,
+     "topic": "FX headwind",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.4186,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 26,
+     "topic": "labor cost pressure",
+     "rank_of_true_partner": 7,
+     "sim_true": 0.3776,
+     "outranked_by": [
+      "dd11",
+      "b2",
+      "a10",
+      "a23",
+      "dd1",
+      "b29"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 27,
+     "topic": "accounting quality concern",
+     "rank_of_true_partner": 3,
+     "sim_true": 0.3815,
+     "outranked_by": [
+      "dd27",
+      "a24"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 28,
+     "topic": "TAM skepticism",
+     "rank_of_true_partner": 1,
+     "sim_true": 0.4393,
+     "outranked_by": [],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 29,
+     "topic": "management credibility loss",
+     "rank_of_true_partner": 23,
+     "sim_true": 0.329,
+     "outranked_by": [
+      "b19",
+      "b8",
+      "a2",
+      "b2",
+      "b26",
+      "b11",
+      "a1",
+      "a9",
+      "b21",
+      "a19",
+      "dd13",
+      "a21",
+      "dd9",
+      "b4",
+      "a10",
+      "b15",
+      "a24",
+      "a27",
+      "dd16",
+      "dd11",
+      "a13",
+      "a23"
+     ],
+     "hard_decoy_won": []
+    },
+    {
+     "pair": 30,
+     "topic": "acquisition speculation",
+     "rank_of_true_partner": 22,
+     "sim_true": 0.3157,
+     "outranked_by": [
+      "dd15",
+      "b14",
+      "b11",
+      "a10",
+      "b8",
+      "a14",
+      "b19",
+      "dd28",
+      "dd16",
+      "a19",
+      "b28",
+      "dd14",
+      "a28",
+      "b21",
+      "b27",
+      "a1",
+      "a24",
+      "b5",
+      "dd11",
+      "b6",
+      "dd7"
+     ],
+     "hard_decoy_won": []
+    }
+   ]
+  }
+ }
+}
