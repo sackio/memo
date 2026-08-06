@@ -48,7 +48,34 @@ class StoreRequest(PermissiveRequest):
 
 
 class StoreResponse(BaseModel):
+    """⭐ Carries enough for the caller to VERIFY the write, not merely learn its id.
+
+    ⛔ WHY. `memo_update` returns the full stored document — that echo is a read of
+    post-write server state, so the call self-verifies. `memo_store` returned
+    `{id}` alone, so it was *issued*, not verified. **Same store, same session, and
+    nothing at the call site distinguished them**, so callers reported both as
+    "stored" and only one of those reports was justified. (`mind`, 2026-08-06,
+    applying `alpaca`'s rule: *an issued write is not a touch of ground truth*.)
+
+    ⚠️ THE FAILURE IS SILENT AND LANDS IN THE DURABLE ARTIFACT. `alpaca` had a
+    `memo_store` abort at 300s mid-embed and reported it done from having issued
+    it. **A timed-out call and a slow successful one are indistinguishable from the
+    caller's side** — they only knew because the harness surfaced the abort.
+
+    ⛔ `content_sha256` IS COMPUTED FROM A POST-WRITE READ, NEVER FROM THE REQUEST.
+    Hashing the input would echo the caller's own string back and prove only that
+    the request was parsed — the same trap as verifying a file by re-reading what
+    you just sent. It must be derived from what the database actually holds, or it
+    is theatre with a checksum on it.
+    """
+
     id: str
+    # sha256 of the stored content, read back from the DB after the write.
+    # Caller compares against sha256 of what they sent.
+    content_sha256: str = ""
+    # Server-side token count of the stored content — a second, independent
+    # witness that catches truncation even if a hash comparison is skipped.
+    token_count: int = 0
 
 
 class Filters(BaseModel):

@@ -1,5 +1,6 @@
 import asyncio
 import contextlib
+import hashlib
 import time as _time
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -72,6 +73,35 @@ mcp_starlette.router.lifespan_context = lambda app: contextlib.AsyncExitStack()
 
 _LEAK_MARKER = "</content>"
 _LEAK_FRAGMENTS = ("<parameter name=", "<tags>", "</invoke>")
+
+
+async def _store_receipt(db_path: str | None, doc_id: str) -> dict:
+    """Post-write read of what the DB actually holds, for the caller to verify against.
+
+    ⛔ READS THE DOCUMENT BACK. Does NOT hash the request body. Hashing the input
+    would confirm only that the request was parsed and would pass unchanged if the
+    write silently truncated, wrote elsewhere, or did nothing — the exact failure
+    this exists to catch. [mind, 2026-08-06]
+
+    ⚠️ This is a receipt, not a durability guarantee: it proves the row is readable
+    now, not that it survived to disk. That is a strictly weaker claim than callers
+    may want and is deliberately not overstated — but it is unboundedly stronger
+    than `{id}`, which proves only that a request was accepted.
+
+    Returns {} rather than raising if the read-back fails: a store that succeeded
+    must not be reported as failed because its receipt could not be produced.
+    """
+    try:
+        doc = await db.get(db_path, doc_id)
+        if not doc:
+            return {}
+        content = doc.get("content") or ""
+        return {
+            "content_sha256": hashlib.sha256(content.encode("utf-8")).hexdigest(),
+            "token_count": int(doc.get("token_count") or 0),
+        }
+    except Exception:
+        return {}
 
 
 def _log_phantom_fields(req, endpoint: str, doc_id: str | None = None,
@@ -161,6 +191,16 @@ async def memo_store(
 ) -> dict:
     """Store a document with automatic embedding and token count.
 
+    Returns `{id, content_sha256, token_count}`. ⭐ **`content_sha256` is read back
+    from the database after the write** — compare it against sha256 of the content
+    you sent to confirm the store landed intact. Without that comparison you know
+    the call was *issued*, not that it *succeeded*: a timed-out call and a slow
+    successful one look identical from the caller's side, and the difference lands
+    in the durable artifact where nothing surfaces it later. [mind, 2026-08-06]
+
+    ⚠️ An empty `content_sha256` means the read-back itself failed, NOT that the
+    store failed. Re-read with `memo_get` before concluding anything.
+
     db_path: ACCEPTED AND IGNORED. There is one database — the global DB on
     server4 — and every request routes to it (2026-06-29 single-global
     refactor). The parameter is kept so existing callers don't break; passing
@@ -181,7 +221,7 @@ async def memo_store(
         db_path, "store", query=title or (content or "")[:200], tags=tags or [],
         result_ids=[doc_id], latency_ms=(_time.time() - _t0) * 1000,
         user_agent="mcp:memo_store")
-    return {"id": doc_id}
+    return {"id": doc_id, **await _store_receipt(db_path, doc_id)}
 
 
 @mcp.tool()
@@ -634,7 +674,7 @@ async def store_document(req: StoreRequest, request: Request):
         latency_ms=(_time.time() - _t0) * 1000,
         user_agent=request.headers.get("user-agent"),
         source_ip=request.client.host if request.client else None)
-    return StoreResponse(id=doc_id)
+    return StoreResponse(id=doc_id, **await _store_receipt(req.db_path, doc_id))
 
 
 @app.get("/documents", response_model=list[Document])
