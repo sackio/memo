@@ -251,12 +251,28 @@ values for the *same object* (the data-shape blocker from scout pass §7).
 
 That precondition splits the two projects cleanly:
 
-- **`mind` has an oracle, and it is free.** A claim about an earnings reaction or a price
-  move is adjudicated by the market within days. Source reliability is not only buildable
-  there, it is buildable *automatically*, with no human labeling — score each source's past
-  calls against what actually happened. ⭐ **mind can measure its retrieval in a way memo
-  structurally cannot**, because its domain hands it ground truth for free. That is a real
-  asset and I do not think it has been recognised as one.
+- **`mind` has an oracle — real, but far thinner than this document first claimed.** A claim
+  about a price move is adjudicated by the market, with no human labeling. **But mind
+  measured the funnel and corrected their own earlier framing**, which I had already written
+  up as load-bearing:
+
+  | verdict, across 52,902 claim verifications | |
+  |---|--:|
+  | **untestable** | **45,869 (86.7%)** |
+  | refuted | 4,809 |
+  | verified | 1,698 |
+  | mixed | 526 |
+
+  ⇒ **Only 12.3% of extracted claims ever resolve against a market outcome, and among those
+  that do, refuted outruns verified nearly 3:1.** The oracle therefore measures *a
+  biased-toward-resolvable slice of creator calls* — not retrieval quality in general.
+
+  ⛔ **I wrote "mind can measure its retrieval in a way memo structurally cannot" and
+  "the only project in this family that can actually measure whether its retrieval is good."
+  Both overstate it and are withdrawn.** mind's words: *"I gave you the clean version of a
+  messy asset."* ⚠️ The asset is still real and still the best in the family — it is just an
+  oracle over a subset with known selection bias, and any number derived from it inherits
+  that bias.
 - **`memo` has no oracle.** "server4's IP is X" is adjudicated by a human noticing, or never.
   We can record *provenance* (who asserted it, when, on which host) but not *accuracy*, and
   a reliability prior we cannot validate is a number that will drift into fiction while
@@ -390,6 +406,68 @@ build reduces to *producing that table* — which is §4c (who wrote it) plus cl
    like**, and these algorithms would ratify it. mind's oracle (resolved calls vs outcomes) is
    the only check in the family against that failure.
 
+## 4e. mind MVP — what Ben actually asked to be spec'd
+
+Ben, 2026-08-06 10:23, narrowing scope: *"I want to speak solely about the mind project…
+spec a basic algorithm and data store… a knowledge base then used by day traders to assess
+trade opportunities… we need to be able to know when many different sources are talking about
+the same thing, when sources disagree or provide counterfactuals to a thesis."*
+
+**Scouted first, and the scouting result is decisive: there is nothing to adopt.** Every
+"financial news RAG" repo found is a 0–3★ demo. Topic-detection-and-tracking has no live
+implementations. The only reusable pieces anywhere near this are Kleinberg burst detection
+(`nmarinsek/burst_detection`, 77★) and crowd-kit (§4d). ⇒ **This gets built.**
+
+### The proposal, and what mind's measurements did to it
+
+I proposed storing claims as `(source, ticker, direction, horizon, thesis, ts)` with chunks
+kept underneath as evidence, and two vector indexes rather than one.
+
+⛔ **mind then measured, and the centre of gravity moved.** Corrections, all theirs:
+
+1. ⭐ **The claim layer already exists at scale.** `claims`: **61,333 rows off 6,309 videos**,
+   ticker present on 54,430 (88.8%), plus `claim_verifications` (52,902), `creator_credibility`
+   (40 creators), `recommendations`/`recommendation_outcomes`. The live schema is very close
+   to what I proposed. **This is not a rework — it is built and running.**
+2. ⛔ **"Test extraction alone before building on it" was aimed at the wrong stage.** 61k
+   claims is extraction already demonstrated at scale. ⚠️ And I cannot cost it: mind's
+   `ingest_cost_log` has the right columns but **0 `llm_calls` / 0 `llm_tokens`** — it is not
+   wired to the extraction path. Their instruction, which is correct: *"Don't replace your
+   guess with a number I don't have."*
+3. ⭐⭐ **THE HARD PART IS RESOLUTION, NOT EXTRACTION.** 86.7% untestable (§4). The
+   `resolutions` design is right and **will run at roughly 1-in-8 yield** — spec it knowing
+   that. ⇒ **Testability, not extraction, is the lever**: a prediction with no window and no
+   threshold cannot be scored, so the value is in claim *formulation*.
+4. ✅ **Point the thesis index at CREATORS, not publishers.** `claims` is keyed on `video_id`
+   — the layer is YouTube-only, and there are no news claims. With the news side dominated by
+   one publisher and **40 creators carrying credibility scores**, "many sources on the same
+   story" has to come from the creator axis. ⛔ **Applied to news it would cluster one vendor
+   talking to itself.** The chunk-index/thesis-index split survives; the axis changes.
+
+### What stands
+
+⭐ **Two vector spaces, not one.** Chunk embeddings are dominated by article style and
+boilerplate; thesis embeddings are dominated by the assertion. **Clustering chunks finds
+documents that read alike; clustering theses finds people saying the same thing** — and only
+the second answers Ben's question. This is the interesting build, now aimed at creators.
+
+⛔ **Ticker is a structured filter, NEVER a vector match.** Dense embeddings are worst exactly
+on literals — measured here (R-25, hybrid work) and confirmed by mind, whose own entity path
+scored **`NYT` at z=4.1 above a real +17% earnings move.** Every query is `ticker + time
+window` as hard filters *first*, then ANN over the survivors. That also keeps the working
+index small, which is what makes it fast enough to trade on.
+
+**What a consumer gets back for a ticker, in one call:** claim count *and* distinct-source
+count (different numbers, and the gap is the story) · burst score against that ticker's own
+trailing baseline — "unusual", not "high" · the direction split with **the minority surfaced,
+not averaged away** · top evidence chunks · each source's hit rate beside its claim.
+⛔ **No blended confidence number** — that hides precisely the counterfactual Ben asked to be
+able to see.
+
+**Deliberately out of MVP:** reliability modelling via crowd-kit (plain hit rate suffices
+until it demonstrably does not) · cross-source copy detection · anything touching ranker
+weights.
+
 ## 5. What I would actually do, in order
 
 **Rewritten after Ben's redirect** — *"i'm not asking you to assess its universe, i'm asking
@@ -436,10 +514,25 @@ even present"** — and that question is almost never the one a feature proposal
 itself.
 
 ⇒ Same conclusion as the audit, from the other end: **the project that can measure should go
-first.** mind has a free oracle (resolved calls against market outcomes) and has already used
-it to rank its own stored fields honestly — track record earns its place, sentiment does not.
-memo has no oracle and should adopt consensus machinery, if ever, **on mind's evidence rather
-than in parallel on hope.**
+first.** mind has an oracle — ⚠️ over a 12.3% resolvable slice with known selection bias
+(§4), not the clean instrument I first described — and has already used it to rank its own
+stored fields honestly. memo has none and should adopt consensus machinery, if ever, **on
+mind's evidence rather than in parallel on hope.**
+
+⭐ **And the strongest recurring finding of the day is not about consensus at all — it is
+about fields that look like answers and are actually defaults.** Three independent instances,
+all failing silently and all in the reassuring direction:
+
+| field | reads as | actually is |
+|---|---|---|
+| mind's `sentiment` = `NULL` | neutral | never scored — and presence encodes *vendor* |
+| a clean near-duplicate check | sources are independent | nothing to syndicate from |
+| mind's `claims.testable` | the extractor judged it testable | **boolean defaulting to `true`** |
+
+⇒ **Whatever gets built should treat "not assessed" as a first-class value wherever a
+judgement can be absent.** All three of these were invisible from inside the system holding
+them, and two were found only because someone outside asked a question that forced the
+disaggregation.
 
 ## 7. Open questions
 
