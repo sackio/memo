@@ -48,27 +48,50 @@ test — an LLM handed five articles is *better* at judging their tone than any 
 have frozen at index time, and unlike our score it can judge tone *relative to the question
 being asked*. A stored sentiment scalar is a worse answer computed earlier.
 
-⭐ **`mind` has run this experiment and supplies a sharper reason than mine — partial
-coverage.** They persist a sentiment scalar and regret it: it covers **~7% of weekdays'
-articles**, a flat ~140–160/day whether the day carries 900 or 2,100. So `NULL` means
-*not scored* and **reads as neutral**. A consumer filtering `sentiment <> 'negative'` passes
-93% of the tape as though it had been cleared. This is not hypothetical — mind warned the
-`alpaca` seat off it the same morning, before they traded on it.
+### The worked example, and what it is actually an example of
 
-> **A derived judgement is absent when the text is absent. A stored scalar is absent while
-> the column still exists — which reads as a value.** (`mind`, 2026-08-06)
+`mind` has a sentiment field, and I used it here as the case against precomputed scalars.
+**Two rounds of correction from them established it is not that case at all.** The corrected
+facts, measured by mind on 2026-08-06 (trailing 30d):
 
-That is the general form of the argument and it is better than "the model can do it itself."
-Deriving fails loudly; a partially-populated column fails silently, in the safe-looking
-direction.
+| vendor | rows | with sentiment |
+|---|--:|--:|
+| `benzinga_archive` | 14,719 | **0** |
+| `polygon` | 13,791 | **4,107 (29.8%)** |
 
-⇒ **And the resolution is to drop the column, not to backfill it.** The scalar is *redundant
-with the chunk it hangs off* — the article is stored, and an LLM reading it can draw the same
-conclusion better and in light of the actual question. That redundancy is also why 7%
-coverage survived so long unnoticed: **nothing depended on the column until a consumer did,**
-and by then it read as authoritative. ⚠️ I argued the opposite (backfill to 100%) for one
-message; that was wrong, and it is recorded here because "make the broken signal complete"
-is the more natural instinct than "delete the signal you didn't need."
+**It is vendor-supplied, by polygon only — mind does not compute it.** And it is **not a
+scalar**: a live row is per-ticker with reasoning prose (*"The company is the subject of a
+securities class action lawsuit alleging…"*).
+
+⇒ **That puts it on the *derive* side of the line, not the store side.** It is text an LLM
+can read, which happens to have arrived pre-written. Filing it as "a stored sentiment scalar"
+was filing it under the wrong case, and both recommendations I drew from it were wrong:
+*backfill it* was not merely expensive but **impossible** (mind would have to author
+judgements the vendor never shipped), and *retire it* means discarding free vendor data on
+evidence that does not support the call.
+
+⇒ ⭐ **What it IS an example of — and this is more useful than the point I was trying to
+make: a partially-populated field whose presence correlates with a hidden variable.**
+
+> **Partial coverage is bad. Partial coverage correlated with source is worse, because the
+> surviving set is systematically non-representative rather than merely small.**
+
+Filtering on `sentiment IS NOT NULL` does not sample 30% of the tape — it **silently selects
+polygon-sourced articles only**. `NULL` still reads as neutral (the `alpaca` hazard, which
+stands), but underneath that there is a selection bias that would survive even if someone
+"fixed" the neutral-reading bug. mind has warned `alpaca` on both.
+
+⇒ **The supportable recommendation is consumer-side and stops there:** `unscored` must be
+distinguishable from `neutral`, **and** presence must not be used as a filter, because
+presence encodes vendor. Dropping the column is a separate call this evidence does not make.
+
+⚠️ **Recorded because the error is instructive on both sides.** mind's first account —
+a flat ~140–160/day against varying volume — read as a capped producer. It was vendor mix,
+and one `GROUP BY` away. In their words: *"I measured the shape of the output when the
+question was about the world that produced it"* — the same error I had named in myself an
+hour earlier, in §3. **Two independent seats committed it on the same afternoon, on
+different data, and neither caught it without being asked a question that forced the
+disaggregation.**
 
 **Applied to annotations we might hang off a stored chunk — never to whether the chunk itself
 is worth keeping:**
@@ -135,9 +158,18 @@ important finding in this document.**
 | Distinct publishers, *entire* 2.49M-article corpus | **4** |
 | Exact-title duplication, same 24h | **1 duplicated title — 2 rows out of 2,337** |
 
-⇒ **The problem is not that corroboration is being inflated by copies. It is that
-cross-source corroboration was never available to be counted.** There is effectively one
-source. Nothing is being double-counted because there is nothing to double-count.
+⛔ **SCOPE CORRECTION — Ben, 2026-08-06: *"mind has tons of publishers, and youtube channels
+to boot — i'm not asking you to assess its universe, i'm asking to build what i want."***
+
+**He is right and the error is mine twice over.** The table above is *one news table over 30
+days*. I reported it as mind's source universe, which it is not — there are more publishers
+and the YouTube creators besides. And I then used that over-broad reading to declare his
+request **blocked**, which is feasibility assessment he did not ask for.
+
+⇒ **What survives is the trap (below), which is a real and general finding. What does not
+survive is the conclusion I drew from it.** A narrow measurement generalised into a verdict
+on a whole system is the same error in a new coat: I measured what was in front of me and
+reported it as a property of the world.
 
 ### ⛔ The trap, which is the part worth carrying to every other project
 
@@ -247,17 +279,18 @@ Added after Ben asked for "consensus / contradiction weighting" together. **They
 names for one feature, and separating them is most of the answer:**
 
 > **Consensus needs *many independent sources*. Contradiction needs only *two facts about the
-> same thing*.** Neither project has the first. memo has plenty of the second.
+> same thing*.** Both projects have both. They differ in what is cheap to reach first.
 
-That asymmetry is why consensus is blocked and contradiction is buildable today.
+⛔ **This section previously said "neither project has the first" and called consensus
+blocked. Ben corrected both halves** — *"memo has ingest from MANY agents, all different
+sources"*, and mind has publishers and YouTube creators well beyond the one table I sampled.
+See §3's scope correction and §4c.
 
 Contradiction itself splits into two cases that want different machinery:
 
 **(a) Synchronic — sources disagree right now.** Handled in the literature by surfacing the
 disagreement rather than silently resolving it (CARE-RAG, `arXiv 2507.01281`, conflict-driven
-summarization). ⚠️ Low value for mind at present: with four publishers there is little real
-disagreement to adjudicate — mind confirms they do no disagreement handling and that this is
-"less of a gap than it sounds."
+summarization).
 
 **(b) Diachronic — new information supersedes old.** This is memo's real case and it needs no
 consensus machinery at all. One agent stores *"the IP is X"*; another later stores *"the IP is
@@ -272,46 +305,123 @@ wrong *as an answer*; ageing it down breaks "when did we decide X" in order to f
 the rule now." The correct shape is additive — `valid_from` / `valid_to` / `supersedes`,
 invalidate-never-delete — and `getzep/graphiti` (29.6k★, Apache-2.0) already implements it.
 
-⇒ **Of everything in this document, (b) is the only item that is unblocked, needs no oracle,
-needs no source diversity, and addresses a failure memo demonstrably has.** If one thing gets
-built when rationing lifts, it should be this — and its first milestone is claim identity,
-not weighting.
+⇒ **(b) needs no oracle and no source diversity, and addresses a failure memo demonstrably
+has.** Its first milestone is claim identity, not weighting.
+
+## 4c. What memo actually records about its sources — measured
+
+Ben: *"memo has ingest from MANY agents, all different sources."* Correct, and it exposed a
+claim of mine that was false. I told him memo tags every document with the seat and host that
+wrote it. **It does not.** Measured against the live corpus, 8,914 documents:
+
+| field | docs | what it actually means |
+|---|--:|---|
+| **no metadata at all** | **4,259** | ~48% of the corpus |
+| `source_host` | 4,441 | host of a *migrated file* — not an author |
+| `memdir_store` | 816 | 31 distinct; closest thing to per-seat identity |
+| `migrated_by` | 816 | 3 values, and it names the migration tool |
+| `author` / `agent` | 5 / 1 | ad hoc, wherever a writer happened to type it |
+
+⇒ ⭐ **memo is genuinely multi-source and the ingest path discards which source.** The
+corpus is not the limitation; the write path is. Nothing records that these three memos about
+one IP came from three different seats rather than one seat writing three times — and that
+distinction is the whole of corroboration.
+
+⭐ **The parallel is the day's real finding.** `mind` reported independently that *provenance
+collapses at ingest* on their side — PR-wire reprints arriving under a publisher's own label.
+**Two unrelated systems, both genuinely multi-source, both throwing source identity away at
+write time, and both therefore unable to say whether agreement means anything.** Neither
+problem is a retrieval problem and neither is fixed by a better ranker.
+
+📌 **Scope: v2, not v1** — Ben, 2026-08-06: *"no defer for v2."* v1 on `:8000` is live fleet
+infrastructure written to by ~50 seats and stays untouched. v2 re-ingests everything anyway,
+so identity gets captured on the way in rather than bolted onto a live path. ⚠️ Backfilling
+the historical half is mostly unanswerable and should not be attempted.
+
+## 4d. The scoring algorithms — solved, and Apache-2.0
+
+Ben: *"i am wondering if you can find algorithmic ways of scoring based on project scouting."*
+Scouted. **The scoring is a solved problem with a maintained library. The algorithm is not the
+work.**
+
+**`Toloka/crowd-kit`** — 252★, **Apache-2.0**, last push 2025-12. ⚠️ GitHub's API reports
+`NOASSERTION`; that is a parse failure, and reading `LICENSE` shows plain Apache 2.0. (Same
+class of error as the 08-05 "all five repos unlicensed" mistake — read the file.)
+
+It ships, under `crowdkit/aggregation/classification/`: **Dawid–Skene · GLAD · MACE · M-MSR ·
+KOS · Wawa · ZeroBasedSkill · MajorityVote · GoldMajorityVote**, plus text and embedding
+aggregators (RASA, HRRASA, ROVER) for free-text answers.
+
+⭐ **Every one of them does exactly the thing Ben asked for: given who-said-what, jointly
+estimate the true value *and* each source's reliability.** Consensus and source-consistency
+are not two features — they are one computation, and it is `pip install`-able.
+
+| algorithm | what it buys over the simpler ones |
+|---|---|
+| **Dawid–Skene** (1979) | the canonical baseline: per-source confusion matrix, EM between "what's true" and "who's reliable" |
+| **GLAD** | separates **source ability from item difficulty** — a fact every seat got wrong means the fact is hard, not that every seat is bad |
+| **MACE** | models a source that isn't *trying* separately from one that is *mistaken* |
+| **Wawa / ZeroBasedSkill** | one-pass approximations, weight by agreement with the majority — where I would start |
+| **GoldMajorityVote** | calibrates against items whose answer is already known; we could seed with infrastructure facts we are certain of |
+
+**Adjacent, different jobs:**
+- **Dempster–Shafer** (`reineking/pyds`, BSD-3, ⚠️ **archived 2021**) — combines evidence
+  while carrying an explicit *unknown* mass. Interesting precisely because it distinguishes
+  "no evidence" from "evidence for neutral" — the exact hazard in §1.
+- **EigenTrust** (several small impls) — transitive reputation over a graph. The one that
+  fits agent-to-agent relay, where trust should flow along who-told-whom.
+- **RRF** (`Raudaschl/rag-fusion`, 948★, MIT) — rank fusion; every implementation found has
+  unvalidated weights, groton's included.
+- **Classical truth discovery** (`joesingo/truthdiscovery`, 7★, GPL-3.0, dead since 2023-03) —
+  Sums, Average.Log, Investment, PooledInvestment, TruthFinder. Algorithms don't rot, but
+  crowd-kit is the maintained path.
+
+⇒ ⭐ **THE WHOLE FAMILY TAKES ONE INPUT SHAPE: a table of `(source, item, value)`.** So the
+build reduces to *producing that table* — which is §4c (who wrote it) plus claim identity
+(what is it about). **Neither is an algorithm problem, and no library call fixes either.**
+
+⚠️ **Two honest caveats, both structural.**
+
+1. These assume multiple sources labelling **the same item**. That is the input contract, not
+   a blocker — but it is precisely what our data does not currently emit.
+2. They estimate reliability **from mutual agreement, with no ground truth.** So they will
+   conclude that a confident majority is right. ⛔ Where a wrong belief propagated *between*
+   agents — the 08-05 pin-protocol cascade — **agreement is exactly what the error looks
+   like**, and these algorithms would ratify it. mind's oracle (resolved calls vs outcomes) is
+   the only check in the family against that failure.
 
 ## 5. What I would actually do, in order
 
-**Reordered after mind's measurement.** The first draft led with near-duplicate clustering;
-§3 shows that would have measured the wrong thing and returned a reassuring number.
+**Rewritten after Ben's redirect** — *"i'm not asking you to assess its universe, i'm asking
+to build what i want."* The earlier version ranked things by whether they were feasible. This
+one is a build order. Each step is testable on its own.
 
-1. ⭐ **Report source concentration wherever agreement is claimed** — distinct sources, not
-   distinct documents. Cheapest item here and it is a *precondition*, not an improvement:
-   without it every downstream consensus figure is arithmetic on one opinion. On mind's
-   corpus today this correctly reports "1 effective source" and stops the rest of the
-   programme before it starts. **A consensus feature built on a 4-publisher feed would have
-   looked like it worked.**
-2. **Retire mind's sentiment scalar, or make its absence explicit** — not a consensus feature
-   at all, but it is live, it is silent, and another seat nearly traded on it. The column is
-   redundant with the stored chunk (§1), so removing it loses nothing; if it stays,
-   `unscored` must be distinguishable from `neutral` at the consumer. mind owns this;
-   flagged here because it is the sharpest instance of §1 in the fleet.
-3. ⭐ **Supersession for memo** (§4b(b)) — **the only unblocked item in this document.** No
-   oracle, no source diversity, no ranker change. First milestone is **claim identity**
-   (knowing two memos are about the same fact), not weighting; if that turns out to be hard,
-   that is the finding and the rest should not be built on top of it.
-4. **Provenance / transmission chains for memo** (§4). Record who asserted a claim and from
-   whom. Additive, no oracle, no ranking impact, and it addresses a failure memo
-   demonstrably has. Pairs naturally with 3 — same schema territory.
-5. **Intra-publisher provenance recovery** (§3, mind only, *if* they want it) — near-dup
-   clustering aimed at the PR-wire reprints that ingest flattened into "Benzinga". ⚠️ Must
-   never be reported as an independence metric; it measures what ingest destroyed.
-6. **Source reliability — mind only**, and largely already built (per-creator hit rate). This
-   is the one needing a harness, and mind is the one project with a free oracle.
+1. ⭐ **Capture source identity at write time — v2** (§4c). Nothing downstream works without
+   it, and 48% of the corpus currently carries no metadata at all. Ben's call: **v2, not a v1
+   patch** (`:8000` stays untouched). v2 re-ingests everything, so this is capture-on-the-way-in
+   rather than a migration. ⚠️ Do not attempt to backfill the historical half.
+2. ⭐ **Claim identity** — knowing two records are about the same fact. This is the real
+   engineering in the whole programme and the input contract for every algorithm in §4d.
+   Similar text is not the same claim, and the same claim can be worded nothing alike.
+   *Test it early and on its own:* if it does not work, that is the finding, and nothing above
+   it should be built.
+3. **Emit the `(source, item, value)` table** and run an off-the-shelf aggregator (§4d). Start
+   with **Wawa** — one pass, no EM, no tuning — and only reach for Dawid–Skene or GLAD if the
+   simple version shows signal. This step is a library call once 1 and 2 exist.
+4. **Annotate, don't weight** (§2). Surface "3 seats, independently, one disagrees" in the
+   context and leave the ranker alone until something measures that a rank change is needed.
+5. **Supersession** (§4b(b)) — additive `valid_from`/`valid_to`/`supersedes`,
+   invalidate-never-delete. Falls out of 2 almost for free, since both need claim identity.
+   Read `getzep/graphiti` first.
+6. **Source track record** — which seats' records later get superseded. Falls out of 5 with no
+   new instrumentation. ⚠️ Read §4d caveat 2 before trusting it.
+7. **mind's consumer-side sentinel fix** — `unscored` distinguishable from `neutral`, and
+   presence never used as a filter (presence encodes vendor). mind owns it; listed because it
+   is live and another seat nearly traded on it.
 
-**Not now, and possibly not ever:** stored sentiment scalars (§1) · decay/recency weighting
-(scout §1, and mind independently reached the same conclusion by a different route) · a
-from-scratch truth-discovery implementation (needs many sources; mind has four) · any shared
-component that owns a data model · **a cross-source consensus feature for mind, until the
-feed has more than one real source** — that is an ingest problem wearing a retrieval
-problem's clothes.
+**Not now:** decay/recency weighting (scout §1; mind reached the same conclusion
+independently) · a from-scratch truth-discovery implementation (crowd-kit is Apache-2.0 and
+maintained) · any shared component that owns a data model · touching v1's write path.
 
 ## 6. The measurement question, which is the same one as yesterday
 
@@ -333,18 +443,41 @@ than in parallel on hope.**
 
 ## 7. Open questions
 
-1. ⭐ **For Ben, and it is now the main one:** consensus weighting was the half you wanted
-   kept, and the measurement says **mind cannot do it — not because the technique is wrong
-   but because the feed has four publishers and 93.6% of a day is one of them.** That makes
-   it an **ingest question before it is a retrieval question**: is adding real source
-   diversity to mind's feed something you want to pursue? Every consensus idea in this
-   document is blocked on that and on nothing else.
-2. **For Ben:** §3 withdrew my own shared-package candidate — the two projects want
-   similarity clustering for genuinely different contracts. Combined with §4 arguing against
-   a shared reliability component, **there is currently no shared consensus core worth
-   packaging.** Worth knowing before more design effort goes into KB-in-a-box.
-3. Does memo want provenance chains at all (§5 step 3)? It is the only item here that
-   changes memo's schema, and the audit's P4 already has a claim on that territory.
-4. **For mind, if cheap:** how far back does the 4-publisher figure hold? If the corpus was
-   more diverse historically, the concentration is a regression with a cause rather than a
-   standing property — and that changes whether §7.1 is a purchase or a repair.
+1. **Claim identity is the gate** (§5 step 2) and I have no design for it yet. Facts in memo
+   are narrative prose, not triples. Whether we extract claims at write time, at read time, or
+   only for a narrow high-value class (IPs, ports, paths, versions) is the first real design
+   decision and I would want to make it deliberately rather than by drift.
+2. **How much of the value needs the full aggregator at all?** §5 step 4 (annotate) may
+   capture most of it without any of §4d, since the model does the weighing. Worth knowing
+   before building 3.
+3. **§4d caveat 2 has no answer yet.** Agreement-based reliability ratifies a confident
+   majority, and agent-to-agent propagation manufactures exactly that. mind's oracle is the
+   only check in the family; memo has none. If we build reliability scoring on memo, we should
+   know in advance what would tell us it had gone wrong.
+
+---
+
+## Provenance of this document
+
+Written across ~90 minutes on 2026-08-06 with Ben correcting live and `mind` supplying
+measurements. **Six positions in it were wrong and were changed on evidence**, which is worth
+recording because the document reads as though it were reasoned out in one pass and it was
+not:
+
+1. "Store what the reader cannot reconstruct" — conflated *what to keep* with *what to
+   annotate*. (Ben)
+2. Then overcorrected to "store sentiment at scan time." (Ben again — I inverted rather than
+   located the error.)
+3. "Backfill mind's sentiment column" — impossible; it is vendor-supplied. (`mind`)
+4. "Retire mind's sentiment column" — unsupported; it is free vendor data, and not a scalar.
+   (`mind`)
+5. Near-duplicate clustering as the shared independence primitive — the detector returns clean
+   on a degenerate corpus and clean reads as independence. (`mind`)
+6. "Consensus is blocked; memo is single-source" — memo has ~50 agent seats writing to it, and
+   mind's universe is far wider than the table I sampled. (Ben)
+
+⭐ **The one error underneath most of them: I kept measuring what was in front of me and
+reporting it as a property of the world** — one table read as mind's universe, one project's
+coverage bug read as a design principle, a duplication count read as provenance. `mind` made
+the same error on the same afternoon and named it in the same words. **It appears to be the
+default failure of a system that can measure things quickly.**
