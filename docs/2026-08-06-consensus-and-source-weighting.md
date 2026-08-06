@@ -438,11 +438,38 @@ kept underneath as evidence, and two vector indexes rather than one.
    `resolutions` design is right and **will run at roughly 1-in-8 yield** — spec it knowing
    that. ⇒ **Testability, not extraction, is the lever**: a prediction with no window and no
    threshold cannot be scored, so the value is in claim *formulation*.
+   ⚠️ **And that 86.7% is what survives an existing filter, not what a new one would catch** —
+   `testable = false` already rejects 8,424 claims (13.7%) up front, so verification runs on
+   the pre-filtered set. ⭐ **The unexploited lever is `test_window`: empty on 30,534 claims
+   (49.8%) that pass as testable anyway.** Requiring a stated window at extraction would gate
+   ~half the corpus, against 13.7% for the gate already running. **A claim that cannot state
+   what would falsify it is not a weak claim — it is not a claim.**
 4. ✅ **Point the thesis index at CREATORS, not publishers.** `claims` is keyed on `video_id`
    — the layer is YouTube-only, and there are no news claims. With the news side dominated by
    one publisher and **40 creators carrying credibility scores**, "many sources on the same
    story" has to come from the creator axis. ⛔ **Applied to news it would cluster one vendor
    talking to itself.** The chunk-index/thesis-index split survives; the axis changes.
+
+### ⛔ SCOPE CUT — resolution is OUT of the MVP
+
+**Ben, 2026-08-06 10:31:** *"I think we care as much about market resolution — I just want to
+know what the market is saying is happening and the traders will do things like resolution.
+I don't think we need to get bogged down in that."*
+
+⇒ **Drop `outcomes`, `resolutions`, and everything downstream.** ⭐ **This also drops the
+86.7%-untestable funnel — the single hardest problem in the design — because it was never the
+MVP's problem.** mind and I spent the preceding exchange characterising a constraint on work
+Ben does not want done. The corrected numbers stay recorded above because they are true and
+mind may want them, but **they no longer bear on this spec.**
+
+⇒ **The MVP is a READ SURFACE over what is being said right now**, not a scoring system:
+*for this ticker, who is saying what, how many distinct sources, is this unusual, and where do
+they disagree.* Judgement stays with the trader. That is the same annotate-don't-weight
+principle from §2, arrived at independently by the person who has to use the thing.
+
+⚠️ **Source credibility becomes optional decoration rather than core.** mind's per-creator hit
+rate can be surfaced beside a claim, but nothing in the MVP depends on it — which is just as
+well, given §4's selection bias.
 
 ### What stands
 
@@ -519,20 +546,41 @@ first.** mind has an oracle — ⚠️ over a 12.3% resolvable slice with known 
 stored fields honestly. memo has none and should adopt consensus machinery, if ever, **on
 mind's evidence rather than in parallel on hope.**
 
-⭐ **And the strongest recurring finding of the day is not about consensus at all — it is
-about fields that look like answers and are actually defaults.** Three independent instances,
-all failing silently and all in the reassuring direction:
+⭐ **And the strongest recurring finding of the day is not about consensus at all.** Stated
+carefully, because the first two attempts at stating it were both too narrow:
+
+> ⭐ **FIELDS WHOSE ABSENCE OR DEFAULT IS NEVER CHECKED BY THE THING THAT DEPENDS ON THEM.**
+
+Three independent instances, all failing silently and all in the reassuring direction:
 
 | field | reads as | actually is |
 |---|---|---|
 | mind's `sentiment` = `NULL` | neutral | never scored — and presence encodes *vendor* |
 | a clean near-duplicate check | sources are independent | nothing to syndicate from |
-| mind's `claims.testable` | the extractor judged it testable | **boolean defaulting to `true`** |
+| mind's `claims.test_window` empty | the claim has a horizon and is falsifiable | **absent on 30,534 claims (49.8%) that are marked testable anyway — nothing consults it** |
+
+⛔ **This table shipped with a wrong third row, and the wrong row is the finding.** I first
+listed `claims.testable` as "a boolean defaulting to `true`, so the extractor never decides."
+**mind checked it and it is false:** `testable = false` on **8,424 rows (13.7%)** — the
+extractor does decide and does reject. That row came from reading the DDL default and
+inferring behaviour, an inference mind handed me and I built on without counting.
+
+⇒ ⭐ **A table about absences that are never checked contained an entry that was itself never
+checked.** It was caught by one `GROUP BY`. **The instrument for this class is counting, not
+reading the schema** — and by mind's own tally that is twice in one afternoon they inferred
+producer behaviour from a shape and were wrong (the sentiment "cap" was the other).
+
+⇒ **The real instance is one column over and is a bigger lever:** `test_window` is empty on
+**49.8%** of claims that pass as testable. The falsification criterion is absent on half the
+corpus and **blocks nothing**. Requiring a stated window at extraction time would gate roughly
+half the corpus — against the 13.7% the existing gate already catches. ⚠️ **Note this also
+corrects my advice to mind:** I proposed an up-front testability filter as though none
+existed. One exists and fires; the mechanism is right but it has to beat a running gate, and
+it should be aimed at `test_window`, not `testable`.
 
 ⇒ **Whatever gets built should treat "not assessed" as a first-class value wherever a
-judgement can be absent.** All three of these were invisible from inside the system holding
-them, and two were found only because someone outside asked a question that forced the
-disaggregation.
+judgement can be absent** — and should verify that claim by counting, not by reading the
+column definition.
 
 ## 7. Open questions
 
