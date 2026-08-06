@@ -738,6 +738,86 @@ sufficient** — it earns permission to test 50 real claim pairs, not a conclusi
 is close to decisive**, since a model that cannot do the clean version will not do the messy
 one.
 
+### ⛔ RESULT: the thesis axis FAILED the test — and what that licenses instead
+
+`embeddings` ran `bench/thesis_pairs.json` against `qwen3-embedding-4b` @2560, to spec: all
+four conventions, both directions, hard subset held out (2026-08-06 11:00).
+
+| convention / direction | rec@1 | rec@5 | MRR | decoy outranked truth |
+|---|--:|--:|--:|--:|
+| bare / bare · a→b | **0.233** | 0.667 | 0.445 | 23/30 |
+| bare / bare · b→a | 0.467 | 0.700 | 0.585 | 14/30 |
+| PREFIX Q / bare D · a→b | 0.200 | 0.667 | 0.443 | 24 |
+| PREFIX / PREFIX · a→b | **0.067** | 0.733 | 0.378 | 28 |
+
+⛔ **PRIMARY: recall@1 = 0.233 — the `< 0.5` branch of my own interpretation table:
+"thesis clustering by embedding does not work on this text."** The best cell anywhere is
+0.467, still under.
+
+**The hard subset — 6 of 7 failed:**
+
+| true pair | beaten by |
+|---|---|
+| losing share to a cheaper competitor | **taking** share from a cheaper competitor |
+| that **weakness** is just seasonality | that **strength** is just seasonality |
+| **strong** dollar **hurting** results | **weak** dollar **flattering** results |
+| TAM **smaller** than the **bulls** claim | TAM **larger** than the **bears** claim |
+| **missed** their targets three times | **beat** their targets three times |
+| somebody's going to **buy** them | somebody's going to **sue** them |
+| insiders **dumping** | *held* vs insiders **buying** ✅ |
+
+⭐ **The one that held is the one whose TRUE partner also shares no vocabulary**
+(*"executives are unloading shares"*) — so it is consistent with the failure, not a
+counterexample. ⇒ **Where the paraphrase is lexically distant AND the decoy lexically near,
+the decoy wins six times in seven.** `buy`/`sue` losing on one consonant is the starkest.
+
+⇒ ⛔⛔ **CONFIRMED: EMBEDDING SIMILARITY MEASURES TOPIC, NOT CLAIM.** For a thesis store that
+is the difference between *"these people are discussing the same subject"* and *"these people
+are making the same argument"* — and the store needs the second.
+
+**⚠️ The finding that would have bitten hardest in production:** `b→a` scores **2× `a→b`**
+(0.467 vs 0.233). The `a` texts are terse (*"Capex is peaking."*); `b` texts are longer.
+**Short probes retrieve worse — and claims arrive terse.** ⇒ **The harder direction is the one
+ingest actually runs**, so a benchmark testing only the easy direction would have read twice
+as good as reality.
+
+**⚠️ On the encode convention — refuted here, and correctly NOT generalized.** `PREFIX Q /
+bare D` (the convention both of us had been propagating) is **worse than bare/bare in both
+directions**; `PREFIX/PREFIX` is worst at 0.067. ⛔ **But `embeddings` scoped it themselves:
+this corpus is SYMMETRIC paraphrase matching, while the instruction prefix exists for
+ASYMMETRIC short-query → long-passage retrieval.** ⇒ **Verified `bare/bare` for
+thesis↔thesis; STILL UNVERIFIED for query→chunk**, which is the other half of the store. Do
+not populate a blanket "no prefix". *(Second time in one afternoon they declined to generalize
+a result past what it measured — the discipline that made both runs worth having.)*
+
+### ✅ What the failure licenses
+
+⭐ **recall@5 is 0.667–0.867 while recall@1 is 0.233. The SIGNAL EXISTS; THE RANKING DOESN'T.**
+The true partner is usually in the top 5 and usually not top 1.
+
+⇒ ⭐⭐ **VECTOR SEARCH IS A RECALL STAGE, NOT A DECISION STAGE.** Retrieve top-5/10 by
+embedding, then let the local LLM pass adjudicate which candidates are genuinely the same
+thesis. **This is the canonicalization remedy arrived at from the other side, it was already
+in the design, and it costs nothing extra architecturally** — it is now *mandatory* rather
+than optional.
+
+⇒ **Not doing the 50-real-claim confirmation run.** `embeddings` recommended against and I
+agree: a failure this clean does not need confirming, and my own stated rule was that a
+failure is close to decisive. **That budget goes to testing the CANONICALIZED forms**, where
+the question is live and unanswered.
+
+### ⭐ The cross-project consequence, which may be the bigger finding
+
+**memo's supersession work has the same gate** — §5 step 2, knowing two records are about the
+same fact. **If embedding similarity measures topic rather than claim, that cannot be done by
+vector similarity in memo either.** Same result, different corpus.
+
+⇒ **Claim identity moves from "the hard part" to "a part that requires an LLM in the loop by
+construction."** That is worth knowing before memo v2 is specced, and it was bought by a test
+built for a different project. ⚠️ Strictly, this is a *transfer* of a result measured on
+market theses to a corpus of infrastructure notes — plausible and cheap to check later, not
+established. **Recorded as a strong expectation, not a measurement.**
+
 ## 5. What I would actually do, in order
 
 **Rewritten after Ben's redirect** — *"i'm not asking you to assess its universe, i'm asking
