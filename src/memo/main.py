@@ -201,6 +201,23 @@ async def memo_store(
     ⚠️ An empty `content_sha256` means the read-back itself failed, NOT that the
     store failed. Re-read with `memo_get` before concluding anything.
 
+    ⛔ **SIZE CEILING: documents over ~8,192 tokens are REJECTED and cannot be
+    stored. Split before storing.** The embedding provider refuses them and this
+    raises a 500 carrying the provider's own message —
+    `maximum context length is 8192 tokens`.
+
+    ⚠️ **That error is loud about the wrong subject.** It reads as *your query is
+    too long* or *the model's context is full*; it actually means *this document
+    will never land*. A caller who takes it at face value goes looking in the wrong
+    place. [mind, 2026-08-06 — who also noted the useful framing: an undocumented
+    misdirecting error is worse than a documented constraint.]
+
+    ⚠️ **This is a HARD SIZE limit, distinct from the OTHER failure mode**: a large
+    store can also abort on timeout mid-embed (~300s observed), and *that* one is
+    silent — indistinguishable from a slow success, which is what
+    `content_sha256` exists to catch. Over-8k fails loudly; the timeout fails
+    quietly. Do not diagnose one as the other.
+
     db_path: ACCEPTED AND IGNORED. There is one database — the global DB on
     server4 — and every request routes to it (2026-06-29 single-global
     refactor). The parameter is kept so existing callers don't break; passing
