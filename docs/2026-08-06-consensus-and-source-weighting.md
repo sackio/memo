@@ -495,6 +495,44 @@ able to see.
 until it demonstrably does not) · cross-source copy detection · anything touching ranker
 weights.
 
+### ⛔ DON'T PRESUME THE SIGNAL — the governing constraint
+
+**Ben, 2026-08-06 10:43:** *"I don't want to necessarily presume what the signal is. I want to
+give a trader a searchable and analyzable knowledge base that structures data in ways that
+they will find useful so that they can attempt to find the signal."*
+
+⛔ **This corrects the section below, which was written before he said it.** I called thesis
+spread *"the thing a trader cannot get anywhere else"* and dismissed ticker volume as *"cheap,
+and largely visible already."* **Neither was mine to decide.** The section's *content* stands —
+thesis spread and ticker volume genuinely are different objects — but its **ranking of them
+does not.**
+
+⇒ ⭐ **STRUCTURE IS OURS; CONCLUSIONS ARE THEIRS.**
+
+Claim extraction, thesis clustering, creator identity and timestamps are not opinions about
+the signal — they are what makes any question askable. Raw transcripts cannot be grouped by
+anything. **The structures create the axes; the trader picks along them.**
+
+**What that forbids:**
+
+| ⛔ don't | ✅ do |
+|---|---|
+| a fixed API of computed signals | a queryable store where arbitrary group-bys are possible |
+| baked thresholds (`burst > 2σ`) | the raw series — **a threshold is a hypothesis wearing a number's clothes** |
+| dropping an axis as uninteresting | keep ticker volume, horizon presence, claim type, source kind, time-of-day, creator |
+| pre-aggregating | **full grain retained** — aggregates are cheap to recompute and impossible to un-collapse |
+| a blended confidence score | compositional counts, reported separately and never merged |
+
+⭐ **This is the same principle as §2 (annotate, don't weight), one level up — and Ben has now
+applied it to me twice: first to sentiment scalars, then to trend metrics.** In both cases I
+moved to precompute a conclusion the consumer was better placed to draw. ⚠️ **The tell is the
+same both times: I found the interesting answer and started building toward it, rather than
+building the thing that lets someone else find an answer I had not thought of.**
+
+⇒ **Architectural consequence:** this wants a well-modelled analytical store with search on
+top — structured filters, full-text, and vector similarity over both chunks and theses — much
+closer to a warehouse table a trader can query than an application with endpoints.
+
 ### Thesis and trend are two objects, not one
 
 Ben, 10:41, on what the read surface should carry: *"thesis and trends things like that."*
