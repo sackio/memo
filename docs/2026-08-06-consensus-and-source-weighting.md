@@ -241,6 +241,42 @@ just where the file was. That is checkable, needs no oracle, and addresses a fai
 demonstrably have — agents relaying facts from other agents, with the 08-05 pin-protocol
 cascade as the worked example.
 
+## 4b. Contradiction — the buildable half
+
+Added after Ben asked for "consensus / contradiction weighting" together. **They are not two
+names for one feature, and separating them is most of the answer:**
+
+> **Consensus needs *many independent sources*. Contradiction needs only *two facts about the
+> same thing*.** Neither project has the first. memo has plenty of the second.
+
+That asymmetry is why consensus is blocked and contradiction is buildable today.
+
+Contradiction itself splits into two cases that want different machinery:
+
+**(a) Synchronic — sources disagree right now.** Handled in the literature by surfacing the
+disagreement rather than silently resolving it (CARE-RAG, `arXiv 2507.01281`, conflict-driven
+summarization). ⚠️ Low value for mind at present: with four publishers there is little real
+disagreement to adjudicate — mind confirms they do no disagreement handling and that this is
+"less of a gap than it sounds."
+
+**(b) Diachronic — new information supersedes old.** This is memo's real case and it needs no
+consensus machinery at all. One agent stores *"the IP is X"*; another later stores *"the IP is
+Y."* Nothing needs to vote — the later assertion wins, **if we know the two are about the same
+thing.** ⭐ **That "if" is the entire problem, and it is claim identity, not consensus.** It is
+also the same gate that blocked truth discovery in the scout pass: we store narrative notes,
+not claims, so nothing knows those two memos are about one fact.
+
+⛔ **The standing constraint, restated because this is exactly where it gets violated: do not
+implement (b) as recency weighting.** A dated record stays true *as a record* and becomes
+wrong *as an answer*; ageing it down breaks "when did we decide X" in order to fix "what is
+the rule now." The correct shape is additive — `valid_from` / `valid_to` / `supersedes`,
+invalidate-never-delete — and `getzep/graphiti` (29.6k★, Apache-2.0) already implements it.
+
+⇒ **Of everything in this document, (b) is the only item that is unblocked, needs no oracle,
+needs no source diversity, and addresses a failure memo demonstrably has.** If one thing gets
+built when rationing lifts, it should be this — and its first milestone is claim identity,
+not weighting.
+
 ## 5. What I would actually do, in order
 
 **Reordered after mind's measurement.** The first draft led with near-duplicate clustering;
@@ -257,13 +293,17 @@ cascade as the worked example.
    redundant with the stored chunk (§1), so removing it loses nothing; if it stays,
    `unscored` must be distinguishable from `neutral` at the consumer. mind owns this;
    flagged here because it is the sharpest instance of §1 in the fleet.
-3. **Provenance / transmission chains for memo** (§4). Record who asserted a claim and from
+3. ⭐ **Supersession for memo** (§4b(b)) — **the only unblocked item in this document.** No
+   oracle, no source diversity, no ranker change. First milestone is **claim identity**
+   (knowing two memos are about the same fact), not weighting; if that turns out to be hard,
+   that is the finding and the rest should not be built on top of it.
+4. **Provenance / transmission chains for memo** (§4). Record who asserted a claim and from
    whom. Additive, no oracle, no ranking impact, and it addresses a failure memo
-   demonstrably has.
-4. **Intra-publisher provenance recovery** (§3, mind only, *if* they want it) — near-dup
+   demonstrably has. Pairs naturally with 3 — same schema territory.
+5. **Intra-publisher provenance recovery** (§3, mind only, *if* they want it) — near-dup
    clustering aimed at the PR-wire reprints that ingest flattened into "Benzinga". ⚠️ Must
    never be reported as an independence metric; it measures what ingest destroyed.
-5. **Source reliability — mind only**, and largely already built (per-creator hit rate). This
+6. **Source reliability — mind only**, and largely already built (per-creator hit rate). This
    is the one needing a harness, and mind is the one project with a free oracle.
 
 **Not now, and possibly not ever:** stored sentiment scalars (§1) · decay/recency weighting
