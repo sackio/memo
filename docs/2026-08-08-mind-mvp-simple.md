@@ -100,7 +100,7 @@ conclusions are theirs.
 
 | | | why |
 |---|---|---|
-| **1** | **News source identity** — pending the URL-domain check | ⛔ protects every count on every screen. If domains fan out, news counts per real publisher; if not, it enters as one source so 3.5M articles don't swamp 61k claims |
+| **1** | ✅ **News source identity — SOLVED, and it's a derived column** | Measured 20:29: **243 distinct URL domains**, ~698k articles (19.7%) originating outside Benzinga — zacks 298k, globenewswire 185k, fool 152k, marketwatch, seekingalpha, investing.com. ⇒ **`domain(url)` is the publisher**; the `publisher` field records the distributor. ⚑ Plus 16,502 distinct `author` values for a finer axis. ⛔ **Count per domain, and probably per `(domain, day)`** — benzinga.com is still 80.3%, so a naive per-article count lets one outlet vote 2.85M times |
 | **2** | **Canonicalization at ingest** (local LLM, micro-batched) | the input to clustering |
 | **3** | **Clustering** = vector recall top-10 + LLM adjudication | ⛔ **test canonicalized vs raw first** — margin > ~3.3pt or repeat runs. Gates the themes screen only |
 

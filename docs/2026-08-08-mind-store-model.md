@@ -401,18 +401,53 @@ and I both measured `publisher`, found n=3, and reported *the world has three ne
 **The column is one field; the world is what it is supposed to represent** — and the person who
 built the ingest could say in one line that they differ.
 
-**Outstanding: URL-domain distribution** (polygon's payload carries `article_url` pointing at
-the *origin* while `publisher` names the distributor) and any author/byline/raw-payload column.
+### ✅ MEASURED 20:29 — THE DOMAINS FAN OUT. Ben was right; the premise was false.
 
-| if domains **fan out** | if they **don't** |
-|---|---|
-| the diversity is already in the store and the field doesn't expose it ⇒ **news collapses per recovered domain, not to one** — a real consensus population | the store cannot see diversity that demonstrably exists ⇒ the finding is **"news provenance is unrecoverable from what we keep"**, which points at ingest, not retrieval |
-| ⛔ the wire-marker work demotes to a *fallback* — §5 below reasons about recovering provenance from BODIES when it may be sitting in the URL | §5 below stands as written |
-| ⛔ **the 5.99% marker figure stops being evidence about diversity** — it only ever measured articles whose body happened to name its origin | — |
+**243 distinct URL domains.** `mind` retracts "news is effectively single-source" in full:
 
-⚠️ **Everything below this addendum was written before it and is retained rather than rewritten,
-because the reasoning is sound and only its premise is in question.** Read it as conditional on
-the domain check.
+| domain | articles | |
+|---|--:|--:|
+| benzinga.com | 2,850,039 | 80.3% |
+| zacks.com | 297,982 | 8.4% |
+| globenewswire.com | 185,368 | 5.2% |
+| fool.com | 152,498 | 4.3% |
+| marketwatch.com · seekingalpha.com · investing.com | 26,887 · 15,398 · 12,565 | |
+| *…237-domain tail* | | |
+
+⇒ ⭐ **~698,000 articles — 19.7% of the corpus — originate outside Benzinga, across five
+substantial outlets. That is a real consensus population and it has been in the store the whole
+time.** ⚑ And `news_articles.author` holds **16,502 distinct values** — real bylines, a finer
+axis neither of us asked about. (`source` and `vendor` are 2 each: ingest labels, ignore.)
+
+**⛔ THREE CONSEQUENCES, all of which overturn what follows:**
+
+1. ⛔ **News is NOT one `source_id`. It is one per recovered domain.**
+2. ⛔ **The 5.99% wire-marker figure is evidence of nothing about diversity.** It only ever
+   measured articles whose *body* happened to name its origin — **while the origin sat in a
+   column in the same row.** Wire extraction retains value for labelling PR releases and none
+   as a diversity mechanism.
+3. ✅ **Source identity for news is now cheap** — a derived `domain(url)` column, not research.
+
+**✅ What survives, and it is only the form of the argument:** the distribution is heavily
+skewed. Benzinga at 80.3% means **per-article admission still lets one outlet vote 2.85M times
+against zacks' 298k.** ⇒ **Count per distinct domain, and probably per `(domain, day)`, or the
+counts re-inherit the same skew.** The volume hazard was real; **n=1 was not.**
+
+### ⭐ Why both of us missed it, which is the transferable part
+
+`mind`'s statement, and it is the sharpest thing either of us produced today:
+
+> **A well-named column is a stronger claim to authority than a correct one.** `publisher`
+> *sounds* like it answers "who published this". `url` does not sound like a provenance field
+> at all, and is the better one.
+
+**Both of us checked cardinality on the field whose name matched the question and stopped.**
+⇒ ⭐ **The name of a column is a hypothesis about its contents, and it is the one hypothesis
+nobody tests.**
+
+⚠️ **Everything below was written under the false premise and is retained rather than deleted,
+because the reasoning about volume skew survives its own premise being wrong.** Read
+"one source" as "one *dominant* source at 80.3%".
 
 ### Measured: on the `publisher` column, news is one source
 
