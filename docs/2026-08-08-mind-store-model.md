@@ -802,7 +802,33 @@ than specced.**
 ⭐ **Steps 0 and 1 are both small and both gate everything downstream** — a file download and a
 `source_id` collapse. That is a better position than the original ordering suggested.
 
-### ⛔ 4a — the item that waiting does not fix
+### ✅ 4a — AUTHORISED 20:28 AND IN FLIGHT. And it is a day, not a project.
+
+**Ben said yes to the scoped question `mind` put to him; `mind` is building it tonight** —
+migration 077 written, `edgar/backfill.py` drafted. ⛔ **Remove "unowned, needs a decision"
+wherever it appears below.**
+
+⛔ **AND MY COST ESTIMATE WAS HALF WRONG, in the expensive direction.** I called historical
+acquisition *"the largest single item in the plan."* Measured by `mind`: SEC publishes
+`full-index/{year}/QTR{q}/master.idx` — **one file listing every filing accepted that quarter**
+⇒ **4 requests per year, 80 for two decades.** The remaining cost is parsing and inserting a
+few hundred thousand rows per quarter, which is local.
+
+⇒ ⭐ **The gate was real; the acquisition half of it is a day.** What stays genuinely unbuilt is
+**document text and XBRL facts** — those are 4b and unchanged.
+
+⚠️ **Worth noting what I did here, because it is the mirror of the error two sections up.** I
+found a real gap, correctly identified that waiting would not close it — and then sized it by
+how *structurally* central it was rather than by asking what fetching actually costs. ⭐ **A
+correctly-identified blocker still needs its cost measured; being right that something is
+gating says nothing about how long it takes.**
+
+⚑ **And `filed_at_precision` now exists as a NOT NULL column** in migration 077, specifically so
+the backfill cannot quietly claim midnight — the `published_at_precision` hazard fixed *ahead*
+of the data that would have triggered it, rather than after. The 3,703 videos get the same
+treatment.
+
+### The original finding, retained — why waiting was never the answer
 
 **`mind-edgar` runs `mind edgar-poll --seconds <float>`. That is the entire CLI surface: no
 `--start`, no `--end`, no date range, no backfill.** It watches the feed forward, as a

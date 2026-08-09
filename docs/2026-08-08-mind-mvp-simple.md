@@ -61,8 +61,14 @@ that resolve, so nobody reads it as an accuracy score.
 
 ### Filings — the EDGAR view
 Recent filings, filterable by form and entity, linked to the commentary around them.
-⚠️ **3 days deep today and forward-only** — the poller has no backfill flag. Show the coverage
-window on the screen itself so it can never be mistaken for a complete archive.
+
+✅ **Historical backfill authorised by Ben 20:28 and in flight** (`mind` — migration 077 +
+`edgar/backfill.py`). ⭐ Far cheaper than I estimated: SEC's `full-index/{year}/QTR{q}/master.idx`
+is one file listing every filing accepted that quarter ⇒ **4 requests per year, 80 for two
+decades.** ⚠️ Document text and XBRL facts remain unbuilt — that half is unchanged.
+
+⚠️ **Show the coverage window on the screen regardless.** ⭐ **A forward-only poller, a
+mid-backfill table, and a complete archive all present the same interface.**
 
 ### Themes / trends — the one worth waiting for
 Clusters ranked by **distinct-creator growth** in the window. Per cluster: the adherent curve
