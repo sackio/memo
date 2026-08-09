@@ -388,7 +388,33 @@ check returns *clean* on a corpus with nothing to duplicate, and clean reads as 
 ⚠️ **Distinct sources, not distinct claims or documents.** One creator posting the same thesis
 nine times is one source. This is the single most common way a consensus number lies.
 
-### ⛔ Measured: news is one source. Model it as one source.
+### ⛔⛔ ADDENDUM, BEN 20:26: *"no news comes from many publishers"* — we read the wrong column
+
+**He set up the ingest and I take that over the field.** The reconciliation is the 08-06
+finding at full strength: **`publisher` is recording the DISTRIBUTOR, not the publisher.**
+Benzinga is the feed everything arrives *through* — via polygon's news endpoint and
+`benzinga_archive`. So "99.4% Benzinga" is a true statement about one column and a false one
+about the news.
+
+⇒ ⭐ **This is my characteristic error with a second seat standing next to me in it.** `mind`
+and I both measured `publisher`, found n=3, and reported *the world has three news sources*.
+**The column is one field; the world is what it is supposed to represent** — and the person who
+built the ingest could say in one line that they differ.
+
+**Outstanding: URL-domain distribution** (polygon's payload carries `article_url` pointing at
+the *origin* while `publisher` names the distributor) and any author/byline/raw-payload column.
+
+| if domains **fan out** | if they **don't** |
+|---|---|
+| the diversity is already in the store and the field doesn't expose it ⇒ **news collapses per recovered domain, not to one** — a real consensus population | the store cannot see diversity that demonstrably exists ⇒ the finding is **"news provenance is unrecoverable from what we keep"**, which points at ingest, not retrieval |
+| ⛔ the wire-marker work demotes to a *fallback* — §5 below reasons about recovering provenance from BODIES when it may be sitting in the URL | §5 below stands as written |
+| ⛔ **the 5.99% marker figure stops being evidence about diversity** — it only ever measured articles whose body happened to name its origin | — |
+
+⚠️ **Everything below this addendum was written before it and is retained rather than rewritten,
+because the reasoning is sound and only its premise is in question.** Read it as conditional on
+the domain check.
+
+### Measured: on the `publisher` column, news is one source
 
 99.4% Benzinga across 3.5M articles; two other publishers at 0.02% each (§0). Against **48
 creators active in 30 days**.
@@ -694,6 +720,32 @@ subquery instead of a literal or parameter silently becomes a full scan.
 ## 10. Build order
 
 Each step is testable on its own, and the ones that gate others come first.
+
+### ⛔ RE-RANKED BY BEN, 2026-08-08 20:26 — *"it's more about seeing consensus and trends"*
+
+**Source weighting is explicitly the lesser half.** He also corrected the news finding —
+*"no news comes from many publishers"* — see §5's addendum.
+
+⇒ ⭐ **Consensus and trends reduce to ONE capability: knowing when two people are making the
+same argument.** That is §7's gate, it is unbuilt, and both features are downstream of it.
+
+**Critical path: canonicalization at ingest → clustering (vector recall + LLM adjudication) →
+trend series over distinct creators.**
+
+⇒ **What drops below it, including things ranked high earlier in this same document:** the
+consensus aggregator (already conditional, now clearly not wanted) · **4a historical EDGAR —
+still worth putting to Ben as its own scoped decision, but not blocking what he asked for** ·
+the CIK bridge, which matters for cross-source joins and less than §2 claimed.
+
+⇒ ⭐ **The canonicalized-vs-raw clustering test is now the highest-value experiment in the
+programme rather than a nice-to-have.** ⛔ Margin > ~3.3pt or repeat runs, and run it through
+the long-lived API path (~320ms) rather than shelling out per pair, or the harness costs more
+than the work.
+
+⚑ **The one item that stays early is news source identity**, because it protects the counts
+that consensus and trends both read.
+
+---
 
 ✅ **Revised after mind's measurements — two steps are already done and one is much smaller
 than specced.**
