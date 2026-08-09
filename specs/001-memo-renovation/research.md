@@ -282,3 +282,152 @@ per-cutover-checkpoint. Rollback = MCP-flip reversal (v2 → v1 in
 
 **Rationale**: C-08 sequencing + operator's operational-safety
 requirement + C38 forever-backup posture.
+
+## R-17 — LLM inference provider (ALL generative LLM use in memo)
+
+**Decision**: **Every** generative LLM call anywhere in memo is served by
+an **interactive Claude Code session**, reached through a single
+`LLMProvider` adapter (`src/memo/providers/llm/`), NOT by a per-token
+inference API.
+
+**Scope is the whole service, not just the mediators** (operator
+clarification 2026-07-29: *"basically anytime memo is using an llm I want
+it to be able to use an interactive session"*). Known callers:
+
+| Caller | Today | Under R-17 |
+|---|---|---|
+| Retrieval mediator — LLM fallback | (new) | `LLMProvider` |
+| Storage mediator — reconcile judgement | (new) | `LLMProvider` |
+| `auto_store` dedup | `openai/gpt-4o-mini` via OpenRouter | `LLMProvider` (T036) |
+| Auditor (Phase 6) | (new) | `LLMProvider` |
+| Migration duplicate "LLM escape" (R-13) | (new) | `LLMProvider` |
+
+There is to be **no second generative path**. A component that reaches for
+an inference API directly is a bug, regardless of how cheap the model is.
+
+**A paid-API adapter is explicitly OUT OF SCOPE for now.** The operator
+named routing to OpenRouter / a paid LLM API as a possible *future*
+enhancement to be avoided at present. The abstraction makes it a drop-in
+later; until then the only adapters that exist are `null` (Phase 3) and
+`claude_session` (Phase 5), so there is no paid-LLM path to silently fall
+back onto. Do NOT add one "as a fallback" — an unavailable session must
+degrade (below), never escalate to billing.
+
+Specifics:
+
+- **A dedicated session, `memo-llm`** — deliberately NOT the standing
+  `memo` session, despite that being the obvious candidate. Three
+  reasons: (a) **reentrancy** — the `memo` session has memo hooks, so a
+  mediator call into it can trigger its own `memo_store`/`memo_recall`
+  and loop; (b) **availability** — `memo` compacts at 06:10 and runs
+  memo-minder at 06:17 daily, so it is unavailable in that window;
+  (c) **blast radius** — if `memo` wedges, every mediated write on the
+  fleet would wedge with it.
+- **`claude -p` is PROHIBITED.** Passing a prompt programmatically to
+  `claude` is billed as API usage; an interactive session rides the Max
+  subscription already being paid for. This is the same reason
+  memo-minder was moved off its `claude -p` host cron to an interactive
+  session cron on 2026-07-15. Any future adapter that shells out to
+  `claude -p` is a regression, not an optimization.
+- **Degrade, never block.** If the session is busy, compacting, or down,
+  the mediator does NOT fail the caller: recall returns its search-only
+  answer with an `anomalies` entry, and store writes-new and flags the
+  auditor. A 10s soft timeout bounds the wait.
+- **Escalate to the supervisor on outage.** On unavailability the
+  provider DMs the `agents` supervisor session over ATC to respawn
+  `memo-llm`, so a dead session self-heals rather than silently
+  degrading recall quality indefinitely. **Rate-limited to one notify
+  per outage**, not per failed call — a dead session plus fleet-wide
+  memo traffic would otherwise blast the supervisor with hundreds of
+  DMs, which is precisely the thundering-herd failure the operator's
+  CLAUDE.md §5 warns about.
+- **Embeddings are out of scope for this decision** and stay on
+  OpenRouter `text-embedding-3-small` per R-05 — there is no Claude
+  embedding endpoint. R-17 governs generative calls only.
+- **`auto_store`'s `openai/gpt-4o-mini` MUST move to the provider.** This
+  is memo's one pre-existing generative caller, and it fires on every
+  hook-triggered store. It was originally scoped as "leave it, T036 picks
+  it up"; the operator's 2026-07-29 clarification makes it in-scope like
+  any other LLM use. T036 performs the switch. Once done, no OpenRouter
+  *generative* call remains in the codebase — grep for
+  `auto_store_model` / chat-completion usage to confirm.
+
+**Rationale**: Operator directive 2026-07-29 ("use an interactive
+Claude Code session for the LLM ... I don't want to use the -p flag ...
+that's programmatic usage of Claude which can cause extra [cost]").
+Cost is the driver; the subscription is already paid for. The spec had
+never actually named a provider for the mediator inference calls — it
+only ever said "LLM fallback" / "LLM escape" — so this fills an
+unspecified slot rather than replacing a prior decision.
+
+Fits the existing Principle VIII provider pattern from R-08: an
+abstract base + a concrete adapter + a `null` adapter, selected by a
+`MEMO_LLM_PROVIDER` env var.
+
+**Sequencing**: Phase 3 builds the mediators against the `LLMProvider`
+interface with a deterministic **null adapter** (search-only, no
+inference), so the mediators land complete and fully testable without
+the transport existing. The concrete `claude_session` adapter lands in
+Phase 5 alongside the other provider adapters.
+
+**Alternatives considered**:
+- *OpenRouter / direct Anthropic API* — rejected by the operator on
+  cost; duplicates spend we already have via the Max subscription.
+- *`claude -p` per call* — rejected, see above. It is the thing that
+  makes this billable.
+- *Serve from the `memo` session itself* — rejected on reentrancy,
+  availability, and blast radius (above).
+
+**Consequence for the contracts**: the latencies quoted in
+`contracts/mediator-recall.md` (87ms happy path, ~1450ms with fallback)
+assumed an in-process API call and are not achievable across a session
+round-trip. Amended there. The happy path is unaffected — it makes no
+LLM call at all.
+
+
+## R-18 — Unattributed facts: tag, don't demote
+
+**Decision**: A `class = fact` memo whose provenance cannot be reconstructed
+stays a **fact**, with `provenance: null` and a **`provenance-pending`** tag.
+It is NOT demoted to `legacy-unattributed`. Applies to BOTH the migration
+backfill and live storage-mediator writes.
+
+**Rationale**: Measured against the real v1 corpus (1000-memo sample,
+2026-07-30), the original C-07 rule sent **86.8%** of memos to
+`legacy-unattributed` — a class that does not inject and "awaits human review".
+That corpus records an origin KIND (`assistant-sourced`, `git-sourced`,
+`host-server5`) but almost never a LOCATOR; only ~3% carry a real
+msg_id/thread_id/session-uuid. Applied literally the migration would file
+~6,000 good memos as needing triage: passing the letter of the spec, failing
+its point.
+
+Operator decision 2026-07-30: *"I'm inclined to loosen the rule for now with
+the expectation that as facts get proven further we will reprovenance them, and
+as memos get outdated they'll fall by the wayside … we should not be heavily
+penalizing the vast bulk of our corpus which is actually good facts but don't
+have a readily known provenance because we haven't done the record keeping of
+it yet."*
+
+**The tag is load-bearing, not cosmetic.** The operator's plan depends on
+coming back to re-attribute these memos; without a marker, "the memos that need
+provenance" becomes unfindable the moment they are indistinguishable from
+attributed ones. `provenance-pending` makes that a query.
+
+**Applied to live writes too**, not only migration, so the same debt is not
+re-accumulated under a different name. Going forward memo v2 *can* capture
+provenance properly (FR-004), so coverage should rise on its own; the tag makes
+the remainder visible either way.
+
+**Measured effect**: legacy-unattributed 86.8% → **0.0%**; 92% of the corpus
+lands as usable `fact`; 868/1000 tagged `provenance-pending`; provenance
+coverage 6.4%, now tracked as a health metric rather than a gate.
+
+**Alternatives rejected**:
+- *Relax SC-009 only* — would have left 86.8% of memos non-injecting, which is
+  the actual harm; the metric was the symptom, not the disease.
+- *Synthesize provenance from origin-kind tags* — fabrication. A provenance
+  block that cannot be followed makes an unsourced memo look verified, which is
+  worse than an honest null.
+- *An origin-only provenance shape* `{origin_kind, host}` — the most faithful
+  option and still worth doing later; deferred because it changes the data
+  model and the tag captures the same recoverability today.

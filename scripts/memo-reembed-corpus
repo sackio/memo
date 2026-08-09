@@ -1,0 +1,386 @@
+#!/usr/bin/env python3
+"""memo-reembed-corpus — re-embed the whole corpus onto a new model. [002/FR-108]
+
+2026-08-01: `3-large`@3072 (OpenRouter) → `qwen3-embedding-4b`@2560 (self-hosted).
+Both vector tables must be rebuilt; cosine between two models is meaningless, not
+merely noisier, so there is no incremental path.
+
+**Order of operations is the whole design.** The old index stays queryable until
+the new one is complete and counted. Nothing is dropped on the strength of an
+intention:
+
+    1. build   document_embeddings_new / chunk_embeddings_new at the NEW width
+    2. populate both, RESUMABLY (skip ids already present — a killed run must not
+       re-bill the GPU; ~65 min of it here)
+    3. VERIFY the new tables match the source row counts exactly
+    4. only then swap, and only via DROP → CREATE → INSERT-SELECT
+
+**Never `ALTER TABLE ... RENAME` a vec0 table.** It moves the main table and
+orphans all six shadow tables (`_rowids`, `_chunks`, `_info`, `_vector_chunks00`,
+`_metadatachunks00`, `_metadatatext00`); the next query dies with
+`no such table: main.<new>_chunks`. Since the natural sequence drops the old
+table first, a RENAME-based swap destroys the working index AND leaves an
+unusable replacement — discovered at the end, with every vector already paid for.
+Found by `groton` on a scratch DB before spending GPU time, reproduced here
+independently, and pinned by tests/unit/test_vec0_table_swap.py.
+
+`chunk_embeddings` carries an extra `chunk_index` column. Recreating it as
+doc_id+embedding would silently drop the passage ordinal — the thing that makes a
+passage addressable at all.
+
+    docker exec -d memo-v2 sh -lc 'python3 -u /app/scripts/memo-reembed-corpus \\
+        > /data/reembed.log 2>&1'
+
+⛔ **There is no `--log` flag.** An earlier version of this line advertised one.
+A detached launch carrying it dies on argparse with the error going nowhere, and
+the absence of a log file is the only symptom — indistinguishable from a job that
+has not started writing yet. Redirect yourself, and use `python3 -u`: without it
+progress sits in a block buffer and a healthy run looks identical to a wedged one.
+
+⚠️ **`timeout N docker exec ...` kills the CLIENT, not the process in the
+container.** A run "cancelled" that way keeps going. On 2026-08-03 that produced
+two concurrent writers, 13,936 rows where 7,336 were expected, and a refused
+swap. To actually stop one, kill it inside the container.
+"""
+from __future__ import annotations
+
+import argparse
+import asyncio
+import json
+import sys
+import time
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, "/app/src")
+
+from memo import db, embeddings  # noqa: E402
+from memo.config import settings  # noqa: E402
+
+DOC_NEW = "document_embeddings_new"
+CHUNK_NEW = "chunk_embeddings_new"
+
+
+def _create_new_tables(conn, dims: int) -> None:
+    conn.execute(
+        f"CREATE VIRTUAL TABLE IF NOT EXISTS {DOC_NEW} USING vec0("
+        f"doc_id TEXT, embedding FLOAT[{dims}] distance_metric=cosine)")
+    conn.execute(
+        f"CREATE VIRTUAL TABLE IF NOT EXISTS {CHUNK_NEW} USING vec0("
+        f"doc_id TEXT, chunk_index INTEGER, "
+        f"embedding FLOAT[{dims}] distance_metric=cosine)")
+    conn.commit()
+
+
+def _pending_docs(conn) -> list[tuple[str, str]]:
+    """Live docs whose vector is not yet in the new table. Resumable by DB state,
+    not by a set this run accumulated — so a re-run retries exactly what is left."""
+    done = {r[0] for r in conn.execute(f"SELECT DISTINCT doc_id FROM {DOC_NEW}")}
+    rows = conn.execute(
+        "SELECT id, content FROM documents "
+        "WHERE valid_until IS NULL AND length(coalesce(content,'')) > 0 "
+        "ORDER BY coalesce(token_count,0) DESC").fetchall()
+    return [(r[0], r[1] or "") for r in rows if r[0] not in done]
+
+
+def _pending_chunks(conn) -> list[tuple[str, int, str]]:
+    done = {(r[0], r[1]) for r in
+            conn.execute(f"SELECT doc_id, chunk_index FROM {CHUNK_NEW}")}
+    rows = conn.execute(
+        "SELECT doc_id, chunk_index, text FROM document_chunks "
+        "ORDER BY doc_id, chunk_index").fetchall()
+    return [(r[0], r[1], r[2] or "") for r in rows if (r[0], r[1]) not in done]
+
+
+async def _run_batch(items, embed_texts, write, *, label: str, batch: int,
+                     progress_every: int, total_hint: int) -> dict:
+    """Embed in batches, write serialised. See passages._write_lock — SQLite has
+    one writer, and asking for more converts throughput into lost rows."""
+    stats = {"done": 0, "errored": 0}
+    failures: list[str] = []
+    started = time.time()
+    for i in range(0, len(items), batch):
+        chunk = items[i:i + batch]
+        try:
+            vectors = await embed_texts([c[-1] for c in chunk])
+            if len(vectors) != len(chunk):
+                raise ValueError(
+                    f"provider returned {len(vectors)} vectors for {len(chunk)} inputs")
+            write(chunk, vectors)
+            stats["done"] += len(chunk)
+        except Exception:
+            # ISOLATE, don't abandon. The provider rejects an over-length input
+            # for the whole request, so one offender fails its 15 healthy
+            # neighbours — measured: 32 documents lost, of which only 17 were
+            # actually over the limit and 15 were merely travelling with them.
+            #
+            # A plain "retry the batch item by item" is NOT enough and was the
+            # first thing tried: it re-raises on the first bad item and throws
+            # away the successes that preceded it, which reproduces the original
+            # loss almost exactly. Each item needs its own try.
+            for one in chunk:
+                try:
+                    v = await embed_texts([one[-1]])
+                    write([one], v)
+                    stats["done"] += 1
+                except Exception as e2:
+                    stats["errored"] += 1
+                    failures.append(
+                        f"{label} {one[0][:8]}: {type(e2).__name__}: {str(e2)[:120]}")
+        finished = stats["done"] + stats["errored"]
+        if progress_every and finished % progress_every < batch:
+            el = max(time.time() - started, 1e-9)
+            rate = finished / el * 60
+            print(f"  {label} {finished}/{len(items)} "
+                  f"({100*finished/max(1,len(items)):.1f}%) · {stats['errored']} errored "
+                  f"· {rate:.0f}/min · ETA {(len(items)-finished)/max(rate,1e-9):.0f} min",
+                  flush=True)
+    stats["failures"] = failures
+    return stats
+
+
+def _swap(conn, dims: int) -> None:
+    """DROP → CREATE → INSERT-SELECT. Never RENAME — see the module docstring."""
+    conn.execute("BEGIN IMMEDIATE")
+    conn.execute("DROP TABLE document_embeddings")
+    conn.execute(
+        f"CREATE VIRTUAL TABLE document_embeddings USING vec0("
+        f"doc_id TEXT, embedding FLOAT[{dims}] distance_metric=cosine)")
+    conn.execute(f"INSERT INTO document_embeddings(doc_id, embedding) "
+                 f"SELECT doc_id, embedding FROM {DOC_NEW}")
+
+    conn.execute("DROP TABLE chunk_embeddings")
+    conn.execute(
+        f"CREATE VIRTUAL TABLE chunk_embeddings USING vec0("
+        f"doc_id TEXT, chunk_index INTEGER, "
+        f"embedding FLOAT[{dims}] distance_metric=cosine)")
+    conn.execute(f"INSERT INTO chunk_embeddings(doc_id, chunk_index, embedding) "
+                 f"SELECT doc_id, chunk_index, embedding FROM {CHUNK_NEW}")
+
+    # ⛔ THE PROVENANCE MUST MOVE WITH THE VECTORS, IN THE SAME TRANSACTION.
+    # `db.assert_read_model_matches()` reads `document_chunks.embedding_model`
+    # and REFUSES every search when it disagrees with `EMBEDDING_MODEL`. That
+    # guard is correct and is stronger than the width check — it catches a
+    # same-width model swap that vec0's dimension typing cannot see.
+    #
+    # ⚠️ But this function used to rebuild the vectors and leave that column
+    # alone, so a LEGITIMATE, fully-verified rebuild ended with the service
+    # refusing 100% of queries — the guard firing on its own successful
+    # migration. Observed live 2026-08-03 after the 3-large rebuild: swap
+    # verified, counts exact, tables FLOAT[3072], and every /search returned
+    # HTTP 500 `vectors were written by 'qwen3-embedding-4b'`.
+    #
+    # ⇒ ⭐ **A CORRECTNESS GUARD KEYED ON METADATA IS ONLY AS GOOD AS THE PATHS
+    # THAT MAINTAIN THAT METADATA.** The guard was right, the writer was
+    # incomplete, and the symptom looked like the guard malfunctioning.
+    conn.execute("UPDATE document_chunks SET embedding_model = ?, embedding_route = ?",
+                 (settings.embedding_model, settings.embedding_base_url))
+    conn.commit()
+
+    conn.execute(f"DROP TABLE {DOC_NEW}")
+    conn.execute(f"DROP TABLE {CHUNK_NEW}")
+    conn.commit()
+
+
+async def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--batch", type=int, default=32)
+    ap.add_argument("--progress-every", type=int, default=200)
+    ap.add_argument("--populate-only", action="store_true",
+                    help="build and fill the new tables; do NOT swap")
+    ap.add_argument("--swap-only", action="store_true",
+                    help="swap already-populated new tables into place")
+    args = ap.parse_args()
+
+    dims = settings.embedding_dimensions
+    conn = db._get_or_create_conn(db.global_path())
+
+    # Read the width off the LIVE table rather than trusting config — that check
+    # is the only reason the 2026-07-31 shell-env bug was caught at all.
+    live = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE name='document_embeddings'").fetchone()
+    print(f"config says {settings.embedding_model} @ {dims}", flush=True)
+    print(f"live document_embeddings: {live[0] if live else '(missing)'}", flush=True)
+
+    _create_new_tables(conn, dims)
+
+    if not args.swap_only:
+        docs = _pending_docs(conn)
+        chunks = _pending_chunks(conn)
+        print(f"pending: {len(docs)} documents, {len(chunks)} passages", flush=True)
+
+        def write_docs(items, vectors):
+            for (doc_id, _), vec in zip(items, vectors):
+                conn.execute(
+                    "INSERT INTO %s(doc_id, embedding) VALUES (?,?)" % DOC_NEW,
+                    (doc_id, db._serialize_vector(vec)))
+            conn.commit()
+
+        def write_chunks(items, vectors):
+            for (doc_id, idx, _), vec in zip(items, vectors):
+                conn.execute(
+                    "INSERT INTO %s(doc_id, chunk_index, embedding) VALUES (?,?,?)"
+                    % CHUNK_NEW, (doc_id, idx, db._serialize_vector(vec)))
+            conn.commit()
+
+        d = await _run_batch(docs, embeddings.embed_batch, write_docs,
+                             label="docs", batch=args.batch,
+                             progress_every=args.progress_every, total_hint=len(docs))
+        c = await _run_batch(chunks, embeddings.embed_batch, write_chunks,
+                             label="passages", batch=args.batch,
+                             progress_every=args.progress_every, total_hint=len(chunks))
+        print(json.dumps({"documents": {k: v for k, v in d.items() if k != "failures"},
+                          "passages": {k: v for k, v in c.items() if k != "failures"}},
+                         indent=2), flush=True)
+        for f in (d["failures"] + c["failures"])[:20]:
+            print("  FAILED " + f, file=sys.stderr, flush=True)
+        if d["errored"] or c["errored"]:
+            print("\nERRORS — nothing swapped. Re-run: it is resumable against the "
+                  "database, so it retries exactly what is missing and re-embeds "
+                  "nothing already paid for.", file=sys.stderr, flush=True)
+            return 2
+
+    # Verify BEFORE dropping anything. A count mismatch here means the swap would
+    # install a quietly incomplete index — the failure this whole ordering exists
+    # to prevent.
+    src_docs = conn.execute(
+        "SELECT COUNT(*) FROM documents WHERE valid_until IS NULL "
+        "AND length(coalesce(content,'')) > 0").fetchone()[0]
+    src_chunks = conn.execute("SELECT COUNT(*) FROM document_chunks").fetchone()[0]
+    new_docs = conn.execute(f"SELECT COUNT(*) FROM {DOC_NEW}").fetchone()[0]
+    new_chunks = conn.execute(f"SELECT COUNT(*) FROM {CHUNK_NEW}").fetchone()[0]
+    print(f"verify: documents {new_docs}/{src_docs} · passages {new_chunks}/{src_chunks}",
+          flush=True)
+    if new_docs != src_docs or new_chunks != src_chunks:
+        print("COUNT MISMATCH — refusing to swap. The old index is untouched and "
+              "still queryable; re-run to fill the gap.", file=sys.stderr, flush=True)
+        return 2
+
+    if args.populate_only:
+        print("--populate-only: new tables are complete and verified, NOT swapped.",
+              flush=True)
+        return 0
+
+    _swap(conn, dims)
+
+    # READ THE OUTCOME BACK OFF THE LIVE TABLES. Not the config, not what this
+    # script intended — the schema sqlite actually holds, plus a real KNN query.
+    # The 2026-07-31 shell-env bug (a `${VAR:-default}` silently taking the
+    # shell's 3-small/1536) was caught ONLY because someone verified the outcome
+    # instead of the intent, and it is the cheapest check in this file.
+    ok = True
+    for table, want_cols in (("document_embeddings", ("doc_id",)),
+                             ("chunk_embeddings", ("doc_id", "chunk_index"))):
+        sql = conn.execute(
+            "SELECT sql FROM sqlite_master WHERE name=?", (table,)).fetchone()[0]
+        count = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+        print(f"  {table}: {count} rows :: {sql}", flush=True)
+        if f"FLOAT[{dims}]" not in sql:
+            print(f"  ✗ {table} is NOT {dims}-wide — the swap did not take",
+                  file=sys.stderr, flush=True)
+            ok = False
+        for col in want_cols:
+            if col not in sql:
+                print(f"  ✗ {table} lost column `{col}` — a dropped passage "
+                      f"ordinal makes passages unaddressable, and it bites at "
+                      f"query time, not here", file=sys.stderr, flush=True)
+                ok = False
+
+    # ⭐ The vectors are only half the migration. `db.assert_read_model_matches()`
+    # refuses EVERY search when `document_chunks.embedding_model` disagrees with
+    # `EMBEDDING_MODEL` — so a rebuild that moves the vectors and not the
+    # provenance produces a correct index that the service will not read.
+    # ⚠️ This check exists because that is not hypothetical: it happened on the
+    # 2026-08-03 3-large rebuild, and every symptom pointed at the guard rather
+    # than at the writer that had failed to maintain what the guard reads.
+    stale = conn.execute(
+        "SELECT embedding_model, COUNT(*) FROM document_chunks "
+        "WHERE embedding_model IS NOT ? GROUP BY 1",
+        (settings.embedding_model,)).fetchall()
+    if stale:
+        print(f"  ✗ document_chunks.embedding_model still records {stale} — "
+              f"the read guard will refuse 100% of searches. The index is fine; "
+              f"the provenance did not move with it.", file=sys.stderr, flush=True)
+        ok = False
+    else:
+        print(f"  provenance: document_chunks.embedding_model == "
+              f"{settings.embedding_model!r} ✓", flush=True)
+
+    # A schema that looks right and a query that works are two claims — and a
+    # query that returns SOMETHING is still a third claim short of correct.
+    #
+    # `mind` proved 2026-08-01 that the width check protects WRITES ONLY: their
+    # reads filtered to zero rows before the distance operator was ever reached,
+    # so a fully-populated, correctly-shaped, correctly-counted migration
+    # returned "no results" for every query with NO error. A schema check and a
+    # row count would both have passed. Only a real query against a KNOWN answer
+    # catches it.
+    #
+    # memo is structurally clear of that specific shape (fixed table names, no
+    # collection predicate — verified: a mismatched-width read raises
+    # "Dimension mismatch for query vector"). The control below does not rely on
+    # that being true.
+    # The control needs a DISTINCTIVE title, and the first version did not ask
+    # for one. It took "the largest memo with a title over 20 chars", which on
+    # this corpus selects `Backfill checkpoint — server5 — 2026-07-20 06:58
+    # (p3/13)` — one of ~179 near-identical checkpoint memos. Its own title
+    # correctly does NOT retrieve it at rank 1, because 178 siblings outrank it.
+    #
+    # Run inside the swap verification, that would have FAILED A HEALTHY SWAP and
+    # blocked it, and the migration would have taken the blame. A control that
+    # cries wolf on good data is barely better than one that passes on bad data:
+    # both destroy the signal. Found by running it before it mattered.
+    # Grouped, not a correlated subquery — the obvious `WHERE (SELECT COUNT(*)
+    # ...) = 1` form is O(n²) and took over two minutes on 7,336 rows, which is
+    # not a cost worth paying inside a verification step.
+    probe_id, probe_title = conn.execute(
+        "WITH uniq AS ("
+        "  SELECT substr(title, 1, 40) AS p FROM documents "
+        "  WHERE valid_until IS NULL AND length(coalesce(title,'')) > 30 "
+        "  GROUP BY p HAVING COUNT(*) = 1) "
+        "SELECT d.id, d.title FROM documents d JOIN uniq ON uniq.p = substr(d.title, 1, 40) "
+        "WHERE d.valid_until IS NULL "
+        "ORDER BY coalesce(d.token_count,0) DESC LIMIT 1").fetchone()
+    probe = await embeddings.embed_query(probe_title)
+    if len(probe) != dims:
+        print(f"  ✗ provider returned {len(probe)} dims, config says {dims}",
+              file=sys.stderr, flush=True)
+        ok = False
+    else:
+        blob = db._serialize_vector(probe)
+        # KNOWN-ANSWER control: a memo's own title must retrieve that memo.
+        doc_hits = [r[0] for r in conn.execute(
+            "SELECT doc_id FROM document_embeddings WHERE embedding MATCH ? AND k=5",
+            (blob,)).fetchall()]
+        print(f"  control query {probe_title[:48]!r}", flush=True)
+        print(f"    document_embeddings → {len(doc_hits)} hit(s), "
+              f"target {'FOUND at ' + str(doc_hits.index(probe_id) + 1) if probe_id in doc_hits else 'ABSENT'}",
+              flush=True)
+        if not doc_hits:
+            print("  ✗ document read returned ZERO rows against a populated "
+                  "table — this is the `mind` failure", file=sys.stderr, flush=True)
+            ok = False
+        elif probe_id not in doc_hits:
+            print("  ✗ a memo's own title did not retrieve it — reads run but "
+                  "return the wrong thing", file=sys.stderr, flush=True)
+            ok = False
+
+        # The passage table needs its own control: it is a SEPARATE index and a
+        # swap can succeed for one and not the other.
+        chunk_hits = conn.execute(
+            "SELECT doc_id FROM chunk_embeddings WHERE embedding MATCH ? AND k=5",
+            (blob,)).fetchall()
+        print(f"    chunk_embeddings    → {len(chunk_hits)} hit(s)", flush=True)
+        if not chunk_hits:
+            print("  ✗ passage read returned ZERO rows against a populated table",
+                  file=sys.stderr, flush=True)
+            ok = False
+
+    return 0 if ok else 2
+
+
+if __name__ == "__main__":
+    rc = asyncio.run(main())
+    print(f"EXIT={rc}", flush=True)
+    raise SystemExit(rc)

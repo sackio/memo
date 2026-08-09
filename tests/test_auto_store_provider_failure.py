@@ -51,7 +51,12 @@ def no_similar(monkeypatch):
     async def _search(**_kwargs):
         return []
 
-    monkeypatch.setattr(main.embeddings, "embed", _embed)
+    # embed() split into embed_query/embed_document on the renovation branch.
+    # ⚠️ This line merged CLEANLY — main added it, the branch never touched
+    # this file — and was broken anyway, because the API it patches changed
+    # underneath. A clean auto-merge is not a working merge.
+    monkeypatch.setattr(main.embeddings, "embed_query", _embed)
+    monkeypatch.setattr(main.embeddings, "embed_document", _embed)
     monkeypatch.setattr(main.db, "search", _search)
 
 
@@ -141,7 +146,12 @@ def test_a_failed_merge_analysis_does_not_fall_through_to_create(monkeypatch):
 
     monkeypatch.setattr("memo.auto_store.analyze_for_store", _store_ok)
     monkeypatch.setattr("memo.auto_store.analyze_for_merge", _merge_boom)
-    monkeypatch.setattr(main.embeddings, "embed", _embed)
+    # embed() split into embed_query/embed_document on the renovation branch.
+    # ⚠️ This line merged CLEANLY — main added it, the branch never touched
+    # this file — and was broken anyway, because the API it patches changed
+    # underneath. A clean auto-merge is not a working merge.
+    monkeypatch.setattr(main.embeddings, "embed_query", _embed)
+    monkeypatch.setattr(main.embeddings, "embed_document", _embed)
     monkeypatch.setattr(main.db, "search", _search)
     monkeypatch.setattr(main.db, "store", _store)
 
@@ -159,42 +169,72 @@ def test_a_failed_merge_analysis_does_not_fall_through_to_create(monkeypatch):
 # failed detects nothing" trap, and these two close it: they drive the REAL
 # function with a provider that raises, which is where the bug lived.
 
-def test_analyze_for_store_returns_an_error_not_a_should_store_false(monkeypatch):
-    """The regression test. Fails against the old `{"should_store": False, ...}`."""
-    class _Boom:
-        class chat:
-            class completions:
-                @staticmethod
-                async def create(**_kwargs):
-                    raise _HTTPError(402)
+class _RaisingProvider:
+    """A provider whose `complete()` raises rather than returning None.
 
-    monkeypatch.setattr(auto_store, "_client", _Boom)
-    out = _run(auto_store.analyze_for_store("some content"))
+    ⚠️ Rewritten during the 001-memo-renovation merge. These tests used to
+    monkeypatch `auto_store._client`, an `AsyncOpenAI` instance that the branch
+    deleted when it moved auto-store onto the shared `LLMProvider` (R-17). Left
+    as they were, `monkeypatch.setattr` would raise AttributeError — **a
+    regression test for silent-skip, itself failing loudly for an unrelated
+    reason, is a test that no longer guards anything.**
+    """
+    name = "raising-stub"
+
+    def __init__(self, status):
+        self._status = status
+
+    async def complete(self, *_args, **_kwargs):
+        raise _HTTPError(self._status)
+
+
+class _NoneProvider:
+    """The contracted failure shape: returns None instead of raising."""
+    name = "none-stub"
+
+    async def complete(self, *_args, **_kwargs):
+        return None
+
+
+def test_analyze_for_store_returns_an_error_not_a_should_store_false():
+    """The regression test. Fails against the old `{"should_store": False, ...}`."""
+    out = _run(auto_store.analyze_for_store("some content",
+                                            provider=_RaisingProvider(402)))
 
     assert "error" in out, (
         "a provider failure must not come back as a normal analysis result — "
         "the old code returned should_store=False, which /auto-store renders "
         "as action='skipped' and the caller reads as 'nothing worth storing'")
     assert out["error"]["kind"] == "payment_required"
-    assert out.get("should_store") is not False or "error" in out
+    assert out.get("should_store") is not False
 
 
-def test_analyze_for_merge_returns_an_error_not_a_create(monkeypatch):
+def test_analyze_for_merge_returns_an_error_not_a_create():
     """Fails against the old `{"action": "create", ...}` fallback."""
-    class _Boom:
-        class chat:
-            class completions:
-                @staticmethod
-                async def create(**_kwargs):
-                    raise _HTTPError(500)
-
-    monkeypatch.setattr(auto_store, "_client", _Boom)
-    out = _run(auto_store.analyze_for_merge("existing", "new"))
+    out = _run(auto_store.analyze_for_merge("existing", "new",
+                                            provider=_RaisingProvider(500)))
 
     assert "error" in out
     assert out.get("action") != "create", (
         "degrading to 'create' on a provider failure duplicates the memo we "
         "just found")
+
+
+# ⭐ The branch's failure mode is UNAVAILABILITY, not an exception — `complete()`
+# is contracted to return None. That path has no traceback to make it feel like
+# an error, which is exactly why it read as a result. Both shapes, both funcs.
+
+def test_store_reports_error_when_provider_returns_none():
+    out = _run(auto_store.analyze_for_store("c", provider=_NoneProvider()))
+    assert "error" in out
+    assert out.get("should_store") is not False
+
+
+def test_merge_reports_error_when_provider_returns_none():
+    out = _run(auto_store.analyze_for_merge("existing", "new",
+                                            provider=_NoneProvider()))
+    assert "error" in out
+    assert out.get("action") != "create"
 
 
 # --- The status classifier itself ---

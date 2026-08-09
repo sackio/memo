@@ -1,0 +1,64 @@
+{
+  "url": "http://server4:8000",
+  "seed": 7,
+  "per_band": 14,
+  "limit": 10,
+  "corpus": 7511,
+  "bands": [
+    {
+      "band": "0-200",
+      "n": 14,
+      "rank1": 14,
+      "top5": 14,
+      "absent": 0,
+      "rank1_pct": 100.0,
+      "median_score": 0.732
+    },
+    {
+      "band": "200-500",
+      "n": 14,
+      "rank1": 9,
+      "top5": 12,
+      "absent": 2,
+      "rank1_pct": 64.3,
+      "median_score": 0.716
+    },
+    {
+      "band": "500-1000",
+      "n": 14,
+      "rank1": 10,
+      "top5": 13,
+      "absent": 0,
+      "rank1_pct": 71.4,
+      "median_score": 0.668
+    },
+    {
+      "band": "1000-2000",
+      "n": 14,
+      "rank1": 5,
+      "top5": 8,
+      "absent": 5,
+      "rank1_pct": 35.7,
+      "median_score": 0.65
+    },
+    {
+      "band": "2000+",
+      "n": 14,
+      "rank1": 2,
+      "top5": 4,
+      "absent": 9,
+      "rank1_pct": 14.3,
+      "median_score": 0.596
+    }
+  ],
+  "content_share": {
+    ">=1000": {
+      "memos": 1730,
+      "token_pct": 56.4
+    },
+    ">=2000": {
+      "memos": 400,
+      "token_pct": 25.1
+    }
+  }
+}

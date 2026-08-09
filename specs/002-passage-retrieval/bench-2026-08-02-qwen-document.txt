@@ -1,0 +1,17 @@
+corpus: 7336 memos @ http://localhost:8091  (seed 7)  path=document [both-indexed only]
+
+        band   n  rank-1  top-5  absent  median
+       0-200 1216     751   1044     126   0.762
+     200-500 2293     996   1608     523   0.707
+    500-1000 2007    1019   1431     434   0.706
+   1000-2000 1306     635    941     282   0.692
+       2000+ 399     169    235     142   0.705
+
+  memos >=1000 tokens: 1761 (57.2% of all content)
+  memos >=2000 tokens: 405 (25.3% of all content)
+
+Searching a memo's own exact title: rank 1 is the only correct answer.
+
+mid-document fact set (the answer lives inside a long memo):
+  rank-1 5/30 (17%) · top-5 11/30 · absent 15/30
+wrote /tmp/claude-1000/-mnt-nas-data-code-memo/ea469f16-e6b5-42b7-a874-d7e5a365ee56/scratchpad/q-document.json

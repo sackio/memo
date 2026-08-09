@@ -1,0 +1,250 @@
+================================================================================
+QWEN3 QUERY INSTRUCT PREFIX — 5-band paired confirmation
+memo-v2 · document path · 2026-08-02 04:20-04:50 EDT · qwen3-embedding-4b @2560
+================================================================================
+
+WHAT THIS IS. Each document is queried by its own title, twice, against the same
+stored vectors: once BARE, once with a query-side instruct prefix. Paired, so each
+doc is its own control and corpus composition cannot explain a difference.
+n=15 per band, seed 7, k=10.
+
+⚠️ SCOPE — carry this label wherever the numbers are quoted.
+
+  1. It measures THIS TASK STRING, not "the effect of prefixing":
+
+       "Instruct: Given a search query, retrieve relevant documents that match
+        the query\nQuery: {q}"
+
+     One fixed module-level string, identical across all five bands, so prefix
+     and task-wording are not varying together. That was the right design for
+     isolating prefix-vs-bare, and it is exactly why the result does not transfer
+     to a different string. `groton` measured 5/10 generic vs 7/10 domain-specific
+     on their own corpus — the better one with the worse tail (a query fell rank
+     2 -> rank 9). The string is a live variable.
+
+  2. Querying a document by its own title makes the correct answer true by
+     construction. That removes selection bias and it also removes headroom where
+     `bare` is already high. READ `bare` BEFORE READING THE DELTA — where bare is
+     near-ceiling, a null means "no power", not "no effect". Top-5 at 0-200 is the
+     clearest case here: 14/15 bare leaves almost nothing to gain.
+
+  3. n=15 per band. Adequate for the large short-band gains; NOT adequate for
+     establishing "no harm" anywhere. The 2000+ band is re-run separately at n=120
+     (instruct-prefix-2000plus-2026-08-02.txt) because that is the band where bare
+     qwen3 already BEATS 3-large (42.4% vs 18.8%) and therefore the band the prefix
+     could plausibly hurt.
+
+⭐ READ THE DISCORDANT PAIRS, NOT THE NET. Two bands prove why:
+
+  band        n   bare r1  inst r1   improved  worsened   net
+  0-200      15      8       11          4        1       +3
+  200-500    15      6       11          5        0       +5
+  500-1000   15      9       15          6        0       +6
+  1000-2000  15     10       10          1        1       +0   <-- a net ZERO that
+  2000+      15      4        6          2        0       +2       is NOT inert
+  TOTAL      75     37       53         18        2      +16
+
+  top-5: 56/75 -> 63/75. Unchanged in three of five bands (0-200, 1000-2000, 2000+).
+
+⛔ THE PREFIX IS NOT MONOTONE IN DOCUMENT LENGTH. The pilot's "7 changed, ALL 7
+improved" held at 200-500 and does not generalise. Two queries were BROKEN:
+
+  0-200      "Inkling — Landing Page and UI Decisions"
+             rank-1 bare -> ABSENT from top-10 under the prefix (the worst form:
+             not demoted, gone)
+  1000-2000  "quantum-feed distributed-build: CELL-WRITE LEVER GATE-#1 GRE..."
+             rank-1 bare -> rank 1 under the prefix
+
+⇒ The effect turns at BOTH ends of the range measured here, so extrapolating
+either upward or downward from a measured band is unsafe. This matters for other
+seats: `groton` has 7,432 chunks below 200 tokens — beneath every band measured
+here — and `mind` sits at 249-386 tok/row.
+
+PRE-REGISTRATION, HONOURED. Before running, I predicted the prefix would help
+LITTLE — the published effect is 1-5% and the gap to close was ~33 points. Measured
++21.4 points of rank-1 overall (49.3% -> 70.7%), and +33 points in the pilot band.
+I WAS WRONG BY AN ORDER OF MAGNITUDE. Recording it because a pre-registration that
+survives being wrong is the only kind that shows the number wasn't chosen after
+seeing the data.
+
+CONTEXT — the census this is diagnosing (3-large -> BARE qwen3, n=7,221, document
+path, same input text): 0-200 78.5->61.8 · 200-500 76.9->43.4 · 500-1000 76.6->50.8
+· 1000-2000 51.8->48.6 · 2000+ 18.8->42.4.
+
+⛔ NOT YET A FIX. memo has no chokepoint: 25 call sites share one embeddings.embed(),
+with the query/document distinction living only in local variable names. Applying
+this needs embed_query()/embed_document() with the ambiguous one REMOVED, and ~21
+call sites reclassified by hand.
+
+================================================================================
+RAW RUN OUTPUT FOLLOWS
+================================================================================
+model qwen3-embedding-4b @ 2560
+
+--- band 0-200: 1216 docs, probing 15 ---
+instruct template: 'Instruct: Given a search query, retrieve relevant documents that match the query\nQuery: <query>'
+
+  870b4b13  bare=0  instruct=0   Ben's Phony Direct Line (BSack - Direct)
+  3f51eff9  bare=2  instruct=1   quantum-feed: DRIVER + CHECKER cron IDs and prompt w
+  a5f4cbc9  bare=0  instruct=0   Karma Burlington Dinner — June 16 2026
+  13a5df7a  bare=0  instruct=0   SMS — Nick @ Endless Energy (+15089056899): post-est
+  1cd8d1c5  bare=0  instruct=-   Inkling — Landing Page and UI Decisions
+  e7cccedb  bare=1  instruct=0   HealthEquity HSA — Employee Contribution Received, A
+  24ee27e9  bare=3  instruct=0   Ro Order OL-00025765634 — Placed 2026-05-11, Deliver
+  98efbda5  bare=0  instruct=0   Matt Sack — Delta 5677 Logan arrival May 15 2026
+  fb374814  bare=0  instruct=0   Smart Lock Shopping Research: Z-Wave vs Zigbee (Jul 
+  175f704f  bare=4  instruct=0   buffet-buster: v0.11.0: running Your Haul food list,
+  da20d58a  bare=0  instruct=0   Gamy 90th Birthday Game — Admin Link Sent to Ben 202
+  5970495b  bare=0  instruct=0   qf-guardian-nx: docs(.reviews): wave-2 design DRAFT 
+  0e75fcbb  bare=-  instruct=0   Memo DB backups — 6h snapshots + hourly live-overwri
+  21b6b5dd  bare=2  instruct=1   memo container — server4 and server5 rebuilt 2026-04
+  b80ff487  bare=2  instruct=2   Gmail-scheduler systemd timer — post-blackout fix pa
+
+                rank-1     top-5
+bare           8/15     14/15   
+instruct      11/15     14/15   
+
+rank-1 delta: +3 of 15
+
+queries whose rank-1 outcome CHANGED (rank None = absent from top-10):
+  bare=0 -> instruct=-   Inkling — Landing Page and UI Decisions
+  bare=1 -> instruct=0   HealthEquity HSA — Employee Contribution Received, Available
+  bare=3 -> instruct=0   Ro Order OL-00025765634 — Placed 2026-05-11, Delivered 2026-
+  bare=4 -> instruct=0   buffet-buster: v0.11.0: running Your Haul food list, bigger 
+  bare=- -> instruct=0   Memo DB backups — 6h snapshots + hourly live-overwrite on al
+
+--- band 200-500: 2293 docs, probing 15 ---
+instruct template: 'Instruct: Given a search query, retrieve relevant documents that match the query\nQuery: <query>'
+
+  968d5338  bare=0  instruct=0   aloHA MCP auth: OAuth key+secret architecture
+  471d03de  bare=-  instruct=0   quantum-feed: Single JetStream path consolidation — 
+  b6819441  bare=2  instruct=0   ATC beacon primitive — rewarm-pin for post-compactio
+  1786fe28  bare=-  instruct=1   quantum-feed: stream_router: quotes_v1 K=16 -> K=1 f
+  2398df07  bare=2  instruct=0   SECURITY: POLYGON_API_KEY leaked in quantum-data ses
+  f5c3e8a3  bare=1  instruct=0   ATC beacon primitive: atc_post_beacon / atc_ack_beac
+  2cff055d  bare=0  instruct=0   quantum-library: news-14 sentiment build STOOD DOWN 
+  a8d84278  bare=-  instruct=1   quantum-feed: 3 new oversight agents LIVE — quantum-
+  1d499962  bare=0  instruct=0   qf-guardian-t094s5: tasks(001): T095 step-7 — regist
+  e910f7d4  bare=0  instruct=0   ⚖️ Operator directive 2026-07-22 18:41 — two-track p
+  646173cb  bare=0  instruct=0   quantum-feed: .reviews: #002 amendment draft — bars 
+  119e7c0a  bare=8  instruct=6   Ecowitt GW2000 + WS90 Weather Station — Garden Integ
+  2a3f9073  bare=-  instruct=1   pantry app: grocery inventory sync + Cook AI/batch-p
+  c7a1465a  bare=1  instruct=0   Phony Advanced Mode: first_message override + Eleven
+  c0f612a2  bare=0  instruct=0   mind: feat(graph): idea de-duplication (Phase 2.1), 
+
+                rank-1     top-5
+bare           6/15     10/15   
+instruct      11/15     14/15   
+
+rank-1 delta: +5 of 15
+
+queries whose rank-1 outcome CHANGED (rank None = absent from top-10):
+  bare=- -> instruct=0   quantum-feed: Single JetStream path consolidation — realtime
+  bare=2 -> instruct=0   ATC beacon primitive — rewarm-pin for post-compaction contex
+  bare=2 -> instruct=0   SECURITY: POLYGON_API_KEY leaked in quantum-data session — n
+  bare=1 -> instruct=0   ATC beacon primitive: atc_post_beacon / atc_ack_beacon (2026
+  bare=1 -> instruct=0   Phony Advanced Mode: first_message override + ElevenLabs age
+
+--- band 500-1000: 2007 docs, probing 15 ---
+instruct template: 'Instruct: Given a search query, retrieve relevant documents that match the query\nQuery: <query>'
+
+  56933de6  bare=2  instruct=0   hi-score project — ClinVar-derived haploinsufficienc
+  f792121a  bare=0  instruct=0   Voicemail: Austin (Nashoba Air & BoilerWorks) — 2026
+  27ffc5c2  bare=1  instruct=0   PXE Boot Log Monitor — Real-Time Detection of New Ma
+  69585790  bare=0  instruct=0   qf-nats-ws-bridge WS TRANSPORT PROVING-TEST = ✅ PASS
+  a944f435  bare=0  instruct=0   quantum-library — corpus-cert basis CORRECTED: real-
+  0c5a43e7  bare=1  instruct=0   Rate-limit cascade post-mortem 2026-06-21 — global A
+  1404f154  bare=0  instruct=0   R9 4-member hunt CLOSED: param-alias flavor asymmetr
+  d51a5a12  bare=0  instruct=0   quantum-library §8 SHA bump 2026-06-14 ~01:22 — re-r
+  8afd1980  bare=0  instruct=0   Convention-batch queue item 73 — cmd||fallback prove
+  195f563c  bare=0  instruct=0   quantum-library 2026-07-19 ~14:54 — BANK v16.3: Land
+  6161aaa3  bare=0  instruct=0   Pool Dimensions & Volume — 120 Reedy Meadow
+  961c5dc7  bare=0  instruct=0   quantum-feed L1 sizing: whole-market midprice hot-ti
+  10aaaccb  bare=-  instruct=0   [quantum-library FOOTPRINT MODEL — FINAL CORRECTION 
+  ebd99ab2  bare=5  instruct=0   qf-library corpus reality at HEAD (2026-07-05): 3 di
+  83e5cfb1  bare=-  instruct=0   Growroom automation — entities, schedule, active tog
+
+                rank-1     top-5
+bare           9/15     12/15   
+instruct      15/15     15/15   
+
+rank-1 delta: +6 of 15
+
+queries whose rank-1 outcome CHANGED (rank None = absent from top-10):
+  bare=2 -> instruct=0   hi-score project — ClinVar-derived haploinsufficiency score 
+  bare=1 -> instruct=0   PXE Boot Log Monitor — Real-Time Detection of New Machines
+  bare=1 -> instruct=0   Rate-limit cascade post-mortem 2026-06-21 — global ACTION br
+  bare=- -> instruct=0   [quantum-library FOOTPRINT MODEL — FINAL CORRECTION 2026-06-
+  bare=5 -> instruct=0   qf-library corpus reality at HEAD (2026-07-05): 3 distinct "
+  bare=- -> instruct=0   Growroom automation — entities, schedule, active toggle
+
+--- band 1000-2000: 1306 docs, probing 15 ---
+instruct template: 'Instruct: Given a search query, retrieve relevant documents that match the query\nQuery: <query>'
+
+  82b30fbc  bare=0  instruct=1   HA indoor lights — sunset schedule + warm mode + man
+  40348c44  bare=0  instruct=0   super-agent phone (phone_ben) can install arbitrary 
+  9fea59c3  bare=-  instruct=-   Discovery sieve — Stage-0 universe-construction reci
+  133ffc98  bare=1  instruct=1   Barn contractor directory — 120 Reedy Meadow (2020-2
+  1d7dac81  bare=-  instruct=6   Validation-pipeline RESUME v6-DELTA-70 (GLOBAL) — 20
+  d30a8dd8  bare=0  instruct=0   scripts session — rewarm state 2026-07-31 16:42 EDT 
+  271b0a4a  bare=-  instruct=-   [quantum-library — FULL-50t VERDICT + ATTRIBUTION RE
+  93d5451f  bare=0  instruct=0   quantum-library PHASE-1 task (operator-directed, T2 
+  e6f87363  bare=0  instruct=0   Breen & Sullivan invoice #2126474 ($1,077 ATS servic
+  17518c04  bare=0  instruct=0   Discovery sieve — MASTER PLAN written: docs/discover
+  c84dc68a  bare=0  instruct=0   CORRECTED: the 2026-07-22 Logan parking capture miss
+  5a4dd921  bare=0  instruct=0   quantum-library: two-grid composed-decoupled cert GR
+  0e143a33  bare=0  instruct=0   ⭐ NAV #42 DELTA — T095 item ② LANDED @38aca6b5 (CDL 
+  22f6b34b  bare=2  instruct=0   quantum-feed distributed-build: CELL-WRITE LEVER GAT
+  ac39f7a0  bare=0  instruct=0   HVAC heat-wave protection — cascading 3-level automa
+
+                rank-1     top-5
+bare          10/15     12/15   
+instruct      10/15     12/15   
+
+rank-1 delta: +0 of 15
+
+queries whose rank-1 outcome CHANGED (rank None = absent from top-10):
+  bare=0 -> instruct=1   HA indoor lights — sunset schedule + warm mode + manual dim 
+  bare=2 -> instruct=0   quantum-feed distributed-build: CELL-WRITE LEVER GATE-#1 GRE
+
+--- band 2000-1000000000: 399 docs, probing 15 ---
+instruct template: 'Instruct: Given a search query, retrieve relevant documents that match the query\nQuery: <query>'
+
+  63df9f8f  bare=2  instruct=1   Git pulse: quantum-feed — 2026-07-27 → 2026-07-29
+  322c69a7  bare=3  instruct=-   quantum-navigator RESUME UPDATE-6 — idx verdict RELA
+  7f02a2f7  bare=0  instruct=0   Claude Code Hooks, Commands, and Permissions
+  d016bf6d  bare=2  instruct=0   quantum-feed: qf-realtime: add benzinga_news_v1 ts-m
+  1238dbb5  bare=4  instruct=4   Ben Sack — Current Health Profile (May 2026)
+  1adc60f3  bare=-  instruct=-   Backfill checkpoint — server4 — 2026-07-20 06:58 (p7
+  a224d89d  bare=-  instruct=-   Backfill checkpoint — office — 2026-07-20 06:58 (p10
+  2062872a  bare=0  instruct=0   HMS Faculty of Medicine CV — Format Rules & Section 
+  733222e3  bare=-  instruct=-   Backfill checkpoint — office — 2026-07-20 06:58 (p2/
+  b44e0884  bare=7  instruct=9   ⭐⭐ NAV #44→#45 HANDOFF rev 5 — head 40a01803 (ALWAYS
+  16a741f4  bare=-  instruct=-   Backfill checkpoint — server4 — 2026-07-20 06:58 (p1
+  9a54732c  bare=-  instruct=-   Backfill checkpoint — server4 — 2026-07-20 06:58 (p6
+  45409972  bare=9  instruct=0   quantum-library 2026-06-11 ~18:37 — SMOKE BUILD-READ
+  0c3c82b4  bare=0  instruct=0   quantum-feed: stream_router: add --skip-existing fla
+  1e38901d  bare=0  instruct=0   Backfill checkpoint — server5 — 2026-07-20 06:58 (p1
+
+                rank-1     top-5
+bare           4/15      8/15   
+instruct       6/15      8/15   
+
+rank-1 delta: +2 of 15
+
+queries whose rank-1 outcome CHANGED (rank None = absent from top-10):
+  bare=2 -> instruct=0   quantum-feed: qf-realtime: add benzinga_news_v1 ts-merge rep
+  bare=9 -> instruct=0   quantum-library 2026-06-11 ~18:37 — SMOKE BUILD-READY: desig
+
+=== ALL BANDS: rank-1 / top-5, bare -> instruct ===
+        band    n   bare r1   inst r1   bare t5   inst t5
+       0-200   15         8        11        14        14
+     200-500   15         6        11        10        14
+    500-1000   15         9        15        12        15
+   1000-2000   15        10        10        12        12
+      2000-+   15         4         6         8         8
+       TOTAL   75        37        53        56        63
+
+rank-1 49.3% -> 70.7%   top-5 74.7% -> 84.0%
+
+⚠️ LOAD-BEARING: check the 2000+ row. qwen3 bare already BEAT 3-large there (42.4% vs 18.8%). If the prefix HURTS that band it is a trade-off, not a free win.

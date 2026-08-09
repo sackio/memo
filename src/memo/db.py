@@ -24,6 +24,9 @@ logger = logging.getLogger(__name__)
 # corrupts results: it surfaced as SQLITE_MISUSE ("bad parameter or other API
 # misuse"), "tuple index out of range", and json.loads(None) — three crash
 # sites, one race.
+#
+# (Both branches carried this fix independently; the "ported from v1 0.3.4"
+# note the renovation branch had is dropped as meaningless post-merge.)
 _local = threading.local()
 _conn_create_lock = threading.RLock()
 _tokenizer = tiktoken.get_encoding("cl100k_base")
@@ -65,6 +68,18 @@ def _truncate_to_tokens(text: str, max_tokens: int) -> str:
     return _tokenizer.decode(tokens[:max_tokens])
 
 
+def _clear_thread_connections(close: bool = False) -> None:
+    """Drop this thread's cached connections (test teardown / path switches)."""
+    conns = getattr(_local, "conns", None)
+    if not conns:
+        return
+    if close:
+        for conn in conns.values():
+            conn.close()
+    conns.clear()
+
+
+
 def _get_or_create_conn(db_path: str) -> sqlite3.Connection:
     conns = getattr(_local, "conns", None)
     if conns is None:
@@ -93,13 +108,59 @@ def _get_or_create_conn(db_path: str) -> sqlite3.Connection:
     # a ceiling, not a delay) and converts a caller-visible error into a wait.
     conn.execute("PRAGMA busy_timeout=30000")
 
-    # Schema creation is serialized across threads: WAL permits concurrent
-    # readers, but two threads running CREATE TABLE IF NOT EXISTS at once on a
-    # fresh DB is a race worth not having.
+    # Schema creation AND migrations are serialized across threads: WAL permits
+    # concurrent readers, but two threads running CREATE TABLE IF NOT EXISTS —
+    # or a migration — at once on a fresh DB is a race worth not having.
     with _conn_create_lock:
         _init_schema(conn)
+        _apply_migrations(conn)
     conns[db_path] = conn
     return conn
+
+
+def _apply_migrations(conn: sqlite3.Connection) -> None:
+    """Apply any unapplied migrations from the ``migrations/`` directory. [001/FR-001 001/FR-002]
+
+    Idempotent: tracked via a ``migrations_applied`` table so each file
+    runs exactly once. Skips silently if the migrations dir is absent
+    (allows in-tree unit tests that don't ship with the dir).
+    """
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS migrations_applied ("
+        "  filename TEXT PRIMARY KEY, applied_at REAL NOT NULL)"
+    )
+    conn.commit()
+
+    # Migration dir is copied into the container at /app/migrations.
+    # In tests / dev, fall back to the working tree location.
+    candidates = [Path("/app/migrations"), Path(__file__).resolve().parents[2] / "migrations"]
+    migrations_dir = next((p for p in candidates if p.is_dir()), None)
+    if migrations_dir is None:
+        logger.info("no migrations dir found — skipping migrations")
+        return
+
+    applied = {row["filename"] for row in conn.execute("SELECT filename FROM migrations_applied")}
+    for path in sorted(migrations_dir.glob("*.sql")):
+        if path.name in applied:
+            continue
+        sql = path.read_text()
+        try:
+            conn.executescript(sql)
+        except sqlite3.OperationalError as e:
+            # ALTER TABLE ADD COLUMN fails with "duplicate column" when re-run
+            # against a DB that already had the column added out-of-band.
+            # That's benign; log + mark applied so we don't retry.
+            if "duplicate column" in str(e).lower():
+                logger.warning("migration %s: %s (marking applied)", path.name, e)
+            else:
+                logger.error("migration %s FAILED: %s", path.name, e)
+                raise
+        conn.execute(
+            "INSERT INTO migrations_applied (filename, applied_at) VALUES (?, ?)",
+            (path.name, time()),
+        )
+        conn.commit()
+        logger.info("applied migration %s", path.name)
 
 
 def _init_schema(conn: sqlite3.Connection) -> None:
@@ -117,6 +178,17 @@ def _init_schema(conn: sqlite3.Connection) -> None:
 
         CREATE VIRTUAL TABLE IF NOT EXISTS document_embeddings USING vec0(
             doc_id TEXT,
+            embedding FLOAT[{settings.embedding_dimensions}] distance_metric=cosine
+        );
+
+        -- 002/FR-105 — passage-level vectors. Lives beside the document-level
+        -- table rather than replacing it: both retrieval paths must be live at
+        -- once so the passage path can be measured against the document path
+        -- before it becomes the default, and so a regression is a config change
+        -- rather than a migration (002/FR-113).
+        CREATE VIRTUAL TABLE IF NOT EXISTS chunk_embeddings USING vec0(
+            doc_id TEXT,
+            chunk_index INTEGER,
             embedding FLOAT[{settings.embedding_dimensions}] distance_metric=cosine
         );
 
@@ -364,10 +436,15 @@ def _sync_store(db_path: str, content: str, title: str | None, tags: list[str],
     doc_id = str(uuid.uuid4())
     now = time()
     token_count = _count_tokens(content)
+    # valid_from MUST be set explicitly. Migration 001 adds the column with
+    # `NOT NULL DEFAULT 0` and backfills existing rows once, but an INSERT that
+    # omits the column silently takes the 0 default — which would make every
+    # NEW v1-path write look valid from the epoch and break get_as_of(). (Found
+    # 2026-07-29: the first row written to the fresh v2 DB had valid_from=0.)
     conn.execute(
-        "INSERT INTO documents (id, content, title, tags, metadata, token_count, created_at, updated_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (doc_id, content, title, json.dumps(tags), json.dumps(metadata), token_count, now, now),
+        "INSERT INTO documents (id, content, title, tags, metadata, token_count, created_at, updated_at, valid_from) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (doc_id, content, title, json.dumps(tags), json.dumps(metadata), token_count, now, now, now),
     )
     conn.execute(
         "INSERT INTO document_embeddings (doc_id, embedding) VALUES (?, ?)",
@@ -424,7 +501,8 @@ def _sync_update(db_path: str, doc_id: str, content: str | None, title: str | No
 
 def _sync_search(db_path: str, embedding: list[float], limit: int, min_score: float | None,
                  tags: list[str], after: float | None, before: float | None,
-                 min_tokens: int | None, max_tokens: int | None) -> list[dict]:
+                 min_tokens: int | None, max_tokens: int | None,
+                 include_superseded: bool = False) -> list[dict]:
     """Semantic search with tag scope (v0.3.1+).
 
     Two paths:
@@ -438,7 +516,31 @@ def _sync_search(db_path: str, embedding: list[float], limit: int, min_score: fl
     Tag-scoped queries need a true DB-side scope; that's what this does.
     """
     conn = _get_or_create_conn(db_path)
+    # ⭐ SUPERSEDED DOCUMENTS ARE EXCLUDED FROM SEARCH. [002/FR-115, 2026-08-03]
+    #
+    # ⛔ Before this, `/supersede` worked perfectly and changed NOTHING that any
+    # caller could observe. Measured live rather than read off the source: a
+    # document was superseded (edge written, `valid_until` set, both verified in
+    # the DB) and search returned it at rank 3 on the very next query, above
+    # everything except its own replacement.
+    #
+    # ⇒ **The bitemporal model was complete on the WRITE side and absent from the
+    # READ path.** `get_current` and `as-of` honoured `valid_until`; the one
+    # function every agent's `/recall` actually goes through did not reference it
+    # at all. So the corpus's 655 self-declared-stale memos could ALL have been
+    # correctly superseded and every one of them would still have been served.
+    #
+    # ⭐ `valid_until IS NULL` is already the codebase's definition of "currently
+    # true" (FR-002). This makes the default read path mean what the schema says.
+    # Time-travel remains available and explicit: `/documents/{id}/as-of`.
+    # ⚠️ NOT a de-rank. A superseded memo is not "less relevant" — it is a fact
+    # the corpus has been told is no longer true, and returning it ranked lower
+    # still returns it.
     date_token_filters = bool(after or before or min_tokens or max_tokens)
+    # Over-fetch when ANY post-filter can drop rows, supersession included —
+    # otherwise excluded documents silently consume top-k slots and the caller
+    # gets fewer results than asked for with nothing to indicate why.
+    post_filters = date_token_filters or not include_superseded
 
     if tags:
         # PATH B — tag-scoped semantic search.
@@ -449,6 +551,8 @@ def _sync_search(db_path: str, embedding: list[float], limit: int, min_score: fl
         )
         clauses.append(f"({tag_clause})")
         params.extend(tags)
+        if not include_superseded:
+            clauses.append("valid_until IS NULL")
         if after is not None: clauses.append("created_at >= ?"); params.append(after)
         if before is not None: clauses.append("created_at <= ?"); params.append(before)
         if min_tokens is not None: clauses.append("token_count >= ?"); params.append(min_tokens)
@@ -474,13 +578,19 @@ def _sync_search(db_path: str, embedding: list[float], limit: int, min_score: fl
         results = []
         for row in rank_rows:
             doc_id, distance = row["doc_id"], row["distance"]
+            if distance is None:
+                # sqlite-vec yields NULL for an undefined cosine — a stored
+                # zero-magnitude vector. Skip rather than crash the whole
+                # search on one bad row.
+                logger.warning("search: NULL distance for doc %s — skipping", doc_id)
+                continue
             score = 1.0 - distance
             if min_score is not None and score < min_score:
                 continue
             doc_row = conn.execute("SELECT * FROM documents WHERE id = ?", (doc_id,)).fetchone()
             if doc_row is None:
                 continue
-            results.append({"document": _row_to_dict(doc_row), "score": score})
+            results.append({"document": _row_to_memo(doc_row), "score": score})
             if len(results) >= limit:
                 break
         return results
@@ -491,7 +601,7 @@ def _sync_search(db_path: str, embedding: list[float], limit: int, min_score: fl
         "FROM document_embeddings de "
         "WHERE de.embedding MATCH ? AND k = ? "
         "ORDER BY de.distance",
-        (_serialize_vector(embedding), limit * 5 if date_token_filters else limit),
+        (_serialize_vector(embedding), limit * 5 if post_filters else limit),
     ).fetchall()
 
     results = []
@@ -511,7 +621,9 @@ def _sync_search(db_path: str, embedding: list[float], limit: int, min_score: fl
         ).fetchone()
         if doc_row is None:
             continue
-        doc = _row_to_dict(doc_row)
+        if not include_superseded and doc_row["valid_until"] is not None:
+            continue
+        doc = _row_to_memo(doc_row)
         if not _matches_filters(doc, [], after, before, min_tokens, max_tokens):
             continue
         results.append({"document": doc, "score": score})
@@ -525,18 +637,69 @@ def _sync_get(db_path: str, doc_id: str) -> dict | None:
     row = conn.execute("SELECT * FROM documents WHERE id = ?", (doc_id,)).fetchone()
     if row:
         _bump_access(conn, doc_id, "get")
-        return _row_to_dict(row)
+        return _row_to_memo(row)
     return None
 
 
-def _sync_delete(db_path: str, doc_id: str) -> bool:
+def _sync_delete(db_path: str, doc_id: str, *, actor: str = "unknown",
+                 reason: str = "unspecified", replaced_by: str | None = None) -> bool:
+    """Delete a memo, snapshotting it to `deletion_log` first. [001/FR-028a]
+
+    The snapshot is taken in the SAME transaction as the delete, and the row is
+    read before anything is removed. That ordering is the whole guarantee: a
+    deletion that fails to record its snapshot must not happen at all, because
+    an unrecorded delete is indistinguishable from data loss.
+
+    Content is stored in full, never truncated — a snapshot missing the tail of
+    a long memo cannot restore it, which defeats the purpose.
+    """
     conn = _get_or_create_conn(db_path)
-    cur = conn.execute("DELETE FROM documents WHERE id = ?", (doc_id,))
-    conn.execute("DELETE FROM document_embeddings WHERE doc_id = ?", (doc_id,))
-    conn.commit()
+    row = conn.execute("SELECT * FROM documents WHERE id = ?", (doc_id,)).fetchone()
+    if row is None:
+        return False
+
+    d = dict(row)
+    try:
+        # IMMEDIATE for the same reason as passages._sync_replace: a deferred
+        # BEGIN that upgrades to a write returns SQLITE_BUSY instantly in WAL
+        # mode, without honouring busy_timeout. A reap sweep racing a write is
+        # exactly the concurrency this hits.
+        conn.execute("BEGIN IMMEDIATE")
+        conn.execute(
+            "INSERT INTO deletion_log (doc_id, deleted_at, content, title, tags, "
+            "metadata, memo_class, created_at, actor, reason, replaced_by) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (doc_id, time(), d.get("content") or "", d.get("title"),
+             d.get("tags"), d.get("metadata"), d.get("class"), d.get("created_at"),
+             actor, reason, replaced_by),
+        )
+        cur = conn.execute("DELETE FROM documents WHERE id = ?", (doc_id,))
+        conn.execute("DELETE FROM document_embeddings WHERE doc_id = ?", (doc_id,))
+        conn.execute("DELETE FROM document_chunks WHERE doc_id = ?", (doc_id,))
+        conn.execute("DELETE FROM chunk_embeddings WHERE doc_id = ?", (doc_id,))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        logger.exception("delete of %s failed; rolled back (memo NOT deleted)", doc_id)
+        raise
+
     if cur.rowcount > 0:
         _bump_access(conn, doc_id, "delete")
     return cur.rowcount > 0
+
+
+def _sync_restore(db_path: str, doc_id: str) -> dict | None:
+    """Recover the most recent deletion-log snapshot for a memo. [001/FR-028a]
+
+    Returns the snapshot rather than re-inserting it: restoring needs a fresh
+    embedding, which is an async concern. A caller that wants the memo back
+    re-stores this content.
+    """
+    conn = _get_or_create_conn(db_path)
+    row = conn.execute(
+        "SELECT * FROM deletion_log WHERE doc_id = ? ORDER BY deleted_at DESC LIMIT 1",
+        (doc_id,)).fetchone()
+    return dict(row) if row else None
 
 
 def _sync_copy(src_path: str, doc_id: str, dst_path: str) -> str | None:
@@ -547,6 +710,10 @@ def _sync_copy(src_path: str, doc_id: str, dst_path: str) -> str | None:
     row = conn_src.execute("SELECT * FROM documents WHERE id = ?", (doc_id,)).fetchone()
     if row is None:
         return None
+    # Deliberately _row_to_dict, NOT _row_to_memo: copy/move re-INSERTS this
+    # row into another DB, so the v2 JSON columns must stay in their stored
+    # string form. Decoding here would hand dicts to an INSERT that expects
+    # TEXT. Read paths use _row_to_memo; this is a transfer path.
     doc = _row_to_dict(row)
 
     emb_row = conn_src.execute(
@@ -618,7 +785,7 @@ def _sync_list(db_path: str, tags: list[str], limit: int, after: float | None,
         f"SELECT * FROM documents {where} ORDER BY created_at DESC LIMIT ?", params
     ).fetchall()
 
-    return [_row_to_dict(row) for row in rows]
+    return [_row_to_memo(row) for row in rows]
 
 
 # --- Async wrappers ---
@@ -629,12 +796,199 @@ async def store(db_path: str | None, content: str, title: str | None,
     return await asyncio.to_thread(_sync_store, path, content, title, tags, metadata, embedding)
 
 
+def _sync_search_passages(db_path: str, embedding: list[float], limit: int,
+                          min_score: float | None, tags: list[str],
+                          after: float | None, before: float | None,
+                          min_tokens: int | None, max_tokens: int | None,
+                          overfetch: int = 8,
+                          include_superseded: bool = False) -> list[dict]:
+    """Passage-level semantic search. [002/FR-105 002/FR-106 002/FR-107]
+
+    Matches narrowly and returns broadly: the vector search runs over passages,
+    but results are grouped back to memos and the WHOLE memo is returned with
+    its best-matching passage attached as a highlight.
+
+    Three properties, each load-bearing:
+
+    * **A memo scores by its BEST passage, never the mean** (FR-106). A mean
+      would rebuild exactly the dilution this feature removes — the reason a
+      3,000-token memo currently loses to a short one on its own title.
+    * **Grouping happens before ranking** (FR-105), so overlap between adjacent
+      passages cannot let one memo occupy several result slots.
+    * **Tag scope is applied DB-side first**, mirroring `_sync_search` path B.
+      Post-filtering a top-K window silently drops correctly-tagged memos when
+      the query does not rank them into the window — the false negative found
+      2026-07-21. That bug is just as reachable here, so the ordering is kept.
+
+    `overfetch` exists because K passages collapse into fewer memos; fetching
+    `limit` passages would return fewer than `limit` memos.
+    """
+    conn = _get_or_create_conn(db_path)
+    blob = _serialize_vector(embedding)
+
+    scoped_ids: list[str] | None = None
+    if tags or after or before or min_tokens is not None or max_tokens is not None:
+        clauses, params = [], []
+        if tags:
+            tag_clause = " OR ".join(
+                ["EXISTS (SELECT 1 FROM json_each(documents.tags) "
+                 "WHERE json_each.value = ?)"] * len(tags))
+            clauses.append(f"({tag_clause})")
+            params.extend(tags)
+        if after is not None: clauses.append("created_at >= ?"); params.append(after)
+        if before is not None: clauses.append("created_at <= ?"); params.append(before)
+        if min_tokens is not None: clauses.append("token_count >= ?"); params.append(min_tokens)
+        if max_tokens is not None: clauses.append("token_count <= ?"); params.append(max_tokens)
+        if not include_superseded:
+            clauses.append("valid_until IS NULL")
+        rows = conn.execute(
+            f"SELECT id FROM documents WHERE {' AND '.join(clauses)}", params).fetchall()
+        scoped_ids = [r["id"] for r in rows]
+        if not scoped_ids:
+            return []
+
+    if scoped_ids is not None:
+        ph = ",".join("?" * len(scoped_ids))
+        hits = conn.execute(
+            f"SELECT doc_id, chunk_index, vec_distance_cosine(embedding, ?) AS distance "
+            f"FROM chunk_embeddings WHERE doc_id IN ({ph}) ORDER BY distance",
+            [blob] + scoped_ids).fetchall()
+    else:
+        hits = conn.execute(
+            "SELECT doc_id, chunk_index, distance FROM chunk_embeddings "
+            "WHERE embedding MATCH ? AND k = ? ORDER BY distance",
+            (blob, limit * overfetch)).fetchall()
+
+    # Group to memos, keeping each memo's BEST passage.
+    best: dict[str, tuple[float, int]] = {}
+    for h in hits:
+        distance = h["distance"]
+        if distance is None:
+            logger.warning("passage search: NULL distance for %s#%s — skipping",
+                           h["doc_id"], h["chunk_index"])
+            continue
+        score = 1.0 - distance
+        prev = best.get(h["doc_id"])
+        if prev is None or score > prev[0]:
+            best[h["doc_id"]] = (score, h["chunk_index"])
+
+    results: list[dict] = []
+    for doc_id, (score, chunk_index) in sorted(best.items(), key=lambda kv: -kv[1][0]):
+        if min_score is not None and score < min_score:
+            continue
+        doc_row = conn.execute("SELECT * FROM documents WHERE id = ?", (doc_id,)).fetchone()
+        if doc_row is None:
+            continue
+        # Same exclusion as the document path — a superseded memo's PASSAGES are
+        # just as stale as the memo, and the passage path is the one the
+        # benchmark says we should be defaulting to.
+        if not include_superseded and doc_row["valid_until"] is not None:
+            continue
+        prow = conn.execute(
+            "SELECT text, token_start, token_end FROM document_chunks "
+            "WHERE doc_id = ? AND chunk_index = ?", (doc_id, chunk_index)).fetchone()
+        results.append({
+            "document": _row_to_memo(doc_row),      # FR-107: the WHOLE memo
+            "score": score,
+            "passage": ({"text": prow["text"], "chunk_index": chunk_index,
+                         "token_start": prow["token_start"],
+                         "token_end": prow["token_end"]} if prow else None),
+        })
+        if len(results) >= limit:
+            break
+    return results
+
+
+class EmbeddingModelMismatch(RuntimeError):
+    """The configured model is not the one that wrote the stored vectors."""
+
+
+_write_model_cache: dict[str, str | None] = {}
+
+
+def _sync_stored_write_model(db_path: str) -> str | None:
+    conn = _get_or_create_conn(db_path)
+    try:
+        row = conn.execute(
+            "SELECT embedding_model FROM document_chunks LIMIT 1").fetchone()
+    except sqlite3.OperationalError:
+        return None                     # no passage index yet — nothing to compare
+    return row[0] if row else None
+
+
+def assert_read_model_matches(db_path: str | None = None) -> None:
+    """Refuse to search with a model that did not write the vectors. [002/FR-108]
+
+    **Why this exists, and why the obvious defence is not enough.** `vec0` bakes
+    the vector width into the table and rejects a mismatched QUERY vector — I
+    verified that (`2560 query on a 3072 table → "Dimension mismatch for query
+    vector"`). But that invariant keys on *dimension*, and dimension is only a
+    proxy for model. It is faithful today because 2560 is an unusual width; it is
+    a property of the model landscape rather than of memo, and the landscape is
+    not ours to control.
+
+    ⇒ Point `EMBEDDING_MODEL` at any OTHER 2560-dimension model and every read
+    silently compares vectors across models: no exception, no width error, and
+    plausible confidently-wrong results. That is precisely the failure this
+    feature exists to prevent, and it is the one case the width guard misses.
+
+    So the model is recorded beside the vectors and checked HERE, on the read
+    path. A write-side check is the half that already works — writes fail loudly
+    because a store has a shape; reads are the silent side. (Raised by the
+    `embeddings` seat 2026-08-02 during the fleet inventory; `mind` gets this
+    property structurally by resolving the model from the active collection,
+    which memo does not do.)
+
+    Cached after the first call: this is a per-process invariant, and a query-time
+    round-trip to check it would be a real cost for a value that cannot change
+    without a restart.
+    """
+    key = _resolve_path(db_path)
+    if key not in _write_model_cache:
+        _write_model_cache[key] = _sync_stored_write_model(key)
+    stored = _write_model_cache[key]
+    if stored and stored != settings.embedding_model:
+        raise EmbeddingModelMismatch(
+            f"refusing to search: vectors were written by {stored!r} but "
+            f"EMBEDDING_MODEL is {settings.embedding_model!r}. Comparing "
+            f"embeddings across models yields plausible, confidently wrong "
+            f"results — re-embed the corpus or restore the original model.")
+
+
+async def search_passages(db_path: str | None, embedding: list[float], limit: int,
+                          min_score: float | None = None, tags: list[str] | None = None,
+                          after: float | None = None, before: float | None = None,
+                          min_tokens: int | None = None,
+                          max_tokens: int | None = None,
+                          include_superseded: bool = False) -> list[dict]:
+    """Passage-level search. [002/FR-105]"""
+    path = _resolve_path(db_path)
+    assert_read_model_matches(path)
+    return await asyncio.to_thread(
+        _sync_search_passages, path, embedding, limit, min_score, tags or [],
+        after, before, min_tokens, max_tokens,
+        # ⛔ KEYWORD, NOT POSITIONAL. `_sync_search_passages` takes
+        # `overfetch: int = 8` BEFORE `include_superseded`, so appending this
+        # positionally put `False` into the OVERFETCH slot — `limit * False` is
+        # `k = 0`, and passage search returned 0 hits with HTTP 200 for every
+        # query. A silent, plausible "no results" rather than an error.
+        # ⇒ **Appending a positional argument is unsafe whenever the callee has
+        # an intervening default.** `to_thread` forwards positionally and cannot
+        # warn. Caught only because a positive control on an unrelated query
+        # failed; the superseded-doc test it was meant to confirm PASSED, and
+        # would have shipped this.
+        include_superseded=include_superseded)
+
+
 async def search(db_path: str | None, embedding: list[float], limit: int,
                  min_score: float | None, tags: list[str], after: float | None,
-                 before: float | None, min_tokens: int | None, max_tokens: int | None) -> list[dict]:
+                 before: float | None, min_tokens: int | None, max_tokens: int | None,
+                 include_superseded: bool = False) -> list[dict]:
     path = _resolve_path(db_path)
+    assert_read_model_matches(path)     # see the docstring there
     return await asyncio.to_thread(
-        _sync_search, path, embedding, limit, min_score, tags, after, before, min_tokens, max_tokens
+        _sync_search, path, embedding, limit, min_score, tags, after, before,
+        min_tokens, max_tokens, include_superseded
     )
 
 
@@ -659,9 +1013,75 @@ async def update(db_path: str | None, doc_id: str, content: str | None, title: s
                                    tags, metadata, embedding, expect_content)
 
 
-async def delete(db_path: str | None, doc_id: str) -> bool:
+async def delete(db_path: str | None, doc_id: str, *, actor: str = "unknown",
+                 reason: str = "unspecified", replaced_by: str | None = None) -> bool:
+    """Delete a memo, snapshotting it first. [001/FR-028a]
+
+    `actor` and `reason` default to "unknown"/"unspecified" rather than being
+    required, so no existing caller breaks — but an unattributed deletion is
+    exactly what the log exists to make visible, and those defaults are meant to
+    show up in an audit as work still to do.
+    """
     path = _resolve_path(db_path)
-    return await asyncio.to_thread(_sync_delete, path, doc_id)
+    return await asyncio.to_thread(_sync_delete, path, doc_id, actor=actor,
+                                   reason=reason, replaced_by=replaced_by)
+
+
+def _sync_record_injection(db_path: str, session_id: str, *, fire_point: str,
+                            agent_family: str | None, project: str | None,
+                            injected_ok: bool, injected_tokens: int | None) -> None:
+    conn = _get_or_create_conn(db_path)
+    conn.execute(
+        "INSERT INTO injection_log (session_id, observed_at, fire_point, "
+        "agent_family, project, injected_ok, injected_tokens) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (session_id, time(), fire_point, agent_family, project,
+         1 if injected_ok else 0, injected_tokens),
+    )
+    conn.commit()
+
+
+def _sync_injection_log(db_path: str, since: float | None, limit: int) -> list[dict]:
+    conn = _get_or_create_conn(db_path)
+    sql = "SELECT * FROM injection_log"
+    params: list = []
+    if since is not None:
+        sql += " WHERE observed_at >= ?"
+        params.append(since)
+    sql += " ORDER BY observed_at DESC LIMIT ?"
+    params.append(limit)
+    return [dict(r) for r in conn.execute(sql, params).fetchall()]
+
+
+async def record_injection(session_id: str, *, fire_point: str,
+                            agent_family: str | None = None,
+                            project: str | None = None,
+                            injected_ok: bool = True,
+                            injected_tokens: int | None = None) -> None:
+    """Record that a session came back from a compaction. [001/FR-044]
+
+    Best-effort and NEVER raises: this rides the session-start critical path,
+    and a ledger write failing must not stop a session from getting its rules.
+    An observer that can break the thing it observes is worse than no observer.
+    """
+    try:
+        await asyncio.to_thread(_sync_record_injection, global_path(), session_id,
+                                fire_point=fire_point, agent_family=agent_family,
+                                project=project, injected_ok=injected_ok,
+                                injected_tokens=injected_tokens)
+    except Exception:
+        logger.exception("compaction ledger write failed for %s — continuing", session_id)
+
+
+async def injection_log(since: float | None = None, limit: int = 500) -> list[dict]:
+    """Read the ledger, for reconciliation against ATC's delivery record."""
+    return await asyncio.to_thread(_sync_injection_log, global_path(), since, limit)
+
+
+async def restore_snapshot(db_path: str | None, doc_id: str) -> dict | None:
+    """The most recent deletion snapshot for a memo, or None. [001/FR-028a]"""
+    path = _resolve_path(db_path)
+    return await asyncio.to_thread(_sync_restore, path, doc_id)
 
 
 async def list_docs(db_path: str | None, tags: list[str], limit: int, after: float | None,
@@ -901,3 +1321,258 @@ async def list_docs_multi(
                 merged.append(doc)
     merged.sort(key=lambda x: x["created_at"], reverse=True)
     return merged[:limit]
+
+
+# ==============================================================================
+# v2 bi-temporal helpers (T019)
+#
+# Versioning model, per data-model.md: a supersession does NOT mutate a row's
+# id. Each version is its OWN `documents` row with its own uuid, and the
+# old->new transition is recorded in `supersede_edges`. So "the memo" is a
+# CHAIN of rows, and any id in that chain is a valid handle to the lineage.
+# That is why get_current()/get_as_of() resolve the chain rather than doing a
+# bare `WHERE id = ?` — a caller holding a superseded id still deserves the
+# right answer instead of None.
+# ==============================================================================
+
+# Columns added by migration 001 that hold JSON and therefore need decoding.
+_V2_JSON_COLUMNS = (
+    "scope", "provenance", "time_scope", "reopenability",
+    "derived_from", "constitution_meta",
+)
+
+
+def _row_to_memo(row: sqlite3.Row) -> dict:
+    """Row -> dict with v1 *and* v2 JSON columns decoded.
+
+    ``_row_to_dict`` only knows about the v1 ``tags``/``metadata`` columns; the
+    v2 additions are also JSON-in-TEXT and would otherwise leak raw strings to
+    callers. A column holding non-JSON is downgraded to None with a warning
+    rather than raising — one malformed legacy row must not fail a whole read.
+    """
+    d = _row_to_dict(row)
+    for col in _V2_JSON_COLUMNS:
+        raw = d.get(col)
+        if isinstance(raw, str):
+            try:
+                d[col] = json.loads(raw)
+            except ValueError:
+                logger.warning(
+                    "memo %s: column %s held non-JSON %r — coercing to None",
+                    d.get("id"), col, raw[:120],
+                )
+                d[col] = None
+    return d
+
+
+def _lineage_chain(conn: sqlite3.Connection, doc_id: str) -> list[str]:
+    """Ordered supersede chain (oldest -> newest) containing ``doc_id``.
+
+    Walks ``supersede_edges`` backwards to the lineage root, then forwards to
+    the tip. ``doc_id`` itself is always included even when it has no edges (a
+    never-superseded memo is a one-element chain). Both walks carry a seen-set
+    so a malformed/cyclic edge set terminates instead of spinning forever —
+    edges are an append-only audit log with no FK constraints, so a cycle is
+    possible in principle and must not hang a request.
+    """
+    seen = {doc_id}
+    root = doc_id
+    while True:
+        row = conn.execute(
+            "SELECT old_id FROM supersede_edges WHERE new_id = ? "
+            "ORDER BY superseded_at LIMIT 1",
+            (root,),
+        ).fetchone()
+        if row is None or row["old_id"] in seen:
+            break
+        root = row["old_id"]
+        seen.add(root)
+
+    chain = [root]
+    while True:
+        row = conn.execute(
+            "SELECT new_id FROM supersede_edges WHERE old_id = ? "
+            "ORDER BY superseded_at LIMIT 1",
+            (chain[-1],),
+        ).fetchone()
+        if row is None or row["new_id"] in chain:
+            break
+        chain.append(row["new_id"])
+    return chain
+
+
+def _sync_get_current(db_path: str, doc_id: str) -> dict | None:
+    """Newest currently-valid version of the lineage containing ``doc_id``. [001/FR-002]
+
+    ``valid_until IS NULL`` is the definition of "currently true" (FR-002).
+    Searched tip-first so the freshest current row wins.
+    """
+    conn = _get_or_create_conn(db_path)
+    for candidate in reversed(_lineage_chain(conn, doc_id)):
+        row = conn.execute(
+            "SELECT * FROM documents WHERE id = ? AND valid_until IS NULL",
+            (candidate,),
+        ).fetchone()
+        if row is not None:
+            return _row_to_memo(row)
+    return None
+
+
+def _sync_get_as_of(db_path: str, doc_id: str, t: float) -> dict | None:
+    """Version of the ``doc_id`` lineage that was true at time ``t``. [001/FR-002]
+
+    Window is half-open — ``valid_from <= t < valid_until`` — so the instant of
+    a supersession belongs to the NEW version, never to both. A NULL
+    ``valid_until`` means the window is still open.
+    """
+    conn = _get_or_create_conn(db_path)
+    for candidate in reversed(_lineage_chain(conn, doc_id)):
+        row = conn.execute(
+            "SELECT * FROM documents WHERE id = ? AND valid_from <= ? "
+            "AND (valid_until IS NULL OR valid_until > ?)",
+            (candidate, t, t),
+        ).fetchone()
+        if row is not None:
+            return _row_to_memo(row)
+    return None
+
+
+def _sync_supersede(db_path: str, old_id: str, new_memo: dict,
+                    embedding: list[float], actor: str, reason: str | None,
+                    operator_directive_ref: dict | None) -> dict | None:
+    """Atomically close out ``old_id`` and write its replacement. [001/FR-003]
+
+    Per FR-003 the close and the create are ONE transaction: ``old.valid_until``
+    and ``new.valid_from`` are the same instant, so a reader can never observe a
+    gap (both rows superseded) or an overlap (both rows current). Returns None if
+    ``old_id`` does not exist or is already superseded — the caller turns that
+    into a 404/409 rather than silently forking the lineage.
+    """
+    conn = _get_or_create_conn(db_path)
+    old = conn.execute(
+        "SELECT id, valid_until FROM documents WHERE id = ?", (old_id,)
+    ).fetchone()
+    if old is None:
+        return None
+    if old["valid_until"] is not None:
+        logger.warning("supersede: %s is already superseded — refusing", old_id)
+        return None
+
+    new_id = str(uuid.uuid4())
+    now = time()
+    content = new_memo["content"]
+    token_count = _count_tokens(content)
+
+    try:
+        conn.execute(
+            "UPDATE documents SET valid_until = ?, updated_at = ? WHERE id = ?",
+            (now, now, old_id),
+        )
+        conn.execute(
+            "INSERT INTO documents ("
+            "  id, content, title, tags, metadata, token_count,"
+            "  created_at, updated_at, class, injection_mode, scope, provenance,"
+            "  valid_from, valid_until, expires_at, time_scope, reopenability,"
+            "  derived_from, constitution_meta"
+            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)",
+            (
+                new_id,
+                content,
+                new_memo.get("title"),
+                json.dumps(new_memo.get("tags") or []),
+                json.dumps(new_memo.get("metadata") or {}),
+                token_count,
+                now,
+                now,
+                new_memo.get("class") or "fact",
+                new_memo.get("injection_mode") or "on-recall",
+                json.dumps(new_memo.get("scope") or ["global"]),
+                json.dumps(new_memo["provenance"]) if new_memo.get("provenance") is not None else None,
+                now,
+                new_memo.get("expires_at"),
+                json.dumps(new_memo["time_scope"]) if new_memo.get("time_scope") is not None else None,
+                json.dumps(new_memo["reopenability"]) if new_memo.get("reopenability") is not None else None,
+                json.dumps(new_memo.get("derived_from") or []),
+                json.dumps(new_memo["constitution_meta"]) if new_memo.get("constitution_meta") is not None else None,
+            ),
+        )
+        conn.execute(
+            "INSERT INTO document_embeddings (doc_id, embedding) VALUES (?, ?)",
+            (new_id, _serialize_vector(embedding)),
+        )
+        cur = conn.execute(
+            "INSERT INTO supersede_edges ("
+            "  old_id, new_id, superseded_at, actor, reason, operator_directive_ref"
+            ") VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                old_id, new_id, now, actor, reason,
+                json.dumps(operator_directive_ref) if operator_directive_ref is not None else None,
+            ),
+        )
+        edge_id = cur.lastrowid
+        conn.commit()
+    except Exception:
+        # Roll the close-out back with the create — a half-applied supersede
+        # would leave the lineage with either two current rows or none.
+        conn.rollback()
+        logger.exception("supersede %s -> %s failed; rolled back", old_id, new_id)
+        raise
+
+    return {
+        "old_id": old_id,
+        "new_id": new_id,
+        "superseded_at": now,
+        "edge_id": edge_id,
+    }
+
+
+def _sync_reap_expired(db_path: str, now: float | None = None) -> list[str]:
+    """Hard-delete rows whose ``expires_at`` has passed. [001/FR-007]
+
+    Returns the reaped ids. Embeddings go with the row — leaving them behind
+    would keep reaped content semantically searchable, which is the whole point
+    of a TTL. ``now`` is injectable so tests need not sleep.
+    """
+    conn = _get_or_create_conn(db_path)
+    cutoff = time() if now is None else now
+    rows = conn.execute(
+        "SELECT id FROM documents WHERE expires_at IS NOT NULL AND expires_at <= ?",
+        (cutoff,),
+    ).fetchall()
+    reaped = [r["id"] for r in rows]
+    if not reaped:
+        return []
+    for doc_id in reaped:
+        conn.execute("DELETE FROM document_embeddings WHERE doc_id = ?", (doc_id,))
+        conn.execute("DELETE FROM documents WHERE id = ?", (doc_id,))
+    conn.commit()
+    logger.info("reaper: swept %d expired memo(s)", len(reaped))
+    return reaped
+
+
+# --- Async wrappers for the v2 helpers ---
+
+async def get_current(db_path: str | None, doc_id: str) -> dict | None:
+    path = _resolve_path(db_path)
+    return await asyncio.to_thread(_sync_get_current, path, doc_id)
+
+
+async def get_as_of(db_path: str | None, doc_id: str, t: float) -> dict | None:
+    path = _resolve_path(db_path)
+    return await asyncio.to_thread(_sync_get_as_of, path, doc_id, t)
+
+
+async def supersede(db_path: str | None, old_id: str, new_memo: dict,
+                    embedding: list[float], actor: str,
+                    reason: str | None = None,
+                    operator_directive_ref: dict | None = None) -> dict | None:
+    path = _resolve_path(db_path)
+    return await asyncio.to_thread(
+        _sync_supersede, path, old_id, new_memo, embedding, actor, reason,
+        operator_directive_ref,
+    )
+
+
+async def reap_expired(db_path: str | None = None, now: float | None = None) -> list[str]:
+    path = _resolve_path(db_path)
+    return await asyncio.to_thread(_sync_reap_expired, path, now)

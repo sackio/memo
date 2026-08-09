@@ -1,0 +1,387 @@
+#!/usr/bin/env python3
+"""memo-retrieval-bench — can memo find its own memos? [002/FR-111]
+
+The instrument that should have existed from the start. This defect —
+documents over ~2000 tokens being unretrievable — survived months of daily
+maintenance cycles because every audit read the corpus by `/documents` or by
+tag, where it looks perfectly healthy, and nothing ever asked the one question
+that matters: *does search return the memo you asked for?*
+
+**The own-title set is free.** Every memo is a labelled example whose correct
+answer is unambiguous: searching a memo's exact title must return that memo at
+rank 1. No hand-labelling, no judgement call, no LLM in the loop.
+
+Results are reported **by size band**, because the aggregate hides the defect —
+a corpus that is 77% short memos scores well on average while a quarter of its
+content is unreachable. Banding is what made this legible.
+
+    memo-retrieval-bench --url http://localhost:8091 --per-band 14
+    memo-retrieval-bench --url http://server4:8000 --json baseline.json
+
+Deliberately NOT self-grading. It prints numbers; SC-101/102/103 in
+specs/002-passage-retrieval/spec.md say what they have to clear.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import random
+import statistics
+import sys
+import urllib.request
+
+BANDS = [(0, 200), (200, 500), (500, 1000), (1000, 2000), (2000, 10**9)]
+
+
+def _get(url: str, path: str, timeout: float = 180.0):
+    with urllib.request.urlopen(url.rstrip("/") + path, timeout=timeout) as r:
+        return json.loads(r.read())
+
+
+# Both retrieval paths are live at once (002/FR-113), so the bench must be able
+# to drive either. Comparing them on the SAME corpus with the SAME queries is
+# the whole point; a passage number measured on a different sample than the
+# document number is not a comparison.
+#
+# These are the EXPLICIT endpoints, never `/search`. Since T260 made `/search`
+# configurable, routing "document" through it would mean a config edit could
+# silently change which index this bench measured while every label in the
+# output still said "document" — the same shape as the coverage confound that
+# has already produced three wrong answers here. The measurement names its own
+# path.
+#
+# ⭐ `v1-search` (added 2026-08-03) is the ONE deliberate exception, and it does
+# not weaken the rule above — it applies it. **v1 has no `/search-documents`; it
+# exposes only `/search`.** So the docstring's own example,
+# `--url http://server4:8000`, has NEVER worked: every query 404s, every band
+# scores rank-1 = 0, and the table reads as "v1 retrieves nothing" rather than
+# "the bench never asked it anything". That is why there has never been a v1
+# number to compare v2 against — the missing baseline was a routing bug wearing
+# a result's clothes.
+#
+# ⛔ It is a SEPARATE KEY rather than a fallback inside "document" precisely
+# because of the T260 argument: a silent fallback would let one label describe
+# two different indexes. This one names itself, and the label is carried into
+# the JSON (`path` field), so a v1 run can never be mistaken for a v2 run.
+# ⚠️ On v1, `/search` IS the configurable route T260 warns about. A `v1-search`
+# number is therefore a claim about "whatever v1's /search is wired to today",
+# not about a named index. Record v1's config alongside the result.
+PATHS = {"document": "/search-documents", "passages": "/search-passages",
+         "v1-search": "/search"}
+
+
+def _search(url: str, query: str, limit: int = 10, timeout: float = 60.0,
+            path: str = "document"):
+    req = urllib.request.Request(
+        url.rstrip("/") + PATHS[path],
+        data=json.dumps({"query": query, "limit": limit}).encode(),
+        headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.loads(r.read())
+
+
+def _passage_indexed_ids(url: str) -> set[str]:
+    """Doc ids with at least one passage.
+
+    LOAD-BEARING for any comparison: the passage index covers only part of the
+    corpus during rollout, so an unrestricted passage run scores every
+    un-indexed memo as `absent` and measures INDEXING COVERAGE while looking
+    exactly like a retrieval result. That mistake was made and caught on
+    2026-07-30; the restriction is why the number means anything.
+    """
+    return set(_get(url, "/admin/passage-indexed-ids", timeout=180.0))
+
+
+def _doc_of(hit: dict) -> dict:
+    # /search returns [{document, score}]; tolerate a bare-document shape too.
+    return hit.get("document", hit)
+
+
+def band_label(lo: int, hi: int) -> str:
+    return f"{lo}-{hi}" if hi < 10**9 else f"{lo}+"
+
+
+def failure_report(res: dict) -> list[str]:
+    """Say what `absent` is made of — or say that it cannot be known.
+
+    ⚠️ `.get("query_failures", 0)` would make a MISSING field read as a measured
+    zero, which is the same defect this field exists to fix, one level up. An
+    output written before the counter existed cannot say whether any query failed,
+    and "0 failures" is precisely the claim it must not make. (`embeddings` seat
+    hit the identical shape in their own tool on 2026-08-02: an absent metrics
+    series defaulted to Δ=0 and printed HEALTHY forever, with nothing to notice.)
+
+    ⇒ Three distinguishable states, never two:
+        unknown  — the field is absent; `absent` is an undecomposable MIXTURE
+        nonzero  — some `absent` counts are queries that never ran
+        zero     — every `absent` is a genuine retrieval miss at `limit`
+
+    Returned as lines rather than printed so the negative cases can be tested
+    directly. A branch that has never been watched to fire is not a check.
+    """
+    bands = res.get("bands") or []
+    unreported = [b["band"] for b in bands if "query_failures" not in b]
+    total = sum(b["query_failures"] for b in bands if "query_failures" in b)
+    out: list[str] = []
+    if unreported:
+        out.append(f"\n⚠️ query failures UNKNOWN for {', '.join(unreported)} — that "
+                   f"output predates this counter. `absent` there is a MIXTURE of "
+                   f"retrieval misses and queries that never ran, and cannot be "
+                   f"decomposed after the fact. Do NOT read it as zero.")
+    if total:
+        out.append(f"\n⚠️ {total} of the `absent` counts above are QUERY FAILURES, "
+                   f"not retrieval misses — the model was never asked. Per band: "
+                   + ", ".join(f"{b['band']}={b['query_failures']}"
+                               for b in bands if b.get("query_failures")))
+    elif not unreported:
+        out.append(f"\nquery failures: 0 — every `absent` above is a genuine "
+                   f"retrieval miss at depth {res.get('limit')}, not a query that "
+                   f"never ran.")
+    return out
+
+
+def run(url: str, per_band: int, limit: int, seed: int,
+        path: str = "document", both_indexed_only: bool = False) -> dict:
+    docs = _get(url, "/documents?limit=20000")
+    random.seed(seed)
+    eligible = None
+    if both_indexed_only:
+        eligible = _passage_indexed_ids(url)
+        docs = [d for d in docs if d["id"] in eligible]
+    out = {"url": url, "seed": seed, "per_band": per_band, "limit": limit,
+           "path": path, "both_indexed_only": both_indexed_only,
+           "corpus": len(docs), "bands": []}
+
+    for lo, hi in BANDS:
+        pool = [d for d in docs
+                if lo <= (d.get("token_count") or 0) < hi
+                and (d.get("title") or "").strip()]
+        sample = random.sample(pool, min(per_band, len(pool)))
+        rank1 = top5 = absent = failures = 0
+        scores: list[float] = []
+
+        for d in sample:
+            try:
+                hits = _search(url, (d.get("title") or "")[:200], limit=limit,
+                               path=path)
+            except Exception as e:  # a failed query is not a passing query
+                # Counting it as `absent` is still right — it did not retrieve.
+                # But `absent` is the column carrying the biggest deltas in this
+                # bench (200-500 moved 69 -> 523 across a model change), and a
+                # silent failure channel inside it is indistinguishable from a
+                # retrieval result. The per-band count below is what separates
+                # "the model missed" from "the query never ran".
+                #
+                # ⚠️ Before this field existed, ruling failures out required
+                # checking that the process's fd/2 pointed at the captured file —
+                # i.e. the artifact could not answer a question about itself.
+                # (`embeddings` seat, 2026-08-02, asking at what depth `absent`
+                # was counted; the depth was fine, this was not.)
+                print(f"  query failed for {d['id'][:8]}: {e}", file=sys.stderr)
+                absent += 1
+                failures += 1
+                continue
+            ids = [_doc_of(h)["id"] for h in hits]
+            if d["id"] in ids:
+                k = ids.index(d["id"])
+                rank1 += k == 0
+                top5 += k < 5
+                scores.append(hits[k].get("score", 0.0))
+            else:
+                absent += 1
+
+        out["bands"].append({
+            "band": band_label(lo, hi),
+            "n": len(sample),
+            "rank1": rank1,
+            "top5": top5,
+            "absent": absent,
+            # `absent` = not in the top `limit`, PLUS any query that failed.
+            # Both fields are needed to read it: `limit` (recorded at the top of
+            # this output) is the depth, `query_failures` is the contamination.
+            # An `absent` figure quoted without its depth names an outcome that
+            # sounds like a property of the document when it is a property of the
+            # measurement.
+            "query_failures": failures,
+            "rank1_pct": round(100 * rank1 / len(sample), 1) if sample else None,
+            "median_score": round(statistics.median(scores), 3) if scores else None,
+        })
+
+    tokens = sum(d.get("token_count") or 0 for d in docs)
+    out["content_share"] = {
+        f">={t}": {
+            "memos": sum(1 for d in docs if (d.get("token_count") or 0) >= t),
+            "token_pct": round(100 * sum((d.get("token_count") or 0) for d in docs
+                                         if (d.get("token_count") or 0) >= t)
+                               / max(1, tokens), 1),
+        } for t in (1000, 2000)
+    }
+    return out
+
+
+def eligible_factset(cases: list[dict], indexed: set[str]) -> tuple[list[dict], int]:
+    """Drop fact cases whose target memo has no passages. [002/FR-111]
+
+    Extracted from `main` so it is reachable from a test. It was inline, which is
+    why the defect it now prevents shipped unnoticed: 22 of 30 cases targeted
+    memos with no passages, scored `absent`, and the fact set read 5/30 (17%)
+    when the honest number among reachable cases was 5/8.
+    """
+    kept = [c for c in cases if c["expect_id"] in indexed]
+    return kept, len(cases) - len(kept)
+
+
+def score_factset(url: str, cases: list[dict], *, limit: int, path: str,
+                  skipped: int = 0) -> dict:
+    """Rank-1 / top-5 / absent over an already-filtered fact set."""
+    r1 = t5 = absent = 0
+    failed = 0
+    for c in cases:
+        try:
+            hits = _search(url, c["query"], limit=limit, path=path)
+        except Exception as e:  # a failed query is not a passing query
+            # SAY SO. Counting a failure as `absent` is right — it did not
+            # retrieve the answer — but doing it silently means a query path that
+            # is broken for EVERY case reports 0% rank-1, which reads as
+            # "retrieval is terrible" rather than "retrieval never ran". The band
+            # loop already prints; this one did not, and it is the half that
+            # produces the SC-103 headline. (Hardened 2026-08-01 after `groton`
+            # found a search layer that had silently served lexical-only results
+            # for a whole session behind a bare except.)
+            print(f"  fact-set query FAILED for {c['expect_id'][:8]}: "
+                  f"{type(e).__name__}: {e}", file=sys.stderr)
+            failed += 1
+            absent += 1
+            continue
+        ids = [_doc_of(h)["id"] for h in hits]
+        if c["expect_id"] in ids:
+            k = ids.index(c["expect_id"])
+            r1 += k == 0
+            t5 += k < 5
+        else:
+            absent += 1
+    n = len(cases) or 1
+    if failed:
+        # Loud enough that nobody quotes the number without seeing this.
+        print(f"  ⚠️  {failed}/{len(cases)} fact-set queries ERRORED — the figure "
+              f"below is NOT a retrieval result for those cases", file=sys.stderr)
+    return {"n": len(cases), "rank1": r1, "top5": t5, "absent": absent,
+            "skipped_unindexed": skipped, "query_failures": failed,
+            "rank1_pct": round(100 * r1 / n, 1)}
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--url", default="http://localhost:8091")
+    ap.add_argument("--per-band", type=int, default=14)
+    ap.add_argument("--limit", type=int, default=10)
+    ap.add_argument("--seed", type=int, default=7)
+    ap.add_argument("--json", default=None, help="write the raw result here")
+    ap.add_argument("--factset", default=None,
+                    help="also run a mid-document fact set (JSON: [{query, expect_id}])")
+    ap.add_argument("--path", choices=sorted(PATHS), default="document",
+                    help="which retrieval path to bench (002/FR-113)")
+    ap.add_argument("--both-indexed-only", action="store_true",
+                    help="restrict BOTH the own-title sample and the fact set to "
+                         "memos present in BOTH indexes. Required for a "
+                         "document-vs-passage comparison while passage coverage "
+                         "is partial — otherwise the run measures indexing "
+                         "coverage, not retrieval.")
+    args = ap.parse_args()
+
+    res = run(args.url, args.per_band, args.limit, args.seed,
+              path=args.path, both_indexed_only=args.both_indexed_only)
+
+    scope = " [both-indexed only]" if res["both_indexed_only"] else ""
+    print(f"corpus: {res['corpus']} memos @ {res['url']}  (seed {res['seed']})"
+          f"  path={res['path']}{scope}")
+    print()
+    # The depth belongs in the HEADER, not in the reader's memory. `rank-1` and
+    # `top-5` name their own cutoffs; `absent` does not, and it is the column with
+    # the largest movement across model changes.
+    # ⭐ A RESULT CARRYING FAILURES DOES NOT PRINT A CLEAN HEADLINE.
+    #
+    # This table used to report `rank-1` and `absent` with no marker, and the
+    # failure count lived in a separate paragraph below. That makes the
+    # contamination RECOVERABLE but not VISIBLE: a reader who takes the number
+    # off this table gets a figure that silently counts never-asked queries as
+    # retrieval misses, and nothing forces the second look.
+    #
+    # Measured 2026-08-02: server4 wedged mid-run and the passage census took
+    # 81 timeouts, 79 of them in a 70-minute window. Every one is inside
+    # `absent`. The `!` column is what stops that number being quoted bare.
+    # (Same fix as the `embeddings` seat putting scope INTO their verdict
+    # string rather than into a DM — a caveat that is not adjacent to the
+    # number protects only the people who go looking for it.)
+    any_fail = any(b.get("query_failures") for b in res["bands"])
+    unknown = any("query_failures" not in b for b in res["bands"])
+    absent_col = f"absent@{res['limit']}"
+    flag_col = "!" if (any_fail or unknown) else ""
+    print(f"{'band':>12} {'n':>3} {'rank-1':>7} {'top-5':>6} "
+          f"{absent_col:>10} {'median':>7} {flag_col:>6}")
+    for b in res["bands"]:
+        if "query_failures" not in b:
+            flag = "  ?"          # cannot say; predates the counter
+        elif b["query_failures"]:
+            flag = f" +{b['query_failures']}f"   # this many `absent` never ran
+        else:
+            flag = ""
+        print(f"{b['band']:>12} {b['n']:3} {b['rank1']:7} {b['top5']:6} "
+              f"{b['absent']:10} {str(b['median_score']):>7} {flag:>6}")
+    if any_fail or unknown:
+        print(f"{'':>12} {'':>3} {'':>7} {'':>6} {'':>10} {'':>7} "
+              f"{'^ absent includes queries that never ran'}")
+    # ⚠️ `.get(key, 0)` would make a MISSING field read as a measured zero — the
+    # same defect this field was added to fix, one level up. An artifact written
+    # before `query_failures` existed cannot say whether any query failed, and
+    # "0 failures" is the one thing it must not claim. Distinguish absent-key from
+    # zero-value. (`embeddings` seat hit the identical shape in their own tool:
+    # an absent metrics series defaulting to Δ=0 printed HEALTHY forever.)
+    for line in failure_report(res):
+        print(line)
+    print()
+    for k, v in res["content_share"].items():
+        print(f"  memos {k} tokens: {v['memos']} ({v['token_pct']}% of all content)")
+    print()
+    print("Searching a memo's own exact title: rank 1 is the only correct answer.")
+
+    if args.factset:
+        cases = json.load(open(args.factset))
+        skipped = 0
+        if args.both_indexed_only:
+            # The SAME restriction the own-title sample gets, and for the same
+            # reason. Measured 2026-07-31: 22 of the 30 fact cases point at
+            # memos with NO passages, so on the passage path they are
+            # structurally unfindable and score as `absent` — 5/30 (17%) looks
+            # like a catastrophic SC-103 failure when the retrieval number
+            # among cases the path can actually reach is 5/8. The flag existed
+            # and simply was not carried through to the fact set; this is the
+            # third appearance of one confound (coverage wearing retrieval's
+            # clothes), so the fix is here rather than in a caller.
+            cases, skipped = eligible_factset(cases, _passage_indexed_ids(args.url))
+        res["factset"] = score_factset(args.url, cases, limit=args.limit,
+                                       path=args.path, skipped=skipped)
+        r1 = res["factset"]["rank1"]
+        t5 = res["factset"]["top5"]
+        absent = res["factset"]["absent"]
+        n = len(cases) or 1
+        print()
+        print("mid-document fact set (the answer lives inside a long memo):")
+        print(f"  rank-1 {r1}/{len(cases)} ({100*r1/n:.0f}%) · "
+              f"top-5 {t5}/{len(cases)} · absent {absent}/{len(cases)}")
+        if skipped:
+            # Said out loud, every run. A silently reduced denominator is how a
+            # partial index flatters itself.
+            print(f"  ({skipped} case(s) excluded: target memo has no passages "
+                  f"— they would score as absent and measure coverage, not retrieval)")
+
+    if args.json:
+        with open(args.json, "w") as fh:
+            json.dump(res, fh, indent=2)
+        print(f"wrote {args.json}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,95 @@
+#!/usr/bin/env python3
+"""memo-index-factset-targets — give SC-103 a fair denominator. [002/FR-111]
+
+T253a. The mid-document fact set (`factset-mid-document.json`) was built against
+the whole v2 corpus, but passage coverage is partial — so most of its target
+memos have no passages and are unreachable on the passage path *by construction*.
+Scored naively that reads as a catastrophic SC-103 failure; restricted to
+reachable cases the sample collapses to n=8, too small to gate on. Neither is a
+measurement. This indexes exactly the fact set's targets so the criterion can be
+judged at its full size.
+
+Deliberately narrow: it touches ONLY memos named by the fact set, so it cannot
+quietly become a backfill (that is T271's job, on the re-migration, chunked once
+rather than embedded twice).
+
+    docker compose exec memo-v2 python /tmp/memo-index-factset-targets \\
+        --factset /tmp/factset-mid-document.json
+"""
+from __future__ import annotations
+
+import argparse
+import asyncio
+import json
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, "/app/src")
+
+from memo import db, passages  # noqa: E402
+
+
+def _missing(ids: list[str]) -> list[tuple[str, str]]:
+    conn = db._get_or_create_conn(db.global_path())
+    have = {r[0] for r in
+            conn.execute("SELECT DISTINCT doc_id FROM document_chunks").fetchall()}
+    out = []
+    for doc_id in ids:
+        if doc_id in have:
+            continue
+        row = conn.execute(
+            "SELECT id, content FROM documents WHERE id = ?", (doc_id,)).fetchone()
+        if row is None:
+            print(f"  ! {doc_id[:8]} — fact set names a memo that is not in this "
+                  f"corpus; skipping", file=sys.stderr)
+            continue
+        out.append((row[0], row[1] or ""))
+    return out
+
+
+async def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--factset", required=True)
+    ap.add_argument("--concurrency", type=int, default=6)
+    ap.add_argument("--dry-run", action="store_true")
+    args = ap.parse_args()
+
+    cases = json.loads(Path(args.factset).read_text())
+    ids = sorted({c["expect_id"] for c in cases})
+    todo = _missing(ids)
+    print(f"fact set names {len(ids)} distinct memos; {len(todo)} have no passages")
+    if args.dry_run or not todo:
+        for doc_id, content in todo:
+            print(f"  would index {doc_id[:8]} ({len(content)} chars)")
+        return 0
+
+    sem = asyncio.Semaphore(args.concurrency)
+    written = 0
+    failures = []
+
+    async def one(doc_id: str, content: str):
+        nonlocal written
+        async with sem:
+            try:
+                n = await passages.index_document(doc_id, content)
+                written += n
+                return n
+            except Exception as e:
+                failures.append((doc_id, f"{type(e).__name__}: {e}"))
+                return 0
+
+    await asyncio.gather(*(one(i, c) for i, c in todo))
+    print(f"indexed {len(todo) - len(failures)}/{len(todo)} memos, "
+          f"{written} passages written")
+    for doc_id, err in failures:
+        print(f"  FAILED {doc_id[:8]}: {err}", file=sys.stderr)
+
+    still = _missing(ids)
+    print(f"fact-set targets still unindexed: {len(still)}")
+    return 1 if failures else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(asyncio.run(main()))

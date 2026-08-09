@@ -1,22 +1,126 @@
 services:
-  memo:
+  memo-v2:
     build: .
-    container_name: memo
+    container_name: memo-v2
     restart: unless-stopped
-    ports:
-      - "${PORT:-8000}:8000"
+    # Use host networking to avoid Docker's network address pool exhaustion.
+    # Container binds directly to the host's network stack on the port set
+    # inside the memo process (default 8000 unless overridden by MEMO_PORT).
+    network_mode: host
     volumes:
-      - memo_data:/data
+      - memo_v2_data:/data
     environment:
       DEFAULT_DB_PATH: /data/memo.db
+      PORT: ${MEMO_V2_PORT:-8091}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
-      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-openai/text-embedding-3-small}
-      EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-1536}
+      # 2026-08-01: SELF-HOSTED qwen3-embedding-4b at native 2560, on the LAN
+      # endpoint (no auth). Supersedes the 2026-07-31 T203 choice of 3-large@3072,
+      # whose measurements survive as research.md R-09 — the comparison baseline.
+      # v1 on :8000 stays on 3-small/1536 and is unaffected — separate compose
+      # file, separate .env, separate database. Scores are NOT comparable across
+      # any two of the three until re-measured.
+      #
+      # ⚠️ The shell on this host STILL exports EMBEDDING_MODEL=...-3-small and
+      # EMBEDDING_DIMENSIONS=1536 (checked again 2026-08-01, still true). That is
+      # precisely why the lines below must stay literal.
+      #
+      # HARD-CODED, and the `${EMBEDDING_MODEL:-...}` form was deliberately
+      # REMOVED. This host exports EMBEDDING_MODEL/EMBEDDING_DIMENSIONS in the
+      # shell environment, and `${VAR:-default}` takes the shell's value — so the
+      # default written here was dead text. Editing it changed nothing, the
+      # container came up on 3-small/1536, and the only reason that was caught is
+      # that the dimensions were read back off the live tables instead of assumed.
+      # A config knob that silently ignores the file it is written in is worse
+      # than no knob. Override for a one-off run with an explicit
+      # `EMBEDDING_MODEL=... docker compose up` if ever needed.
+      # ⛔⛔ THE WIDTH IS THE ONLY THING STOPPING SILENT CROSS-SPACE MIXING, AND
+      # THE WIDTH IS A PARAMETER. Measured on a scratch vec0 table 2026-08-03:
+      # a `float[2560]` column REJECTS a 3072 vector on BOTH insert and query
+      # (`OperationalError: Dimension mismatch ...`). That is why moving between
+      # qwen3@2560 and 3-large@3072 fails loudly instead of mis-ranking.
+      #
+      # ⚠️ That protection is an ACCIDENT OF ARITHMETIC, NOT A DESIGN.
+      # `text-embedding-3-large` serves arbitrary output widths by truncation,
+      # so a future `EMBEDDING_DIMENSIONS: 2560` here would write 3-large vectors
+      # into a qwen3-shaped store WITH NO ERROR ON EITHER SIDE — and cosine
+      # between two models is meaningless, so every neighbour returned would be
+      # confidently wrong with nothing raised and nothing logged.
+      # ⇒ **Two different models at the SAME width is the unrecoverable case.**
+      # Keep 3-large at its NATIVE 3072 (Ben's call 2026-07-31, and the reason he
+      # gave was safety, not quality). Never set a truncated width to "match"
+      # an existing table. (`embeddings` seat raised this 2026-08-03.)
+      #
+      # ⛔ ALL FOUR LINES ARE REQUIRED. Omitting the URL/key does NOT fall back
+      # to OpenRouter — `config.py`'s DEFAULTS were changed to the qwen3 LAN
+      # service on 2026-08-01 (`embedding_base_url` defaults to
+      # http://192.168.1.5:31536/v1). So a "removed" setting silently
+      # re-selects qwen3 while this file still reads `3-large`, and the mismatch
+      # surfaces only as a dimension error at write time — if you are lucky.
+      # ⇒ **A code default that moved is not a fallback; it is a different
+      # config wearing the word "default".**
+      EMBEDDING_MODEL: openai/text-embedding-3-large
+      EMBEDDING_DIMENSIONS: 3072
+      EMBEDDING_BASE_URL: https://openrouter.ai/api/v1
+      EMBEDDING_API_KEY: ${OPENROUTER_API_KEY}
+      # ⭐ RANK BY PASSAGE, DELIVER THE DOCUMENT. [002/FR-117, research.md R-20]
+      # Measured on the pinned sample, 256 questions with a unique-literal answer:
+      #   path        ranks right doc   answer in SPAN   answer in FULL DOC
+      #   document          74.5%            95.8%             95.8%
+      #   passages          84.0%            77.3%             98.7%
+      # Passage retrieval is the best RETRIEVER and the worst DELIVERER, so both
+      # `/search` and `/context` take its ranking and return the whole document.
+      # ⛔ Hard-coded, like the embedding settings above and for the same reason:
+      # a `${VAR:-default}` here would let a shell export change which index
+      # answers, and two runs would differ with nothing in the record saying why.
+      # memo-qa-suite now reads this back off the live container per run.
+      MEMO_RETRIEVAL_PATH: passages
+      # ⛔ SPAN WINDOWING IS OFF, AND THE MEASUREMENT IS WHY. [002/FR-120, R-25]
+      # Tried at 160 tokens either side of the matched passage. It did exactly
+      # what it promised mechanically and made the product worse:
+      #   whole documents   90.8% answers · 5.25 docs · 93.2% truncated
+      #   windowed ±160     82.1% answers · 7.77 docs · 81.7% truncated
+      # ⇒ MORE documents, LESS truncation, 8.8pt FEWER ANSWERS — far outside the
+      # ~2.4pt floor. Capacity was never the binding constraint; FIDELITY was.
+      # ⚠️ Do not re-enable by widening the window without re-measuring: a wider
+      # window converges on whole-document packing, so the knob's best value is
+      # the one that turns it off. The code stays because it is tested and
+      # reversible, and because a future chunker may change the trade.
+      MEMO_CONTEXT_SPAN_WINDOW: 0
+      MEMO_CONDUCTOR_PROVIDER: ${MEMO_CONDUCTOR_PROVIDER:-atc}
+      MEMO_AGENT_CONTROLLER_PROVIDER: ${MEMO_AGENT_CONTROLLER_PROVIDER:-agents_supervisor}
+      MEMO_V2_VERSION: 2.0.0-alpha1
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:${MEMO_V2_PORT:-8091}/health')"]
       interval: 300s
       timeout: 10s
       retries: 3
 
+  # Test runner. Profile-gated so `docker compose up` never starts it and it is
+  # never treated as an orphan.
+  #
+  #   docker compose run --rm test              # whole suite
+  #   docker compose run --rm test <pytest args>
+  #
+  # Tests MUST run here, never on the host: the project requires Python >=3.12
+  # (server4's host python is 3.10) and the host's fastapi/starlette pair is
+  # mismatched badly enough that `import memo.main` raises inside FastAPI's own
+  # constructor — so a host run silently SKIPS every test that imports the app
+  # and reports a smaller, passing number. That is how a host run reported
+  # "73 passed" while the real suite is 89 (2026-07-29).
+  #
+  # Uses a throwaway /tmp DB inside the container and does NOT mount
+  # memo_v2_data, so a test run can never touch the real store.
+  test:
+    build:
+      context: .
+      target: test
+    profiles: ["test"]
+    network_mode: none
+    environment:
+      # Settings requires this; tests pass dummy embedding vectors and never
+      # make an outbound call, so a placeholder is sufficient.
+      OPENROUTER_API_KEY: test-dummy-key
+      DEFAULT_DB_PATH: /tmp/memo-test.db
+
 volumes:
-  memo_data:
+  memo_v2_data:

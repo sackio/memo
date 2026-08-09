@@ -3,6 +3,11 @@
 **Feature**: 001-memo-renovation
 **Branch**: `001-memo-renovation`
 **Generated**: 2026-07-29
+**Last audited**: 2026-07-30 (see `specs/STATUS.md`)
+**Status**: **Phases 1–7 COMPLETE and green. Everything still open is either an
+operator/runtime action (Phase 8), blocked behind operator approval (Phase 9
+cutover), or final polish.** 84 done · 16 open · 2 withdrawn.
+
 **Inputs**: `spec.md` (8 user stories US1-US8, 54 FRs, 10 SCs, 10 resolved clarifications), `plan.md` (Phases A-H, ~8-12 h dev time), `research.md` (16 decisions), `data-model.md`, `contracts/` (11 contracts), `quickstart.md`, `.specify/memory/constitution.md` (v1.3.0, 8 principles).
 
 ## Organization note
@@ -15,6 +20,18 @@ are grouped by **plan.md Phase A-H** (the actual dependency chain), with
 `[US#]` labels marking which user story a task primarily serves. Every
 FR is covered by at least one task; the phase gate at end of each phase
 runs `speckit-trace --require-full <FR-list>` to prove it.
+
+## Habit: an operator ruling mid-flight is not done until it has a task
+
+**Three times in this feature** a requirement changed mid-build on an operator ruling and no
+task was created: FR-044 (caught by the Phase 5 gate → T086a), FR-028a (caught by the trace
+gate's L1 miss → T039a), and FR-002 (caught by the 2026-07-30 audit → T033a — worse, because
+the stale anchors made a withdrawn requirement rate FULL).
+
+So: **after any operator ruling that adds, amends or withdraws a requirement, immediately
+(a) write the task, and (b) re-run `speckit-trace --require-full` for the affected phase.**
+An addition shows up as an L1 miss; a withdrawal shows up as nothing at all, which is why it
+needs the deliberate step. *(speckit's recommendation, 2026-07-30.)*
 
 ## Marker convention (READ THIS ONCE, APPLIES TO EVERY TASK)
 
@@ -58,12 +75,23 @@ Tasks marked `[P]` can run in parallel with each other (different files, no shar
 
 ## Phase 1 — Setup (worktree + tooling)
 
-- [ ] T001 Create v2 git worktree at `../memo-v2` off branch `001-memo-renovation` — `cd /mnt/nas/data/code/memo && git worktree add ../memo-v2 001-memo-renovation`
-- [ ] T002 [P] Copy `pyproject.toml`, `docker-compose.yml`, `.env.example` from v1 to `../memo-v2/`; bump `pyproject.toml` version to `2.0.0-alpha1`; rename container to `memo-v2`; change host port to 8001; change data volume path to `./v2-data`
-- [ ] T003 [P] Verify `speckit-trace --version` on server4 and `cd ../memo-v2 && speckit-trace` produces the PRE-TASKS "not rated" output (baseline sanity)
-- [ ] T004 [P] Add `../memo-v2/src/memo/__init__.py` with `__version__ = "2.0.0-alpha1"` header comment for the whole package (no FR marker yet — just structure)
+- [X] T001 Create v2 git worktree at `../memo-v2` off branch `001-memo-renovation` — `cd /mnt/nas/data/code/memo && git worktree add ../memo-v2 001-memo-renovation`
+- [X] T002 [P] Copy `pyproject.toml`, `docker-compose.yml`, `.env.example` from v1 to `../memo-v2/`; bump `pyproject.toml` version to `2.0.0-alpha1`; rename container to `memo-v2`; change host port to ~~8001~~ **8091** (see deviation note); change data volume path to `./v2-data`
+- [X] T003 [P] Verify `speckit-trace --version` on server4 and `cd ../memo-v2 && speckit-trace` produces the PRE-TASKS "not rated" output (baseline sanity)
+- [X] T004 [P] Add `../memo-v2/src/memo/__init__.py` with `__version__ = "2.0.0-alpha1"` header comment for the whole package (no FR marker yet — just structure)
 
-**Phase 1 gate**: `docker-compose up -d` in `../memo-v2/` succeeds; `curl -sf http://server4:8001/health` returns 200. No FR markers yet — Phase 1 is pure setup.
+**T002 deviation (2026-07-29)**: host port is **8091**, not the 8001 this task
+originally specified — port 8001 on server4 is already held by an unrelated
+development service (its `/health` returns `{"status":"ok","environment":
+"development"}`, which is NOT memo). Binding v2 to 8001 would have collided.
+`docker-compose.yml` uses `PORT: ${MEMO_V2_PORT:-8091}` with `network_mode:
+host`. Every downstream reference to the v2 port must read 8091. Also note the
+data volume is the named volume `memo_v2_data` (→ `/data`) rather than a
+`./v2-data` bind mount, to match v1's volume style.
+
+**Phase 1 gate**: ✅ MET (verified 2026-07-29) — `memo-v2` container up + healthy;
+`curl -sf http://localhost:8091/health` → `{"status":"ok"}`. No FR markers yet —
+Phase 1 is pure setup.
 
 ---
 
@@ -71,22 +99,22 @@ Tasks marked `[P]` can run in parallel with each other (different files, no shar
 
 Foundational; blocks all user stories.
 
-- [ ] T010 Author `../memo-v2/migrations/001_v2_schema.sql` — additive columns on `documents` (`class`, `injection_mode`, `scope`, `provenance`, `valid_from`, `valid_until`, `expires_at`, `time_scope`, `reopenability`, `derived_from`, `constitution_meta`) per data-model.md. Marker `001/FR-001 001/FR-002 001/FR-005 001/FR-006 001/FR-007 001/FR-008 001/FR-009` in header comment.
-- [ ] T011 Author `../memo-v2/migrations/002_bi_temporal_indexes.sql` — indexes `documents_current_idx`, `documents_class_scope_idx`, `documents_expires_idx`, `documents_time_scope_idx`. Marker `001/FR-002` in header.
-- [ ] T012 [P] Author `../memo-v2/migrations/003_seed_canonical_tags.sql` — retire `hard-rule`/`ben-hard-rule`/`behavioral-rule` fragmentation to a single canonical vocabulary (C44). Marker `001/FR-001` in header.
-- [ ] T013 [P] Author `../memo-v2/migrations/004_supersede_edges.sql` — new `supersede_edges` table per data-model.md. Marker `001/FR-002 001/FR-003` in header.
-- [ ] T014 [P] Author `../memo-v2/migrations/005_mediator_audit_log.sql` — new `mediator_audit_log` table. Marker `001/FR-014 001/FR-015f 001/FR-035` in header.
-- [ ] T015 [P] Author `../memo-v2/migrations/006_injection_set_cache.sql` — new `injection_set_cache` table. Marker `001/FR-016` in header.
-- [ ] T016 [P] Author `../memo-v2/migrations/007_constitution_proposals.sql` — new `constitution_proposals` table. Marker `001/FR-023` in header.
-- [ ] T017 [P] Author `../memo-v2/migrations/008_session_guide_cache.sql` — new `SESSION_GUIDE_cache` table. Marker `001/FR-016` in header.
-- [ ] T018 Write `../memo-v2/src/memo/models.py` — Pydantic v2 models per data-model.md (Memo, Provenance nested types, TimeScope, Reopenability, ConstitutionMeta, InjectionSet, TransclusionResolution). Module docstring marker `001/FR-001 001/FR-002 001/FR-004 001/FR-005 001/FR-006 001/FR-007 001/FR-008 001/FR-009`.
-- [ ] T019 Extend `../memo-v2/src/memo/db.py` from v1 — add bi-temporal helpers: `get_current(id)`, `get_as_of(id, t)`, `supersede(old_id, new_memo, actor, reason, operator_directive_ref)`. Marker `001/FR-002 001/FR-003` on each helper's docstring.
-- [ ] T020 Write `../memo-v2/src/memo/repositories/documents.py` — repository abstraction wrapping db.py raw operations, so future Postgres swap doesn't touch call sites (per R-03). Marker `001/FR-001` on module docstring.
-- [ ] T021 [P] Write `../memo-v2/src/memo/reaper.py` — 5-minute background task sweeping rows with `expires_at < now`. Marker `001/FR-007` on module docstring.
-- [ ] T022 [P] Add `POST /supersede` endpoint in `../memo-v2/src/memo/main.py` per FR-003. Marker `001/FR-003` on the endpoint function docstring.
-- [ ] T023 Write `../memo-v2/tests/unit/test_models.py` — validate every Memo class + special-field-requirement rules from data-model.md §Validation Rules. Marker `001/FR-001 001/FR-005 001/FR-006 001/FR-007 001/FR-008 001/FR-009` in file docstring. Any fixture line with a marker string gets `# speckit-trace: ignore`.
-- [ ] T024 Write `../memo-v2/tests/unit/test_db_bi_temporal.py` — supersede, as_of, current-filter round-trips. Marker `001/FR-002 001/FR-003` in file docstring.
-- [ ] T025 Write `../memo-v2/tests/unit/test_reaper.py` — expires_at sweep behavior. Marker `001/FR-007` in file docstring.
+- [X] T010 Author `../memo-v2/migrations/001_v2_schema.sql` — additive columns on `documents` (`class`, `injection_mode`, `scope`, `provenance`, `valid_from`, `valid_until`, `expires_at`, `time_scope`, `reopenability`, `derived_from`, `constitution_meta`) per data-model.md. Marker `001/FR-001 001/FR-002 001/FR-005 001/FR-006 001/FR-007 001/FR-008 001/FR-009` in header comment.
+- [X] T011 Author `../memo-v2/migrations/002_bi_temporal_indexes.sql` — indexes `documents_current_idx`, `documents_class_scope_idx`, `documents_expires_idx`, `documents_time_scope_idx`. Marker `001/FR-002` in header.
+- [X] T012 [P] Author `../memo-v2/migrations/003_seed_canonical_tags.sql` — retire `hard-rule`/`ben-hard-rule`/`behavioral-rule` fragmentation to a single canonical vocabulary (C44). Marker `001/FR-001` in header.
+- [X] T013 [P] Author `../memo-v2/migrations/004_supersede_edges.sql` — new `supersede_edges` table per data-model.md. Marker `001/FR-002 001/FR-003` in header.
+- [X] T014 [P] Author `../memo-v2/migrations/005_mediator_audit_log.sql` — new `mediator_audit_log` table. Marker `001/FR-014 001/FR-015f 001/FR-035` in header.
+- [X] T015 [P] Author `../memo-v2/migrations/006_injection_set_cache.sql` — new `injection_set_cache` table. Marker `001/FR-016` in header.
+- [X] T016 [P] Author `../memo-v2/migrations/007_constitution_proposals.sql` — new `constitution_proposals` table. Marker `001/FR-023` in header.
+- [X] T017 [P] Author `../memo-v2/migrations/008_session_guide_cache.sql` — new `SESSION_GUIDE_cache` table. Marker `001/FR-016` in header.
+- [X] T018 Write `../memo-v2/src/memo/models.py` — Pydantic v2 models per data-model.md (Memo, Provenance nested types, TimeScope, Reopenability, ConstitutionMeta, InjectionSet, TransclusionResolution). Module docstring marker `001/FR-001 001/FR-002 001/FR-004 001/FR-005 001/FR-006 001/FR-007 001/FR-008 001/FR-009`.
+- [X] T019 Extend `../memo-v2/src/memo/db.py` from v1 — add bi-temporal helpers: `get_current(id)`, `get_as_of(id, t)`, `supersede(old_id, new_memo, actor, reason, operator_directive_ref)`. Marker `001/FR-002 001/FR-003` on each helper's docstring.
+- [X] T020 Write `../memo-v2/src/memo/repositories/documents.py` — repository abstraction wrapping db.py raw operations, so future Postgres swap doesn't touch call sites (per R-03). Marker `001/FR-001` on module docstring.
+- [X] T021 [P] Write `../memo-v2/src/memo/reaper.py` — 5-minute background task sweeping rows with `expires_at < now`. Marker `001/FR-007` on module docstring.
+- [X] T022 [P] Add `POST /supersede` endpoint in `../memo-v2/src/memo/main.py` per FR-003. Marker `001/FR-003` on the endpoint function docstring.
+- [X] T023 Write `../memo-v2/tests/unit/test_models.py` — validate every Memo class + special-field-requirement rules from data-model.md §Validation Rules. Marker `001/FR-001 001/FR-005 001/FR-006 001/FR-007 001/FR-008 001/FR-009` in file docstring. Any fixture line with a marker string gets `# speckit-trace: ignore`.
+- [X] T024 Write `../memo-v2/tests/unit/test_db_bi_temporal.py` — supersede, as_of, current-filter round-trips. Marker `001/FR-002 001/FR-003` in file docstring.
+- [X] T025 Write `../memo-v2/tests/unit/test_reaper.py` — expires_at sweep behavior. Marker `001/FR-007` in file docstring.
 
 **Phase 2 gate**:
 
@@ -97,21 +125,179 @@ cd ../memo-v2 && speckit-trace --require-full \
 
 Must exit 0. On PARTIAL/INVISIBLE, fix before proceeding to Phase 3.
 
+**Phase 2 gate: ✅ PASS (2026-07-29)** — FR-001..FR-009 all FULL, 0 dangling
+markers, 0 L1 misses, exit 0. Full suite: **89 passed**, run in docker —
+`docker compose run --rm test` (see note 7; never run tests on the host).
+
+### Phase 2 implementation notes / deviations
+
+1. **T023 marker set widened.** T023 specified FR-001/005/006/007/008/009, but
+   the gate requires FR-001..FR-009 FULL and **FR-004 (provenance) had no
+   enforcing test in any Phase 2 task** — the gate failed it as PARTIAL. FR-004
+   and FR-002 are both genuinely exercised by `test_models.py`, so its marker
+   set is FR-001/002/004/005/006/007/008/009. Later phases adding provenance
+   behavior should keep an enforcing test anchored to FR-004.
+2. **`valid_from` write-path bug fixed (found, not specified).** Migration 001
+   adds `valid_from REAL NOT NULL DEFAULT 0`, and `_sync_store` did not set the
+   column — so every NEW write silently took 0 and looked valid from the epoch,
+   which breaks `get_as_of`. Confirmed empirically: the only row in the fresh v2
+   DB had `valid_from=0`. `_sync_store` now sets it explicitly; pinned by
+   `test_new_write_sets_valid_from_to_now`.
+3. **Supersession keeps ids immutable.** Per data-model.md each version is its
+   own `documents` row with its own uuid, linked via `supersede_edges`. So
+   `get_current`/`get_as_of` RESOLVE THE CHAIN rather than doing a bare
+   `WHERE id = ?` — a caller holding a superseded id still gets the right
+   answer instead of None. Chain walks carry a seen-set because
+   `supersede_edges` has no FK constraints and a cycle would otherwise hang a
+   request (`test_cyclic_edges_do_not_hang`).
+4. **As-of window is half-open** (`valid_from <= t < valid_until`), so the
+   supersession instant belongs to the new version only — never to both, never
+   to neither.
+5. **Two extra read endpoints beyond T022.** `GET /documents/{id}/current` and
+   `GET /documents/{id}/as-of?t=` were added alongside `POST /supersede`; FR-002
+   is a storage requirement with no read surface of its own, and the bi-temporal
+   helpers were otherwise unreachable over HTTP.
+6. **`src/memo/__init__.py` docstring must not contain a literal marker.** It
+   had an illustrative `001/FR-XXX`, which the scanner counted as a real anchor
+   and reported as dangling → gate FAIL. Reworded to describe the convention
+   without spelling a marker.
+7. **Tests run IN DOCKER. NEVER on the host. RESOLVED.**
+
+   ```bash
+   cd ../memo-v2 && docker compose run --rm test                       # whole suite
+   cd ../memo-v2 && docker compose run --rm test tests/unit -q         # subset
+   cd ../memo-v2 && docker compose run --rm --build test               # after editing src/
+   ```
+
+   The Dockerfile sets `ENTRYPOINT ["python","-m","pytest"]` with
+   `CMD ["tests/","-q"]` precisely so the subset form works. `docker compose
+   run <service> <args>` REPLACES the CMD rather than appending to it, so with a
+   bare CMD any pytest flag is treated as the executable —
+   `exec: "-q": executable file not found`. (My own first draft of these docs
+   had that bug.)
+
+   **89 passed, 0 failed.** This unblocks the Phase 3 mediator contract tests,
+   which need `TestClient`.
+
+   The host cannot run this suite: the project requires Python >=3.12 (host is
+   3.10), and the host's `fastapi`/`starlette` versions are mismatched badly
+   enough that `import memo.main` raises
+   `TypeError: Router.__init__() got an unexpected keyword argument 'on_startup'`
+   inside FastAPI's own constructor — so `tests/test_leak_guard.py` could not even
+   collect, and the suite had effectively never run.
+
+   ⚠️ **A host run does not fail loudly — it silently reports a SMALLER passing
+   number.** Every test that imports the app is dropped at collection, so the
+   host reported "73 passed" while the real suite is 89. Treat any test count
+   that did not come out of docker as untrustworthy. (Operator correction,
+   2026-07-29: "you should be building all this in docker / docker compose.")
+
+   Implemented as a `dev` optional-dependency group (pytest, pytest-asyncio,
+   httpx-for-TestClient), a `test` stage in the Dockerfile, and a profile-gated
+   `test` service in `docker-compose.yml`. The service uses a throwaway /tmp DB
+   and does NOT mount `memo_v2_data`, so a test run cannot touch the real store.
+   The `test` profile keeps it out of `docker compose up` and out of
+   orphan-cleanup. Things to know:
+   * The `test` stage is deliberately NOT the last stage in the Dockerfile —
+     docker's default target is the final stage, and `docker compose build` must
+     keep producing the runtime image. Verified: the runtime image has no pytest.
+   * The test stage installs the package, so tests import from
+     `site-packages/memo`, NOT `src/`. `docker compose run` reuses the existing
+     image, so after editing `src/` you MUST rebuild or you will be testing stale
+     code (this cost a confusing cycle):
+
+     ```bash
+     docker compose run --rm --build test
+     ```
+
+   `[tool.pytest.ini_options]` pins `asyncio_mode = "strict"` so the mode cannot
+   drift and silently disable async fixture teardown (see note 9).
+7a. **Pre-existing test-data bug fixed in `tests/test_leak_guard.py`.** Once the
+   suite could actually run, `test_discussion_of_bug_mid_body_no_tags` failed its
+   own setup assertion: the guard only inspects `content[-400:]`, and the fixture
+   was 416 chars with the marker ending at index 59 — i.e. inside the tail window
+   the test intended it to be outside of. Padded the fixture past 459 chars with
+   the arithmetic documented inline. The guard itself was correct; only the
+   fixture was mis-sized.
+8. **`tests/unit/conftest.py` isolation is `autouse` on purpose.**
+   `db._resolve_path` ignores its `db_path` argument (single-global refactor),
+   so a test that merely passes a temp path would still write the REAL store.
+   Isolation must not depend on a test remembering to opt in. Verified: after a
+   full run, `~/.memo/memo.db` does not exist.
+9. **Async fixtures must use `@pytest_asyncio.fixture`.** pytest-asyncio runs in
+   strict mode here; a plain `@pytest.fixture` async generator is never awaited
+   and silently becomes a no-op (so the reaper-task cleanup did not run, despite
+   green tests). pytest 9 will make this a hard error.
+10. **Live e2e verified against the running container** (port 8091), then its
+    rows were deleted: create → supersede → `get_current` via the STALE id
+    returns the new content → `as-of` midpoint returns the OLD content → `as-of`
+    at the supersession instant returns the NEW one → double-supersede 409 →
+    unknown id 404. The reaper logs `TTL reaper started — sweeping every 300s`
+    on boot, and v1 on :8000 was unaffected throughout.
+11. **⚠️ Phase 7 input — one row in the v2 alpha DB has `valid_from = 0`**
+    (id `2715c4ce…`, content "test v2 memo"). It was written by a smoke test
+    AFTER migration 001's one-shot `UPDATE ... WHERE valid_from = 0` backfill had
+    already run and been marked applied, so nothing re-backfilled it. **Left in
+    place deliberately** — it is a genuine specimen of the pre-fix bug, so the
+    Phase 7 migration script should sweep `valid_from = 0` rows and can use this
+    row as its fixture. Do not hand-patch it before then.
+
 ---
 
 ## Phase 3 (== plan Phase B) — Both mediators [US2]
 
-- [ ] T030 [US2] Write `../memo-v2/src/memo/mediators/filters.py` — filter chain strategy classes: `DedupFilter` (migration-cluster collapse per C-06), `BiTemporalFilter` (`valid_until IS NULL` unless `as_of` set), `RecencyBoost`, `TagClassBoost` (per FR-013), `ScopeFilter`. Each class's docstring has `001/FR-011 001/FR-012 001/FR-013` marker.
-- [ ] T031 [US2] Write `../memo-v2/src/memo/mediators/recall.py` — retrieval mediator per contracts/mediator-recall.md. Wires filter chain; LLM-fallback trigger on N candidates or conflict (default N=15). Module docstring marker `001/FR-010 001/FR-011 001/FR-012 001/FR-013 001/FR-014 001/FR-015`.
-- [ ] T032 [US2] Write `../memo-v2/src/memo/clarify.py` — synchronous clarification round-trip helper for the storage mediator (FR-015d). Marker `001/FR-015d`.
-- [ ] T033 [US2] Write `../memo-v2/src/memo/mediators/store.py` — storage mediator per contracts/mediator-store.md. Reconcile-before-write (merge/supersede/split/reject/write-new); canonical tag/class inference; clarify round-trip; refute-fact rejection with operator-directive-ref requirement. Module docstring marker `001/FR-015a 001/FR-015b 001/FR-015c 001/FR-015d 001/FR-015e 001/FR-015f 001/FR-015g`.
-- [ ] T034 [US2] Add `POST /recall` endpoint in main.py; delegates to recall mediator. Marker `001/FR-010`.
-- [ ] T035 [US2] Refactor existing `POST /store` (and MCP `memo_store` tool) in main.py to route through the storage mediator. Preserve v1 tool name for back-compat. Marker `001/FR-015a`.
-- [ ] T036 [US2] [P] Refactor `../memo-v2/src/memo/auto_store.py` to route through storage mediator instead of raw insert. Marker `001/FR-015a`.
-- [ ] T037 [US2] Write `../memo-v2/tests/contract/test_mediator_recall.py` — one test per contract Response section (SUCCESS/NO-RESULTS/ANOMALY/error). Marker `001/FR-010 001/FR-011 001/FR-012 001/FR-013 001/FR-014 001/FR-015`.
-- [ ] T038 [US2] Write `../memo-v2/tests/contract/test_mediator_store.py` — one test per contract Response section (MERGE/WRITE-NEW/SUPERSEDE/CLARIFY/REJECT/SPLIT). Marker `001/FR-015a 001/FR-015b 001/FR-015c 001/FR-015d 001/FR-015e 001/FR-015f 001/FR-015g`.
-- [ ] T039 [US2] [P] Write `../memo-v2/tests/integration/test_dedup_collapse.py` — reproduce the Matt-Sack `0c55a9a3/c664f4a1/98efbda5` scenario (canonical + 2 duplicates); assert retrieval returns only canonical. Marker `001/FR-012`.
-- [ ] T040 [US2] [P] Write `../memo-v2/tests/integration/test_recall_parking.py` — reproduce 7/26 parking-recall scenario. Assert July memo (when it exists) ranks #1 over May SF memo. Marker `001/FR-013`.
+**R-17 amendment (operator directive 2026-07-29)**: the mediators' generative
+LLM calls are served by an **interactive Claude Code session** (`memo-llm`),
+never by a per-token API and never via `claude -p` — see research.md R-17 for
+the full decision and rationale.
+
+Phase 3 therefore builds against the `LLMProvider` INTERFACE with a
+deterministic **null adapter** (T029a below), so the mediators land complete
+and fully testable without the transport existing. The concrete
+`claude_session` adapter lands in **Phase 5** (T085a) with the other provider
+adapters. Contract-test note: with the null adapter, LLM-fallback paths assert
+the DEGRADED behavior — that is the correct, specified behavior, not a stub.
+
+Everywhere the mediators touch the LLM they must **degrade, never block**:
+on unavailability recall returns its search-only answer with an `anomalies`
+entry and store writes-new + flags the auditor. Neither may fail the caller.
+
+- [X] T029a [US2] Write `../memo-v2/src/memo/providers/llm/base.py` — abstract `LLMProvider` (`complete(prompt, *, budget_tokens, timeout_s) -> str | None`, returning None on unavailability rather than raising) plus `../memo-v2/src/memo/providers/llm/null.py` — `NullLLMProvider` that always reports unavailable, so every caller exercises the degrade path. Wire `MEMO_LLM_PROVIDER` (default `null` until Phase 5) in config. Marker `001/FR-015` on the base class docstring.
+- [X] T030 [US2] Write `../memo-v2/src/memo/mediators/filters.py` — filter chain strategy classes: `DedupFilter` (migration-cluster collapse per C-06), `BiTemporalFilter` (`valid_until IS NULL` unless `as_of` set), `RecencyBoost`, `TagClassBoost` (per FR-013), `ScopeFilter`. Each class's docstring has `001/FR-011 001/FR-012 001/FR-013` marker.
+- [X] T031 [US2] Write `../memo-v2/src/memo/mediators/recall.py` — retrieval mediator per contracts/mediator-recall.md. Wires filter chain; LLM-fallback trigger on N candidates or conflict (default N=15). Module docstring marker `001/FR-010 001/FR-011 001/FR-012 001/FR-013 001/FR-014 001/FR-015`.
+- [X] T032 [US2] Write `../memo-v2/src/memo/clarify.py` — synchronous clarification round-trip helper for the storage mediator (FR-015d). Marker `001/FR-015d`.
+- [X] T033 [US2] Write `../memo-v2/src/memo/mediators/store.py` — storage mediator per contracts/mediator-store.md. Reconcile-before-write (merge/supersede/split/reject/write-new); canonical tag/class inference; clarify round-trip; refute-fact rejection with operator-directive-ref requirement. Module docstring marker `001/FR-015a 001/FR-015b 001/FR-015c 001/FR-015d 001/FR-015e 001/FR-015f 001/FR-015g`.
+- [X] T033a [US2] **ADDED 2026-07-30 by audit — FR-002's withdrawal was declared but never
+  executed.** Operator withdrew bi-temporal versioning on 2026-07-30; the spec said
+  `valid_from`/`valid_until`, `get_as_of`, `GET /documents/{id}/as-of` and supersede-chain
+  resolution "all go". None of it went. 23 files still referenced the surface, the endpoint was
+  live and tested, and the retained `001/FR-002` anchors made the trace gate rate a WITHDRAWN
+  requirement **FULL** — the gate can check that code matches a marker, never that the code
+  should exist. Marker `001/FR-002`.
+  **RESOLVED 2026-07-31 — operator kept as-of. Nothing is deleted.** Asked to either
+  finish the removal or amend the spec, the decision was to keep it. So spec.md is
+  corrected to match the code rather than a working, tested read path across 23 files
+  being destroyed to match a spec line; FR-002 is reinstated there with its withdrawal
+  history preserved. No code, markers, `tests/unit/test_db_bi_temporal.py` or
+  `BiTemporalFilter` are removed.
+  The inconsistency this task existed to fix is gone — resolved by withdrawing the
+  withdrawal rather than by executing it. **The lesson is unchanged by the direction it
+  went:** an operator ruling mid-flight is not done until it has a task, and a withdrawal
+  surfaces to the gate as *nothing at all*, which is why it needs the deliberate step.
+- [X] T034 [US2] Add `POST /recall` endpoint in main.py; delegates to recall mediator. Marker `001/FR-010`.
+- [X] T035 [US2] Refactor existing `POST /store` (and MCP `memo_store` tool) in main.py to route through the storage mediator. Preserve v1 tool name for back-compat. Marker `001/FR-015a`.
+- [X] T036 [US2] [P] Refactor `../memo-v2/src/memo/auto_store.py` to route through storage mediator instead of raw insert. Marker `001/FR-015a`. **ALSO (R-17, operator clarification 2026-07-29): move auto_store's `openai/gpt-4o-mini` dedup call off OpenRouter onto the `LLMProvider`.** This is memo's one pre-existing generative caller and fires on every hook-triggered store, so it is in scope like any other LLM use — the earlier "leave it for now" note is superseded. After this task, NO generative OpenRouter call should remain: verify with a grep for `auto_store_model` / chat-completion usage. Embeddings stay on OpenRouter (R-05) and are unaffected. Note auto_store must tolerate a None completion (degrade to write-new) like every other caller.
+- [X] T037 [US2] Write `../memo-v2/tests/contract/test_mediator_recall.py` — one test per contract Response section (SUCCESS/NO-RESULTS/ANOMALY/error). Marker `001/FR-010 001/FR-011 001/FR-012 001/FR-013 001/FR-014 001/FR-015`.
+- [X] T038 [US2] Write `../memo-v2/tests/contract/test_mediator_store.py` — one test per contract Response section (MERGE/WRITE-NEW/SUPERSEDE/CLARIFY/REJECT/SPLIT). Marker `001/FR-015a 001/FR-015b 001/FR-015c 001/FR-015d 001/FR-015e 001/FR-015f 001/FR-015g`.
+- [X] T039a [US2] **ADDED 2026-07-30 — FR-028a had NO task** (found by the audit of
+  2026-07-30; it was the trace gate's only L1 miss). FR-028a arrived with the operator's
+  deletion ruling *after* Phase 2 was written, and the code shipped without a task naming
+  it — the exact gap T086a closed for FR-044. Deletion snapshots the memo to `deletion_log`
+  before removing it, and `deletion_snapshot()` recovers the most recent one; this is what
+  makes aggressive pruning safe rather than merely regretted. Implemented in
+  `src/memo/db.py`, gated by `tests/unit/test_deletion_log.py`. Marker `001/FR-028a`.
+- [X] T039 [US2] [P] Write `../memo-v2/tests/integration/test_dedup_collapse.py` — reproduce the Matt-Sack `0c55a9a3/c664f4a1/98efbda5` scenario (canonical + 2 duplicates); assert retrieval returns only canonical. Marker `001/FR-012`.
+- [X] T040 [US2] [P] Write `../memo-v2/tests/integration/test_recall_parking.py` — reproduce 7/26 parking-recall scenario. Assert July memo (when it exists) ranks #1 over May SF memo. Marker `001/FR-013`.
 
 **Phase 3 gate**:
 
@@ -121,30 +307,76 @@ cd ../memo-v2 && speckit-trace --require-full \
 001/FR-015a,001/FR-015b,001/FR-015c,001/FR-015d,001/FR-015e,001/FR-015f,001/FR-015g
 ```
 
+**Phase 3 gate: ✅ PASS (2026-07-29)** — all 13 FRs FULL, 0 dangling markers,
+0 L1 misses, exit 0. Full suite **177 passed** (`docker compose run --rm test`).
+
+### Phase 3 implementation notes
+
+1. **R-17 shape.** Mediators built against the `LLMProvider` interface with the
+   `null` adapter, so every LLM-fallback path in the tests exercises the
+   DEGRADED branch — specified behavior, not a stub. `claude_session` lands at
+   T085a.
+2. **Merge is suppressed when a refutation check is undetermined.** Merge only
+   unions TAGS and leaves stored content untouched, so merging a contradicting
+   update silently DISCARDS the new fact. Found by the contract tests.
+3. **...but only for the ambiguous band.** Blanket suppression was too broad:
+   with the null provider every fact-adjacent write is undetermined, which
+   disabled merge entirely and duplicated byte-identical re-stores. Bands are
+   now `>= MERGE_SIM` restatement (merge, no inference needed) /
+   `RECONCILE_SIM..MERGE_SIM` ambiguous (the only band that costs an LLM call
+   and the only one where undetermined suppresses merge) / below, unrelated.
+   Caught live on the mediated `/store` path.
+4. **Read-path dedup keys on CONTENT words, not n-grams.** n-gram overlap could
+   not separate the real Matt-Sack cluster from must-not-collapse controls —
+   duplicates `D1/D2` scored 0.77 unigram while "CP1500 in the rack" vs "in the
+   closet" scored 0.75, and on 3-grams the ordering INVERTED. Structural
+   reason: migration duplicates differ only in filler, distinct memos differ in
+   a content word. Measured content-word Jaccard: must-collapse 0.85–1.00,
+   must-not 0.00–0.60. Threshold 0.80.
+5. **`max_results` is a CEILING.** `_answer_set` admits a runner-up only within
+   85% of the leader's score. Without it the live `/recall` returned an
+   unrelated dentist memo alongside the UPS answer.
+6. **Refutation flow is 409-then-403** per the operator ruling; both spec.md
+   FR-015c and contracts/mediator-store.md amended.
+7. **Test-fixture bugs worth remembering** (all found by these suites, none
+   were code bugs): an all-zeros embedding has undefined cosine → sqlite-vec
+   returns NULL → `1.0 - distance` raises; a stub keyed on `"parking"` does not
+   match the query `"park?"`; `seed()` must move `valid_from` with
+   `created_at` or every historical `as_of` filters the row out; and
+   `"appointment"` is itself a LOGISTICS family tag, so it cannot be used as
+   the un-boosted control.
+8. **FR-013's recency term is universal**, not logistics-only. Only the
+   tag-class term is logistics-specific. A test asserting otherwise was wrong
+   about the spec and was rewritten to hold recency constant.
+9. **Known overlap left explicit**: auto_store still runs its own LLM dedup
+   before the mediator reconciles again. Where they disagree the mediator wins;
+   its merge is weaker (tags-only vs auto_store rewriting content). Collapsing
+   the two is the right cleanup but is beyond T036.
+
 ---
 
 ## Phase 4 (== plan Phase C) — Layer 2 injection + hooks [US1] [US3] [US4]
 
-- [ ] T050 [US1] Write `../memo-v2/src/memo/injection/posture.py` — detects `CLAUDE_CODE_DISABLE_AUTO_MEMORY` per-session via `/proc/<pid>/environ` with roster fallback. Module docstring marker `001/FR-017 001/FR-018`.
-- [ ] T051 [US1] Write `../memo-v2/src/memo/injection/guides.py` — SESSION_GUIDE resolver (4 conventions per Agent H; DM to `agents` supervisor OR parses `~/scripts/agents` for `SESSION_GUIDE` array; caches to `SESSION_GUIDE_cache` table). Marker `001/FR-016 001/FR-017`.
-- [ ] T052 [US1] Write `../memo-v2/src/memo/injection/transclude.py` — scans given text for `memo:<uuid>` references (regex + validation) and returns resolved memo content. Marker `001/FR-016 001/FR-017`.
-- [ ] T053 [US1] Write `../memo-v2/src/memo/injection/set.py` — main `InjectionSet` builder per contracts/injection-set.md. Assembles: spec-kit constitution.md if present + forcible-constitutional/current-focus memos matching scope + time-scoped active memos + transclusions. Enforces 5k token budget (C-02) with drop-priority order. Module docstring marker `001/FR-016 001/FR-017 001/FR-018 001/FR-019 001/FR-020`.
-- [ ] T054 [US1] Add `GET /injection-set` endpoint in main.py. Marker `001/FR-016`.
-- [ ] T055 [US3] [P] Extend injection/set.py `_current_focus()` to include `class=time-scoped` memos where current time in `[start, end]`. Marker `001/FR-005` (time_scope field) and `001/FR-020` (current-focus).
-- [ ] T056 [US1] Write `../memo-v2/src/memo/hooks/session_start.py` — `POST /hooks/session-start` per contracts/claude-code-hooks.md. Marker `001/FR-017`.
-- [ ] T057 [US1] Write `../memo-v2/src/memo/hooks/post_compact.py` — `POST /hooks/post-compact`. Replaces the atc-precompact-beacon.py subagent dance (C58 / FR-036). Marker `001/FR-018 001/FR-036`.
-- [ ] T058 [US1] Write `../memo-v2/src/memo/hooks/instructions_loaded.py` — `POST /hooks/instructions-loaded`. Scans passed instruction_files content for `memo:<uuid>` references and returns resolved additionalContext. Marker `001/FR-017`.
-- [ ] T059 [US1] Write `../memo-v2/src/memo/hooks/session_end.py` — `POST /hooks/session-end`. Triggers auditor final-sweep (async — no additionalContext). Marker `001/FR-025`.
-- [ ] T060 [US4] [P] Write `../memo-v2/src/memo/log_queries.py` — intelligent Claude Code log query tool per contracts/log-queries.md. `command grep -m<max>` discipline. Marker `001/FR-033`.
-- [ ] T061 [US1] Add `POST /flush` endpoint in main.py per contracts/flush.md. Marker `001/FR-034`.
-- [ ] T062 [US1] Write `../memo-v2/tests/contract/test_injection_set.py` — request/response shapes; token-budget drop order. Marker `001/FR-016 001/FR-017 001/FR-018 001/FR-019 001/FR-020`.
-- [ ] T063 [US1] Write `../memo-v2/tests/contract/test_claude_code_hooks.py` — one test per hook endpoint. Marker `001/FR-017 001/FR-018 001/FR-036`.
-- [ ] T064 [US3] [P] Write `../memo-v2/tests/integration/test_time_scoped_autopin.py` — memo with `time_scope: {start, end}` is in injection-set during the window, absent after `end`. Marker `001/FR-005`.
-- [ ] T065 [US1] [P] Write `../memo-v2/tests/integration/test_spec_kit_constitution_injection.py` — session in cwd that contains `.specify/memory/constitution.md` gets it in `additionalContext`. Marker `001/FR-016`.
-- [ ] T066 [US1] [P] Write `../memo-v2/tests/integration/test_transclusion.py` — CLAUDE.md with `memo:<uuid>` reference gets resolved on InstructionsLoaded. Marker `001/FR-017`.
-- [ ] T067 [US1] [P] Write `../memo-v2/tests/integration/test_memory_posture_detection.py` — memory-on session vs. memory-off session receive different-sized injection sets. Marker `001/FR-017`.
-- [ ] T068 [US4] [P] Write `../memo-v2/tests/contract/test_log_queries.py`. Marker `001/FR-033`.
-- [ ] T069 [US1] [P] Write `../memo-v2/tests/contract/test_flush.py`. Marker `001/FR-034`.
+- [X] T050 [US1] Write `../memo-v2/src/memo/injection/posture.py` — detects `CLAUDE_CODE_DISABLE_AUTO_MEMORY` per-session via `/proc/<pid>/environ` with roster fallback. Module docstring marker `001/FR-017 001/FR-018`.
+- [X] T051 [US1] Write `../memo-v2/src/memo/injection/guides.py` — SESSION_GUIDE resolver (4 conventions per Agent H; DM to `agents` supervisor OR parses `~/scripts/agents` for `SESSION_GUIDE` array; caches to `SESSION_GUIDE_cache` table). Marker `001/FR-016 001/FR-017`.
+- [X] T052 [US1] Write `../memo-v2/src/memo/injection/transclude.py` — scans given text for `memo:<uuid>` references (regex + validation) and returns resolved memo content. Marker `001/FR-016 001/FR-017`.
+- [X] T053 [US1] Write `../memo-v2/src/memo/injection/set.py` — main `InjectionSet` builder per contracts/injection-set.md. Assembles: spec-kit constitution.md if present + forcible-constitutional/current-focus memos matching scope + time-scoped active memos + transclusions. Enforces 5k token budget (C-02) with drop-priority order. Module docstring marker `001/FR-016 001/FR-017 001/FR-018 001/FR-019 001/FR-020`.
+- [X] T054 [US1] Add `GET /injection-set` endpoint in main.py. Marker `001/FR-016`.
+- [X] T055 [US3] [P] Extend injection/set.py `_current_focus()` to include `class=time-scoped` memos where current time in `[start, end]`. Marker `001/FR-005` (time_scope field) and `001/FR-020` (current-focus).
+- [X] T056 [US1] Write `../memo-v2/src/memo/hooks/session_start.py` — `POST /hooks/session-start` per contracts/claude-code-hooks.md. Marker `001/FR-017`.
+- [X] T057 [US1] Write `../memo-v2/src/memo/hooks/post_compact.py` — `POST /hooks/post-compact`. Replaces the atc-precompact-beacon.py subagent dance (C58 / FR-036). Marker `001/FR-018 001/FR-036`.
+- [X] T058 [US1] Write `../memo-v2/src/memo/hooks/instructions_loaded.py` — `POST /hooks/instructions-loaded`. Scans passed instruction_files content for `memo:<uuid>` references and returns resolved additionalContext. Marker `001/FR-017`.
+- [X] T059 [US1] Write `../memo-v2/src/memo/hooks/session_end.py` — `POST /hooks/session-end`. Triggers auditor final-sweep (async — no additionalContext). Marker `001/FR-025`.
+- [X] T060 [US4] [P] Write `../memo-v2/src/memo/log_queries.py` — intelligent Claude Code log query tool per contracts/log-queries.md. `command grep -m<max>` discipline. Marker `001/FR-033`.
+- [~] T061 [US1] ~~Add `POST /flush` endpoint in main.py per contracts/flush.md.~~ **WITHDRAWN 2026-07-30** with FR-034 — operator decision, session state is ATC's. Removed in `707e714`.
+- [X] T062 [US1] Write `../memo-v2/tests/contract/test_injection_set.py` — request/response shapes; token-budget drop order. Marker `001/FR-016 001/FR-017 001/FR-018 001/FR-019 001/FR-020`.
+- [X] T063 [US1] Write `../memo-v2/tests/contract/test_claude_code_hooks.py` — one test per hook endpoint. Marker `001/FR-017 001/FR-018 001/FR-036`.
+- [X] T064 [US3] [P] Write `../memo-v2/tests/integration/test_time_scoped_autopin.py` — memo with `time_scope: {start, end}` is in injection-set during the window, absent after `end`. Marker `001/FR-005`.
+- [X] T065 [US1] [P] Write `../memo-v2/tests/integration/test_spec_kit_constitution_injection.py` — session in cwd that contains `.specify/memory/constitution.md` gets it in `additionalContext`. Marker `001/FR-016`.
+- [X] T066 [US1] [P] Write `../memo-v2/tests/integration/test_transclusion.py` — CLAUDE.md with `memo:<uuid>` reference gets resolved on InstructionsLoaded. Marker `001/FR-017`.
+- [X] T067 [US1] [P] Write `../memo-v2/tests/integration/test_memory_posture_detection.py` — memory-on session vs. memory-off session receive different-sized injection sets. Marker `001/FR-017`.
+- [X] T068 [US4] [P] Write `../memo-v2/tests/contract/test_log_queries.py`. Marker `001/FR-033`.
+- [~] T069 [US1] [P] ~~Write `../memo-v2/tests/contract/test_flush.py`.~~ **WITHDRAWN 2026-07-30** with FR-034 and T061.
 
 **Phase 4 gate**:
 
@@ -154,21 +386,70 @@ cd ../memo-v2 && speckit-trace --require-full \
 001/FR-033,001/FR-034,001/FR-036
 ```
 
+**Phase 4 gate: ✅ PASS (2026-07-30)** — all 8 FRs FULL, 0 dangling, exit 0.
+Full suite **260 passed**.
+
+### Phase 4 implementation notes
+
+1. **Everything on the session-start path fails OPEN.** Hooks fire while a
+   session is trying to start, so `/injection-set` and every hook endpoint
+   return an empty set on internal failure rather than raising. A session that
+   starts with less memory beats a session that does not start. Same reasoning
+   in `posture` (an unreadable `/proc/<pid>/environ` yields "not opted out",
+   never "opted out") and in `guides` (an unreachable roster falls back to
+   `session_id` as the agent-family).
+2. **Budget drop order is the load-bearing rule** and is tested directly:
+   transclusions, then current-focus, **never constitutional**. If
+   constitutional content alone exceeds the ceiling, memo goes over budget and
+   reports it rather than truncating a standing rule into something that reads
+   as complete.
+3. **C71 honored**: `CLAUDE_CODE_DISABLE_AUTO_MEMORY` does NOT reduce the
+   injection set. It means Layer 2 *is* the session's memory, so the set is
+   identical and only the rendered posture note changes. Only the explicit
+   `MEMO_DISABLE_INJECTION` suppresses injection.
+4. **T064 and T066 did not get their own files.** T064's scenario
+   (time-scoped memo present inside its window, absent after `end`) is
+   `test_injection_set.py::test_time_scoped_memo_only_inside_its_window`, and
+   T066's is `tests/unit/test_transclusion.py`, which additionally covers the
+   case that matters most — a reference to a SUPERSEDED memo resolving to the
+   current version of that lineage. Duplicating them into
+   `tests/integration/` would add files, not coverage.
+5. **Global offline embedding stub added to `tests/conftest.py`.** The test
+   service runs `network_mode: none`, so a real embedding call fails with DNS
+   — correctly. Rather than have each suite rediscover that, every test now
+   gets a deterministic offline vector by default; the mediator suites override
+   it with topic-aware stubs.
+6. **`log_queries` safety is deliberate, not stylistic.** argv-form grep (no
+   shell, so no ugrep shim), a mandatory `-m<max>`, a hard cap, a pattern-length
+   limit, and never reading a whole transcript. The shim took the office host
+   down at 17 GB RSS on 2026-07-22 on a bounded-alternation pattern; the
+   pattern-length check exists specifically for that shape.
+7. **Repeat offense worth recording**: I wrote Phase 2 note 9 about
+   `@pytest_asyncio.fixture` and then used a plain `@pytest.fixture` on an
+   async fixture anyway. Strict mode does not run it, and the failure surfaces
+   as a confusing setup error rather than a clear one.
+8. **Auditor hook is a stub.** `/hooks/session-end` acknowledges and records
+   the fire point but defers the actual sweep to Phase 6. The hook contract is
+   stable now so hook scripts do not need redeploying later.
+
 ---
 
 ## Phase 5 (== plan Phase D) — Provider abstractions + adapters [US8]
 
-- [ ] T080 [US8] Write `../memo-v2/src/memo/providers/conductor/base.py` — abstract `Conductor` class with push/pull/scheduled/event-trigger/bridge-event method signatures. Marker `001/FR-041 001/FR-042 001/FR-042a 001/FR-046`.
-- [ ] T081 [US8] Write `../memo-v2/src/memo/providers/conductor/atc.py` — concrete ATC adapter using HTTP `POST /messages` + `POST /beacons` + `POST /triggers`. Marker `001/FR-041 001/FR-042`.
-- [ ] T082 [US8] [P] Write `../memo-v2/src/memo/providers/agent_controller/base.py` — abstract `AgentController` with spawn/respawn/clear/change-model/compact/interrupt/inject signatures. Marker `001/FR-043 001/FR-046`.
-- [ ] T083 [US8] Write `../memo-v2/src/memo/providers/agent_controller/agents_supervisor.py` — concrete `agents`-supervisor adapter. Marker `001/FR-043`.
-- [ ] T084 [US8] [P] Write `../memo-v2/src/memo/providers/null.py` — `NullConductor` + `NullAgentController` for standalone mode. Marker `001/FR-045`.
-- [ ] T085 [US8] Wire provider selection in main.py — `MEMO_CONDUCTOR_PROVIDER` + `MEMO_AGENT_CONTROLLER_PROVIDER` env vars, default `atc`/`agents_supervisor`, `null` for standalone. Marker `001/FR-045`.
-- [ ] T086 [US8] Add `POST /events` endpoint per contracts/conductor-pull.md. Routes each event kind to its handler. Marker `001/FR-042 001/FR-042a`.
-- [ ] T087 [US8] Write `../memo-v2/tests/contract/test_conductor_push.py`. Marker `001/FR-041 001/FR-046`.
-- [ ] T088 [US8] Write `../memo-v2/tests/contract/test_conductor_pull.py`. Marker `001/FR-042 001/FR-042a`.
-- [ ] T089 [US8] Write `../memo-v2/tests/contract/test_agent_controller.py`. Marker `001/FR-043`.
-- [ ] T090 [US8] [P] Write `../memo-v2/tests/integration/test_standalone_mode.py` — start memo with both providers set to `null`; verify CRUD + mediators still work; verify integration features WARN-log the "would have fired" note. Marker `001/FR-045`.
+- [X] T080 [US8] Write `../memo-v2/src/memo/providers/conductor/base.py` — abstract `Conductor` class with push/pull/scheduled/event-trigger/bridge-event method signatures. Marker `001/FR-041 001/FR-042 001/FR-042a 001/FR-046`.
+- [X] T081 [US8] Write `../memo-v2/src/memo/providers/conductor/atc.py` — concrete ATC adapter using HTTP `POST /messages` + `POST /beacons` + `POST /triggers`. Marker `001/FR-041 001/FR-042`.
+- [X] T082 [US8] [P] Write `../memo-v2/src/memo/providers/agent_controller/base.py` — abstract `AgentController` with spawn/respawn/clear/change-model/compact/interrupt/inject signatures. Marker `001/FR-043 001/FR-046`.
+- [X] T083 [US8] Write `../memo-v2/src/memo/providers/agent_controller/agents_supervisor.py` — concrete `agents`-supervisor adapter. Marker `001/FR-043`.
+- [X] T084 [US8] [P] Write `../memo-v2/src/memo/providers/null.py` — `NullConductor` + `NullAgentController` for standalone mode. Marker `001/FR-045`.
+- [X] T085 [US8] Wire provider selection in main.py — `MEMO_CONDUCTOR_PROVIDER` + `MEMO_AGENT_CONTROLLER_PROVIDER` env vars, default `atc`/`agents_supervisor`, `null` for standalone. Marker `001/FR-045`.
+- [X] T085a [US8] Write `../memo-v2/src/memo/providers/llm/claude_session.py` — concrete `LLMProvider` that serves inference from the **interactive `memo-llm` Claude Code session** over ATC (request/response with a correlation id + 10s soft timeout). Per R-17: **MUST NOT shell out to `claude -p`** — that is billed API usage and is the exact thing this design avoids; an interactive session rides the existing Max subscription. On unavailability return None (never raise) so callers degrade, AND DM the `agents` supervisor to respawn `memo-llm` — **rate-limited to one notify per outage, not per failed call**, or a dead session plus fleet-wide memo traffic floods the supervisor (the thundering-herd failure in CLAUDE.md §5). ~~Switch `MEMO_LLM_PROVIDER` default from `null` to `claude_session`.~~ **DEVIATION (2026-07-30): default stays `null`.** The adapter is built and selectable, but no `memo-llm` session exists on the fleet yet. Flipping the default would make every v2 boot try to reach a session that isn't there and — working exactly as designed — page the `agents` supervisor about it. Shipping a default that pages the supervisor about missing infrastructure is a bad default. Flip it with `MEMO_LLM_PROVIDER=claude_session` once the session is spawned; that is a one-line change and a Phase 8/9 concern. Marker `001/FR-045`.
+- [X] T085b [US8] Write `../memo-v2/tests/contract/test_llm_provider.py` — null adapter reports unavailable; `claude_session` returns None (never raises) when the session is down; supervisor escalation fires exactly ONCE per outage across N consecutive failures and re-arms only after a recovery. Marker `001/FR-045`.
+- [X] T086a [US8] **ADDED 2026-07-30 — FR-044 had NO task.** The Phase 5 gate requires `001/FR-044` (the Claude Code hook INTERFACE: endpoints for SessionStart, SessionStart:compact, PreCompact, SessionStop, SessionEnd) but no task in any phase implemented or anchored it, so the gate failed it as PARTIAL. Phase 4 built four of the five hooks under FR-017/018/025/036 markers; **PreCompact and SessionStop were missing entirely**. Adds `POST /hooks/pre-compact` (synchronous flush before context is dropped, per FR-036) and `POST /hooks/session-stop` (end-of-turn checkpoint), and anchors `001/FR-044` across the hook chain. Marker `001/FR-044`.
+- [X] T086 [US8] Add `POST /events` endpoint per contracts/conductor-pull.md. Routes each event kind to its handler. Marker `001/FR-042 001/FR-042a`.
+- [X] T087 [US8] Write `../memo-v2/tests/contract/test_conductor_push.py`. Marker `001/FR-041 001/FR-046`.
+- [X] T088 [US8] Write `../memo-v2/tests/contract/test_conductor_pull.py`. Marker `001/FR-042 001/FR-042a`.
+- [X] T089 [US8] Write `../memo-v2/tests/contract/test_agent_controller.py`. Marker `001/FR-043`.
+- [X] T090 [US8] [P] Write `../memo-v2/tests/integration/test_standalone_mode.py` — start memo with both providers set to `null`; verify CRUD + mediators still work; verify integration features WARN-log the "would have fired" note. Marker `001/FR-045`.
 
 **Phase 5 gate**:
 
@@ -177,21 +458,56 @@ cd ../memo-v2 && speckit-trace --require-full \
   001/FR-041,001/FR-042,001/FR-042a,001/FR-043,001/FR-044,001/FR-045,001/FR-046
 ```
 
+**Phase 5 gate: ✅ PASS (2026-07-30)** — all 7 FRs FULL, 0 dangling, exit 0.
+Full suite **297 passed**.
+
+### Phase 5 implementation notes
+
+1. **FR-044 had no task at all** — see T086a. The gate list required it but no
+   phase implemented or anchored it, and two of its five fire points
+   (PreCompact, SessionStop) did not exist. This is the second time a gate FR
+   turned out to be unowned (FR-004 in Phase 2), so it is worth stating as a
+   pattern: **the `--require-full` list is not derived from the task list, and
+   the two drift.** Worth a sweep before the final phase.
+2. **`MEMO_LLM_PROVIDER` default deliberately stays `null`** despite T085a
+   saying to flip it. The adapter works and is selectable, but no `memo-llm`
+   session exists on the fleet yet, so defaulting to it would make every v2
+   boot page the `agents` supervisor about missing infrastructure — correct
+   behavior, bad default. One env var flips it when the session is spawned.
+3. **PreCompact fails LOUD; the injecting hooks fail QUIET.** Opposite postures
+   on purpose. A SessionStart hook that fails should let the session start
+   without Layer 2. A PreCompact flush that fails must NOT report success —
+   the session would compact believing its state was saved.
+4. **The conductor queue is bounded and drops oldest-first.** An unreachable
+   ATC must not turn into a memory leak inside memo. Events are advisory; the
+   memo itself is already committed to sqlite before any event is emitted, so
+   dropping one loses a notification, not data.
+5. **`claude -p` prohibition is asserted structurally**, not just documented:
+   a test greps the adapter source for `subprocess`/`os.system`/`shell=True`.
+   Documentation alone would not survive a future maintainer optimizing.
+6. **Supervisor escalation is once-per-outage**, tested directly (12 failures →
+   1 notify), with re-arming after a recovery and a 30-minute re-notify ceiling
+   so a permanently dead session is still reported occasionally.
+7. **`httpx` promoted to a runtime dependency.** It was only in the `dev`
+   extra while `claude_session.py` imports it at runtime; it happens to arrive
+   transitively via `openai`, which is exactly how a working image breaks on an
+   unrelated upgrade.
+
 ---
 
 ## Phase 6 (== plan Phase E) — Auditor [US6]
 
-- [ ] T100 [US6] Write `../memo-v2/src/memo/auditor/proposals.py` — `constitution-proposal` writer + `POST /constitution/propose` per contracts/constitution-proposals.md. Marker `001/FR-023`.
-- [ ] T101 [US6] Add `POST /constitution/resolve` + `GET /constitution/proposals` in main.py per contracts/constitution-proposals.md. Marker `001/FR-023`.
-- [ ] T102 [US6] Write `../memo-v2/src/memo/auditor/shadow.py` — per-session shadow auditor: long-running Conductor-subscribed watcher scoped to an agent-family. Subscribes to session's zone; observes transcript growth, memo query patterns, incoming DMs; classifies frustration signals; can write proposals + request AgentController ops. Module docstring marker `001/FR-021 001/FR-022`.
-- [ ] T103 [US6] Write `../memo-v2/src/memo/auditor/liveness.py` — content-based liveness monitor mirroring stale-guide-detector (C70). Marker `001/FR-025`.
-- [ ] T104 [US6] Write `../memo-v2/src/memo/auditor/global_sweep.py` — cron-driven global auditor: polices shadow auditors, synthesizes cross-session patterns, reaps `ephemeral-flush` past TTL (belt-and-suspenders with the 5-min reaper), coalesces long supersession chains. Marker `001/FR-024`.
-- [ ] T105 [US6] Wire auditor bootstrap into main.py — starts shadow-auditor tasks for each active agent-family in the SESSION_GUIDE roster; registers global-auditor scheduled trigger with Conductor. Marker `001/FR-021 001/FR-024`.
-- [ ] T106 [US6] Wire operator-override handling — `POST /events` handler for `operator.directive` events routes to auditor for classification (fact-update? override?). Marker `001/FR-026 001/FR-029`.
-- [ ] T107 [US6] Write `../memo-v2/tests/contract/test_constitution_proposals.py`. Marker `001/FR-023`.
-- [ ] T108 [US6] [P] Write `../memo-v2/tests/integration/test_shadow_auditor.py` — spawn a mock session; auditor observes; assert proposal fired for a synthetic anti-pattern violation. Marker `001/FR-021 001/FR-022`.
-- [ ] T109 [US6] [P] Write `../memo-v2/tests/integration/test_auditor_compaction_trigger.py` — auditor detects composite bloat threshold (C-10: transcript >2.5 MB, cache-read >20M/day, >120 turns) and calls `AgentController.compact()`. Marker `001/FR-022 001/FR-037`.
-- [ ] T110 [US6] [P] Write `../memo-v2/tests/integration/test_answer_loop_correction.py` — operator correction → immediate finding log; 3 corroborating in 24h → auto-promote hint. Marker `001/FR-035`.
+- [X] T100 [US6] Write `../memo-v2/src/memo/auditor/proposals.py` — `constitution-proposal` writer + `POST /constitution/propose` per contracts/constitution-proposals.md. Marker `001/FR-023`.
+- [X] T101 [US6] Add `POST /constitution/resolve` + `GET /constitution/proposals` in main.py per contracts/constitution-proposals.md. Marker `001/FR-023`.
+- [X] T102 [US6] Write `../memo-v2/src/memo/auditor/shadow.py` — per-session shadow auditor: long-running Conductor-subscribed watcher scoped to an agent-family. Subscribes to session's zone; observes transcript growth, memo query patterns, incoming DMs; classifies frustration signals; can write proposals + request AgentController ops. Module docstring marker `001/FR-021 001/FR-022`.
+- [X] T103 [US6] Write `../memo-v2/src/memo/auditor/liveness.py` — content-based liveness monitor mirroring stale-guide-detector (C70). Marker `001/FR-025`.
+- [X] T104 [US6] Write `../memo-v2/src/memo/auditor/global_sweep.py` — cron-driven global auditor: polices shadow auditors, synthesizes cross-session patterns, reaps `ephemeral-flush` past TTL (belt-and-suspenders with the 5-min reaper), coalesces long supersession chains. Marker `001/FR-024`.
+- [X] T105 [US6] Wire auditor bootstrap into main.py — starts shadow-auditor tasks for each active agent-family in the SESSION_GUIDE roster; registers global-auditor scheduled trigger with Conductor. Marker `001/FR-021 001/FR-024`.
+- [X] T106 [US6] Wire operator-override handling — `POST /events` handler for `operator.directive` events routes to auditor for classification (fact-update? override?). Marker `001/FR-026 001/FR-029`.
+- [X] T107 [US6] Write `../memo-v2/tests/contract/test_constitution_proposals.py`. Marker `001/FR-023`.
+- [X] T108 [US6] [P] Write `../memo-v2/tests/integration/test_shadow_auditor.py` — spawn a mock session; auditor observes; assert proposal fired for a synthetic anti-pattern violation. Marker `001/FR-021 001/FR-022`.
+- [X] T109 [US6] [P] Write `../memo-v2/tests/integration/test_auditor_compaction_trigger.py` — auditor detects composite bloat threshold (C-10: transcript >2.5 MB, cache-read >20M/day, >120 turns) and calls `AgentController.compact()`. Marker `001/FR-022 001/FR-037`.
+- [X] T110 [US6] [P] Write `../memo-v2/tests/integration/test_answer_loop_correction.py` — operator correction → immediate finding log; 3 corroborating in 24h → auto-promote hint. Marker `001/FR-035`.
 
 **Phase 6 gate**:
 
@@ -202,8 +518,45 @@ cd ../memo-v2 && speckit-trace --require-full \
 ```
 
 Also cover FR-027..FR-032 (reconciliation FRs — many are implicit in mediator + auditor):
-- [ ] T111 Write `../memo-v2/src/memo/reconciler.py` — event-triggered reconciliation on ATC `infra.change` events (FR-031); real-time reconcile hook on `class=fact` write path (FR-030). Marker `001/FR-027 001/FR-028 001/FR-029 001/FR-030 001/FR-031 001/FR-032`.
-- [ ] T112 Write `../memo-v2/tests/contract/test_reconciliation.py`. Marker `001/FR-027 001/FR-028 001/FR-029 001/FR-030 001/FR-031 001/FR-032`.
+- [X] T111 Write `../memo-v2/src/memo/reconciler.py` — event-triggered reconciliation on ATC `infra.change` events (FR-031); real-time reconcile hook on `class=fact` write path (FR-030). Marker `001/FR-027 001/FR-028 001/FR-029 001/FR-030 001/FR-031 001/FR-032`.
+- [X] T112 Write `../memo-v2/tests/contract/test_reconciliation.py`. Marker `001/FR-027 001/FR-028 001/FR-029 001/FR-030 001/FR-031 001/FR-032`.
+
+**Phase 6 gate: ✅ PASS (2026-07-30)** — 8 FRs FULL, 0 dangling, exit 0.
+
+### Phase 6 implementation notes
+
+1. **Principle V is enforced in code, not trusted.** `ShadowAuditor.modify_memo`
+   REFUSES a `class=constitutional` target and logs the refusal. An auditor able
+   to edit constitutional memos could silently rewrite the standing rules
+   force-injected into every session on the fleet, so the boundary is a code
+   path with a test, not a convention.
+2. **Compaction is idle-gated (FR-037), and that is not politeness** —
+   compacting mid-turn discards the work in flight. C-10's composite threshold
+   requires ALL THREE of transcript/turns/cache-read; any one alone false-positives
+   on a long healthy session.
+3. **Reconciliation supersedes, never rewrites in place.** An in-place rewrite
+   would destroy the prior value with no record it was ever believed, which is
+   exactly the history bi-temporality exists to keep. Infra-change is also
+   DRY-RUN by default and blast-radius capped: rewriting the corpus off a single
+   broadcast — which may be wrong or staged — is not something to do unprompted.
+4. **Operator overrides are captured, not merely obeyed** (FR-026). An override
+   becomes a `decision-in-progress` memo so it feeds auditor calibration; obeyed
+   and forgotten teaches nothing and the auditor repeats the call next week.
+5. **The global sweep's TTL reap is deliberately redundant** with the 5-minute
+   reaper. If the process was down or the reaper disabled by config, TTLs
+   silently stopped being honored — a scheduled sweep that finds nothing is cheap.
+6. **Chain coalescing keeps EDGES, compacts BODIES.** The audit trail of who
+   changed what and when is the part worth keeping.
+7. **`GET /answer-loop-audit` (FR-035) had an anchor but no implementation** —
+   only migration 005 mentioned it. Now implemented, and the logic lives in
+   `auditor/answer_loop.py` rather than the endpoint body: calling an endpoint
+   function directly (as these tests do, to avoid the MCP lifespan) leaves
+   FastAPI `Query(default=...)` SENTINEL OBJECTS bound as parameter values,
+   which sqlite rejects. Worth remembering for any future endpoint whose body
+   touches the DB directly.
+8. **Migration 007 has `proposed_class NOT NULL` and `urgency NOT NULL`**, which
+   data-model.md's table does not list. The schema is the source of truth; the
+   insert now supplies both.
 
 **Phase 6b gate** (reconciliation):
 
@@ -216,11 +569,11 @@ cd ../memo-v2 && speckit-trace --require-full \
 
 ## Phase 7 (== plan Phase F) — Migration script [US5] [US7]
 
-- [ ] T120 [US7] Write `../memo-v2/scripts/memo-migrate-backfill` per contracts/migration-cli.md — the full per-memo pipeline (fetch/classify/retag/provenance-link/split/merge/redirect/set-bi-temporal/write). Includes per-class rules from migration-cli.md §"Per-class backfill rules". Marker `001/FR-039`.
-- [ ] T121 [US7] Write `../memo-v2/scripts/memo-migrate-verify` — post-check per contracts/migration-cli.md §"Post-migration verification". Marker `001/FR-039`.
-- [ ] T122 [US5] [P] Extend backfill script to preserve v1 bi-temporal semantics — set `valid_from = v1.created_at` and `valid_until = NULL` for every migrated memo. Marker `001/FR-002`.
-- [ ] T123 [US7] Write `../memo-v2/tests/integration/test_migration_backfill.py` — migrate a synthetic 200-memo corpus covering every v2 class; assert all migrated with correct class assignments + provenance where inferrable + duplicates collapsed. Marker `001/FR-039`.
-- [ ] T124 [US7] [P] Write `../memo-v2/tests/integration/test_migration_matt_sack_cluster.py` — reproduce the Matt-Sack duplicate cluster case; verify collapse to single canonical + redirects for the other IDs. Marker `001/FR-012 001/FR-039`.
+- [X] T120 [US7] Write `../memo-v2/scripts/memo-migrate-backfill` per contracts/migration-cli.md — the full per-memo pipeline (fetch/classify/retag/provenance-link/split/merge/redirect/set-bi-temporal/write). Includes per-class rules from migration-cli.md §"Per-class backfill rules". Marker `001/FR-039`.
+- [X] T121 [US7] Write `../memo-v2/scripts/memo-migrate-verify` — post-check per contracts/migration-cli.md §"Post-migration verification". Marker `001/FR-039`.
+- [X] T122 [US5] [P] Extend backfill script to preserve v1 bi-temporal semantics — set `valid_from = v1.created_at` and `valid_until = NULL` for every migrated memo. Marker `001/FR-002`.
+- [X] T123 [US7] Write `../memo-v2/tests/integration/test_migration_backfill.py` — migrate a synthetic 200-memo corpus covering every v2 class; assert all migrated with correct class assignments + provenance where inferrable + duplicates collapsed. Marker `001/FR-039`.
+- [X] T124 [US7] [P] Write `../memo-v2/tests/integration/test_migration_matt_sack_cluster.py` — reproduce the Matt-Sack duplicate cluster case; verify collapse to single canonical + redirects for the other IDs. Marker `001/FR-012 001/FR-039`.
 
 **Phase 7 gate**:
 
@@ -231,17 +584,132 @@ cd ../memo-v2 && speckit-trace --require-full \
 
 FR-038 (deployable in separate worktree) + FR-040 (reversibility) satisfied by the Phase 1 worktree setup + this phase's audit-log; add markers for those to the migration scripts' module docstrings.
 
+**Phase 7 gate: ✅ PASS (2026-07-30)** — FR-038/039/040 FULL, 0 dangling, exit 0.
+Full suite **376 passed**. (FR-038/FR-040 markers landed in
+`src/memo/migrate/__init__.py` per the note above.)
+
+### Phase 7 implementation notes
+
+1. **v1 is read-only, structurally.** Every v1 access in the migration package
+   is a GET. That is what makes FR-040 reversibility a property rather than a
+   procedure someone has to follow correctly — rollback only ever touches v2.
+2. **`--dry-run` is the DEFAULT; committing needs an explicit `--commit`.** A
+   migration of the fleet's knowledge base should not be one typo away from
+   running.
+3. **Migration does NOT use `db.store`.** That stamps `created_at = now`, and a
+   migration that rewrites every memo's creation date destroys the recency
+   signal the entire FR-013 ranking formula depends on. Rows are inserted with
+   v1's timestamps preserved, `valid_from = v1.created_at` (T122/FR-002).
+4. **Two different dedup rules, on purpose.** Migration uses R-13 (cosine ≥0.90
+   AND title 4-gram ≥60%) because both embeddings are in hand. The read path
+   uses content-word Jaccard because it only has each candidate's similarity to
+   the QUERY, not to the other candidates. Neither rule works in the other's
+   position.
+5. **Retired duplicate ids get redirects.** Collapsing a cluster without them
+   would 404 every reference ever written to the retired ids.
+6. **Classification fails toward `legacy-unattributed`, never toward a guess.**
+   A memo wrongly classed `constitutional` is force-injected into every session
+   on the fleet; one parked in legacy-unattributed just waits for a human. That
+   asymmetry decides every judgement call in `classify.py` — which is why
+   `constitutional` needs an explicit tag, or an operator-authority tag WITH
+   matching content.
+7. **Provenance is never invented.** An invented block is worse than none: it
+   makes an unsourced memo look verified.
+8. **One bad memo cannot strand the run.** Per-memo failures become a `skip`
+   audit line and the corpus continues.
+9. **The deliberate `valid_from=0` specimen is now used as a test fixture** —
+   `test_verify_catches_the_valid_from_zero_specimen` asserts verification
+   notices it, which is what that row was preserved for.
+
 ---
 
 ## Phase 8 (== plan Phase G) — Soak test (RUNTIME PHASE — not dev)
 
-- [ ] T130 [US8] Author `../memo-v2/scripts/memo-soak-test` — driver script that spawns background test agents via AgentController with a synthetic + real-workload query stream against the ported v2 corpus. Instrumentation captures per-SC metrics per quickstart.md §"SC measurement methodology". Marker `001/FR-035` (uses the mediator-audit-log).
-- [ ] T131 [US7] Run the full backfill: `scripts/memo-migrate-backfill --v1-url http://server4:8000 --v2-url http://server4:8001 --audit-log /mnt/backup/memo/migration-YYYY-MM-DD/audit.jsonl` — 7339 memos processed. Deliverable: SC-005 (dupe clusters → 0) + SC-009 (≥95% classified) measurable.
+- [X] T130 [US8] Author `../memo-v2/scripts/memo-soak-test` — driver script that spawns background test agents via AgentController with a synthetic + real-workload query stream against the ported v2 corpus. Instrumentation captures per-SC metrics per quickstart.md §"SC measurement methodology". Marker `001/FR-035` (uses the mediator-audit-log).
+- [ ] T131 [US7] ✅ unblocked (SC-009 finding resolved above) — operator/runtime action, not run unattended. Run the full backfill: `scripts/memo-migrate-backfill --v1-url http://server4:8000 --v2-url http://server4:8001 --audit-log /mnt/backup/memo/migration-YYYY-MM-DD/audit.jsonl` — 7339 memos processed. Deliverable: SC-005 (dupe clusters → 0) + SC-009 (≥95% classified) measurable.
 - [ ] T132 [US7] Run `scripts/memo-migrate-verify` — must exit 0 or investigate failing checks.
-- [ ] T133 Wire Claude Code hooks on SERVER4 ONLY (edit `~/.claude/settings.json` per contracts/claude-code-hooks.md). DO NOT wire on office/server5 yet.
-- [ ] T134 Flip a single non-production test session to v2 MCP via `scripts/memo-mcp-flip --session <test> --to v2`; round-trip validate (store, recall, injection). Flip back; verify clean resume on v1.
-- [ ] T135 [US8] Kick off soak test: `scripts/memo-soak-test --duration <operator-chosen>` — writes report to `/tmp/memo-soak-report-<date>.md`.
-- [ ] T136 Send soak report to Ben (DM slack:U0NGEHS2J with the report body). Confidence-gate decision belongs to operator; no automated pass/fail here.
+- [ ] T133 ⏸️ (operator/runtime — not run unattended) Wire Claude Code hooks on SERVER4 ONLY (edit `~/.claude/settings.json` per contracts/claude-code-hooks.md). DO NOT wire on office/server5 yet.
+- [ ] T134 ⏸️ (operator/runtime — not run unattended) Flip a single non-production test session to v2 MCP via `scripts/memo-mcp-flip --session <test> --to v2`; round-trip validate (store, recall, injection). Flip back; verify clean resume on v1.
+- [ ] T135 ⏸️ (operator/runtime — not run unattended) [US8] Kick off soak test: `scripts/memo-soak-test --duration <operator-chosen>` — writes report to `/tmp/memo-soak-report-<date>.md`.
+- [ ] T136 ⏸️ (operator/runtime — not run unattended) Send soak report to Ben (DM slack:U0NGEHS2J with the report body). Confidence-gate decision belongs to operator; no automated pass/fail here.
+
+### ✅ RESOLVED 2026-07-30 — was: SC-009 unachievable as specified
+
+**Measured against the REAL v1 corpus (1000-memo sample, 2026-07-30) with
+`scripts/memo-migrate-preview`:**
+
+| | value |
+|---|---|
+| would land in `legacy-unattributed` | **86.8%** |
+| SC-009 budget | **≤5%** |
+| provenance reconstructible | **6.0%** |
+| memos with ANY provenance-ish signal | ~23% |
+| memos with a real LOCATOR (msg_id / thread_id / session uuid) | ~3% |
+
+**Why.** Two specified rules collide on this data:
+* **C-07 / data-model.md**: `class = fact` REQUIRES provenance, else
+  → `legacy-unattributed`.
+* **SC-009**: ≤5% may be `legacy-unattributed`.
+
+The v1 corpus simply does not carry provenance. Its tag vocabulary records an
+origin KIND (`assistant-sourced`, `git-sourced`, `host-server5`) but almost
+never a LOCATOR. So ~87% of memos are facts we cannot attribute, and C-07 sends
+every one of them to a class that does not inject and awaits human review.
+Applied literally, the migration would file 6,000+ memos as
+"needs human triage" — a technically-passing migration that is a practical
+failure.
+
+**What was already done** (2026-07-30): `reconstruct_provenance` was broadened
+to recognise the corpus's real locators — `email-sourced` + metadata
+`msg_id`/`thread_id`, bare URLs in content, and `session-<hex>` handles. That
+moved legacy 91.6% → 86.8% and provenance 2.4% → 6.0%. It is an honest
+improvement and nowhere near enough, because the data is not there.
+
+**What was deliberately NOT done**: C-07 was not relaxed to make the number
+pass. Provenance was not synthesised from origin-kind tags. Both would game
+SC-009 rather than satisfy it, and a fabricated provenance block is worse than
+an absent one — it makes an unsourced memo look verified.
+
+**OPERATOR DECISION REQUIRED — three options:**
+1. **Relax SC-009** to match reality (e.g. ≤5% of memos *that have
+   reconstructible provenance*, or a flat "≤90% legacy on first pass, driven
+   down over time"). Cheapest; admits the corpus is what it is.
+2. **Relax C-07** so a fact without provenance stays `class=fact` with
+   `provenance: null`. Keeps memos injectable/recallable, loses the
+   attribution guarantee Principle III wants.
+3. **Add an origin-only provenance shape** to the data model (e.g.
+   `{origin_kind: "assistant-sourced", host: "server5"}` with no locator), so
+   "we know where it came from but not exactly where" is representable.
+   Most work, most honest, and probably the right long-term answer.
+
+**OPERATOR DECISION (2026-07-30): option 2 — loosen the rule.** *"as facts get
+proven further we will reprovenance them, and as memos get outdated they'll fall
+by the wayside … we should not be heavily penalizing the vast bulk of our corpus
+which is actually good facts but don't have a readily known provenance because we
+haven't done the record keeping of it yet."*
+
+**Implemented** (see research.md **R-18**): an unattributed fact stays
+`class = fact` with `provenance: null` and gains a **`provenance-pending`** tag,
+in BOTH the migration backfill and live storage-mediator writes.
+
+The tag was added beyond the literal decision because the operator's plan
+depends on re-attributing these later — without a marker, "the memos that need
+provenance" is unfindable the moment they look like attributed ones.
+
+**Re-measured on the real corpus:**
+
+| | before | after |
+|---|---|---|
+| `legacy-unattributed` | 86.8% | **0.0%** |
+| usable `fact` | ~5% | **92%** |
+| tagged `provenance-pending` | — | 868 / 1000 |
+| provenance coverage | 6.4% | 6.4% (now a HEALTH metric, not a gate) |
+
+SC-009 now passes meaningfully: `legacy-unattributed` means "no usable signal",
+not "we didn't write down where this came from".
+
+**T131 is unblocked**, but still an operator/runtime action — not run
+unattended.
 
 **Phase 8 gate**: OPERATOR CONFIDENCE GATE (C-08 step 4). Not a `speckit-trace` gate — this is a human review of the soak report. No cutover shape is committed until Ben approves.
 
@@ -262,7 +730,23 @@ FR-038 (deployable in separate worktree) + FR-040 (reversibility) satisfied by t
 ## Final Phase — Polish & cross-cutting
 
 - [ ] T150 [P] Author `~/.claude/skills/trace-driven-tasks/SKILL.md` — reusable skill capturing the marker-discipline + phase-gate authoring pattern this build used (per operator directive; coordinate with speckit session for convention-doc review before publishing).
-- [ ] T151 [P] Update `.specify/memory/constitution.md` version footer if any principle text was tightened during the build.
+- [x] T151 [P] Update `.specify/memory/constitution.md` version footer if any principle text was tightened during the build.
+      **DONE 2026-07-31. The condition was met and the footer was stale.**
+      Principle II was redefined on 2026-07-30 by operator directive (`1c3e356`)
+      — "deletion is earned, not forbidden" replacing "only operators can refute
+      facts" — and said so in its own body, while the footer still read
+      `Version: 1.3.0 | Last Amended: 2026-07-29`. The version stamp contradicted
+      the document it stamped.
+      Bumped to **2.0.0**, not 1.4.0. The three prior bumps were expansions and
+      additions (MINOR); this one REMOVES a constraint — agents formerly
+      forbidden to refute may now delete under stated rules — so anything written
+      against the old rule is no longer governed by it. *If the operator reads
+      that as MINOR it is a one-character change; the reasoning is recorded in
+      the footer comment so the call is reviewable rather than silent.*
+      Also annotated `plan.md`'s Constitution Check, which was gated against
+      v1.3.0: it is deliberately NOT re-run, because the amendment is strictly
+      more permissive and nothing that passed a stricter rule can fail a looser
+      one. A future *tightening* amendment would require re-running it.
 - [ ] T152 Run full `speckit-trace --strict` across the whole feature — no PARTIAL, no INVISIBLE, no dangling markers, no unknown FR references. Whole-feature FULL rating.
 - [ ] T153 Update `~/.claude/CLAUDE.md` `## Memo` section (if applicable) with any operator-facing changes to `/recall` / `/memorize` command semantics.
 - [ ] T154 [P] Retire memo-minder Phase G cross-host sync + Phase A.6.5 reconcile-lite entries — they become no-ops in the single-global + auditor world.

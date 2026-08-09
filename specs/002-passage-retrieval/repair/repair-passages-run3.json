@@ -1,0 +1,851 @@
+{
+ "path": "passages",
+ "rows": [
+  {
+   "id": "b687621c-d92b-47f5-920b-4866c1db1403",
+   "band": "0-200",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "d12e3c56-ea20-4d8c-97ea-3bc7b0d2e2ba",
+   "band": "0-200",
+   "rank": null,
+   "rank1": false,
+   "top5": false,
+   "absent": true
+  },
+  {
+   "id": "683cf0b9-5ec1-461f-a55e-14dc9aca7b6d",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "324f7358-3181-4e1e-9253-601ea2fb7765",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "6b92be73-942c-4b72-956b-eca7cad36d09",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "32e6d1cb-01cc-47cd-8c8e-059cde3674ef",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "47be20cf-6773-47dd-a29b-87692ff81403",
+   "band": "500-1000",
+   "rank": 3,
+   "rank1": false,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "8898fcb8-7f75-48f5-b4bf-e46085f4078d",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "463a6c8b-25d6-493e-a96e-d5fef784a75f",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "f74bd281-c696-49ad-932a-28df92d69d9e",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "cb939e4b-7bab-47d8-958f-3796fd6d2b56",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "6082927b-45b1-428e-a84f-b74a07c6e5b1",
+   "band": "500-1000",
+   "rank": 1,
+   "rank1": false,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "6a3d5aec-3d94-4393-a1cb-cc63ca46fd91",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "38a8b22e-77a6-43ba-a4c1-ff5e168cf8a8",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "835fdbe4-1508-4a33-bc2c-990269a2e656",
+   "band": "500-1000",
+   "rank": 1,
+   "rank1": false,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "d0647372-43b3-437c-bd2e-8b18e18a1b0e",
+   "band": "500-1000",
+   "rank": 1,
+   "rank1": false,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "ed9a620c-cbfd-4033-9315-2e4a11c8b672",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "85f9a998-1e0e-4940-a932-aec61ecd8438",
+   "band": "500-1000",
+   "rank": 1,
+   "rank1": false,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "d9c9d621-3aac-4f56-b4f0-e1b4c2f0b2f0",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "3f072cdc-08ff-47fe-bd8b-e9aeefabaa0c",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "7226593c-8f27-4e00-8108-845ab426eee4",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "fdac7e13-5154-46a7-a682-35d139303148",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "8afd1980-95ef-42b6-b758-d5f68287abfe",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "6bca43f2-48d6-4c93-a752-2725ebbf1448",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "885d4d49-ecc7-4078-bb5d-eaa30f0b3b18",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "70184707-8e77-4157-884c-c71f6fd30ace",
+   "band": "500-1000",
+   "rank": 1,
+   "rank1": false,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "d0332390-47ea-41c1-a454-03cecc4f9f28",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "194614b8-ef59-4647-aa60-5c5383205846",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "fa46e7c5-5148-4da4-9b09-ed07ae7911e9",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "16f1b191-9261-40c1-81e4-f297c022bb51",
+   "band": "500-1000",
+   "rank": 6,
+   "rank1": false,
+   "top5": false,
+   "absent": false
+  },
+  {
+   "id": "efebab2f-1002-4943-abdc-7ed68532f3e1",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "5c5a4334-ff62-4723-a9bd-c406a324ee1e",
+   "band": "500-1000",
+   "rank": 4,
+   "rank1": false,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "70f369fc-3438-4d36-9b45-cb077fe737c2",
+   "band": "500-1000",
+   "rank": 1,
+   "rank1": false,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "3d0d42fa-1198-4e4b-a4a6-8ca60d8251dc",
+   "band": "500-1000",
+   "rank": 9,
+   "rank1": false,
+   "top5": false,
+   "absent": false
+  },
+  {
+   "id": "81df496f-8159-4026-98b4-d081c0d00ff6",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "572acf34-2d75-48c5-8c99-fcb913184032",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "e8843fe9-40dd-454c-9c34-47cb8395beb7",
+   "band": "500-1000",
+   "rank": null,
+   "rank1": false,
+   "top5": false,
+   "absent": true
+  },
+  {
+   "id": "0b1e5af9-a542-4ebc-9f13-b6f476527a02",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "cc6dce9f-93ec-4ea1-8229-179ada84bc17",
+   "band": "500-1000",
+   "rank": 1,
+   "rank1": false,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "6244d9e7-fd00-46e4-a76c-54b5200bb013",
+   "band": "500-1000",
+   "rank": null,
+   "rank1": false,
+   "top5": false,
+   "absent": true
+  },
+  {
+   "id": "33962c20-cc25-4ee5-a652-9a0445fbbad3",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "e9215dba-9a23-4631-a207-2953a80b3611",
+   "band": "500-1000",
+   "rank": 1,
+   "rank1": false,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "cd97c46d-d43a-4ae3-847e-c2915b5f6615",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "1cf7c546-7de4-4ca8-8e07-ab7d07d2ed8b",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "a77a4c97-637f-407d-bca8-515d788e17f1",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "921b2fb9-064b-4796-bf56-91b95ae7f5e1",
+   "band": "500-1000",
+   "rank": null,
+   "rank1": false,
+   "top5": false,
+   "absent": true
+  },
+  {
+   "id": "c8554710-eafb-4843-93b5-3916893f7ce5",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "bed35e12-efad-4b2a-abcb-bcfa9265a50d",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "7de51e84-74b2-4fe7-8ec3-9c478d9efa17",
+   "band": "500-1000",
+   "rank": 9,
+   "rank1": false,
+   "top5": false,
+   "absent": false
+  },
+  {
+   "id": "9acc7fe4-abfa-47cf-9f4b-d54af498921c",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "d3c4bf7d-3320-4a5a-8848-97aa5874e835",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "c92da6b7-64f9-450a-88d5-fb525547fbd9",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "b1f30c8b-9723-4c31-a673-f41a50a734d4",
+   "band": "500-1000",
+   "rank": null,
+   "rank1": false,
+   "top5": false,
+   "absent": true
+  },
+  {
+   "id": "e5a6f662-12cb-4430-b581-09c9c3aea7f6",
+   "band": "500-1000",
+   "rank": null,
+   "rank1": false,
+   "top5": false,
+   "absent": true
+  },
+  {
+   "id": "c36aa6f6-70de-4d90-b52b-01e24b6c8fb6",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "03375155-4476-40f5-a7a2-586f24f91adc",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "6b6b14fe-24d7-4be5-ac94-000e3f2cff3a",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "00662aa5-8704-4d2f-9700-c921c34a2191",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "6ba4b869-2d15-48c9-bd6e-26237de32f8e",
+   "band": "500-1000",
+   "rank": null,
+   "rank1": false,
+   "top5": false,
+   "absent": true
+  },
+  {
+   "id": "fe5439d0-262e-4701-ac89-4705746281c1",
+   "band": "500-1000",
+   "rank": 3,
+   "rank1": false,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "e82f9a60-39c8-48ad-b45d-41a5c7406471",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "758442cc-eade-4d52-8af6-46897e5c26bd",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "8e00eae0-4bfd-4a2c-836e-d89a9e9fa898",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "f52f6944-981a-42ef-8c41-80dc5d401e35",
+   "band": "500-1000",
+   "rank": 5,
+   "rank1": false,
+   "top5": false,
+   "absent": false
+  },
+  {
+   "id": "a7e3587c-2afe-4de2-80d1-b43594c991d1",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "74fc8610-9847-44b7-8b4e-977bf3d7fb0b",
+   "band": "500-1000",
+   "rank": 1,
+   "rank1": false,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "445a17de-8cdd-417b-9d39-787e888dabb8",
+   "band": "500-1000",
+   "rank": null,
+   "rank1": false,
+   "top5": false,
+   "absent": true
+  },
+  {
+   "id": "9219aebe-4805-4ab4-b27e-4ca450727808",
+   "band": "500-1000",
+   "rank": 1,
+   "rank1": false,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "c87a1dfc-1303-4868-8bb5-ce7cc2f7cfa9",
+   "band": "500-1000",
+   "rank": 2,
+   "rank1": false,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "1b3a7417-3df8-496e-bddf-22430ecb3d8f",
+   "band": "500-1000",
+   "rank": null,
+   "rank1": false,
+   "top5": false,
+   "absent": true
+  },
+  {
+   "id": "49112cc0-bdb4-4fff-a1b3-9c27273c87d6",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "7710c10f-5867-4bc0-89ff-02da0381eb75",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "b2ea65f2-7ce9-4ebc-853d-81b19a189a61",
+   "band": "500-1000",
+   "rank": null,
+   "rank1": false,
+   "top5": false,
+   "absent": true
+  },
+  {
+   "id": "d53108b4-799e-45ee-b9c2-5da0d14bba61",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "f7efd74a-ed39-4600-a91c-247373df1998",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "ddda3745-b90e-462a-8f5e-d77901711100",
+   "band": "500-1000",
+   "rank": 2,
+   "rank1": false,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "4dc45872-1122-42a1-9862-77fc8b040ff0",
+   "band": "500-1000",
+   "rank": 6,
+   "rank1": false,
+   "top5": false,
+   "absent": false
+  },
+  {
+   "id": "135f339c-56c6-4c5a-95e9-db9fd5f71b57",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "feaa80a1-0422-4745-a121-b209e6d377f4",
+   "band": "500-1000",
+   "rank": 1,
+   "rank1": false,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "64529fb0-7843-4bbb-a071-46baea1cd2c0",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "c4eee9d2-1d5d-4554-a3ca-26cc154185c4",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "93682549-160c-4288-b90b-44aaa9ce423f",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "b792b1d0-7f24-43e5-b247-bf985113c1d4",
+   "band": "500-1000",
+   "rank": 1,
+   "rank1": false,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "d09b88a6-a035-4e66-910d-082d2ac322c7",
+   "band": "500-1000",
+   "rank": 1,
+   "rank1": false,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "3a8530ea-f667-45e1-8c31-f0c482eb9d11",
+   "band": "500-1000",
+   "rank": 1,
+   "rank1": false,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "b32b6289-a958-4973-b080-837141f78a81",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "783cb78c-f3af-4fe2-9307-3a9f0f2acda5",
+   "band": "500-1000",
+   "rank": null,
+   "rank1": false,
+   "top5": false,
+   "absent": true
+  },
+  {
+   "id": "42ac7bbe-7ef0-4c27-84d6-336445038b97",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "4bb77d4f-c97d-4965-b660-d791a906663e",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "4a1e07d9-174c-4839-9e86-9a7120fd84df",
+   "band": "500-1000",
+   "rank": 2,
+   "rank1": false,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "81c7abaf-0290-47af-969f-27e8f7199ac0",
+   "band": "500-1000",
+   "rank": 5,
+   "rank1": false,
+   "top5": false,
+   "absent": false
+  },
+  {
+   "id": "7dbdc729-1d68-4e5e-a68a-67b970786751",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "de1f56fa-9b31-4e73-9aec-62bb0d69b42c",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "5ec23504-39cd-4a1b-a48c-812114f308e6",
+   "band": "500-1000",
+   "rank": 1,
+   "rank1": false,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "b3a3e0fb-48e6-4a62-b8af-eb4fb5cf69de",
+   "band": "500-1000",
+   "rank": 1,
+   "rank1": false,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "326f6a20-0777-4456-a9fb-2ee40dc4186c",
+   "band": "500-1000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "e182273b-223f-4482-8e8f-71ad876c91ef",
+   "band": "500-1000",
+   "rank": null,
+   "rank1": false,
+   "top5": false,
+   "absent": true
+  },
+  {
+   "id": "f8330110-61a5-42d5-bd45-420bf548669d",
+   "band": "1000-2000",
+   "rank": null,
+   "rank1": false,
+   "top5": false,
+   "absent": true
+  },
+  {
+   "id": "6c4a7d43-1f35-49a9-8a97-39db1c446ad6",
+   "band": "1000-2000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "7cce024f-24c8-49d8-896a-1570b170879a",
+   "band": "1000-2000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "92e656f4-30af-470e-9a97-fbd9e7fb2531",
+   "band": "1000-2000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "8337c338-6ea8-4dee-bd8c-3200872ab87e",
+   "band": "1000-2000",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "3662c7c9-1b0d-42f4-a8b4-69189a240526",
+   "band": "1000-2000",
+   "rank": 2,
+   "rank1": false,
+   "top5": true,
+   "absent": false
+  }
+ ],
+ "by_band": {
+  "0-200": {
+   "n": 2,
+   "rank1": 1,
+   "top5": 1,
+   "absent": 1
+  },
+  "500-1000": {
+   "n": 95,
+   "rank1": 56,
+   "top5": 78,
+   "absent": 11
+  },
+  "1000-2000": {
+   "n": 6,
+   "rank1": 4,
+   "top5": 5,
+   "absent": 1
+  }
+ },
+ "still_failing": 0,
+ "not_in_corpus": []
+}

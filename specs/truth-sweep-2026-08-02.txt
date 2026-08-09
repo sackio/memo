@@ -1,0 +1,579 @@
+==============================================================================
+⛔ CORRECTION 2026-08-03 — THIS REPORT'S COUNTS ARE WRONG AND IT CANNOT BE RE-RUN
+==============================================================================
+Three defects, found while acting on the .42:32000 line. Read them before
+quoting any number below.
+
+1. UNDERCOUNT. This file reports `[26 claims / 19 memos] 192.168.1.42:32000`.
+   Re-derived directly against the live v1 corpus (7,955 memos):
+   41 claims across 28 memos. Both figures are low.
+
+2. SILENT TRUNCATION. Every `memos :` line prints at most SIX ids and then
+   stops — no ellipsis, no "+N more" — directly beneath a header stating a
+   larger count. The output gives a reader no way to see the cap. A bounded
+   result rendered as a complete one.
+
+3. ⛔ NO GENERATOR. The script that produced this file was an inline heredoc,
+   not a committed tool. It is not in scripts/ and not in any scratchpad file.
+   So this report cannot be re-run, re-checked, or repaired — only replaced.
+   That is why defects 1 and 2 are being annotated here rather than fixed.
+
+⇒ The PROBE RESULTS below (what answered, what refused, what timed out) are
+  still good — they were measured. It is the AGGREGATION that is unreliable.
+  Treat every count as a lower bound and every memo list as a sample.
+
+📌 See specs/repoint-42-32000-REPORT.md for the corrected .42:32000 analysis,
+  including why that repoint must not be batched.
+==============================================================================
+
+FIRST TRUTH SWEEP — failure list, 2026-08-02
+==============================================================================
+READ-ONLY. Nothing in the corpus was modified. There is no --fix flag.
+
+corpus                      7,336 memos
+memos carrying >=1 claim    1,479  (20.2%)
+claims extracted            4,153
+  probeable                 2,664
+  unprobeable (counted)     1,489
+claims PASS                 2,311
+claims FAIL/TIMEOUT         344
+
+⭐ WHAT THE FAILURES ACTUALLY ARE
+------------------------------------------------------------------------------
+   173   50.3%   RESIDUAL — worth a human look
+   122   35.5%   memo itself says the address is old, deleted or wrong
+    30    8.7%   subnet not routed from server4 (0 passes in that /24)
+    14    4.1%   memo itself says it is down
+     5    1.5%   historical / incident record
+
+⇒ 173 of 344 failing claims (50%) are not already explained by the memo's own text
+  or by an unrouted subnet. Everything else is the memo being RIGHT.
+
+subnets with zero reachable targets from server4: 100.68.35.0/24, 192.168.2.0/24, 192.168.30.0/24, 192.168.5.0/24
+  (a whole subnet failing is one routing question, not N stale memos)
+
+==============================================================================
+RESIDUAL LIST — distinct targets, most-cited first
+==============================================================================
+
+[26 claims / 19 memos]  192.168.1.42:32000
+   observed: tcp/32000 ConnectionRefusedError: [Errno 111] Connection refused
+   context : Deployment: `kokoro-tts` in `curator` namespace on barn k8s cluster. - Image: `192.168.1.42:32000/kokoro-tts:latest` - Port: 8880 (FastAPI/uvicorn) - Dockerfile: `~/code/curator/Dockerfile.kokoro` - W
+   memos   : 0d999718, 191c49e1, 219ca8a7, 21fddad4, 24eee687, 3ec38750
+
+[14 claims / 7 memos]  192.168.0.112
+   observed: no icmp reply; no tcp on 22,80,443,4999,8080
+   context : . `ip neigh` shows `INCOMPLETE` indefinitely. - Workers CAN reach `192.168.0.109` (server4 SFP+ port 25) and `192.168.0.112` (server5 SFP+ port 26) — same switch, similar ports. - Dells (server1, serv
+   memos   : 1888ef54, 348ec433, 7d274710, 85596dd6, b23d55db, fee650af
+
+[7 claims / 5 memos]  192.168.0.250
+   observed: no icmp reply; no tcp on 22,80,443,4999,8080
+   context : Property has 3 SPAN smart panels. Network: SPAN panel at 192.168.0.250 (as of 2026-07-09 session). Other panels also present. Integration status (as of 2026-07-11): - SPAN officia
+   memos   : 84b231f6, 8f51ac49, 955f9407, af710d82, bcec6222
+
+[6 claims / 4 memos]  192.168.1.44
+   observed: no icmp reply; no tcp on 22,80,443,4999,8080
+   context : 26-06-29: Ben's Senville AC ("barn") is now controllable in Home Assistant via midea_ac_lan, local control to 192.168.1.44. The weeks-stuck integration is done. Key facts + the technique that cracked 
+   memos   : 1ec6b0dd, 7710c10f, 8284a06f, d330e362
+
+[6 claims / 5 memos]  192.168.1.230
+   observed: no icmp reply; no tcp on 22,80,443,4999,8080
+   context : s | Host | eth0 | WiFi | Pico serial | |------|------|------|-------------| | pi-tester (a) | 192.168.1.244 | 192.168.1.230 | E66540F0A36D7A2D | | pi5-cable-b (b) | 192.168.1.245 | 192.168.1.225 | E66
+   memos   : 1f441c86, 926a416a, bd91db60, bdeb6e38, f21c25d9
+
+[5 claims / 5 memos]  192.168.1.42:31382
+   observed: tcp/31382 timeout
+   context : corrected.] ⚠️ QFC_L1_REDIS_URL FIX (the recipe e8127582 had the wrong URL): • WRONG (in e8127582): redis://192.168.1.42:31382 (NodePort) — TIMES OUT from a host (server5/s3), data confirmed empirical
+   memos   : 37102df7, 473eec3c, a7aa0f00, b25d9172, e8127582
+
+[4 claims / 2 memos]  192.168.1.2
+   observed: no icmp reply; no tcp on 22,80,443,4999,8080
+   context : 19-LM (eth0) - **Software**: VyOS 2026.03.18-0028-rolling - **SSH**: ssh -p 4999 ben@192.168.1.1 (LAN) or ben@192.168.1.2 (management) - **Management IP**: 192.168.1.2/23 (static, eth0 onboard I219-LM
+   memos   : 05ac7b57, 8de981a0
+
+[3 claims / 2 memos]  192.168.1.98
+   observed: no icmp reply; no tcp on 22,80,443,4999,8080
+   context : ress restored ### Laura Wireless Spectrum Routing Added - Action: Added PBR rule 6 for Laura wireless device 192.168.1.98 to route via Spectrum - Commit: feat/server4-enp65s0-tuning branch (8c9498f, r
+   memos   : 618f08bc, 77f8a2a8
+
+[3 claims / 3 memos]  192.168.1.206
+   observed: no icmp reply; no tcp on 22,80,443,4999,8080
+   context : cus camera + Waveshare 1.3" LCD HAT (240x240, SPI) - **IP**: 192.168.0.235 (DHCP; reserved as `kiosk-zero` at 192.168.1.206 on LAN side) - **Project codename**: zerocam — Pi-based viewfinder/live came
+   memos   : 0c268eaf, 0d999718, 735cee8d
+
+[3 claims / 3 memos]  192.168.1.166
+   observed: no icmp reply; no tcp on 22,80,443,4999,8080
+   context : Garden water stack: ``` Wall outlet └── Kasa HS103 "garden-water" (192.168.1.166, MAC 6c:5a:b0:5d:02:f3) — power switch └── NodeMCU/ESP8266 "garden-water-controller" (192.168.1.82, M
+   memos   : 6470c988, a4476b27, f88be3e6
+
+[3 claims / 3 memos]  192.168.1.155
+   observed: no icmp reply; no tcp on 22,80,443,4999,8080
+   context : d a new false positive: in markdown tables, the regex matched `<host>` in ANY cell, so `| gpu1-tesla | gpu1 | 192.168.1.155 |` flagged gpu1=.155 (wrong — that row's subject is gpu1-tesla, gpu1 is just
+   memos   : 0d999718, 735cee8d, f8330110
+
+[3 claims / 2 memos]  192.168.10.10
+   observed: no icmp reply; no tcp on 22,80,443,4999,8080
+   context : (Omada pushes config to switches+APs in ~30s), a test phone joining `sfw_guest` should get a lease like: ``` 192.168.10.10 1a:81:04:53:41:bb active ... GUEST ... phone-ben ``` Check with: `ssh -p 4999
+   memos   : 59bae7ee, 77c9901f
+
+[2 claims / 2 memos]  http://192.168.1.168:3000/broker
+   observed: [Errno 111] Connection refused
+   context : # Broker dashboard: book attribution is wrong. Account layer is fine. Found 2026-07-28 by alpaca, validating http://192.168.1.168:3000/broker against the Alpaca API at Ben's request (relayed via mind)
+   memos   : 91db4b16, f2537ab0
+
+[2 claims / 2 memos]  http://local-llm.barn:8000/v1
+   observed: [Errno -2] Name or service not known
+   context : akes calls to reduce Anthropic weekly limit burn. Endpoint: gpu4:31434 (Ollama native) OpenAI-compat target: http://local-llm.barn:8000/v1 (set OPENAI_BASE_URL) CLI: ollm up / ollm down / ollm chat <m
+   memos   : bcb6edd4, c8fe6eff
+
+[2 claims / 2 memos]  http://192.168.1.42:9876/
+   observed: [Errno 111] Connection refused
+   context : quantum.pushbuild.com is a basic-auth-protected HTTPS reverse proxy to http://192.168.1.42:9876/ (server5 Python static server). htpasswd user: admin (Apache-MD5). LE cert exists. Python static server
+   memos   : 410bdfb2, c1e354c8
+
+[2 claims / 2 memos]  office:8124
+   observed: tcp/8124 ConnectionRefusedError: [Errno 111] Connection refused
+   context : : 5 commits, unpushed (4 pillars + polish) - docs/ARCHITECTURE.md: drafted, uncommitted - Demo: scratch HA on office:8124 - Phase 3 (Stripe) completed June 29 in test mode - Relay live at aloha.pushbu
+   memos   : a48741ed, abbb937f
+
+[2 claims / 2 memos]  192.168.0.174
+   observed: no icmp reply; no tcp on 22,80,443,4999,8080
+   context : "full" at 31 cycles; sensor unreliable (see below) WiFi / Network: - SSID: `sfw_iot_2.4` (IoT 2.4GHz) - IP: 192.168.0.174 (DHCP reservation) - MAC: ac:74:c4:1d:fe:7c - Cloud broker: Maytronics AWS IoT
+   memos   : b50c8259, dc43db2f
+
+[2 claims / 1 memos]  192.168.1.18
+   observed: no icmp reply; no tcp on 22,80,443,4999,8080
+   context : pectations. ## Deployment details (2026-06-05) | Field | Value | |---|---| | Hostname | pi-zerocam | | IP | 192.168.1.18 (VyOS DHCP reservation pinned) | | WiFi SSID | sfw_iot_2.4 | | SSH | port 4999,
+   memos   : a6885100
+
+[2 claims / 2 memos]  127.0.0.1:9010
+   observed: tcp/9010 ConnectionRefusedError: [Errno 111] Connection refused
+   context : port-publishing - mcp-server container's `NetworkSettings.Ports` was empty `{}` despite compose specifying `127.0.0.1:9010` + `192.168.1.199:9010`. - iptables NAT had no entry for 9010; container had 
+   memos   : 1ba20b98, 2c15def4
+
+[2 claims / 2 memos]  192.168.0.224
+   observed: no icmp reply; no tcp on 22,80,443,4999,8080
+   context : s (firstfloor 192.168.1.19, upstairs 192.168.0.216, basement 192.168.0.220, backyard 192.168.0.222, frontyard 192.168.0.224). Barn: 192.168.0.221 (ap-barn-outdoor). - Verify RSSI before mounting any a
+   memos   : 09190cbd, 8209c06e
+
+[2 claims / 2 memos]  192.168.1.225
+   observed: no icmp reply; no tcp on 22,80,443,4999,8080
+   context : ---| | pi-tester (a) | 192.168.1.244 | 192.168.1.230 | E66540F0A36D7A2D | | pi5-cable-b (b) | 192.168.1.245 | 192.168.1.225 | E66540F0A34D9A2D | ## KVM topology - Pico-A UART wired to tester-a GPIO, U
+   memos   : bdeb6e38, f21c25d9
+
+[2 claims / 2 memos]  192.168.0.235
+   observed: no icmp reply; no tcp on 22,80,443,4999,8080
+   context : share 1.3in ST7789VW 240x240 SPI + 5-way joystick + 3 keys. Camera: LEEKWI/Arducam IMX519 16MP autofocus. IP: 192.168.0.235 (DHCP placeholder). MAC: b8:27:eb:b4:47:4e. Code: scripts/setup-pi-zerocam.s
+   memos   : 0c268eaf, f21c25d9
+
+[2 claims / 2 memos]  192.168.1.177
+   observed: no icmp reply; no tcp on 22,80,443,4999,8080
+   context : low (iota controlled lights directly) iota's `BackyardLightsTimer()` toggled 5 Kasa wall switches directly: - 192.168.1.177 — `switch.backyard` - 192.168.1.173 — `switch.outside` - (3 more) Problem: i
+   memos   : 0aebe11c, ac856bbd
+
+[2 claims / 2 memos]  192.168.1.173
+   observed: no icmp reply; no tcp on 22,80,443,4999,8080
+   context : ) iota's `BackyardLightsTimer()` toggled 5 Kasa wall switches directly: - 192.168.1.177 — `switch.backyard` - 192.168.1.173 — `switch.outside` - (3 more) Problem: iota didn't know about HA's sunset sc
+   memos   : 0aebe11c, ac856bbd
+
+[2 claims / 2 memos]  192.168.1.114
+   observed: no icmp reply; no tcp on 22,80,443,4999,8080
+   context : airs (EAP770, 192.168.0.216) — office/upstairs AP Note: Sticky client behavior observed — Pi Zero 2 W kiosk (192.168.1.114, MAC 2C-CF-67-20-21-C4) clung to ap_backyard (outdoor, -72 dBm) even when ap_
+   memos   : 69004388, a21a4e18
+
+[2 claims / 2 memos]  192.168.1.224
+   observed: no icmp reply; no tcp on 22,80,443,4999,8080
+   context : .168) at https://localhost:8043 — requires auth cookie. ## Known Normal Background Traffic - cam-frontporch (192.168.1.224) streams RTSP port 554 at ~100 Mbps internally to NVR receiver at 192.168.0.1
+   memos   : 0195fbae, a16769b8
+
+[2 claims / 2 memos]  192.168.4.10
+   observed: no icmp reply; no tcp on 22,80,443,4999,8080
+   context : server-name 192.168.1.168 set service dhcp-server shared-network-name LAN subnet 192.168.4.0/23 range 0 start 192.168.4.10 set service dhcp-server shared-network-name LAN subnet 192.168.4.0/23 range 0
+   memos   : 23a3538e, a0bdd22d
+
+[2 claims / 2 memos]  127.0.0.1:31379
+   observed: tcp/31379 ConnectionRefusedError: [Errno 111] Connection refused
+   context : twork K8s Pods Pods with hostNetwork: true cannot: - Resolve K8s service DNS (use NodePort instead: redis at 127.0.0.1:31379) - Resolve external hostnames reliably (use S3_ENDPOINT_IP env var: 198.44.
+   memos   : b7bd82a7, cffb67fe
+
+[2 claims / 2 memos]  192.168.1.203
+   observed: no icmp reply; no tcp on 22,80,443,4999,8080
+   context : (192.168.1.57) | 192.168.1.155 | 52:54:00:9c:5e:69 | 470.256.02 | 11.4 | | gpu2-tesla | gpu2 (192.168.1.5) | 192.168.1.203 | 52:54:00:44:33:04 | 470.x | 11.4 | | gpu3-tesla | gpu3 (192.168.1.49) | 192
+   memos   : 0d999718, 735cee8d
+
+[2 claims / 2 memos]  192.168.1.212
+   observed: no icmp reply; no tcp on 22,80,443,4999,8080
+   context : gpu2 (192.168.1.5) | 192.168.1.203 | 52:54:00:44:33:04 | 470.x | 11.4 | | gpu3-tesla | gpu3 (192.168.1.49) | 192.168.1.212 | 52:54:00:6b:9f:26 | 470.x | 11.4 | | gpu4-tesla | gpu4 (192.168.1.47) | 192
+   memos   : 0d999718, 735cee8d
+
+[2 claims / 2 memos]  http://192.168.1.42:30300/bar-generation
+   observed: [Errno 111] Connection refused
+   context : w` — download queues - `dl:completed` — completed set - `dl:failed` — failed sorted set ## Dashboard - URL: http://192.168.1.42:30300/bar-generation - Shows: queue depths, completion count, active wor
+   memos   : 6c8fdafb, 91a43057
+
+[2 claims / 2 memos]  192.168.1.232
+   observed: no icmp reply; no tcp on 22,80,443,4999,8080
+   context : # OctoPrint Integration (Pi Zero 2W) See "OctoPrint Pi Zero 2 W — Setup & Access" memo for full config. - IP: 192.168.1.232, SSH user: pi - API Key: Ii3zGZkFMcndwiu_rH2_Jf8i59Ma4sYzi0rMEpPGfrY - PSU C
+   memos   : 87a4e679, d70b1ee5
+
+[2 claims / 2 memos]  server5:32000
+   observed: tcp/32000 ConnectionRefusedError: [Errno 111] Connection refused
+   context : comes from server5 registry (`192.168.1.42:32000/media-faces:latest`). When server5 is down, locally tagged `server5:32000/media-faces:latest` works if retagged. Use `docker compose up --pull never` t
+   memos   : 4f42a9c5, cf62fb94
+
+[2 claims / 2 memos]  server5:6379
+   observed: tcp/6379 ConnectionRefusedError: [Errno 111] Connection refused
+   context : mory ### Redis - **Deployment**: `redis` (1/1, always running) - **Image**: redis:7.4-alpine - **Address**: server5:6379 (also accessible as `redis` service in-cluster) ## backtest-config ConfigMap (2
+   memos   : 93765684, dead30a5
+
+[1 claims / 1 memos]  server4:3000
+   observed: tcp/3000 ConnectionRefusedError: [Errno 111] Connection refused
+   context : in session-log memos — attention map (2026-07-23 afternoon/evening) Full MVP market attention map dashboard (server4:3000) built from scratch, replacing an unusable extractor whose top "tickers" were 
+   memos   : f3789b65
+
+[1 claims / 1 memos]  https://prod.ecobee.com/api/v1
+   observed: [Errno -5] No address associated with hostname
+   context : i` (nkgilley/python-ecobee-api, v0.3.2) - `request_tokens_web()` does an Auth0 form-post grant with `audience=https://prod.ecobee.com/api/v1` - Returns a JWT (1h TTL) that works against BOTH `api.ecob
+   memos   : a62673cc
+
+[1 claims / 1 memos]  192.168.10.23
+   observed: no icmp reply; no tcp on 22,80,443,4999,8080
+   context : r tick +1 simultaneously at 02:04 2026-07-12. Identified 2026-07-13 via ANTISPOOF-DROP kernel logs: - Source: 192.168.10.23 (guest VLAN 100 device) emitting IGMP multicast to 224.0.0.2 (all-routers) w
+   memos   : 71cd87c1
+
+[1 claims / 1 memos]  192.168.1.168:2055
+   observed: tcp/2055 ConnectionRefusedError: [Errno 111] Connection refused
+   context : service` DISABLED (it was competing on UDP 2055 with source 0.0.0.0:2055) - Custom nfcapd instance: bound to `192.168.1.168:2055` (UDP), writes to /var/cache/nfdump or custom NAS dir - NAS-archive + 9
+   memos   : 454abf26
+
+[1 claims / 1 memos]  192.168.1.140
+   observed: no icmp reply; no tcp on 22,80,443,4999,8080
+   context : R mode) defaults its LAN to 192.168.1.0/24 -- the same as the house LAN. When server5 eno2 pulls a DHCP lease 192.168.1.140/24 from the Starlink router, the kernel auto-installs an on-link 192.168.1.0
+   memos   : 4f8007cd
+
+[1 claims / 1 memos]  127.0.0.1:9090
+   observed: tcp/9090 ConnectionRefusedError: [Errno 111] Connection refused
+   context : s fail from the s5 host: Service ClusterIP 10.152.183.237:9090 (kube-proxy hairpin timeout, pod node-local) + 127.0.0.1:9090 (CNI portmap maps NODE IP only). CORRECT target = http://192.168.1.42:9090/
+   memos   : 24012c0e
+
+[1 claims / 1 memos]  https://care.onemedical.com
+   observed: [Errno -5] No address associated with hostname
+   context : personal-assistant can read from Gmail alone — payload is in-app *Suggested action:* open One Medical app OR https://care.onemedical.com to view Viki's message before Mexico trip (7/22-25). Trip prep 
+   memos   : 45203d54
+
+[1 claims / 1 memos]  192.168.0.149
+   observed: no icmp reply; no tcp on 22,80,443,4999,8080
+   context : -fix discard ``` ## Resolution status (2026-05-21) Deferred — Ben instructed to skip and authorize HA to use 192.168.0.149 directly instead. Router fix logged as task #16 in the server-admin session. 
+   memos   : b52cb50f
+
+[1 claims / 1 memos]  office:24222
+   observed: tcp/24222 ConnectionRefusedError: [Errno 111] Connection refused
+   context : _select_option` on Amazon product pages — triggers bot detection. **Applies to:** unibrowse agent on office (office:24222); browser_realistic_click dispatches via real Chromium user events. **Source:*
+   memos   : 89e035e9
+
+[1 claims / 1 memos]  http://192.168.1.42:3099/library
+   observed: [Errno 111] Connection refused
+   context : er when Ben says. (2) TEMP STANDUP still running on s5 (backend uvicorn 0.0.0.0:8799 + next dev 0.0.0.0:3099, http://192.168.1.42:3099/library Corpus Coverage tab showing at-scale numbers) — EPHEMERAL
+   memos   : ad296010
+
+[1 claims / 1 memos]  192.168.1.42:3010
+   observed: tcp/3010 ConnectionRefusedError: [Errno 111] Connection refused
+   context : I built sorted-pivot + news panels into crates/qf-dashboard (Next.js) — but Ben's LIVE operator dashboard at 192.168.1.42:3010/data is the qf-data-status WEB app (dashboard/web), a DIFFERENT app. VERI
+   memos   : 9161f933
+
+[1 claims / 1 memos]  http://qf-refdata.quantum-feed.svc.cluster.local:9100/refresh
+   observed: [Errno -2] Name or service not known
+   context : ml` — `0 8 * * *` UTC (4 AM ET winter / 5 AM ET DST). **Trivial trigger:** `curlimages/curl:8.10.1` POSTs to `http://qf-refdata.quantum-feed.svc.cluster.local:9100/refresh`. The long-running `qf-refda
+   memos   : 63bb6d2f
+
+[1 claims / 1 memos]  http://192.168.1.42:9876
+   observed: [Errno 111] Connection refused
+   context : n ATC task from `quantum-assistant`, to be live before Ben's flight the next morning. ## Backend - Backend: `http://192.168.1.42:9876` (server5) - Page size: 1.36 MB (heavy single-page UI; tuned proxy
+   memos   : 3804ef41
+
+[1 claims / 1 memos]  192.168.1.254:554
+   observed: tcp/554 ConnectionRefusedError: [Errno 111] Connection refused
+   context : //; s/^["'"'"']//; s/["'"'"']$//') timeout 20 ffmpeg -y -nostdin -rtsp_transport tcp \ -i "rtsp://${U}:${P}@192.168.1.254:554/h264Preview_01_main" \ -frames:v 1 -q:v 2 /tmp/barnsouth.jpg # then Read /
+   memos   : db36fa78
+
+[1 claims / 1 memos]  http://192.168.1.199:9181/
+   observed: [Errno 111] Connection refused
+   context : bed.pid`, `/tmp/qp-correlate.pid`, `/tmp/qp-api.pid` ## Dashboard - `qp-api` serves on port **9181** - URL: `http://192.168.1.199:9181/` - Routes: `GET /`, `GET /api/stats`, `GET /api/markets`, `GET /
+   memos   : 78c366c9
+
+[1 claims / 1 memos]  192.168.1.38
+   observed: no icmp reply; no tcp on 22,80,443,4999,8080
+   context : app. ## Camera Inventory | Camera | IP | Status | Notes | |--------|-----|--------|-------| | gardenback | 192.168.1.38 | ✅ HA integrated | RTSP open, password env REOLINK_PASSWORD, entity `camera.gar
+   memos   : ad73ea49
+
+[1 claims / 1 memos]  192.168.1.76
+   observed: no icmp reply; no tcp on 22,80,443,4999,8080
+   context : app | | server room | 192.168.0.212 | ⚠️ needs work | Needs RTSP+ONVIF+HTTP+HTTPS enabled via app | | barn | 192.168.1.76 | ⚠️ integrated but no entity | Device added to HA but needs RTSP enabled in R
+   memos   : ad73ea49
+
+[1 claims / 1 memos]  https://hvac-talk.com/vbb/threads/1324921-Bryant-Evolution-Extreme
+   observed: http timeout
+   context : Bryant 291VAN: https://www.bryant.com/en/us/products/heat-pumps/291van/ - HVAC-Talk Evolution Extreme thread: https://hvac-talk.com/vbb/threads/1324921-Bryant-Evolution-Extreme **Verdict:** This is wh
+   memos   : d1a37f34
+
+[1 claims / 1 memos]  https://hvac-talk.com/vbb/threads/2242902
+   observed: http timeout
+   context : /gotductless.com/products/mitsubishi-thermostat-interface-pac-us445cn-1 - HVAC-Talk Mitsubishi zoning thread: https://hvac-talk.com/vbb/threads/2242902 **Verdict:** Leo's pushback aligns with a non-Mi
+   memos   : d1a37f34
+
+[1 claims / 1 memos]  192.168.1.58
+   observed: no icmp reply; no tcp on 22,80,443,4999,8080
+   context : arden | switch.garden | Kasa HS200, 192.168.1.48 | | poolshed outside | switch.poolshed_outside | Kasa HS200, 192.168.1.58 | | outside barn | switch.outside_barn | (also in sunset group — overlap) | |
+   memos   : ac856bbd
+
+[1 claims / 1 memos]  office:443
+   observed: tcp/443 ConnectionRefusedError: [Errno 111] Connection refused
+   context : 100 in `configuration.yaml`. Still defeats brute-force while tolerating brief local-script auth blips. nginx (office:443 + server4:443) handles external rate-limiting separately. To disable auto-ban e
+   memos   : ea990a70
+
+[1 claims / 1 memos]  192.168.1.189
+   observed: no icmp reply; no tcp on 22,80,443,4999,8080
+   context : As of**: 2026-05-03/04 (corrected this cycle) Prior IP was incorrect in memo records. Verified correct IP is 192.168.1.189. **Source**: Session d8333da6 (server-admin)
+   memos   : 50e67483
+
+[1 claims / 1 memos]  http://192.168.1.42:30300/pipeline
+   observed: [Errno 111] Connection refused
+   context : large x2 (medium) - 9 dl-workers: 6 FIOS + 3 Starlink on server5 - Both coordinators on server5 - Dashboard: http://192.168.1.42:30300/pipeline - `cg-worker-crypto` waves trimmed to crypto-safe famili
+   memos   : 84360762
+
+[1 claims / 1 memos]  192.168.0.114
+   observed: no icmp reply; no tcp on 22,80,443,4999,8080
+   context : 1`, now `.101`). ## Don't disrupt - server5 setup is shared by VyOS failover + the danted SOCKS proxies on `192.168.0.114` (Starlink) and `192.168.0.115` (Spectrum). One-off Recipe A/B traffic is invi
+   memos   : 5ffdc66b
+
+[1 claims / 1 memos]  192.168.0.115
+   observed: no icmp reply; no tcp on 22,80,443,4999,8080
+   context : upt - server5 setup is shared by VyOS failover + the danted SOCKS proxies on `192.168.0.114` (Starlink) and `192.168.0.115` (Spectrum). One-off Recipe A/B traffic is invisible to that machinery — it j
+   memos   : 5ffdc66b
+
+[1 claims / 1 memos]  http://192.168.1.42:30300
+   observed: [Errno 111] Connection refused
+   context : the dashboard along with it. Moving it off server4 breaks the dependency. ## URL (unchanged) - **Primary**: http://192.168.1.42:30300 (NodePort — hits any barn node IP) - Pages: `/data-sourcing` (data
+   memos   : f45ebf6a
+
+[1 claims / 1 memos]  192.168.1.246
+   observed: no icmp reply; no tcp on 22,80,443,4999,8080
+   context : | IP (Ethernet) | IP (WiFi) | Role | |----|---------------|-----------|------| | pi-cable-a | 192.168.1.242 | 192.168.1.246 | server | | pi-cable-b | 192.168.1.243 | 192.168.1.250 | client | P2P subne
+   memos   : bdeb6e38
+
+[1 claims / 1 memos]  https://api.example.com/hook
+   observed: [Errno -5] No address associated with hostname
+   context : t": 60, "if": "Bash(test *)" } ``` **HTTP Hook** (external service): ```json { "type": "http", "url": "https://api.example.com/hook", "headers": { "Authorization": "Bearer $MY_TOKEN" }, "allowedEnvVar
+   memos   : 7f02a2f7
+
+[1 claims / 1 memos]  https://api.*.example.com/*
+   observed: [Errno -2] Name or service not known
+   context : true, "disableBypassPermissionsFlag": true, "allowedMcpServers": ["server1"], "allowedHttpHookUrls": ["https://api.*.example.com/*"], "httpHookAllowedEnvVars": ["MY_TOKEN"] } ``` --- ## 4. SETTINGS HI
+   memos   : 7f02a2f7
+
+[1 claims / 1 memos]  192.168.1.237
+   observed: no icmp reply; no tcp on 22,80,443,4999,8080
+   context : 92.168.1.236 - **Role**: Chrome with TradingView open for market watching ## laptop2 (above desk) - **IP**: 192.168.1.237 - **MAC (WiFi)**: 68:94:23:09:7a:cf - **Role**: Chrome kiosk showing HA camera
+   memos   : bd7613e2
+
+[1 claims / 1 memos]  http://192.168.1.42:30300/api/bar-generation
+   observed: [Errno 111] Connection refused
+   context : unts['time'] = 5213 means 5213/5677 dates done for time wave ``` ### Method 2: Dashboard API ```bash curl -s http://192.168.1.42:30300/api/bar-generation | python3 -m json.tool ``` ### Method 3: Redis
+   memos   : 91a43057
+
+[1 claims / 1 memos]  server4:9999
+   observed: tcp/9999 ConnectionRefusedError: [Errno 111] Connection refused
+   context : nt /dev/sda1 /mnt/debug-usb bash /mnt/debug-usb/run ``` ## Debug Receiver - Python HTTP receiver was used at server4:9999 but proved unreliable - Switched to nginx phone-home approach (just hit a URL,
+   memos   : d135805b
+
+[1 claims / 1 memos]  192.168.0.71
+   observed: no icmp reply; no tcp on 22,80,443,4999,8080
+   context : 8.1.x ## IP Gaps Some IPs in range are skipped (e.g., .69 was a smart plug, now moved). Next free worker IP: 192.168.0.71 (worker47). ## Notes - The Ansible `edgerouter_dhcp` role auto-calculates IP f
+   memos   : 0a2c572b
+
+[1 claims / 1 memos]  192.168.1.26:19001
+   observed: tcp/19001 ConnectionRefusedError: [Errno 111] Connection refused
+   context : ``` ssh server3 'sudo microk8s status | head' ``` Should show: ``` datastore master nodes: 192.168.1.42:19001 192.168.1.26:19001 192.168.1.236:19001 datastore standby nodes: none ``` ## Future conside
+   memos   : b822ba9f
+
+[1 claims / 1 memos]  192.168.1.236:19001
+   observed: tcp/19001 ConnectionRefusedError: [Errno 111] Connection refused
+   context : do microk8s status | head' ``` Should show: ``` datastore master nodes: 192.168.1.42:19001 192.168.1.26:19001 192.168.1.236:19001 datastore standby nodes: none ``` ## Future considerations - **server5
+   memos   : b822ba9f
+
+[1 claims / 1 memos]  http://192.168.1.42:30300/data-sourcing
+   observed: [Errno 111] Connection refused
+   context : onical dashboard record = 7d5b0678. --- [LEGACY content — pre-2026-06-19 relocation] ## Dashboard Page URL: http://192.168.1.42:30300/data-sourcing Next.js page in qf-dashboard showing real-time data 
+   memos   : 24eee687
+
+[1 claims / 1 memos]  192.168.0.217
+   observed: no icmp reply; no tcp on 22,80,443,4999,8080
+   context : rage** | RLC-423WS (5MP) | 192.168.1.239 | Yes | Active | | **Street** | TrackMix PoE (dual-lens, 4K+1080p) | 192.168.0.217 | Yes | Active (lens 0 wide-angle only) | | **Fronthouse** | (wireless via b
+   memos   : a16769b8
+
+[1 claims / 1 memos]  192.168.1.208
+   observed: no icmp reply; no tcp on 22,80,443,4999,8080
+   context : local ports closed) 6 additional Reolink cameras have cloud-only access (no local RTSP): - Garden Reolink A (192.168.1.208), Garden Reolink B (192.168.1.104) - Electric Closet, Server Room, Kitchen, D
+   memos   : a16769b8
+
+[1 claims / 1 memos]  192.168.1.104
+   observed: no icmp reply; no tcp on 22,80,443,4999,8080
+   context : Reolink cameras have cloud-only access (no local RTSP): - Garden Reolink A (192.168.1.208), Garden Reolink B (192.168.1.104) - Electric Closet, Server Room, Kitchen, Dining Room See /mnt/nas/data/code
+   memos   : a16769b8
+
+[1 claims / 1 memos]  192.168.0.26
+   observed: no icmp reply; no tcp on 22,80,443,4999,8080
+   context : ee space; monitor going forward ## Worker Updates (March 2026) ### New Workers Provisioned - **worker17** (192.168.0.26): HP ProDesk, i5-10500 6c/12t, 15 GB RAM, 238.5 GB WD NVMe - **worker18** (192.1
+   memos   : 6dc00eba
+
+[1 claims / 1 memos]  192.168.1.42:1082
+   observed: tcp/1082 ConnectionRefusedError: [Errno 111] Connection refused
+   context : ---|-------| | FIOS | 192.168.1.42:1080 | primary | | Starlink | 192.168.1.42:1081 | secondary | | Spectrum | 192.168.1.42:1082 | skipped | ## Other Details - **MarketCalendar**: NYSE holiday rules + 
+   memos   : 0ba7611d
+
+[1 claims / 1 memos]  192.168.1.42:8080
+   observed: tcp/8080 ConnectionRefusedError: [Errno 111] Connection refused
+   context : docs) mdBook documentation site served via Docker. ## Access - **Port**: 8080 - **URLs**: localhost:8080 or 192.168.1.42:8080 (server5) ## Content - 35 HTML pages, ~13MB total ## Docker - **Dockerfile
+   memos   : bf4928cc
+
+[1 claims / 1 memos]  192.168.1.120
+   observed: no icmp reply; no tcp on 22,80,443,4999,8080
+   context : etwork state. IP kept at static 192.168.0.50 across the switch. Note: prior memo claimed server3 iDRAC IP was 192.168.1.120 — that was WRONG (or pre-April-2026 aspirational); confirmed 0.50 on the wir
+   memos   : 19c746fa
+
+[1 claims / 1 memos]  192.168.1.199:8086
+   observed: tcp/8086 ConnectionRefusedError: [Errno 111] Connection refused
+   context : ary data store (quantum_reactor DB) | | Redis | server5:6379 | Queue broker (backtests, scans) | | InfluxDB | 192.168.1.199:8086 | Time-series market data | | Polygon S3 | Via polygon-s3-credentials s
+   memos   : dead30a5
+
+[1 claims / 1 memos]  server5:27018
+   observed: tcp/27018 ConnectionRefusedError: [Errno 111] Connection refused
+   context : age-api-key | Dojo-specific | MongoDB URI constructed in env: `mongodb://$(MONGODB_USER):$(MONGODB_PASSWORD)@server5:27018/` ### Volume Mounts (all hostPath, server5-local) | Container Path | Host Pat
+   memos   : 9f760baf
+
+[1 claims / 1 memos]  http://192.168.1.42:30300/ticker-universe
+   observed: [Errno 111] Connection refused
+   context : tuent data (of 137 tracked) - Point-in-time holdings for survivorship-bias-free sampling ## Dashboard - URL: http://192.168.1.42:30300/ticker-universe - Shows: active tickers by market, ETF coverage, 
+   memos   : 6ddb807d
+
+==============================================================================
+HAND-GRADED SAMPLE OF THE RESIDUAL — read before trusting the 173
+==============================================================================
+
+The 173 residual claims are what a keyword pass could not explain. They are NOT
+173 stale memos. I graded the 12 most-cited targets by hand:
+
+  GENUINELY WORTH ACTING ON (4 of 12)
+    192.168.1.42:32000        k8s NodePort registry on server5 — refused.
+                              26 claims / 19 memos depend on this address.
+    server4:3000 and
+    http://192.168.1.168:3000/broker
+                              broker/attention dashboards — refused.
+    http://192.168.1.42:9876/ server5 static server behind
+                              quantum.pushbuild.com — refused. (The memo's own
+                              subject is that this service is not
+                              systemd-managed and dies, so the failure is
+                              consistent with what it says.)
+
+  NOT A CLAIM AT ALL (4 of 12) — extraction artifacts
+    https://prod.ecobee.com/api/v1   an OAuth `audience=` identifier, never an
+                                     endpoint anyone fetches
+    http://local-llm.barn:8000/v1    a proposed endpoint, written before it
+                                     existed
+    192.168.10.23                    a guest-VLAN source address quoted from an
+                                     ANTISPOOF-DROP kernel log
+    192.168.1.140                    an ephemeral Starlink DHCP lease, described
+                                     AS ephemeral
+
+  WRONG PROBE (3 claims found corpus-wide)
+    192.168.1.168:2055, 192.168.1.1:8443 and one other are UDP services. The
+    sweep probes TCP. A UDP service is not reachable by a TCP connect and never
+    was — the failure is a property of my probe, not of the memo.
+
+  DEVICE ASLEEP / BY DESIGN (the rest)
+    Kasa plugs, NodeMCU, IP cameras, pi-testers on WiFi. These go quiet and come
+    back; a single negative probe is not a liveness verdict for them.
+
+⇒ EXTRAPOLATING FROM 12 GRADED OF 80 DISTINCT TARGETS, the genuinely actionable
+  set is of order 10-20 targets, not 344 claims and not 173. State it that way:
+  I graded 12, not 80, and the extrapolation is a guess with an n of twelve.
+
+==============================================================================
+WHAT THIS SAYS ABOUT AUTO-PATCHING
+==============================================================================
+
+At least 41% of failures (141 of 344) are the memo being CORRECT — recording an
+address that is old, deleted, wrong, down, or part of an incident. The hand
+sample says the true share is higher, because "RESIDUAL" also swallowed OAuth
+identifiers, kernel-log sources and UDP services.
+
+An agent given permission to "fix failing claims" on this list would have
+rewritten memos whose value is precisely that they record what changed.
+
+⇒ Report-only was the right call, and the next slice should be a better
+  EXTRACTOR (protocol awareness, endpoint-vs-identifier) rather than an agent.
+
+==============================================================================
+FOLLOW-UP, SAME EVENING — the top residual finding was not what it looked like
+==============================================================================
+
+The residual list above names `192.168.1.42:32000` as the single most-cited
+failing target and calls it "genuinely worth acting on", with 26 memos
+depending on it. The address is indeed dead. Everything implied about what to
+DO with it was wrong, and the way it was wrong is the most useful thing in this
+report.
+
+WHAT HAPPENED
+
+Ben, told the registry was refusing connections, replied that server4 is the
+real registry and "should be that for all the hosts". That is an instruction a
+patching agent could act on directly: rewrite 26 memos to say
+`192.168.1.168:32000`. Probing first showed two live registries with different
+catalogs — server4:32000 with 27 repos, nas:5050 with 58, overlapping on 20 —
+which was reported as drift between two stores that should have been one.
+
+Then the corpus was asked, and it already held the answer:
+
+  4866412a (2026-04-07)  3-server crane sync. server4:32000 is "Primary — push
+                         here"; server5 and server3 are MIRRORS. Hourly cron.
+  a4c0c234 (2026-06-19)  The barn cluster registry MIGRATED off .42:32000 to
+                         Synology nas:5050, 2026-06-02/03, deliberately, for
+                         HA — server1's hostPath took the registry down on
+                         every k8s leave/rejoin. 111 GB, 9,745 files,
+                         containerd hosts.toml deployed to all 51 nodes,
+                         67 yaml files and 140 refs updated in commit e63e5cb.
+  b7581785 (2026-06-09)  "Registry is nas:5050, NOT .42:32000", with live probe
+                         evidence from three separate hosts.
+
+⇒ The two catalogs are not drift. They are two ROLES: nas serves the k8s fleet
+  (the qf-* images), server4 serves the docker services it runs itself
+  (blender-agent, curator-render, moondream, ollama). "Neither is proxying the
+  other" was a correct observation carrying a wrong implication.
+
+WHAT THE EDIT WOULD HAVE DONE
+
+Of the 26 memos citing the dead address, 10 are k8s deployment guides —
+kokoro-tts on barn, quantum-reactor, quantum-dojo, blender-agent. Per the June
+migration those belong on nas:5050. Repointing them to server4 would have
+contradicted the operator's own migration record and aimed manifests at a
+registry missing 38 of the images. Two of them — qf-ticker-universe and
+qf-py-tools — exist ONLY on nas, so that edit would have been flatly wrong on
+its face.
+
+⭐ THE GENERAL LESSON, WHICH IS WHY THIS IS IN THE REPORT
+
+A failing probe proves the address is dead. It proves NOTHING about which live
+address should replace it, and the operator's answer to "which one is real" can
+be an expression of intent rather than a description of the world. No probe
+distinguishes those two. Neither does an agent.
+
+  · The memos here are not stale. They DISAGREE with the operator.
+  · Disagreement between the corpus and the operator is a fourth verdict, and
+    the design's four (correct / historical / retire / escalate) collapse it
+    into "escalate" — which is right, but only if the agent thinks to look at
+    the corpus before acting on the instruction. Nothing forced that here
+    except choosing to.
+
+⇒ Add CONFLICT as an explicit outcome, and require that before any repoint the
+  candidate replacement is checked for the thing being repointed to — here,
+  literally: does the image exist in the registry you are about to name?

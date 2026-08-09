@@ -1,0 +1,110 @@
+{
+  "schema": 1,
+  "run_id": "2026-08-03T145347Z",
+  "label": "smoke test during rebuild",
+  "git": {
+    "sha": "4a02c30",
+    "dirty": true
+  },
+  "seed": 7,
+  "per_band": 60,
+  "targets": [
+    {
+      "name": "v1",
+      "url": "http://server4:8000",
+      "container": "memo",
+      "reachable": true,
+      "resolved": {
+        "error": "docker exec returned nothing 4x \u2014 COULD NOT TELL, not 'no config'"
+      },
+      "search_paths": {
+        "document": "http 404",
+        "passages": "http 404",
+        "v1-search": "present"
+      },
+      "corpus": {
+        "n": 7915,
+        "ge_1000": 1886,
+        "ge_2000": 395
+      }
+    },
+    {
+      "name": "v2",
+      "url": "http://localhost:8091",
+      "container": "memo-v2",
+      "reachable": true,
+      "resolved": {
+        "model": "openai/text-embedding-3-large",
+        "dims": 3072,
+        "url": "https://openrouter.ai/api/v1"
+      },
+      "search_paths": {
+        "document": "http 500",
+        "passages": "http 500",
+        "v1-search": "http 500"
+      },
+      "corpus": {
+        "n": 7336,
+        "ge_1000": 1761,
+        "ge_2000": 405
+      }
+    }
+  ],
+  "results": {
+    "v1": {
+      "primary_path": "v1-search",
+      "paths_present": [
+        "v1-search"
+      ],
+      "api_surface": {
+        "task": "api_surface",
+        "routes": [
+          "/admin/access-stats",
+          "/admin/leak-incidents",
+          "/admin/recount-tokens",
+          "/auto-store",
+          "/context",
+          "/documents",
+          "/documents/{doc_id}",
+          "/documents/{doc_id}/copy",
+          "/documents/{doc_id}/move",
+          "/health",
+          "/index",
+          "/search"
+        ],
+        "search_shape": {
+          "document": {
+            "error": "HTTPError"
+          },
+          "passages": {
+            "error": "HTTPError"
+          },
+          "v1-search": {
+            "container": "list",
+            "row_keys": [
+              "document",
+              "score"
+            ],
+            "doc_keys": [
+              "content",
+              "created_at",
+              "id",
+              "metadata",
+              "tags",
+              "title",
+              "token_count",
+              "updated_at"
+            ]
+          }
+        },
+        "control_ok": true,
+        "status": "ok",
+        "elapsed_s": 1.4
+      }
+    },
+    "v2": {
+      "status": "could_not_run",
+      "why": "no working search path"
+    }
+  }
+}

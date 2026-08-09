@@ -1,0 +1,557 @@
+# Tasks: Passage-Level Retrieval
+
+**Spec**: `specs/002-passage-retrieval/spec.md` · **Plan**: `plan.md`
+**Created**: 2026-07-30 · **Last audited**: 2026-08-02 (post qwen3 census)
+**Status**: **Phases A–D built; Phase F (re-migrate) complete; Phase E measured twice on the full corpus and CORRECTLY BLOCKED on SC-101, SC-102 and SC-103.**
+T201–T203 are CLOSED, which unblocks T240–T243.
+31/41 done. **The FLIP is HELD by the operator** — Ben, 2026-08-01 20:31: *"hold the cut over I'm not ready to do it until we do much more testing"*. It is a decision now, not a measurement gap.
+
+⚠️ **All figures in R-01…R-08 were taken on `3-small` against a partial corpus and
+DO NOT carry over.** The corpus was rolled back and re-migrated on
+`text-embedding-3-large` @3072 (7,336 memos, 0 errored), passage-indexed in full,
+and has since moved again to self-hosted `qwen3-embedding-4b` @2560.
+**R-10 is the current record**; R-09 is its 3-large comparison point.
+
+⭐ **R-13 (2026-08-02) SUPERSEDES R-10 ON THE DOCUMENT PATH.** The prefix is live and
+measured on the full corpus: rank-1 **49.4% → 66.4%** vs bare qwen3. Against 3-large the
+TOTAL reads −3.0, **which is the wrong number to quote** — short bands lose (−5.3 / −11.1 /
+−7.9) and long bands win (+11.5, **+28.1**), taking 2000+ from **18.8% → 46.9%**, more than
+double, on the one band this feature exists to fix. A corpus that is 77% short memos lets
+the short bands dominate any weighted mean.
+⛔ **SC-101 STILL FAILS on the document path** (46.9% vs 80%) — a better encoder raises the
+document-as-one-vector ceiling rather than removing it.
+⚠️ **THE PASSAGE HALF OF T282 IS NOT DONE.** It ran to ~64% and was paused when server4
+wedged; it carries **90 query timeouts**, 79 of them inside a 70-minute window where memo-v2
+completed almost nothing. Those are scored `absent` and must be repaired with
+`scripts/memo-bench-repair` before any passage number is quoted. **Raw and corrected, both
+columns, always.**
+
+⛔ **READ R-11 BEFORE QUOTING R-10.** R-10 measures a client that sends **bare
+queries** to an encoder trained to expect an instruction prefix, so its qwen3
+columns are a **floor for that model, not a verdict on it**. Both paths regress
+against 3-large — the passage path in *every* band — and R-11 identifies the cause
+as memo's own query formulation. Restoring the prefix recovers +21.3 / +20.0
+rank-1 points across two independent draws, but is a **null with nine named
+casualties** in the 2000+ band and requires ~21 call sites to be reclassified by
+hand first. **This is new work, listed at the end of Phase G.**
+
+Measured 2026-08-01 (R-09, `text-embedding-3-large`) by **full census — every
+titled memo in every band, 7,221 queries per path, no sampling**:
+
+| | document | passages | bar | verdict |
+|---|---|---|---|---|
+| rank-1 @ ≥2000 tok (n=399) | 18.8% | **47.6%** | ≥80% | **SC-101 FAIL** |
+| short bands (n=1216/2293/2007) | 78.5/76.9/76.6% | 77.1/72.0/74.5% | no regression | **SC-102 FAIL** (−1.5/−4.9/−2.1) |
+| mid-document facts (n=30) | 13.3% | **46.7%** | ≥75% | **SC-103 FAIL** |
+
+⚠️ **R-10 (2026-08-02, qwen3) supersedes these numbers and REFUTES one of the
+conclusions this table used to carry.** The old text said *"the remaining gap is
+ranking, not retrieval"* — that rested on top-5 being far above rank-1, i.e. on the
+target being found and merely mis-ordered. **R-10 falsified it on both paths**: the
+pre-registered prediction was that rank-1 would move materially at ≥2000 tokens while
+top-5 barely moved, and instead top-5 moved almost as much (passages −22.3 / −20.8;
+document +23.6 / +18.3). **Retrievability moves with the encoder about as much as rank
+does**, so a re-ranker is not the whole remaining gap.
+
+**What still stands.** (1) The larger embedding model **alone did not fix long
+memos** — 18.8% at 2000+ on the document path, so a 3,000-token memo as one vector
+fails structurally. (2) T240–T243 remain worth doing on the top-5-vs-rank-1 evidence,
+but they are no longer *the* measured bottleneck. (3) The short-band regression is the
+honest cost of chunking already-coherent units, which argued for routing by size
+(**T273**) — see the warning on T273 below, since R-10 changes the basis of its
+thresholds.
+
+**T253 remains true and still closed off the route the plan expected**: the
+{256,384,512} × {0,15,25}% sweep found chunk geometry does not move SC-101 (R-06).
+
+Marker discipline: every implementation file carries `[002/FR-1XX]` in a
+comment; every test that proves an FR carries the same marker. Never write a
+literal `002/FR-` marker in prose that is not a real anchor — the scanner counts
+it and fails the run as dangling.
+
+Gate command per phase is stated at the end of each phase. **Never** run
+`--write-baseline`. **Never** attach `--strict` to a per-phase gate — it is
+repo-wide and will fail on later-phase FRs. Run inside the v2 worktree.
+
+---
+
+## Phase 0 — Clarifications (BLOCKING, operator)
+
+- [x] **T201** — *Result shape for `memo_search` / `/recall`.* FR-107 says whole
+      memo; the open question is what happens when 10 whole memos is 30k tokens.
+      Options put to the operator: (A) always whole, (B) whole for top hit +
+      passages after, (C) passages + parent id only, (D) whole until a total
+      token cap, then degrade to passages.
+      **RESOLVED 2026-07-31: option (D).** Whole memos until a total token
+      budget is reached, then degrade to passages for the remainder. **T240–T243
+      are unblocked.**
+      Note for whoever builds it: the budget-packing bug fixed in v1 0.3.3 is
+      the exact failure mode to avoid here — when the top hit exceeded the
+      budget the loop `break`s and returned an empty result, which reads to a
+      caller as "the corpus has nothing on this topic". Degrading to a passage
+      is precisely the fallback that was missing. Carry `matched_count` so a
+      caller can tell "nothing matched" from "matched but did not fit".
+- [x] **T202** — *(RESOLVED 2026-07-31 by rollback; both consequences below are now
+      moot.)* SC-103 evaluates at its full n=30 against the re-migrated corpus, and
+      the `DUP_COSINE` calibration is no longer blocked by this corpus — though R-12
+      finds it blocked by something else instead: the cutoff was chosen on `3-small`
+      and has never been re-derived through two encoder changes.
+      *Original entry retained below for the record.*
+- [x] **T202 (original)** — *Disposition of the partial v2 corpus* (1,655 memos from the
+      stopped 2026-07-30 backfill). Keep as a development fixture (real content,
+      real size distribution, useful for the sweep) or roll back now for
+      cleanliness. **Recommendation: keep**, and roll back immediately before the
+      final clean migration.
+      ⚠️ **"Blocks nothing" was wrong — corrected 2026-07-31.** This corpus is now
+      known to cap two measurements:
+      (a) **SC-103 at n=12** — 18 of the fact set's 30 target memos were never
+      migrated, so a Phase-E success criterion cannot be evaluated at its
+      intended power (R-07);
+      (b) **the `DUP_COSINE` calibration** — 7.5% of this corpus is
+      machine-generated checkpoint logs, which dominate the near-duplicate
+      distribution, so a must-collapse set cannot be drawn from it (R-08).
+      Neither is fatal, but both mean the decision has measurement consequences
+      it was not credited with.
+- [x] **T203** — *Does the operator want `text-embedding-3-large` in scope here?*
+      Spec sequences it after (FR-108). Recommendation was "after".
+      **RESOLVED 2026-07-31: IN SCOPE for this feature — operator overrode the
+      recommendation, and was probably right to.** T253 ruled out chunk geometry
+      as a lever on SC-101 the same morning, which leaves the embedding model as
+      one of the few remaining candidates for the 57.6% → 80% gap.
+      Measured facts behind the change (verified live, not assumed):
+      - OpenRouter serves `openai/text-embedding-3-large` at native **3072** and
+        at a truncated **1536**. Both tested.
+      - Neither memo v1 nor v2 is on the large model today; both run
+        `3-small`/1536. This is a real change, not an alignment.
+      - Full re-embed of the whole corpus, both indexes: **~$1.61** (vs $0.25 on
+        small). Vector storage 177 MB → 354 MB. Neither is a constraint.
+      - **Go native 3072, not truncated 1536 — for safety, not quality.** The
+        vec0 tables bake the dimension in and *reject* a wrong-sized vector
+        (tested). At 1536 an old and a new vector are indistinguishable in shape,
+        so a half-finished migration would silently score nonsense; at 3072 it
+        fails loudly. Given this project's failure history, take the option that
+        cannot fail quietly.
+      **Sequencing is the load-bearing part: switch BEFORE the real backfill**
+      (T131/T271), or the corpus is embedded on the small model and immediately
+      re-embedded — the same "embedded twice" waste T271 already calls out for
+      chunking.
+      ⚠️ **Every measurement in R-01…R-08 was taken on `3-small`.** SC-101 and
+      SC-103 must be re-measured after the switch; the current 57.6% / 67% do not
+      carry over.
+
+---
+
+## Phase A — The chunker (pure, no I/O) — FR-101, FR-102, FR-103, FR-104
+
+- [x] **T210** — `src/memo/chunking.py`: `Passage` dataclass (`text`, `index`,
+      `token_start`, `token_end`) and `chunk(text, *, target, overlap)`. No
+      imports from `db` or `embeddings` — this module must be testable with no
+      database, no network, no provider. `[002/FR-101]`
+- [x] **T211** — Structure-first splitting: markdown headings (`^#{1,6} `), then
+      paragraph boundaries within an over-target section, then bounded hard-wrap.
+      `[002/FR-102]`
+- [x] **T212** — Fenced-code awareness: do not split inside a ``` fence when a
+      legal boundary exists outside it. Half a table or half a command is worse
+      than a slightly oversized passage. `[002/FR-102]`
+- [x] **T213** — Bound every passage below the provider input cap, including the
+      hard-wrap fallback. `[002/FR-104]`
+- [x] **T214** — **Coverage test: the union of passages, minus overlap, must
+      reconstruct the input exactly.** A chunker that silently drops a span is
+      the failure mode that matters and is invisible without this assertion.
+      `[002/FR-101]`
+- [x] **T215** — Edge cases, one test each: no headings; a single 8k-token
+      paragraph; heading with no body; fence larger than target; empty content;
+      content of exactly `target` tokens; content one token over. `[002/FR-102]`
+- [x] **T216** — **Single-passage invariant**: text under `target` yields exactly
+      one passage whose text is the input, unchanged. Assert there is no
+      `if token_count > N` branch anywhere in the module — the threshold is
+      emergent, not configured. `[002/FR-103]`
+
+**Gate A**: `speckit-trace --require-full 002/FR-101,002/FR-102,002/FR-103,002/FR-104`
+
+---
+
+## Phase B — Storage — FR-110, FR-108
+
+- [x] **T220** — Migration `migrations/0XX_document_chunks.sql`:
+      `document_chunks(doc_id, chunk_index, text, token_start, token_end,
+      embedding_model, embedding_route, PRIMARY KEY (doc_id, chunk_index))`
+      plus the sqlite-vec passage index. `[002/FR-110]`
+- [x] **T221** — Record `embedding_model` **and** `embedding_route` on every
+      passage. A corpus that mixes providers must stay auditable afterwards:
+      quantum-data measured the same text via OpenRouter vs OpenAI-direct as 4/5
+      bit-identical and one at cosine 0.999580, so one model *label* can cover
+      non-identical outputs. `[002/FR-108]`
+- [~] **T222** — Write path: chunk → `embed_batch` → replace that document
+      version's rows **in one transaction**. *Mechanism done and tested
+      (`passages.index_document`); CALL-SITE WIRING DEFERRED.* There are 10
+      `db.store`/`db.update` call sites across 5 modules, and a guarantee that
+      rests on all of them remembering is the same shape as every silent defect
+      found on 2026-07-30. `db.store` cannot own it either — it receives a
+      precomputed embedding and must not start making network calls. So the
+      invariant is made checkable instead (`find_unindexed`, T226) and the
+      wiring lands with Phase C, when the read path settles where indexing
+      belongs. `[002/FR-110]`
+- [x] **T226** — `passages.find_unindexed()` + tests: live memos with no
+      passages, biggest first. Makes "every memo is indexed" verifiable rather
+      than trusted. `[002/FR-110]`
+- [x] **T223** — Supersede path: the new version gets its own passage set; the
+      superseded version's rows are retained so as-of queries stay answerable.
+      `[002/FR-110]`
+- [x] **T224** — Test: a memo stored, then updated, then superseded has exactly
+      one live passage set per version and no orphans. `[002/FR-110]`
+- [x] **T225** — Test: a 9,000-token memo (over the provider cap) stores
+      successfully and every passage is under the cap. This is User Story 3 and
+      it must fail against the pre-change code. `[002/FR-104]`
+
+**Gate B**: `speckit-trace --require-full 002/FR-108,002/FR-110`
+
+---
+
+## Phase C — Retrieval — FR-105, FR-106, FR-107, FR-107a, FR-109
+
+- [x] **T230** — Passage search returning `(doc_id, chunk_index, score)`, then
+      group by `doc_id`. `[002/FR-105]`
+- [x] **T231** — Score each memo by its **best** passage. Test explicitly that a
+      mean is not used: a memo with one strong and four weak passages must
+      outrank a memo with five mediocre ones. `[002/FR-106]`
+- [x] **T232** — Overlap must not let one memo occupy several result slots —
+      group before ranking. `[002/FR-105]`
+- [ ] **T240** — *(blocked by T201)* Result assembly per the chosen option;
+      whole memo carries the matching passage + offsets as a highlight.
+      `[002/FR-107]`
+- [ ] **T241** — *(blocked by T201)* `expand: "memo" | "passage"` on the
+      retrieval API, defaulting to `"memo"`. The passage form MUST carry its
+      parent id. `[002/FR-107a]`
+- [ ] **T242** — *(blocked by T201)* `InjectionSet` opts into passage form under
+      the 5k budget; drop order unchanged. Measure relevant-token share before
+      and after — that is User Story 2's actual payoff. `[002/FR-107a]`
+- [ ] **T243** — *(blocked by T201)* Test: **no path ever returns a truncated
+      memo presented as whole.** Either it is the whole memo, or it is a passage
+      that says so and names its parent. `[002/FR-107]`
+- [ ] **T244** — `verbatim-critical` returns whole, enforced in the result
+      assembler rather than left to callers. Note this now coincides with the
+      default; the test must still pin it, because the default may change and
+      this must not. `[002/FR-109]`
+
+**Gate C**: `speckit-trace --require-full 002/FR-105,002/FR-106,002/FR-107,002/FR-107a,002/FR-109`
+
+---
+
+## Phase D — Measurement — FR-111, FR-112, FR-114
+
+- [x] **T250** — `scripts/memo-retrieval-bench`: own-title set, reported by size
+      band. **DONE 2026-07-30** (`31ec402`). `[002/FR-111]`
+      **Extended 2026-07-30**: `--path {document,passages}` drives either
+      retrieval path, and `--both-indexed-only` restricts the sample to memos
+      present in BOTH indexes (backed by `GET /admin/passage-indexed-ids`).
+      The restriction is load-bearing while passage coverage is partial — an
+      unrestricted passage run scores un-indexed memos as `absent` and reports
+      **indexing coverage while looking exactly like a retrieval result**.
+- [x] **T251** — Baseline recorded before any change:
+      `specs/002-passage-retrieval/baseline-2026-07-30-v1.json` — v1 @ 7,511
+      memos, top band 2/14 rank-1, 9/14 absent. **DONE 2026-07-30.** `[002/FR-111]`
+- [x] **T252** — Mid-document fact set: ~30 facts living in the middle of memos
+      ≥2000 tokens, with known correct answers. **This set must FAIL against the
+      current implementation** — if it passes today it is not testing the defect.
+      `[002/FR-111]`
+- [x] **T253** — Sweep {256, 384, 512} × {0, 15, 25}% overlap against both sets;
+      write the table to `research.md` with the winner and *why*. `[002/FR-112]`
+      **DONE 2026-07-31 — research.md R-06. There is no winner, and that is the
+      result.** All nine configs scored 5 or 6 of 14 on the gating band; the
+      whole spread is one document. Re-measured over the **entire** 63-memo
+      2000+ band instead of sampling it, the two configs furthest apart
+      (512/25% at 3.37 passages/doc, 384/15% at 4.31) score **identically:
+      37/63 = 58.7%**. Chunk geometry does not move SC-101.
+      Driver checked in as `scripts/memo-chunk-sweep`; it re-asserts the control
+      set between rounds and aborts if it changed, so a coverage shift can never
+      be reported as a retrieval difference. Index left at the default 384/15%.
+      **Two corrections fell out of this and are recorded in R-06:**
+      R-05's headline 36% was a 14-of-63 sampling artifact (true value 58.7%,
+      annotated in place, not rewritten); and top-5 on that band is **88.9%**,
+      so the answer is almost always retrieved and it is *rank-1 ordering* that
+      misses — a re-ranking problem, not a chunking one.
+- [x] **T253a** — Passage-index the fact-set target memos that have no passages,
+      so SC-103 can be judged at full size. `[002/FR-111]`
+      **DONE 2026-07-31 — and the task as originally written described the wrong
+      problem.** It assumed 22 targets needed indexing. In fact **18 of the fact
+      set's 30 memos are not in the v2 corpus at all**: the set was built against
+      v1 (7,511 memos) and v2 currently holds a partially-migrated 1,655. Only 4
+      were present-but-unindexed; those are now indexed (32 passages, coverage
+      gap zero) via `scripts/memo-index-factset-targets`.
+      Result: SC-103 is measurable at **n=12, not n=30**, and 8/12 (67%) against
+      a ≥75% bar — **FAILS**. See R-07.
+      ⚠️ **Raising n is blocked by T202**, not by indexing: the missing 18 cannot
+      be indexed because they were never migrated. T202 was understood to block
+      only T270; it also caps the power at which a Phase-E success criterion can
+      be evaluated, and that belongs in the decision.
+      Origin of the task: `--both-indexed-only` restricted the own-title sample
+      but never the fact set, so unreachable cases scored `absent` and SC-103
+      read 5/30 (17%). The bench now restricts both sets and prints the excluded
+      count on every run.
+- [x] **T254** — Re-measure duplicate thresholds against passage vectors:
+      `DUP_COSINE = 0.90` + title-4gram ≥ 0.60 (migration) and the `>= 0.80`
+      read-path bar were calibrated on document vectors. Use known
+      must-collapse and must-not-collapse pairs. Record both numbers even if
+      unchanged, so the next reader knows they were checked. `[002/FR-114]`
+      **DONE 2026-07-31 — research.md R-08. Both unchanged, and the task's own
+      premise needed correcting first.**
+      The `>= 0.80` read-path bar is **not a cosine and not vector-based** — it is
+      Jaccard over content words, and `DedupFilter`'s docstring already explains
+      that the read path never holds pairwise embeddings. Passage vectors cannot
+      affect it. The migration rule compares whole-document embeddings, which
+      passage retrieval adds to rather than replaces. So both numbers stand, for
+      structural reasons rather than measured ones.
+      Measured anyway (`scripts/memo-dup-threshold-check`, 400-memo sample, 384
+      nearest-neighbour pairs): **0 pairs would collapse**; 87 (22.7%) clear the
+      cosine bar and are stopped by the 4-gram gate. The gate is the entire
+      decision and **the cosine bar is therefore untested here**.
+      15 of the top 18 pairs are memo-minder's own backfill checkpoints (124 of
+      1,655 live memos), up to cosine 0.9998 — genuinely redundant, since all
+      three hosts proxy to one DB, and kept apart only because their titles
+      differ in the hostname. Upstream fix landed the same day (one checkpoint
+      per cycle, not three); the historical 124 are left alone.
+      ⚠️ Calibrating the cosine bar needs a must-collapse set drawn from content
+      memos, not logs, and **this corpus is not the one to draw it from** —
+      partially migrated and 7.5% machine-generated. Another dependency on T202.
+- [x] **T255** — Wire the bench into CI against a fixed corpus slice with the
+      numbers checked in. An uninstrumented bench rots; that is how the original
+      defect survived.
+      **DONE 2026-07-31 — but NOT as written, and the difference matters.**
+      *Checking the numbers into CI is not possible and would be dishonest if
+      faked.* The test container is `network_mode: none` with a throwaway DB —
+      no corpus, no embedding provider. Pinning expected rank-1 counts would mean
+      either committing megabytes of vectors or quietly testing a fixture instead
+      of the corpus, and a green CI would then say nothing about retrieval. The
+      quality numbers stay a deliberate run against :8091, recorded in
+      research.md with their date and sample size.
+      **What IS now covered is the instrument — which is where all three of this
+      feature's defects actually were.** `tests/unit/test_retrieval_bench.py`
+      (12 tests, no network) pins the shape of each wrong answer that once looked
+      plausible: an unrestricted run scoring un-indexed memos as `absent`; the
+      fact set not receiving the same restriction; a failed query counting as
+      anything but absent; rank-1 requiring position 0 rather than presence; and
+      one seed drawing one sample, without which a two-path comparison is not a
+      comparison.
+      Two changes were required rather than optional: `scripts/` was **not in the
+      test image at all**, so the measurement code was wholly uncovered; and the
+      fact-set logic sat inline in `main()` where **nothing could call it**,
+      which is exactly why that defect shipped. Extracted as `eligible_factset()`
+      / `score_factset()`.
+      Verified by falsification: reverting the filter makes
+      `test_factset_restriction_drops_cases_the_path_cannot_reach` fail and the
+      other 11 pass. A test that has never failed is not known to detect anything.
+
+**Gate D**: `speckit-trace --require-full 002/FR-111,002/FR-112,002/FR-114`
+
+---
+
+## Phase E — Flip the default — FR-113
+
+- [x] **T260** — Both query paths live simultaneously, selectable by config.
+      `[002/FR-113]`
+      *(was PARTIAL 2026-07-30: selection was by endpoint, not by config. The
+      reason given was that "a flag invites flipping the default before the
+      numbers exist" — that objection expired when R-07 produced the numbers.)*
+      **DONE 2026-07-31.** `settings.memo_retrieval_path` selects what `/search`
+      serves; **the default stays `document`** and flipping it remains an
+      operator decision gated on SC-101/SC-103, neither of which passes.
+      Building the switch and throwing it are separate acts.
+      **The switch created a new way for this feature's recurring confound to
+      return, so the design forecloses it.** The bench reached the document path
+      through `/search`; once `/search` became configurable, one config edit
+      would have silently changed *what the bench measured* while every label in
+      its output still read "document". So `/search-documents` was added
+      alongside `/search-passages`, both immune to the setting, and the bench
+      now targets those. `/search` is the product surface; the explicit
+      endpoints are the measurement surface.
+      `/search` also returns `X-Memo-Retrieval-Path`, so a caller can tell which
+      index answered instead of inferring it from config it cannot see.
+      Passage results are narrowed to the existing `{document, score}` contract:
+      the matching passage and offsets are deliberately NOT carried through,
+      because that is T201/T240–T241 and answering it by implementation would
+      pre-empt the operator. A test asserts the highlight is absent.
+      Verified by falsification: routing `/search-documents` through the config
+      makes `test_explicit_endpoints_ignore_the_config[passages]` fail.
+- [x] **T261** — Re-run the bench on the passage path; compare against T251's
+      committed baseline. Flip only if SC-101 (≥80% rank-1 for ≥2000 tokens),
+      SC-102 (no band regresses) and SC-103 (mid-document ≥75%) all clear.
+      **DONE 2026-07-30 — comparison run, and the flip is CORRECTLY BLOCKED.**
+      SC-102 holds (no band regresses). **SC-101 fails: 36% vs the required
+      80%** for ≥2000 tokens, though that band moves 0/14 → 5/14 rank-1 and
+      3/14 → 11/14 top-5. SC-103 not yet re-run against the passage path. See
+      research.md R-05. The bench gained `--path` and `--both-indexed-only` so
+      this is reproducible rather than a one-off claim.
+      **Superseded 2026-07-31 by R-07**, which re-runs this comparison over whole
+      bands instead of 14-memo samples. The verdict is unchanged — the flip stays
+      blocked — but every magnitude moved, and the feature looks *better*, not
+      worse: 2000+ rank-1 is **10/66 → 38/66** (15.2% → 57.6%) and absent-from-
+      top-10 **36/66 → 8/66**; the 1000–2000 band, read here as a wash, is
+      actually 41.8% → 68.7%. SC-101 fails at 57.6%; SC-102 holds; **SC-103 now
+      measured properly at 8/12 (67%) vs the document path's 1/12 (8%)** — fails
+      a 75% bar, and capped at n=12 by T202. Prefer R-07's numbers to this task's.
+- [ ] **T262** — Document path stays behind a flag for one release, so a
+      regression is a config change and not a migration. `[002/FR-113]`
+      **UNBLOCKED 2026-07-31** — T260's flag exists, so the rollback path is
+      real: `memo_retrieval_path=document` restores today's behaviour without
+      touching data, and `/search-documents` keeps the path addressable
+      regardless. Nothing further to build until the flip itself happens; this
+      task is the *commitment* to keep the flag for one release after it does.
+- [x] **T263** — Record the post-change numbers in `research.md` beside the
+      baseline. If a criterion is missed, say so and stop — a criterion quietly
+      relaxed to fit the result is worse than a failed gate.
+      **DONE 2026-07-30 — research.md R-05.** SC-101 recorded as FAILED at 36%.
+      Bar not moved; T253's chunk-size sweep is the designed way to close it.
+
+**Gate E**: `speckit-trace --require-full 002/FR-113`
+
+---
+
+## Phase F — Re-migrate
+
+- [x] **T270** — Roll back the partial v2 corpus. Done 2026-07-31; T202 was
+      superseded by Ben's ruling to re-migrate on the large model.
+- [x] **T271** — *(DONE WITH DEVIATION — read this before citing it)* Re-ran the
+      v1→v2 backfill: 7,661 → 7,336 written, 325 merged, **0 skipped, 0 errored**,
+      exit 0, on `openai/text-embedding-3-large` at native 3072.
+      **The stated goal was NOT met.** T271 asks for the corpus to be "chunked once
+      rather than embedded twice"; run 3 wrote document embeddings only, so the
+      passage index was a **second** full-corpus embed (~$0.85 rather than the
+      ~$0.13 estimated here). Paid deliberately — a third migration costs more —
+      but inline chunking is **still owed for the next migration**, and this box is
+      ticked for the backfill, not for the efficiency it promised. [R-09]
+- [x] **T272** — Post-migration verify + bench recorded, not assumed.
+      Verify: 4/5 checks pass; the one failure (`no_duplicate_clusters`, 4 pairs,
+      0.05%) is R-08's 4-gram title gate behaving as measured, not a new defect.
+      Bench: full census, both paths, raw output checked in as
+      `bench-2026-08-01-{document,passages}.{json,txt}`. **SC-101/102/103 all FAIL**
+      — 47.6% rank-1 at 2000+ against an 80% bar, three short bands regress 1.5–4.9
+      points, 46.7% on the mid-document fact set against a 75% bar. [R-09]
+
+- [x] **T273** — *(from R-09, operator-approved 2026-08-01)* Route by size instead of choosing one path.
+      The document path is better below ~1000 tokens (78.5/76.9/76.6% vs
+      77.1/72.0/74.5%) and much worse above 2000 (18.8% vs 47.6%). Both paths are
+      already live under FR-113, so the router has what it needs. This is what
+      SC-102's regression is actually telling us, and it is cheaper than closing
+      the short-band gap by tuning.
+
+- [x] **T274** — *(from R-09, operator-approved 2026-08-01)* An exact-content match should not need the
+      title gate's permission. Four content-identical pairs survived a clean
+      migration because their titles differ in a token carrying no information (a
+      hostname; an inline `[⚠️ STALE …]` annotation). Deliberately not fixed inside
+      the migration — changing a dedup rule to green a verifier on the day the
+      corpus was rebuilt is how you get a corpus nobody can reason about.
+
+### Newly discovered, 2026-08-02 — the query prefix and the stale cutoffs
+
+⚠️ **T273's routing thresholds were derived from R-09 and R-10 changes their basis.**
+On qwen3 the document path no longer wins the short bands by the margin quoted there,
+and the passage path no longer wins anywhere. **Do not re-derive them from R-10 either**
+— R-10 measures the misconfigured client. The router's numbers should be taken after
+the prefix question is settled, not before.
+
+- [ ] **T280** — Split `embeddings.embed()` into `embed_query()` / `embed_document()`
+      and **delete the ambiguous function**, so no call site can default. 25 sites share
+      it today and the query/document distinction lives only in local variable names;
+      removing the default turns ~21 silent misclassifications into ~21 forced decisions
+      at edit time. Both directions of a wrong decision fail silently — a document routed
+      through the query path stores a prefixed vector, a query left bare reproduces the
+      R-10 regression. [002/FR-111]
+- [ ] **T281** — *(blocked by T280, and by an operator decision)* Send qwen3's instruction
+      prefix on the **query side only**. ⛔ Do NOT prefix documents — that means
+      re-embedding the corpus again and is not what the model wants. Uniformly or not at
+      all: there is no evidential basis for routing by document length (R-11). [002/FR-111]
+- [ ] **T282** — Re-run the full census after T281 and compare against **both** R-09 and
+      R-10. R-10 is the bare-qwen3 floor, not the model's ceiling, and the point of T281
+      is to find out where the ceiling actually is. ⛔ **BOTH PATHS.** Every prefix number
+      to date is document-path only — `chunk_embeddings` has never been queried with a
+      prefixed vector. The passage path regressed harder (−27.3 vs −19.9) and holds no long
+      vectors, so the band that partly rescues the document path cannot exist there. Whether
+      the prefix helps passages at all is **open**, and assuming it transfers is the specific
+      error this task exists to prevent. [002/FR-111]
+- [ ] **T283** — ⛔ **FIRST ATTEMPT WEDGED 2026-08-03, still UNRUN.** Launched
+      `--n 120 --seed 7` at 05:29:31Z; killed at 06:08Z having produced nothing. Its own
+      `/proc/<pid>/io` counters are the record: **`syscw = 7` for the entire 38-minute
+      life** (~3 HTTP requests), all three sockets to the embedding endpoint in
+      `CLOSE-WAIT`, and meanwhile `syscr = 463,693,461` / `rchar = 1.9 TB` climbing at
+      2.4 GB/s with `read_bytes` only 112 MB — i.e. spinning CPU-bound over cached pages.
+      ⚠️ **Root cause NOT established.** It made a few embed calls, had its connections
+      closed, and then span. Whether that is retry logic, the event loop, or something in
+      `cosine()` is unknown and should not be guessed at when re-running.
+      ⭐ **Two defects made this invisible for 38 minutes and both are now fixed:** no
+      progress output (stdout was block-buffered to a pipe, so the log was empty AND the
+      buffer was destroyed by the kill — the wedge erased its own evidence), and no
+      timeout on the embed call. **A job with no progress output and no timeout cannot be
+      distinguished from a slow one from the outside.**
+      ⛔ **And a reporting failure worth keeping:** while it sat wedged I told the
+      `embeddings` seat it was submitting 1,680 calls at up to 567 tok/s, derived by
+      READING THE SOURCE and reported as a submit-side measurement. The counters
+      disagreed by three orders of magnitude. **Source code is a claim about behaviour,
+      not an observation of it.** Re-run with a submit-side counter, on an idle box, and
+      announce to `embeddings` first.
+      Original task: Re-derive `DUP_COSINE` and `auto_store_similarity_threshold` on the
+      current encoder. **Construct** the reference population by perturbing known texts —
+      identifying natural near-duplicates requires the similarity judgement being
+      calibrated, and doing it by title prefix already produced one withdrawn result.
+      Record an **admit rate** alongside the raw cutoff: the rate is invariant to the
+      encoder, which is the thing that keeps changing. [002/FR-114]
+      → **Instrument written 2026-08-02: `scripts/memo-dup-threshold-construct`.** Seven
+      classes, each a deterministic transformation of a real memo, so the transformation
+      IS the label and no similarity judgement enters the calibration. `identical` is a
+      determinism control; `numbers` (every digit run changed) is the class that decides
+      `auto_store_similarity_threshold`, being the exact shape of a memo re-stored with an
+      updated value. ⚠️ It also reports the corpus's own nearest-neighbour band as an
+      **unlabelled** diagnostic — a cutoff below that band collapses memos the corpus
+      already treats as distinct, and no constructed class can reveal that. Not yet run:
+      it competes with the T282 census for the embedding endpoint.
+- [x] **T284** — Decide the fate of `memo_recall_min_score`. **WIRED** 2026-08-02.
+      ⚠️ The premise of this task was wrong: it was NOT "read nowhere".
+      `hooks/memo-auto-recall.sh` reads `$MEMO_RECALL_MIN_SCORE` and sends it as
+      `min_score` on every `/context` call. The break was that `hooks.py` wrote
+      `~/.memo/hooks.env` from five hard-coded literals, so the config field could never
+      reach its own consumer. `cmd_install` now interpolates `settings`; covered by
+      `tests/unit/test_hooks_env.py` with non-default values throughout.
+      ⭐ The original diagnosis came from grepping the Python identifier when the consumer
+      is a shell script — a setting is dead only if nothing reads the file it is written
+      to, in *any* language present. See the correction block in research.md R-12.
+      ⚠️ Wiring made `0.5` reachable, not correct — it stays on T283's list as a
+      3-small-era cutoff unmeasured on qwen3. [002/FR-111]
+- [ ] **T285** — Before `size-routed` is ever enabled, measure whether document-level and
+      chunk-level cosines share a scale — it ranks documents against each other using
+      scores drawn from two indexes. Needs **real short-query vectors**; the zero-cost
+      stored-vector probe is confounded, because query shape is one of the two variables
+      (R-12). [002/FR-113]
+
+- [ ] **T286** — Retain `usage.prompt_tokens` from every embedding response, on both
+      `embed_query` and `embed_document`. Today both discard it: the call returns
+      `response.data[0].embedding` and the token count dies with the response object.
+      ⭐ **The cost is not the missing metric, it is that nothing in the system can
+      contradict an estimate.** On 2026-08-02 I told the `embeddings` seat this corpus
+      averages "10-25 tokens per query"; it is **53.0 measured** (n=60, same pool,
+      reading `usage.prompt_tokens` off the endpoint). Wrong by 2-5x, from a
+      chars/token ratio I never measured — and the figure stood for a day because no
+      instrument existed to challenge it. `quantum-data` spent three rounds trying to
+      explain the resulting "unexplained background" on the shared endpoint, which was
+      entirely memo.
+      ⚠️ Note the second cause when re-deriving: the qwen3 instruct prefix is **17.9 of
+      those 53 tokens**, so a bare-query measurement reads ~34% low and any token figure
+      predating 2026-08-02 17:33 EDT is a bare-query figure. [002/FR-111]
+
+- [ ] **T287** — Decide whether retrieval is required to be **set-stable**, and state the
+      answer in the spec either way. Measured in R-14: asking 25 titles 5× each, the
+      target's own rank never varied (0/25) but **the returned 10-id list varied on 11/25
+      (44%)**. Retrieval is rank-stable and not set-stable. Confirmed independently by
+      three replicates of the same 95 repair queries: rank-1 55/56/56, absent 10/10/11,
+      both flips at a rank boundary.
+      ⭐ **The bench barely notices this — a 1-2 count wobble in 95 — but the bench only
+      ever asks about ONE document's rank. Every product surface asks about the SET.**
+      `memo_context` budget packing, dedup, and any citation list can therefore differ
+      between two identical `/recall` calls with the same top hit. Whether that is a
+      defect or an acceptable property of ANN search is a decision, not a measurement,
+      and the spec currently claims **nothing in either direction** — which is the actual
+      problem, since it means no implementation can be wrong.
+      ⚠️ Do not "fix" this before deciding: forcing a total order (e.g. tie-break by id)
+      buys reproducibility and may cost relevance, and nobody has measured which ties are
+      real ties versus float noise. **Establish the requirement first.** [002/FR-113]
+
+**Final gate**: `speckit-trace --strict` (repo-wide, all of 001 + 002)

@@ -8,6 +8,11 @@ import urllib.request
 import urllib.error
 from pathlib import Path
 
+# Imported UNDER AN ALIAS deliberately. `cmd_install` binds a local named
+# `settings` for Claude Code's settings.json, so importing this as `settings`
+# would be silently shadowed there — the one function that needs it.
+from memo.config import settings as memo_settings
+
 HOOKS_DIR = Path(__file__).parent.parent.parent / "hooks"
 AUTO_RECALL_SCRIPT = HOOKS_DIR / "memo-auto-recall.sh"
 PREWORK_SCRIPT = HOOKS_DIR / "memo-prework-recall.sh"
@@ -106,18 +111,34 @@ def cmd_install(args) -> None:
 
     _save_settings(settings)
 
-    # Write hooks.env
+    # Write hooks.env.
+    #
+    # [002/T284] These values come from `settings`, not from literals. Until
+    # 2026-08-02 they were hard-coded here while config.py carried a matching
+    # block of fields under the comment "Hook settings (written to
+    # ~/.memo/hooks.env during memo-hooks install)" — describing a wiring that
+    # did not exist. `memo_recall_min_score` in particular was reachable from
+    # nowhere in Python: the shell hook read the ENV VAR of that name, and the
+    # only writer of that env var was the literal below. Setting
+    # MEMO_RECALL_MIN_SCORE and re-installing therefore reproduced 0.5.
+    #
+    # The fix is to wire rather than delete, because the settings are how a host
+    # tunes its own recall floor, and pydantic already maps each field to the
+    # env var the generated file uses:
+    #     MEMO_RECALL_MIN_SCORE=0.35 memo-hooks install
+    # now writes 0.35. `MEMO_AUTO_STORE_MIN_LEN` stays literal — it is read by
+    # memo-auto-store.sh and has no config.py field to read.
     HOOKS_ENV_PATH.parent.mkdir(parents=True, exist_ok=True)
     env_content = f"""\
 # memo hooks configuration
 # Edit these values to tune behavior without reinstalling hooks.
 
 MEMO_PORT={port}
-MEMO_AUTO_RECALL=true
-MEMO_PREWORK_RECALL=true
-MEMO_AUTO_STORE=true
-MEMO_RECALL_MIN_SCORE=0.5
-MEMO_RECALL_TOKEN_BUDGET=2000
+MEMO_AUTO_RECALL={str(memo_settings.memo_auto_recall).lower()}
+MEMO_PREWORK_RECALL={str(memo_settings.memo_prework_recall).lower()}
+MEMO_AUTO_STORE={str(memo_settings.memo_auto_store).lower()}
+MEMO_RECALL_MIN_SCORE={memo_settings.memo_recall_min_score}
+MEMO_RECALL_TOKEN_BUDGET={memo_settings.memo_recall_token_budget}
 MEMO_AUTO_STORE_MIN_LEN=200
 """
     with open(HOOKS_ENV_PATH, "w") as f:

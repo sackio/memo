@@ -1,0 +1,150 @@
+{
+  "schema": 2,
+  "run_id": "2026-08-03T225209Z",
+  "label": "FR-118b: similarity floor 0.35 \u2014 43 edges to 29, pairs that share a title but not a claim excluded",
+  "git": {
+    "sha": "d5020ba",
+    "dirty": true
+  },
+  "seed": 7,
+  "per_band": 60,
+  "sample": {
+    "id": "s-2026-08-03T184827Z",
+    "path": "/mnt/nas/data/code/memo-v2/bench/samples/default.json",
+    "minted_from": {
+      "url": "http://server4:8000",
+      "corpus_n": 7937
+    }
+  },
+  "targets": [
+    {
+      "name": "v1",
+      "url": "http://server4:8000",
+      "container": "memo",
+      "reachable": true,
+      "resolved": {
+        "model": "openai/text-embedding-3-small",
+        "dims": 1536,
+        "url": null,
+        "retrieval_path": null
+      },
+      "search_paths": {
+        "document": "http 404",
+        "passages": "http 404",
+        "v1-search": "present"
+      },
+      "display_name": "v1",
+      "corpus": {
+        "n": 7970,
+        "ge_1000": 1922,
+        "ge_2000": 407
+      }
+    },
+    {
+      "name": "v2",
+      "url": "http://localhost:8091",
+      "container": "memo-v2",
+      "reachable": true,
+      "resolved": {
+        "model": "openai/text-embedding-3-large",
+        "dims": 3072,
+        "url": "https://openrouter.ai/api/v1",
+        "retrieval_path": "passages"
+      },
+      "search_paths": {
+        "document": "present",
+        "passages": "present",
+        "v1-search": "present"
+      },
+      "display_name": "v2",
+      "corpus": {
+        "n": 8014,
+        "ge_1000": 1971,
+        "ge_2000": 469
+      }
+    }
+  ],
+  "results": {
+    "v1": {
+      "primary_path": "v1-search",
+      "paths_present": [
+        "v1-search"
+      ],
+      "supersession": {
+        "v1-search": {
+          "task": "supersession",
+          "path": "v1-search",
+          "edges": 29,
+          "n_ran": 29,
+          "failures": 0,
+          "replacement_at_1_pct": 24.14,
+          "replacement_in_top5_pct": 58.62,
+          "neither_returned_pct": 24.14,
+          "superseded_still_returned": 21,
+          "control_ok": false,
+          "status": "ok",
+          "why": "superseded memos are STILL being returned \u2014 FR-115 is not filtering, so the rest of this row is meaningless"
+        },
+        "elapsed_s": 11.9
+      }
+    },
+    "v2": {
+      "primary_path": "document",
+      "paths_present": [
+        "document",
+        "passages",
+        "v1-search"
+      ],
+      "supersession": {
+        "document": {
+          "task": "supersession",
+          "path": "document",
+          "edges": 29,
+          "n_ran": 29,
+          "failures": 0,
+          "replacement_at_1_pct": 31.03,
+          "replacement_in_top5_pct": 65.52,
+          "neither_returned_pct": 27.59,
+          "superseded_still_returned": 0,
+          "control_ok": true,
+          "status": "ok",
+          "why": null
+        },
+        "passages": {
+          "task": "supersession",
+          "path": "passages",
+          "edges": 29,
+          "n_ran": 29,
+          "failures": 0,
+          "replacement_at_1_pct": 51.72,
+          "replacement_in_top5_pct": 72.41,
+          "neither_returned_pct": 13.79,
+          "superseded_still_returned": 0,
+          "control_ok": true,
+          "status": "ok",
+          "why": null
+        },
+        "v1-search": {
+          "task": "supersession",
+          "path": "v1-search",
+          "edges": 29,
+          "n_ran": 29,
+          "failures": 0,
+          "replacement_at_1_pct": 51.72,
+          "replacement_in_top5_pct": 72.41,
+          "neither_returned_pct": 13.79,
+          "superseded_still_returned": 0,
+          "control_ok": true,
+          "status": "ok",
+          "why": null
+        },
+        "elapsed_s": 53.9
+      }
+    }
+  },
+  "display_names": {
+    "v1": "v1",
+    "v2": "v2"
+  },
+  "probe_timeout_s": 120.0
+}

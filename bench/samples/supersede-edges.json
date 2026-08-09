@@ -1,0 +1,263 @@
+[
+  {
+    "old_id": "024bef03-8e42-4aaa-bcf0-1711a0d29c0e",
+    "new_id": "7e822f96-44a9-479a-bb3d-4156cc71a47f",
+    "title": "Ecobee Auth0 silent renewal via unibrowse \u2014 working prototype",
+    "days_apart": 7.01,
+    "probe_query": "``` https://auth.ecobee.com/authorize?response_type=form_post&prompt=none&client_id=183eORFPlXyz9BbDZwqexHPBQoVjgadh&scope=openid+piiRead+piiWrite+smartRead+smartWrite&redirect_uri",
+    "method": "same-title-heuristic",
+    "similarity": 0.95
+  },
+  {
+    "old_id": "0be2ed33-6742-4aa3-9bc5-3d5db9a83814",
+    "new_id": "1de592ca-d3f5-4592-ae32-c0549e6056b7",
+    "title": "Best Budss Landscaping \u2014 Walkway Estimate EST0433 ($7,290)",
+    "days_apart": 53.86,
+    "probe_query": "4. **Location:** approximately 1/3 of the way from the house end (one crossing, two sleeves). 5. **Cost question:** ask whether the extra trench/sleeves are included in the $7,290 ",
+    "method": "same-title-heuristic",
+    "similarity": 0.788
+  },
+  {
+    "old_id": "0e0a711e-f617-4587-80d5-772dd374e0c0",
+    "new_id": "456582c0-f02d-43da-b761-ca1286e10df7",
+    "title": "Omada Controller \u2014 API and Configuration",
+    "days_apart": 2.09,
+    "probe_query": "CONTROLLER_ID=\"bd0747d5d6ba1492d82d4ad47f7a5428\" BASE_URL=\"https://localhost:8043/$CONTROLLER_ID/api/v2\" SITE_ID=\"68d8605cf6424e512e1a2779\" LOGIN=$(curl -k -s -X POST -H \"Content-T",
+    "method": "same-title-heuristic",
+    "similarity": 0.662
+  },
+  {
+    "old_id": "6ddae34f-d1e0-437b-abcf-af64c9a9f777",
+    "new_id": "103b3de4-31cd-4cdf-a803-d0763560dfce",
+    "title": "House switch port inventory (SG3428X-M2, 192.168.1.3) after 2026-05-28 cutover",
+    "days_apart": 14.0,
+    "probe_query": "Key port assignments post-cutover: Barn switch MAC: 10-5A-95-CA-48-71 Omada controller local URL: https://localhost:8043, controller ID: bd0747d5d6ba1492d82d4ad47f7a5428, site ID: ",
+    "method": "same-title-heuristic",
+    "similarity": 0.817
+  },
+  {
+    "old_id": "9459ddac-5e02-4248-9c98-074910178d40",
+    "new_id": "10ee2111-e906-484d-8f2e-b80c84a02abf",
+    "title": "Ben Sack \u2014 Athena CCDA Export (Sarkisyan, 2015-2026)",
+    "days_apart": 4.63,
+    "probe_query": "Full 2024-01-03 panel (lipid + CMP + CBC + TSH + A1c) \u2014 values match what was already in the Quest PDFs in `medical/lab-results/`. Athena also has placeholder entries for 2025-05-2",
+    "method": "same-title-heuristic",
+    "similarity": 0.869
+  },
+  {
+    "old_id": "112bd49d-cf61-4123-ad34-35ed78444116",
+    "new_id": "fde4c3aa-8a0d-42a4-b814-a9898ae8cc1f",
+    "title": "Git pulse: quantum-predict -- 2026-05-31",
+    "days_apart": 20.88,
+    "probe_query": "Source: `git log --since=2026-05-24` in `/home/ben/code/quantum-predict`. Headline business signal: **MSTR-only paper trading produced $1.5-1.8k/24h in iter34 12.5h holdout; iter35",
+    "method": "same-title-heuristic",
+    "similarity": 0.959
+  },
+  {
+    "old_id": "1604fd5a-182a-4479-b770-1dfcea82085c",
+    "new_id": "574e3da6-e3aa-4c96-9c19-8335686909ea",
+    "title": "Ben Sack \u2014 Healthcare Provider Directory",
+    "days_apart": 16.02,
+    "probe_query": "Provider: Dr. Jeanette Qablawi, MD (telemed) Next visit: 2026-05-18 1:00 PM EDT (10-min telemed slot) Zepbound (tirzepatide) 15mg weekly, $449/mo First charge 2026-05-11 Providers:",
+    "method": "same-title-heuristic",
+    "similarity": 0.684
+  },
+  {
+    "old_id": "11588416-0604-4451-99df-ddc235f4f1f4",
+    "new_id": "574e3da6-e3aa-4c96-9c19-8335686909ea",
+    "title": "Ben Sack \u2014 Healthcare Provider Directory",
+    "days_apart": 16.02,
+    "probe_query": "Zepbound (tirzepatide) 15mg weekly, $449/mo First charge 2026-05-11 Providers: John Watson MD, Danielle Raja DCNP, Moira Quinn CNP, Allison Vecchiarello, Kelly Scott (PA/CMA) Recur",
+    "method": "same-title-heuristic",
+    "similarity": 0.543
+  },
+  {
+    "old_id": "346d0edf-d14c-42d7-a057-7bcb7e4009c7",
+    "new_id": "e0481422-3f8e-42d2-94cd-262fd3af4e3d",
+    "title": "Ben Sack \u2014 Current Health Profile (May 2026)",
+    "days_apart": 39.69,
+    "probe_query": "ALT/AST consistently low-normal (AST 11-13, ALT 15-16). Alkaline phosphatase normal. Bilirubin normal. Albumin/globulin normal. (Prior memo noted \"no hepatotoxicity from oral TRT\" ",
+    "method": "same-title-heuristic",
+    "similarity": 0.947
+  },
+  {
+    "old_id": "8c446c1d-d21e-4604-b277-4ba746d73ede",
+    "new_id": "1a427941-03df-42b1-a1aa-631c0d09d9f4",
+    "title": "Automated Claude Code Crons \u2014 partial scale-down 2026-04-22/23",
+    "days_apart": 59.27,
+    "probe_query": "flock -n /tmp/<job>.lock timeout --foreground -k 30 <duration> /home/ben/.local/bin/claude -p ... ``` Empty 0-byte `/tmp/*.lock` files are normal flock artifacts; flock releases on",
+    "method": "same-title-heuristic",
+    "similarity": 0.669
+  },
+  {
+    "old_id": "1feb7299-8ee7-4f31-8245-ad0d306c3254",
+    "new_id": "bcbf3e4e-e469-4c05-aad7-a1045ca63e8b",
+    "title": "Cluster alert: server4 SSH connectivity issue (2026-05-31)",
+    "days_apart": 21.01,
+    "probe_query": "3. `arp -a` \u2014 look for stale entries 4. `netstat -s` \u2014 dropped packets 5. Restart network service / interface reset if needed 6. server3 iDRAC needs manual investigation (IPMI time",
+    "method": "same-title-heuristic",
+    "similarity": 0.554
+  },
+  {
+    "old_id": "28b772fe-2fbc-4b56-8516-59608f8c1b86",
+    "new_id": "8de981a0-9350-4362-a1d7-8afe20e02091",
+    "title": "VyOS Router \u2014 Hardware, Config & Migration Reference",
+    "days_apart": 17.15,
+    "probe_query": "The EdgeRouter X bottlenecked at ~900Mbps and couldn't handle FIOS 2Gbps service. Replaced with VyOS rolling (nftables) on HP ProDesk 600 G6 SFF with Intel X710-DA4 quad 10G SFP+ N",
+    "method": "same-title-heuristic",
+    "similarity": 0.68
+  },
+  {
+    "old_id": "6ba9fc87-cb97-474a-981e-bd5bbc49c338",
+    "new_id": "2abe0256-b76e-423f-babb-eb2c429ac15f",
+    "title": "Generator (Generac) Wi-Fi disconnected \u2014 recurring issue post-outage",
+    "days_apart": 22.0,
+    "probe_query": "Generator name: Ben Sack (Generac 24 kW LP standby) Open Mobile Link app \u2192 tap \"Reconnect now\" \u2192 follow on-screen instructions Power outage on 2026-05-27 may have disrupted the gen",
+    "method": "same-title-heuristic",
+    "similarity": 0.84
+  },
+  {
+    "old_id": "42277c2b-fb60-43dc-8ced-bfd944036dab",
+    "new_id": "2ee6c85f-eeb7-4226-878c-dff969e9b9d8",
+    "title": "2026 Garden \u2014 Raised Bed Dimensions & Measurements",
+    "days_apart": 10.21,
+    "probe_query": "5. Sunbelt Plum Perfect 6. Sierra Lady 7. White Gold 8. Pink Knockout Rose-tone rate: \u00bd cup/bush \u00d7 8 bushes = 4 cups (~1 lb) per application. Source: Laura email to self, May 18 20",
+    "method": "same-title-heuristic",
+    "similarity": 0.828
+  },
+  {
+    "old_id": "9cdb47cd-c196-43de-937e-fc2f8acf5603",
+    "new_id": "30f71ed0-266f-46f9-820d-9ba62d19c966",
+    "title": "Git pulse rollup: quantum-feed -- 2026-06-12 to 2026-06-14",
+    "days_apart": 7.01,
+    "probe_query": "4. Wave-1 at-scale signal-parity cert (32 surfaces @ 1000x90, 0 divergences) 5. k8s Job for at-scale signal-parity sweep 6. QFRT_MAX_ACK_PENDING env + health-harness Layer-1 per-st",
+    "method": "same-title-heuristic",
+    "similarity": 0.681
+  },
+  {
+    "old_id": "33f8a7b4-4cbc-42d3-9a98-759336523791",
+    "new_id": "63d7d81d-5a5b-4161-9714-b392f06adea1",
+    "title": "Autoimmune Exome Project \u2014 KM15642",
+    "days_apart": 42.44,
+    "probe_query": "All steps complete. Reference genome: GRCh38 no-alt contigs. 1. Configure pedigrees + affected status in seqr (programmatic via API) 2. Assign HPO terms per individual 3. Create ge",
+    "method": "same-title-heuristic",
+    "similarity": 0.58
+  },
+  {
+    "old_id": "4fab798f-dab0-4d9e-a61e-a7c5febc7329",
+    "new_id": "8a8686d6-054e-45e7-a8d6-524f5dad5384",
+    "title": "Barn K8s Cluster \u2014 Topology and Node Roles",
+    "days_apart": 33.41,
+    "probe_query": "Kubeconfig: /mnt/nas/data/code/server_admin/k8s-credentials/clusters/barn-cluster.yaml Alias: k-barn quantum (reactor workloads), quantum-feed (data pipeline), quantum-dojo (dashbo",
+    "method": "same-title-heuristic",
+    "similarity": 0.375
+  },
+  {
+    "old_id": "a2619d6a-868d-4184-9b92-951c8502b496",
+    "new_id": "9c2721c1-6c2a-46b3-8411-35b6a8c436b9",
+    "title": "Contractor Murilo Flawless renovation update 120 Reedy Meadow active May 2026",
+    "days_apart": 42.0,
+    "probe_query": "Vertical PVC board orientation selected. Materials ordered. Original too large (returned). Replacement 30x80 with 6-9/16\" jamb discussed April 21. Junior noted plywood badly rotted",
+    "method": "same-title-heuristic",
+    "similarity": 0.382
+  },
+  {
+    "old_id": "97c99329-8f8c-44b2-ad90-86a77026f8c0",
+    "new_id": "630472c3-645e-4e4a-995b-ae7831c013d1",
+    "title": "PushBuild Tax Categorization \u2014 Context & Strategy",
+    "days_apart": 2.98,
+    "probe_query": "If data feeds + utilities + cloud are pooled as \u00a7195 startup costs AND hardware (~$60K) is included: Startup cost analysis tab: \"\u00a7195 Startup Pool\" in the main Business Expenditure",
+    "method": "same-title-heuristic",
+    "similarity": 0.865
+  },
+  {
+    "old_id": "aea5865f-d6b9-455b-9025-ec9c795e2781",
+    "new_id": "6f679c11-59cc-4dae-a3ea-c2a6cbf8a8ff",
+    "title": "Git pulse: storybook -- 2026-05-31 (new project)",
+    "days_apart": 20.88,
+    "probe_query": "Source: `git log --since=2026-05-24` in `/home/ben/code/storybook`. Storybook is a brand-new project: a personalized illustrated children's book generator. Takes a story spec \u2192 gen",
+    "method": "same-title-heuristic",
+    "similarity": 0.953
+  },
+  {
+    "old_id": "786132d7-9b02-4345-87f3-5e01f45ab3db",
+    "new_id": "7e843270-29f9-4ba7-9c41-f961e560d5e2",
+    "title": "House-barn network cutover: 10G fiber primary, legacy Cat6 trunks abandoned (2026-05-28)",
+    "days_apart": 14.0,
+    "probe_query": "2. Unplugged old Cat6 trunks at both ends: RED (house p11), WHITE (house p13 / barn p21), BLUE (house p12 \u2014 old route to outdoor barn AP). ORANGE (house p14 / barn p22) was already",
+    "method": "same-title-heuristic",
+    "similarity": 0.951
+  },
+  {
+    "old_id": "7e33f64b-0777-4ca8-90e5-d045884ef839",
+    "new_id": "b3028d13-c0ae-4e05-a873-19aff004f53a",
+    "title": "PXE Autoinstall \u2014 NVMe Partition Wipe Fix (early-commands)",
+    "days_apart": 14.66,
+    "probe_query": "Also added empty vendor-data file to stop cloud-init hammering 404s (non-fatal but noisy). The above wipes hardcoded `/dev/sda` and `/dev/nvme0n1` \u2014 fine for PXE-installed barn wor",
+    "method": "same-title-heuristic",
+    "similarity": 0.36
+  },
+  {
+    "old_id": "82d132ea-88ef-45e8-a807-0d2395798af8",
+    "new_id": "f792121a-e8c7-4857-a9ef-2e2bf2afac6d",
+    "title": "Voicemail: Austin (Nashoba Air & BoilerWorks) \u2014 2026-05-26",
+    "days_apart": 25.0,
+    "probe_query": "From: +19784860600 Full transcript: \"Hi Ben. This is Austin from the show, the air and boiler work, some of the sales manager over here. One of our sister company, central, florida",
+    "method": "same-title-heuristic",
+    "similarity": 0.583
+  },
+  {
+    "old_id": "a3ec528f-d35b-4e92-89b6-df5869ce2c60",
+    "new_id": "855fb1f1-7e28-4ab8-bf74-99280b7f474d",
+    "title": "HVAC Replacement Plan \u2014 120 Reedy Meadow Rd, Groton MA",
+    "days_apart": 37.01,
+    "probe_query": "3. Grid outage: Battery covers 10-17 hr typical load 4. Extended outage: Generac 24kW LP standby auto-starts, full HVAC load covered Leo submitted a proposal with **Bryant Crossove",
+    "method": "same-title-heuristic",
+    "similarity": 0.878
+  },
+  {
+    "old_id": "b2741569-1c3f-4ab2-8f2d-79ab7c2a88a0",
+    "new_id": "85f8908a-f0b5-4bdf-a6f7-9991bb711a89",
+    "title": "Laura IRA \u2192 Solo 401k Rollover \u2014 April 2026",
+    "days_apart": 64.69,
+    "probe_query": "Clears the pro-rata rule so the $21,950 after-tax basis remaining in the IRA can be converted to Roth with zero federal/MA tax owed (backdoor Roth). Per IRS Notice 2014-54 / IRC \u00a74",
+    "method": "same-title-heuristic",
+    "similarity": 0.886
+  },
+  {
+    "old_id": "a334a34f-4cfd-464c-ba9d-330c29c57997",
+    "new_id": "ee31b52e-3f77-4aeb-afa1-aed75af048d1",
+    "title": "Ben Sack \u2014 Hormone Optimization Stack (2026)",
+    "days_apart": 39.69,
+    "probe_query": "1. Ben is NOT on TRT (Hone-confirmed protocol is enclomiphene+anastrozole+tadalafil, not exogenous testosterone). 2. Dr. Dahl and Dr. Lajoie are HONE providers, not Time Therapeuti",
+    "method": "same-title-heuristic",
+    "similarity": 0.914
+  },
+  {
+    "old_id": "d72f3805-711c-4195-b9c4-e5b60b7be3f6",
+    "new_id": "9d66c4c0-1323-44da-a3d5-a950b10a2ae4",
+    "title": "quantum-feed: dashboard architecture \u2014 ports, deployment, and canonical URLs",
+    "days_apart": 16.0,
+    "probe_query": "QFLS_REPO_ROOT: points at the committed .reviews/*.json artifacts (NOT a worktree checkout); the library-status backend reads these static JSON files. URL: http://192.168.1.42:3000",
+    "method": "same-title-heuristic",
+    "similarity": 0.731
+  },
+  {
+    "old_id": "c59032d3-1fc8-404e-8a16-58c775fb5254",
+    "new_id": "a92c57c7-4469-48c3-90d1-48c0fefe37e3",
+    "title": "Flawless Construction \u2014 Contract, Project Status & History (Apr 2026)",
+    "days_apart": 8.41,
+    "probe_query": "2. **Stone Veneer Installation** \u2014 $22,026 (original) + $14,500 (garage expansion) + $749.25 (foundation extension) = $37,275.25 3. **Trim & Fascia \u2014 Full PVC Replacement** \u2014 $18,9",
+    "method": "same-title-heuristic",
+    "similarity": 0.778
+  },
+  {
+    "old_id": "cd45f96b-e812-4be2-899e-17a270bfcf58",
+    "new_id": "bdd1cf45-d40a-4db0-80db-2b3fd89336a2",
+    "title": "Barn K8s Troubleshooting \u2014 Known Issues and Fixes (March 2026)",
+    "days_apart": 14.98,
+    "probe_query": "2. MicroK8s v1.32 uses nftables not iptables: Checking iptables shows 0 KUBE rules even when working. Service CIDR works via nft rules. 3. server1 stale IPs after reboot: 192.168.1",
+    "method": "same-title-heuristic",
+    "similarity": 0.694
+  }
+]

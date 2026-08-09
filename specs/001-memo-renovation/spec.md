@@ -398,11 +398,37 @@ verify the session resumes on v1 with no corruption.
   drawn from: `constitutional`, `behavioral`, `goal`, `verbatim-critical`,
   `fact`, `decision-in-progress`, `episodic`, `ephemeral-flush`,
   `time-scoped`, `legacy-unattributed`.
-- **FR-002**: memo MUST store `valid_from` and `valid_until` timestamps
-  on every memo. `valid_until IS NULL` = current; timestamped = superseded.
-- **FR-003**: memo MUST expose a `POST /supersede` endpoint that atomically
-  sets `valid_until` on the old memo and creates the new memo with
-  matching `valid_from`.
+- **FR-002** *(withdrawn 2026-07-30, **REINSTATED 2026-07-31** by operator
+  directive)*: Bi-temporal versioning **stays**. `valid_from` / `valid_until`,
+  `get_as_of`, `GET /documents/{id}/as-of` and supersede-chain resolution are all
+  retained, live and tested.
+
+  **History, kept deliberately.** On 2026-07-30 this requirement was withdrawn:
+  the argument was that under the amended Principle II superseded *state* is
+  deleted rather than retained, so an as-of query would have nothing to find, and
+  point-in-time reconstruction should come from backups instead. **The withdrawal
+  was never executed** — no task carried it out, the surface stayed live across 23
+  files, and because the code still carried `001/FR-002` anchors the trace gate
+  rated a withdrawn requirement **FULL**. The 2026-07-30 audit caught that and
+  raised **T033a** to force the choice.
+
+  **The choice went the other way (2026-07-31).** Asked to either execute the
+  withdrawal or amend the spec, the operator kept as-of. So the spec is corrected
+  to match the code rather than the code destroyed to match the spec — which also
+  means nothing has to be deleted, and the 23 files stand as they are.
+
+  Two things this leaves true and worth stating, since the withdrawal rationale
+  was not wrong, merely outweighed:
+  - Superseded state under Principle II is deleted rather than retained, so an
+    as-of query answers from what still exists — it is not a general time machine.
+  - **FR-028a**'s deletion log with content snapshots remains the recovery path
+    for anything actually removed. The two are complementary, not redundant.
+
+- **FR-003** *(amended 2026-07-30)*: `POST /supersede` survives as the
+  **replace-and-record** primitive: write the new memo, delete the old, and log
+  the old one's content to the deletion log in one transaction. It no longer
+  maintains a version chain — `supersede_edges` is reduced to that audit record.
+
 - **FR-004**: memo MUST store a structured `provenance` block per memo
   supporting the fields: `claude_log_ref`, `git_ref`, `gmail_msg_id`,
   `phony_ref`, `atc_ref`, `url`, `derived_from`.
@@ -452,12 +478,16 @@ verify the session resumes on v1 with no corruption.
   overlap + entity match. On match, the mediator chooses one of `merge`,
   `supersede`, `split`, `reject`, `write-new` and returns the chosen
   action + resulting memo id(s) to the caller.
-- **FR-015c**: The storage mediator MUST reject any write that would
-  refute a `class = fact` memo unless the caller supplies an
-  operator-directive reference (session-id + timestamp of Ben's
-  authorizing DM, or auditor invocation id). Returns HTTP 409 with a
-  clarification body: `{action: "clarify", conflicting_memo_id, prompt:
-  "who is authorizing the refutation?"}`.
+- **FR-015c**: **WITHDRAWN** 2026-07-30, amended under Principle II. The
+  operator-directive requirement for refuting a `class = fact` memo, and its
+  409-then-403 protocol, are removed. Superseding a wrong fact is ordinary
+  corpus maintenance, not a privileged act. Replaced by FR-028's
+  supersede-never-delete rule. The `operator_directive_ref` field remains
+  OPTIONAL on `supersede_edges` for the cases where an operator *did* direct
+  the change and it is worth recording — it is no longer a gate
+  section of contracts/mediator-store.md — that contract previously specified
+  403 for this same case, and the two are reconciled as 409-then-403 rather
+  than either alone.
 - **FR-015d**: The storage mediator MUST synchronously issue a
   clarification prompt to the calling agent when the incoming memo is
   ambiguous (missing class, missing provenance, appears to be compound,
@@ -525,14 +555,36 @@ verify the session resumes on v1 with no corruption.
 ### Functional Requirements — reconciliation
 
 - **FR-027**: An agent MAY create new facts via `memo_store`.
-- **FR-028**: An agent MUST NOT delete, supersede, or edit an existing
-  `class = fact` memo. Attempts return 403.
-- **FR-029**: Fact refutation MUST be initiated by an operator directive
-  (direct edit or invoking the auditor), which the auditor then executes.
-- **FR-030**: Real-time reconciliation MUST fire on the write path for
-  `class = fact` memos: if a new fact contradicts a current fact
-  (semantic + entity match), the write is queued for operator review
-  rather than applied silently.
+- **FR-028** *(amended 2026-07-30)*: An agent MAY supersede AND MAY DELETE.
+  Deletion is restricted by WHAT qualifies, not by who asks:
+  **deletable** — byte-identical duplicates (keep one), superseded versions past
+  retention, TTL-expired and `ephemeral-flush`, empty stubs;
+  **supersede-then-delete** — superseded operational STATE (the old router, the
+  previous IP, last month's config). Nobody queries what router we had in 2025,
+  and keeping it competes for retrieval against the current fact. A "we used to
+  have X" rewrite keeps the cost and adds none of the value;
+  **keep** — the REASONING behind a change (decisions, postmortems, measured
+  findings). Those are not superseded by the state changing; they explain it.
+  The line is: facts about what IS get replaced, findings about what HAPPENED
+  get kept. Split a memo containing both;
+  **operator-only** — `class = constitutional`.
+  Content changes MUST route through supersede rather than in-place mutation, so
+  the prior version stays answerable via `get_as_of`. Every supersede edge MUST
+  record `actor` and `reason`.
+- **FR-028a** *(added 2026-07-30)*: Every deletion MUST be logged with a content
+  snapshot sufficient to reconstruct the memo. That log — not a prohibition — is
+  what makes aggressive pruning safe, and it is what lets a wrong call be undone
+  rather than merely regretted.
+- **FR-029**: **WITHDRAWN** 2026-07-30, amended. Refutation no longer
+  requires an operator directive. The measured failure mode is staleness (44
+  duplicate groups / 150 excess copies, 2026-07-30), which an operator gate
+  makes worse by making the operator the bottleneck on every correction.
+- **FR-030** *(amended 2026-07-30)*: Real-time reconciliation MUST fire on the
+  write path for `class = fact` memos: a new fact that contradicts a current
+  one MUST be reconciled — superseded, merged, or both retained with the
+  conflict recorded — rather than written silently alongside it. It is NO
+  LONGER queued for operator review; the reconciling agent decides and the
+  audit log records what it decided.
 - **FR-031**: Event-triggered reconciliation MUST fire on ATC
   infra-change events (existing L3a listener extended) for
   infrastructure-tagged memos.
@@ -545,9 +597,14 @@ verify the session resumes on v1 with no corruption.
   (grep-based; embedding-optional). Given `(host, project, session_uuid,
   optional query)`, returns matched line-ranges with structured metadata
   for provenance linking.
-- **FR-034**: memo MUST expose a `POST /flush` endpoint that upserts a
-  slot-set of ephemeral-flush memos in one call, keyed on
-  `(session_id, flush_generation)`.
+- **FR-034**: **WITHDRAWN** 2026-07-30, operator directive. Was: memo MUST expose a
+  `POST /flush` endpoint upserting a slot-set of ephemeral-flush memos keyed on
+  `(session_id, flush_generation)`. Session working state belongs to ATC, and
+  memo's copy was a *redundant store* rather than redundant delivery — two
+  mechanisms holding the same state can silently diverge with nothing
+  reconciling them. Deleting it did not create a gap; it revealed one that ATC
+  already had, which is the point. Module, tests, endpoint and the pre-compact
+  path removed in `707e714`; T061/T069 are withdrawn with it.
 - **FR-035**: memo MUST expose `GET /answer-loop-audit` returning the
   mediator's query→answer→user-next-turn log for auditor consumption.
 
@@ -705,6 +762,15 @@ verify the session resumes on v1 with no corruption.
   post-cutover.
 - **SC-009**: Backfill classifies ≥95% of v1 memos into a real class
   (≤5% land in `legacy-unattributed`).
+  **AMENDED 2026-07-30 (operator decision)**: measured against the amended
+  C-07 (see data-model.md). An unattributed fact now stays a `fact` tagged
+  `provenance-pending`, so `legacy-unattributed` means "no usable signal"
+  rather than "unattributed". Measured on the real corpus: **0.0%**
+  legacy-unattributed (was 86.8% under the original rule).
+  **Provenance coverage (6.4%) is now a tracked HEALTH metric, explicitly
+  NOT a gate** — it should rise over time as memos are re-attributed, and
+  gating on it would block a migration on record-keeping debt that
+  predates the requirement.
 - **SC-010**: Operator (Ben) can flip a single session's MCP between v1
   and v2 in under 60 seconds, with no data loss on rollback.
 

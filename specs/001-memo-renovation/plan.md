@@ -46,6 +46,16 @@ Memo becomes a durable, cross-session memory substrate for an N-agent fleet, add
 
 Each principle from `.specify/memory/constitution.md` (v1.3.0) evaluated against this plan:
 
+> ⚠️ **This gate was evaluated against v1.3.0; the constitution is now v2.0.0.**
+> Principle II was redefined on 2026-07-30 by operator directive — "deletion is
+> earned, not forbidden" replaced "only operators can refute facts" — and the
+> footer was stamped on 2026-07-31 (T151). **The check below is NOT re-run, and
+> does not need to be**, because the change is strictly *more permissive*: it
+> removes a constraint rather than adding one, so nothing that passed under the
+> stricter rule can fail under the looser one. The row for Principle II now
+> understates what is allowed rather than overstating it. A future amendment that
+> *tightens* a principle would require re-running this gate; this one does not.
+
 | Principle | Gate check | Status |
 |---|---|---|
 | **I. Agents Are the Primary Users** | Every interface (mediator, injection-set, hook contracts) shaped for agent-first consumption; human paths (`/recall`, `/memorize`) are pass-throughs to the same mediators, not privileged shortcuts. | ✅ PASS |

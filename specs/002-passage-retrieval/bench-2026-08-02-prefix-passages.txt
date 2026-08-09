@@ -1,0 +1,122 @@
+  query failed for b687621c: timed out
+  query failed for d12e3c56: timed out
+  query failed for 683cf0b9: timed out
+  query failed for 324f7358: timed out
+  query failed for 6b92be73: timed out
+  query failed for 32e6d1cb: timed out
+  query failed for 47be20cf: timed out
+  query failed for 8898fcb8: timed out
+  query failed for 463a6c8b: timed out
+  query failed for f74bd281: timed out
+  query failed for cb939e4b: timed out
+  query failed for 6082927b: timed out
+  query failed for 6a3d5aec: timed out
+  query failed for 38a8b22e: timed out
+  query failed for 835fdbe4: timed out
+  query failed for d0647372: timed out
+  query failed for ed9a620c: timed out
+  query failed for 85f9a998: timed out
+  query failed for d9c9d621: timed out
+  query failed for 3f072cdc: timed out
+  query failed for 7226593c: timed out
+  query failed for fdac7e13: timed out
+  query failed for 8afd1980: timed out
+  query failed for 6bca43f2: timed out
+  query failed for 885d4d49: timed out
+  query failed for 70184707: timed out
+  query failed for d0332390: timed out
+  query failed for 194614b8: timed out
+  query failed for fa46e7c5: timed out
+  query failed for 16f1b191: timed out
+  query failed for efebab2f: timed out
+  query failed for 5c5a4334: timed out
+  query failed for 70f369fc: timed out
+  query failed for 3d0d42fa: timed out
+  query failed for 81df496f: timed out
+  query failed for 572acf34: timed out
+  query failed for e8843fe9: timed out
+  query failed for 0b1e5af9: timed out
+  query failed for cc6dce9f: timed out
+  query failed for 6244d9e7: timed out
+  query failed for 33962c20: timed out
+  query failed for e9215dba: timed out
+  query failed for cd97c46d: timed out
+  query failed for 1cf7c546: timed out
+  query failed for a77a4c97: timed out
+  query failed for 921b2fb9: timed out
+  query failed for c8554710: timed out
+  query failed for bed35e12: timed out
+  query failed for 7de51e84: timed out
+  query failed for 9acc7fe4: timed out
+  query failed for d3c4bf7d: timed out
+  query failed for c92da6b7: timed out
+  query failed for b1f30c8b: timed out
+  query failed for e5a6f662: timed out
+  query failed for c36aa6f6: timed out
+  query failed for 03375155: timed out
+  query failed for 6b6b14fe: timed out
+  query failed for 00662aa5: timed out
+  query failed for 6ba4b869: timed out
+  query failed for fe5439d0: timed out
+  query failed for e82f9a60: timed out
+  query failed for 758442cc: timed out
+  query failed for 8e00eae0: timed out
+  query failed for f52f6944: timed out
+  query failed for a7e3587c: timed out
+  query failed for 74fc8610: timed out
+  query failed for 445a17de: timed out
+  query failed for 9219aebe: timed out
+  query failed for c87a1dfc: timed out
+  query failed for 1b3a7417: timed out
+  query failed for 49112cc0: timed out
+  query failed for 7710c10f: timed out
+  query failed for b2ea65f2: timed out
+  query failed for d53108b4: timed out
+  query failed for f7efd74a: timed out
+  query failed for ddda3745: timed out
+  query failed for 4dc45872: timed out
+  query failed for 135f339c: timed out
+  query failed for feaa80a1: timed out
+  query failed for 64529fb0: timed out
+  query failed for c4eee9d2: timed out
+  query failed for 93682549: timed out
+  query failed for b792b1d0: timed out
+  query failed for d09b88a6: timed out
+  query failed for 3a8530ea: timed out
+  query failed for b32b6289: timed out
+  query failed for 783cb78c: timed out
+  query failed for 42ac7bbe: timed out
+  query failed for 4bb77d4f: timed out
+  query failed for 4a1e07d9: timed out
+  query failed for 81c7abaf: timed out
+  query failed for 7dbdc729: timed out
+  query failed for de1f56fa: timed out
+  query failed for 5ec23504: timed out
+  query failed for b3a3e0fb: timed out
+  query failed for 326f6a20: timed out
+  query failed for e182273b: timed out
+  query failed for f8330110: timed out
+  query failed for 6c4a7d43: timed out
+  query failed for 7cce024f: timed out
+  query failed for 92e656f4: timed out
+  query failed for 8337c338: timed out
+  query failed for 3662c7c9: timed out
+corpus: 7336 memos @ http://localhost:8091  (seed 7)  path=passages [both-indexed only]
+
+        band   n  rank-1  top-5  absent@10  median
+       0-200 1216     876   1124         53   0.738
+     200-500 2293    1462   2033        156   0.699
+    500-1000 2007    1190   1587        332   0.678
+   1000-2000 1306     706   1042        178   0.656
+       2000+ 399     169    247        136   0.651
+
+⚠️ 103 of the `absent` counts above are QUERY FAILURES, not retrieval misses — the model was never asked. Per band: 0-200=2, 500-1000=95, 1000-2000=6
+
+  memos >=1000 tokens: 1761 (57.2% of all content)
+  memos >=2000 tokens: 405 (25.3% of all content)
+
+Searching a memo's own exact title: rank 1 is the only correct answer.
+
+mid-document fact set (the answer lives inside a long memo):
+  rank-1 16/30 (53%) · top-5 24/30 · absent 4/30
+wrote bench-2026-08-02-prefix-passages.json

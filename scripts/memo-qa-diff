@@ -1,0 +1,293 @@
+#!/usr/bin/env python3
+"""memo-qa-diff — compare two memo-qa-suite runs, or two targets inside one.
+
+⭐ **The question is almost never "what does v2 score." It is "did this change
+help, and where did it hurt."** That needs two runs side by side WITH their
+config deltas attached, which is the whole reason `memo-qa-suite` stores the
+resolved config next to the numbers.
+
+    memo-qa-diff bench/results/qa-A.json bench/results/qa-B.json
+    memo-qa-diff --within bench/results/qa-A.json        # v1 vs v2 in one run
+
+## ⛔ WHAT THIS REFUSES TO DO
+
+**It will not diff two numbers whose configs differ without saying so.** A
+rank-1 delta between a 3-small run and a 3-large run is not a regression or an
+improvement in anything until you know which knob moved. Config deltas print
+FIRST, above the numbers, and a run with `git.dirty` is flagged as
+non-reproducible.
+
+**It will not treat a missing task as a zero.** `could_not_run` propagates; a
+task that did not execute prints as `—`, never as `0.0%` and never as a delta.
+*The most expensive mistakes in this project have all been a null rendered as a
+value.*
+
+## ⚠️ ON COMPARING TOTALS
+
+Totals are UNWEIGHTED means of five band rates with n fixed per band, so they are
+immune to corpus composition **by construction**. A total delta is therefore not
+explainable by "one corpus has more long documents" — that argument is already
+excluded by the sampling design and reaching for it produces a confident wrong
+mechanism attached to a possibly-right conclusion.
+
+⛔ **Band-level deltas are the noisy ones and they are the ones that get quoted
+alone.** At n=60 a single band swing of 25pt is ~15 documents. This tool prints
+the raw integers next to every percentage for exactly that reason.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+CFG_FIELDS = ("model", "dims", "url", "retrieval_path")
+
+
+def load(p: str) -> dict:
+    return json.loads(Path(p).read_text())
+
+
+def target(run: dict, name: str) -> dict:
+    for t in run.get("targets", []):
+        if t.get("name") == name:
+            return t
+    return {}
+
+
+def task_paths(run: dict, name: str, task: str) -> dict:
+    r = (run.get("results") or {}).get(name) or {}
+    ot = r.get(task)
+    if not isinstance(ot, dict):
+        return {}
+    # recall tasks are stored per-path: {"document": {...}, "v1-search": {...}}
+    if "task" in ot:            # single-path shape
+        return {ot.get("path", "?"): ot}
+    return {k: v for k, v in ot.items() if isinstance(v, dict) and "task" in v}
+
+
+def fmt_pct(v) -> str:
+    return "—" if v is None else f"{v:.1f}%"
+
+
+def cfg_line(t: dict) -> str:
+    r = t.get("resolved") or {}
+    if r.get("error"):
+        return f"{r['error']} ({r.get('detail','')[:60]})"
+    return " · ".join(f"{k}={r.get(k)}" for k in CFG_FIELDS)
+
+
+def print_config_delta(a_run, b_run, a_name, b_name, a_label, b_label) -> None:
+    ta, tb = target(a_run, a_name), target(b_run, b_name)
+    print("── CONFIG (printed first, because a delta between different configs "
+          "is not a regression) ──")
+    print(f"  {a_label:22} {cfg_line(ta)}")
+    print(f"  {b_label:22} {cfg_line(tb)}")
+    ra, rb = ta.get("resolved") or {}, tb.get("resolved") or {}
+    diffs = [f"{k}: {ra.get(k)} -> {rb.get(k)}" for k in CFG_FIELDS
+             if ra.get(k) != rb.get(k)]
+    print("  CHANGED: " + ("; ".join(diffs) if diffs else "nothing"))
+    ca, cb = ta.get("corpus") or {}, tb.get("corpus") or {}
+    if ca and cb and "error" not in ca and "error" not in cb:
+        print(f"  corpus:  n {ca.get('n')} -> {cb.get('n')}"
+              f"   ≥2000tok {ca.get('ge_2000')} -> {cb.get('ge_2000')}")
+        if ca.get("n") != cb.get("n"):
+            print("  ⚠️ CORPUS SIZES DIFFER — band pools are not the same memos. "
+                  "Stratification fixes composition, NOT within-band difficulty.")
+    for run, lbl in ((a_run, a_label), (b_run, b_label)):
+        if (run.get("git") or {}).get("dirty"):
+            print(f"  ⚠️ {lbl}: git tree was DIRTY — run is not reproducible")
+    print()
+
+
+NOISE_FLOOR_PT = 1.3   # R-17, measured. See print_sample_provenance().
+
+
+def print_sample_provenance(a_run, b_run, a_label, b_label) -> None:
+    """⛔ Whether the two runs asked the SAME QUESTIONS — printed before any
+    number, because it decides whether the numbers may be subtracted at all.
+
+    R-17: a seed does NOT make two runs comparable. `random.sample` over a
+    changed pool draws different documents under the same seed, and the resulting
+    ±1.3pt of resampling noise is invisible in the results — it looks exactly
+    like a small real effect. This is the check that makes it visible.
+    """
+    sa, sb = a_run.get("sample"), b_run.get("sample")
+    print("── SAMPLE (whether these two runs asked the same questions) ──")
+    for s, lbl in ((sa, a_label), (sb, b_label)):
+        print(f"  {lbl:22} " + (f"pinned {s.get('id')}" if s else
+                                "DRAWN FRESH (schema 1, or --sample none)"))
+    if sa and sb and sa.get("id") == sb.get("id"):
+        print("  ✓ same pinned question set — deltas are comparable")
+    elif not sa and not sb and a_run is b_run:
+        # v1-vs-v2 inside ONE drawn run: both columns were drawn from the same
+        # rng in the same process, but from each build's OWN corpus.
+        print(f"  ⚠️ both DRAWN — within-run v1-vs-v2 only. Treat anything under "
+              f"±{NOISE_FLOOR_PT}pt as noise (R-17).")
+    else:
+        print(f"  ⛔ DIFFERENT QUESTION SETS. These numbers answer different "
+              f"questions and MUST NOT be subtracted.\n"
+              f"     Re-run both with the same --sample, or read each on its own.")
+    print()
+
+
+def print_recall_task(task, a_run, b_run, a_name, b_name, a_label, b_label) -> None:
+    pa, pb = task_paths(a_run, a_name, task), task_paths(b_run, b_name, task)
+    print(f"── {task} (unweighted mean of band rates; raw counts in parens) ──")
+    if not pa and not pb:
+        print(f"  — neither run has a {task} result (could_not_run)\n")
+        return
+    for path in sorted(set(pa) | set(pb)):
+        va, vb = pa.get(path), pb.get(path)
+        def cell(v):
+            if not v or v.get("status") != "ok":
+                return "—"
+            return (f"{v['unweighted_rank1_pct']:.1f}% "
+                    f"({v['total_rank1']}/{v['total_n']}"
+                    + (f", {v['total_failures']}F" if v.get("total_failures") else "")
+                    + (f", {v['total_missing']}✗" if v.get("total_missing") else "")
+                    + ")")
+        line = f"  {path:12} {cell(va):26} {cell(vb):26}"
+        both_ok = (va and vb and va.get("status") == "ok"
+                   and vb.get("status") == "ok")
+        if both_ok:
+            d = vb["unweighted_rank1_pct"] - va["unweighted_rank1_pct"]
+            # ⛔ The floor is applied to the PRINTED delta, not left to the
+            # reader. A number small enough to be resampling should not be
+            # readable as a result just because it has a sign.
+            line += (f"  {d:+.1f}pt"
+                     + ("  (< floor — NOT a result)"
+                        if abs(d) < NOISE_FLOOR_PT else ""))
+        else:
+            line += "   (no delta — a missing task is not a zero)"
+        print(line)
+        # ⚠️ `missing` breaks the denominators apart: two builds scored over
+        # different subsets of the pinned set are not directly comparable, and
+        # the totals will not say so.
+        for v, lbl in ((va, a_label), (vb, b_label)):
+            if isinstance(v, dict) and v.get("total_missing"):
+                print(f"      ⚠️ {lbl}: {v['total_missing']} of "
+                      f"{v['total_pinned']} pinned ids are NOT IN THAT CORPUS "
+                      f"— scored over {v['total_n']}, not {v['total_pinned']}")
+        if both_ok:
+            for ba, bb in zip(va["bands"], vb["bands"]):
+                if not ba["n"] or not bb["n"]:
+                    continue
+                ra_, rb_ = 100*ba["rank1"]/ba["n"], 100*bb["rank1"]/bb["n"]
+                print(f"      {ba['band']:>10}  {ra_:5.1f}% ({ba['rank1']}/{ba['n']})"
+                      f"  ->  {rb_:5.1f}% ({bb['rank1']}/{bb['n']})"
+                      f"   {rb_-ra_:+5.1f}pt")
+    print()
+
+
+ANSWER_ROWS = [
+    ("right_doc_top1_pct", "right doc @1", "the OLD metric — kept beside the "
+                                           "others so the gap is visible"),
+    ("answer_in_topk_pct", "ANSWER in top-k", "⭐ GROUND TRUTH: the fact came back"),
+    ("answer_in_context_pct", "answer in /context", "⭐ …and survived the budget"),
+    ("truncation_loss_pt", "  ↳ lost to budget", "retrieved, then truncated away"),
+    ("context_tokens_mean", "tokens per call", "what delivery cost"),
+]
+
+
+def print_answer_recall(a_run, b_run, a_name, b_name, a_label, b_label) -> None:
+    pa = task_paths(a_run, a_name, "answer_recall")
+    pb = task_paths(b_run, b_name, "answer_recall")
+    print("── answer_recall (did the ANSWER come back, not did the doc rank) ──")
+    if not pa and not pb:
+        print("  — neither run has an answer_recall result (could_not_run)\n")
+        return
+    for path in sorted(set(pa) | set(pb)):
+        va, vb = pa.get(path), pb.get(path)
+        ok = lambda v: isinstance(v, dict) and v.get("status") == "ok"
+        print(f"  [{path}]  n={va.get('total_n') if ok(va) else '—'}"
+              f" / {vb.get('total_n') if ok(vb) else '—'}")
+        for key, lbl, why in ANSWER_ROWS:
+            fa = va.get(key) if ok(va) else None
+            fb = vb.get(key) if ok(vb) else None
+            unit = "" if key == "context_tokens_mean" else ("pt" if key.endswith("_pt") else "%")
+            cell = lambda f: "—" if f is None else f"{f:.1f}{unit}"
+            line = f"    {lbl:20} {cell(fa):>10}  ->  {cell(fb):>10}"
+            if fa is not None and fb is not None:
+                d = fb - fa
+                # ⛔ The floor is R-17's and applies to RATES. Token counts are a
+                # different quantity and are NOT floored — silently applying a
+                # percentage-point floor to a token count would be a category error.
+                floored = (unit == "%" and abs(d) < NOISE_FLOOR_PT)
+                line += (f"   {d:+.1f}{unit}"
+                         + ("  (< floor — NOT a result)" if floored else ""))
+            print(f"{line:<62} · {why}")
+        for v, lbl in ((va, a_label), (vb, b_label)):
+            if isinstance(v, dict) and (v.get("total_ambiguous")
+                                        or v.get("total_missing")):
+                print(f"    ⚠️ {lbl}: {v.get('total_missing',0)} missing, "
+                      f"{v.get('total_ambiguous',0)} ungradeable of "
+                      f"{v.get('total_pinned')} pinned")
+    print("    (ground truth = answer_in_topk; right-sizing = the loss row "
+          "and tokens-per-call)\n")
+
+
+def print_task_delta(a_run, b_run, a_name, b_name, a_label, b_label) -> None:
+    for task in ("own_title", "content_query"):
+        print_recall_task(task, a_run, b_run, a_name, b_name, a_label, b_label)
+    print_answer_recall(a_run, b_run, a_name, b_name, a_label, b_label)
+
+    for key, label in (("set_stability", "set_stability (T287)"),
+                       ("api_surface", "api_surface")):
+        va = ((a_run.get("results") or {}).get(a_name) or {}).get(key)
+        vb = ((b_run.get("results") or {}).get(b_name) or {}).get(key)
+        print(f"── {label} ──")
+        for v, lbl in ((va, a_label), (vb, b_label)):
+            if not isinstance(v, dict):
+                print(f"  {lbl:22} — absent"); continue
+            if v.get("status") != "ok":
+                print(f"  {lbl:22} could_not_run ({v.get('why','')[:60]})"); continue
+            if key == "set_stability":
+                print(f"  {lbl:22} rank1 varied {v['rank1_varied']}/{v['n_ran']}"
+                      f" · id-list varied {v['id_list_varied']}/{v['n_ran']}"
+                      f" ({v['replicates']} replicates)")
+            else:
+                print(f"  {lbl:22} {len(v.get('routes') or [])} routes; "
+                      f"paths={ {k: (s.get('row_keys') or s.get('error')) for k, s in (v.get('search_shape') or {}).items()} }")
+        if key == "api_surface" and isinstance(va, dict) and isinstance(vb, dict):
+            ra_, rb_ = set(va.get("routes") or []), set(vb.get("routes") or [])
+            if ra_ or rb_:
+                print(f"  only in {a_label}: {sorted(ra_-rb_) or '—'}")
+                print(f"  only in {b_label}: {sorted(rb_-ra_) or '—'}")
+        print()
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("a")
+    ap.add_argument("b", nargs="?")
+    ap.add_argument("--within", action="store_true",
+                    help="compare v1 vs v2 inside a single run file")
+    args = ap.parse_args()
+
+    a_run = load(args.a)
+    if args.within or not args.b:
+        b_run = a_run
+        a_name, b_name = "v1", "v2"
+        # ⛔ Use the name the run RECORDED for the build, not the slot key —
+        # a slot named v1 may hold a second v2 build (see --v1-name).
+        dn = a_run.get("display_names") or {}
+        a_label = f"{dn.get('v1', 'v1')} @ {a_run['run_id'][:17]}"
+        b_label = f"{dn.get('v2', 'v2')} @ {a_run['run_id'][:17]}"
+    else:
+        b_run = load(args.b)
+        a_name = b_name = "v2"
+        a_label = f"{a_run['run_id'][:17]} {a_run.get('label','')}"[:22]
+        b_label = f"{b_run['run_id'][:17]} {b_run.get('label','')}"[:22]
+
+    print(f"\nA: {args.a}   git={a_run.get('git')}")
+    print(f"B: {args.b or args.a}   git={b_run.get('git')}\n")
+    print_config_delta(a_run, b_run, a_name, b_name, a_label, b_label)
+    print_sample_provenance(a_run, b_run, a_label, b_label)
+    print_task_delta(a_run, b_run, a_name, b_name, a_label, b_label)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

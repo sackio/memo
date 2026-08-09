@@ -1,0 +1,110 @@
+#!/usr/bin/env python3
+"""memo-migrate-preview — classification preview, no embeddings, no writes. [001/FR-039]
+
+Answers "what would migration DO to this corpus" before spending anything on
+it. Unlike `--dry-run`, this computes NO embeddings, so it costs nothing and
+runs in seconds — the trade-off being that it cannot report duplicate/merge
+counts, which need vectors.
+
+Use it to check the SC-009 classification budget (<=5% legacy-unattributed)
+before committing a real migration.
+
+    memo-migrate-preview --v1-url http://localhost:8000 --limit 1000
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+import urllib.request
+from collections import Counter
+from pathlib import Path
+from time import time
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, "/app/src")
+
+from memo.migrate.classify import classify, reconstruct_provenance  # noqa: E402
+
+MAX_LEGACY_PCT = 5.0
+
+
+def fetch(v1_url: str, limit: int, page: int = 250) -> list[dict]:
+    docs: list[dict] = []
+    offset = 0
+    while len(docs) < limit:
+        n = min(page, limit - len(docs))
+        url = f"{v1_url.rstrip('/')}/documents?limit={n}&offset={offset}"
+        with urllib.request.urlopen(url, timeout=60) as r:
+            batch = json.loads(r.read())
+        if not batch:
+            break
+        docs.extend(batch)
+        offset += len(batch)
+        if len(batch) < n:
+            break
+    return docs
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--v1-url", default="http://localhost:8000")
+    ap.add_argument("--limit", type=int, default=1000)
+    ap.add_argument("--show-unclassified", type=int, default=0,
+                    help="print N sample memos that fell through to legacy")
+    args = ap.parse_args()
+
+    docs = fetch(args.v1_url, args.limit)
+    if not docs:
+        print(json.dumps({"error": "no memos fetched"}))
+        return 1
+
+    now = time()
+    classes: Counter = Counter()
+    sources: Counter = Counter()
+    tag_freq: Counter = Counter()
+    prov_yes = demoted = 0
+    unclassified_samples: list[dict] = []
+
+    for d in docs:
+        cls, src = classify(d, now=now)
+        prov, _ = reconstruct_provenance(d)
+        if prov:
+            prov_yes += 1
+        # C-07 AS AMENDED (operator decision 2026-07-30): an unattributed fact
+        # stays a fact and is tagged provenance-pending, not demoted.
+        if prov is None and cls == "fact":
+            demoted += 1          # now counts "tagged pending", not "demoted"
+            if len(unclassified_samples) < args.show_unclassified:
+                unclassified_samples.append(
+                    {"id": d.get("id", "")[:8], "tags": d.get("tags"),
+                     "excerpt": (d.get("content") or "")[:100]})
+        classes[cls] += 1
+        sources[src] += 1
+        for t in (d.get("tags") or []):
+            tag_freq[t] += 1
+
+    n = len(docs)
+    legacy_pct = round(100.0 * classes["legacy-unattributed"] / n, 1)
+    out = {
+        "sample_size": n,
+        "class_distribution": dict(classes.most_common()),
+        "classifier_sources": dict(sources.most_common()),
+        "provenance_reconstructed": prov_yes,
+        "provenance_pct": round(100.0 * prov_yes / n, 1),
+        "facts_tagged_provenance_pending": demoted,
+        "provenance_coverage_pct": round(100.0 * prov_yes / n, 1),
+        "legacy_unattributed_pct": legacy_pct,
+        "sc009_budget_pct": MAX_LEGACY_PCT,
+        "sc009_would_pass": legacy_pct <= MAX_LEGACY_PCT,
+        "top_tags": dict(tag_freq.most_common(25)),
+    }
+    if unclassified_samples:
+        out["unclassified_samples"] = unclassified_samples
+    print(json.dumps(out, indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,214 @@
+#!/usr/bin/env python3
+"""memo-chunk-sweep — which (target, overlap) makes long memos findable? [002/FR-112]
+
+T253. The passage path beat the document path on every band but still missed
+SC-101 (≥80% rank-1 for memos ≥2000 tokens) at 36%, measured at the *untuned*
+default of 384 tokens / 15% overlap. Nobody chose 384; it was a reasonable
+starting number. This sweep is the difference between a default and a decision.
+
+**The control set is fixed and re-asserted every round.** The sample the bench
+draws is `--both-indexed-only`, i.e. whatever currently has passages. If a
+config silently indexed fewer documents, the sample would change underneath the
+measurement and a coverage difference would read as a retrieval difference —
+the exact error that made the first document-vs-passage comparison wrong on
+2026-07-30. So the doc set is captured once, re-indexed wholesale each round,
+and verified identical before the bench is allowed to run.
+
+Runs INSIDE the container: it needs the passage index (a docker volume) and the
+embedding provider, and it re-embeds the whole control set once per config.
+
+    docker compose exec memo-v2 python /tmp/memo-chunk-sweep \\
+        --factset /tmp/factset-mid-document.json --out /tmp/sweep.json
+
+Deliberately NOT self-grading, like the bench it drives: it prints a table and
+writes JSON. SC-101/102/103 in spec.md say what has to clear.
+"""
+from __future__ import annotations
+
+import argparse
+import asyncio
+import json
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, "/app/src")
+
+from memo import db, passages  # noqa: E402
+from memo.chunking import chunk  # noqa: E402
+
+BENCH = "/tmp/memo-retrieval-bench"
+
+
+def _control_set() -> list[tuple[str, str]]:
+    """(id, content) for every document currently carrying passages."""
+    conn = db._get_or_create_conn(db.global_path())
+    rows = conn.execute(
+        "SELECT d.id, d.content FROM documents d "
+        "WHERE d.id IN (SELECT DISTINCT doc_id FROM document_chunks) "
+        "ORDER BY d.id").fetchall()
+    return [(r[0], r[1] or "") for r in rows]
+
+
+def _indexed_ids() -> set[str]:
+    conn = db._get_or_create_conn(db.global_path())
+    return {r[0] for r in
+            conn.execute("SELECT DISTINCT doc_id FROM document_chunks").fetchall()}
+
+
+async def _reindex(docs: list[tuple[str, str]], target: int, overlap: float,
+                   concurrency: int) -> dict:
+    sem = asyncio.Semaphore(concurrency)
+    written = 0
+    failures: list[tuple[str, str]] = []
+
+    async def one(doc_id: str, content: str) -> int:
+        async with sem:
+            try:
+                return await passages.index_document(
+                    doc_id, content, target=target, overlap=overlap)
+            except Exception as e:  # a doc that fails to index is not a doc that indexed
+                failures.append((doc_id, f"{type(e).__name__}: {e}"))
+                return 0
+
+    t0 = time.time()
+    counts = await asyncio.gather(*(one(i, c) for i, c in docs))
+    written = sum(counts)
+
+    # Passage-length distribution is half the answer to "why did this win".
+    lens = [p.token_end - p.token_start
+            for _, c in docs for p in chunk(c, target=target, overlap=overlap)]
+    lens.sort()
+    return {
+        "passages": written,
+        "docs": len(docs),
+        "passages_per_doc": round(written / max(1, len(docs)), 2),
+        "median_passage_tokens": lens[len(lens) // 2] if lens else None,
+        "p90_passage_tokens": lens[int(len(lens) * 0.9)] if lens else None,
+        "seconds": round(time.time() - t0, 1),
+        "failures": failures[:10],
+        "failure_count": len(failures),
+    }
+
+
+def _bench(url: str, factset: str | None, per_band: int, seed: int, out: str) -> dict:
+    cmd = [sys.executable, BENCH, "--url", url, "--path", "passages",
+           "--both-indexed-only", "--per-band", str(per_band), "--seed", str(seed),
+           "--json", out]
+    if factset:
+        cmd += ["--factset", factset]
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise RuntimeError(f"bench failed ({proc.returncode}): {proc.stderr[-2000:]}")
+    return json.loads(Path(out).read_text())
+
+
+def _band(res: dict, label: str) -> dict:
+    for b in res["bands"]:
+        if b["band"] == label:
+            return b
+    return {}
+
+
+async def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--url", default="http://localhost:8091")
+    ap.add_argument("--targets", default="256,384,512")
+    ap.add_argument("--overlaps", default="0,15,25", help="percent")
+    ap.add_argument("--per-band", type=int, default=14)
+    ap.add_argument("--seed", type=int, default=7)
+    ap.add_argument("--concurrency", type=int, default=6)
+    ap.add_argument("--factset", default=None)
+    ap.add_argument("--out", default="/tmp/chunk-sweep.json")
+    ap.add_argument("--restore", default=None,
+                    help="TARGET:OVERLAP_PCT to leave the index at when done "
+                         "(default: the config with the best 2000+ rank-1)")
+    args = ap.parse_args()
+
+    targets = [int(t) for t in args.targets.split(",") if t.strip()]
+    overlaps = [int(o) for o in args.overlaps.split(",") if o.strip()]
+
+    docs = _control_set()
+    control = {i for i, _ in docs}
+    if not docs:
+        print("no passage-indexed documents — nothing to sweep", file=sys.stderr)
+        return 1
+    print(f"control set: {len(docs)} documents (fixed for every config)\n")
+
+    results = []
+    for target in targets:
+        for pct in overlaps:
+            tag = f"{target}/{pct}%"
+            print(f"── {tag} ─ re-indexing …", flush=True)
+            idx = await _reindex(docs, target, pct / 100.0, args.concurrency)
+            if idx["failure_count"]:
+                print(f"   ⚠ {idx['failure_count']} documents FAILED to index; "
+                      f"first: {idx['failures'][:2]}", file=sys.stderr)
+
+            after = _indexed_ids()
+            if after != control:
+                # Refuse rather than measure a sample that moved. A shrunken
+                # control set makes coverage look like retrieval.
+                print(f"   ✗ control set changed: {len(control)} → {len(after)} "
+                      f"({len(control - after)} lost). ABORTING — the comparison "
+                      f"would no longer be like-for-like.", file=sys.stderr)
+                return 2
+
+            bench = _bench(args.url, args.factset, args.per_band, args.seed,
+                           f"/tmp/sweep-{target}-{pct}.json")
+            top = _band(bench, "2000+")
+            fs = bench.get("factset", {})
+            print(f"   {idx['passages']} passages "
+                  f"({idx['passages_per_doc']}/doc, median {idx['median_passage_tokens']}t) "
+                  f"· 2000+ rank-1 {top.get('rank1')}/{top.get('n')} "
+                  f"· factset rank-1 {fs.get('rank1', '—')}/{fs.get('n', '—')}",
+                  flush=True)
+            results.append({"target": target, "overlap_pct": pct,
+                            "index": idx, "bench": bench})
+
+    print()
+    hdr = (f"{'config':>10} {'psg':>6} {'p/doc':>6} {'medT':>5} "
+           f"{'500-1k':>7} {'1k-2k':>7} {'2000+':>7} {'2000+%':>7} {'factset':>8}")
+    print(hdr)
+    print("-" * len(hdr))
+    for r in results:
+        b, i = r["bench"], r["index"]
+        t = _band(b, "2000+")
+        fs = b.get("factset", {})
+        print(f"{r['target']:>6}/{r['overlap_pct']:>2}% {i['passages']:>6} "
+              f"{i['passages_per_doc']:>6} {str(i['median_passage_tokens']):>5} "
+              f"{str(_band(b, '500-1000').get('rank1')) + '/' + str(_band(b, '500-1000').get('n')):>7} "
+              f"{str(_band(b, '1000-2000').get('rank1')) + '/' + str(_band(b, '1000-2000').get('n')):>7} "
+              f"{str(t.get('rank1')) + '/' + str(t.get('n')):>7} "
+              f"{str(t.get('rank1_pct')):>7} "
+              f"{str(fs.get('rank1', '—')) + '/' + str(fs.get('n', '—')):>8}")
+
+    best = max(results, key=lambda r: (_band(r["bench"], "2000+").get("rank1") or 0,
+                                       (r["bench"].get("factset") or {}).get("rank1") or 0))
+    print(f"\nbest 2000+ rank-1: {best['target']}/{best['overlap_pct']}% "
+          f"— {_band(best['bench'], '2000+').get('rank1_pct')}% "
+          f"(SC-101 needs 80%)")
+
+    if args.restore:
+        rt, ro = args.restore.split(":")
+        rt, ro = int(rt), int(ro)
+    else:
+        rt, ro = best["target"], best["overlap_pct"]
+    print(f"leaving the passage index at {rt}/{ro}% …", flush=True)
+    final = await _reindex(docs, rt, ro / 100.0, args.concurrency)
+    print(f"restored: {final['passages']} passages, "
+          f"{final['failure_count']} failures")
+
+    payload = {"control_docs": len(docs), "seed": args.seed,
+               "per_band": args.per_band, "results": results,
+               "left_at": {"target": rt, "overlap_pct": ro}}
+    Path(args.out).write_text(json.dumps(payload, indent=2))
+    print(f"wrote {args.out}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(asyncio.run(main()))

@@ -1,0 +1,93 @@
+{
+ "path": "document",
+ "rows": [
+  {
+   "id": "b687621c-d92b-47f5-920b-4866c1db1403",
+   "band": "0-200",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "d12e3c56-ea20-4d8c-97ea-3bc7b0d2e2ba",
+   "band": "0-200",
+   "rank": null,
+   "rank1": false,
+   "top5": false,
+   "absent": true
+  },
+  {
+   "id": "43602c49-0fae-4eb6-92cc-b85eb9e6e2b1",
+   "band": "0-200",
+   "rank": 5,
+   "rank1": false,
+   "top5": false,
+   "absent": false
+  },
+  {
+   "id": "f07859c3-39b8-4585-b885-af0319b41a4f",
+   "band": "2000+",
+   "rank": null,
+   "rank1": false,
+   "top5": false,
+   "absent": true
+  },
+  {
+   "id": "8a29044b-abca-487e-8d47-871ab3fa401c",
+   "band": "2000+",
+   "rank": null,
+   "rank1": false,
+   "top5": false,
+   "absent": true
+  },
+  {
+   "id": "fb81b6f1-436e-476e-8de6-fbfa01dfcd13",
+   "band": "2000+",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "43067c6e-b84f-4c01-a5b9-b16936bcf179",
+   "band": "2000+",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "9697f587-e5a4-4b00-8c5c-99c30d971955",
+   "band": "2000+",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  },
+  {
+   "id": "560e0bef-d525-4ea6-b3a8-e2a1617be1c8",
+   "band": "2000+",
+   "rank": 0,
+   "rank1": true,
+   "top5": true,
+   "absent": false
+  }
+ ],
+ "by_band": {
+  "0-200": {
+   "n": 3,
+   "rank1": 1,
+   "top5": 1,
+   "absent": 1
+  },
+  "2000+": {
+   "n": 6,
+   "rank1": 4,
+   "top5": 4,
+   "absent": 2
+  }
+ },
+ "still_failing": 0,
+ "not_in_corpus": []
+}

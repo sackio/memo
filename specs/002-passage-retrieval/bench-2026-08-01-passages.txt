@@ -1,0 +1,18 @@
+  query failed for ec06fbb6: timed out
+corpus: 7336 memos @ http://localhost:8091  (seed 7)  path=passages [both-indexed only]
+
+        band   n  rank-1  top-5  absent  median
+       0-200 1216     937   1159      35   0.734
+     200-500 2293    1651   2146      98   0.701
+    500-1000 2007    1495   1839     124   0.711
+   1000-2000 1306     895   1170      96   0.706
+       2000+ 399     190    268     121   0.692
+
+  memos >=1000 tokens: 1761 (57.2% of all content)
+  memos >=2000 tokens: 405 (25.3% of all content)
+
+Searching a memo's own exact title: rank 1 is the only correct answer.
+
+mid-document fact set (the answer lives inside a long memo):
+  rank-1 14/30 (47%) · top-5 26/30 · absent 2/30
+wrote /tmp/claude-1000/-mnt-nas-data-code-memo/ea469f16-e6b5-42b7-a874-d7e5a365ee56/scratchpad/bench-passages.json

@@ -1,0 +1,207 @@
+#!/usr/bin/env python3
+"""memo-resume-gate — decide whether it is safe to resume a paused long job.
+
+Supersedes the ad-hoc gate used for the 2026-08-02 passages census. That one was
+right in SHAPE and wrong in its NUMBER, and the number was wrong in a way that
+looked like success.
+
+## ⭐ WHAT THE ORIGINAL GOT RIGHT — keep this part
+
+Probe THE CAPABILITY THAT FAILED, on the path that failed. The census died
+because memo-v2 could not serve `/search-passages`, while the embedding endpoint
+answered in 0.04s from the same host. Load and iowait were the wrong instrument:
+resuming on `iowait 1-2%` degraded again within 15 minutes.
+
+⇒ **LOAD AND IOWAIT ARE PROXIES; A RESUME GATE SHOULD PROBE THE THING THAT
+BROKE.** Sampling a proxy ten times only makes it a well-sampled proxy.
+
+## ⛔ WHAT IT GOT WRONG — the bound was set without measuring the band
+
+The original required ONE probe under 5s, twice. The 5s came from two endpoints
+— 0.04s healthy-direct, 60s wedged — with nothing sampled in between. Measured
+afterwards at n=30, under the realistic contended condition:
+
+    min 254   p50 3312   p90 15166   max 22676 ms   (+1 outright failure in 30)
+
+    bound  5000ms -> refuses 34% of single draws on a HEALTHY box
+    bound 15000ms -> refuses 17%
+    bound 20000ms -> refuses  3%
+
+⇒ Requiring TWO draws under 5s passes ~0.66^2 = **44% of attempts on a healthy
+box.** The gate was not selective — it was a retry loop that eventually drew two
+good samples. **It passed on its first attempt and that was recorded as the gate
+working: one sample of a binary outcome, read as validation.**
+
+⚠️ And the separation is much smaller than assumed. Healthy-contended reaches
+22.7s; the wedge signature was 60s timeouts. That is a **2.6x gap, not 1500x**.
+The gap is the only thing that makes a threshold mean anything, and it cannot be
+seen from the two endpoints alone.
+
+## ⭐ THE RULE THIS ENCODES
+
+**Do not pick a threshold. Measure the band, put the bound OUTSIDE it, and keep
+the distribution — the justification lives in the band, not in the constant.**
+`--calibrate` re-measures; a bound inherited without a band is not defensible.
+
+⚠️ A max of N draws is not a p99. If this refuses on a box that is plainly fine,
+the tail is fatter than measured: raise the bound and record a larger n. **Do not
+treat that refusal as a finding about the host.**
+
+## Design
+
+1. **Cheap filter first** (load/D-state) — refuses fast and free, costs nothing
+   when the box is obviously busy. Credit `mind`, 2026-08-03, whose two-stage
+   shape is better than the single-probe original.
+2. **Capability probe decides** — median of k draws, not a single draw, so one
+   tail sample neither passes nor fails the gate.
+3. **Then WATCH** — resume, and re-pause if the failure count climbs. This was
+   the sound half of the original and is unchanged: it closes the loop on the
+   world rather than on the resume having been issued.
+
+⛔ A FAILED probe is not a slow probe. Its duration says nothing about latency
+and it is counted separately, never folded into the median.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import statistics
+import subprocess
+import sys
+import time
+import urllib.request
+
+# Measured 2026-08-03 on server4 under contention, n=30. Re-derive with
+# --calibrate rather than trusting these across a host or workload change.
+BAND = {"p50": 3312, "p90": 15166, "max": 22676, "n": 30}
+DEFAULT_BOUND_MS = 20000     # ~3% refusal in the measured band
+WEDGE_SIGNATURE_MS = 60000   # what the failure actually looked like
+
+
+def probe(url: str, query: str, timeout_s: float) -> tuple[float, bool]:
+    req = urllib.request.Request(
+        url, data=json.dumps({"query": query, "limit": 10}).encode(),
+        headers={"Content-Type": "application/json"})
+    t = time.time()
+    try:
+        urllib.request.urlopen(req, timeout=timeout_s).read()
+        return (time.time() - t) * 1000, True
+    except Exception:
+        return (time.time() - t) * 1000, False
+
+
+def cheap_filter(max_load: float) -> tuple[bool, str]:
+    try:
+        load1 = os.getloadavg()[0]
+    except OSError:
+        return True, "loadavg unavailable — not refusing on a missing instrument"
+    if load1 > max_load:
+        return False, f"load1 {load1:.1f} > {max_load}"
+    return True, f"load1 {load1:.1f}"
+
+
+def failures_in(path: str) -> int:
+    try:
+        with open(path) as fh:
+            return sum(1 for line in fh if "query failed" in line)
+    except FileNotFoundError:
+        return -1
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--url", default="http://localhost:8091/search-passages")
+    ap.add_argument("--query", default="barn cluster node inventory")
+    ap.add_argument("--pid", type=int, help="paused process to SIGCONT")
+    ap.add_argument("--watch-file", help="run log; its 'query failed' count is the world-check")
+    ap.add_argument("--bound-ms", type=float, default=DEFAULT_BOUND_MS)
+    ap.add_argument("--draws", type=int, default=5, help="median of this many")
+    ap.add_argument("--max-load", type=float, default=40.0)
+    ap.add_argument("--watch-s", type=int, default=600)
+    ap.add_argument("--allow-new-failures", type=int, default=3)
+    ap.add_argument("--calibrate", type=int, metavar="N",
+                    help="measure the band with N draws and exit — change no state")
+    args = ap.parse_args()
+
+    if args.calibrate:
+        ms, failed = [], 0
+        for i in range(args.calibrate):
+            d, ok = probe(args.url, args.query, 30)
+            if ok:
+                ms.append(d)
+            else:
+                failed += 1
+            print(f"  {i+1:3}/{args.calibrate} {d:8.0f}ms {'ok' if ok else 'FAILED'}",
+                  flush=True)
+        if not ms:
+            print("all probes failed — nothing to characterise")
+            return 1
+        ms.sort()
+        p90 = ms[min(len(ms) - 1, int(0.9 * len(ms)))]
+        print(f"\nn={len(ms)} ok, {failed} failed")
+        print(f"  min {ms[0]:.0f}  p50 {statistics.median(ms):.0f}  "
+              f"p90 {p90:.0f}  max {ms[-1]:.0f} ms")
+        for b in (5000, 10000, 15000, 20000, 30000):
+            over = sum(1 for x in ms if x > b)
+            print(f"  bound {b:6}ms -> refuses {over}/{len(ms)} ({100*over/len(ms):.0f}%)")
+        print("\n⚠️ max of N draws is not a p99. Put the bound OUTSIDE the band and "
+              "record n.\n⛔ Leave a real gap to the wedge signature "
+              f"({WEDGE_SIGNATURE_MS:.0f}ms observed) — the gap IS the meaning.")
+        return 0
+
+    ok, why = cheap_filter(args.max_load)
+    if not ok:
+        print(f"REFUSED (cheap filter): {why}")
+        return 2
+    print(f"cheap filter passed: {why}")
+
+    ms, failed = [], 0
+    for _ in range(args.draws):
+        d, good = probe(args.url, args.query, args.bound_ms / 1000 * 1.5)
+        if good:
+            ms.append(d)
+        else:
+            failed += 1
+    if failed > args.draws // 2:
+        print(f"REFUSED: {failed}/{args.draws} probes FAILED outright — "
+              f"not slow, failed. Their timings are not latency and are excluded.")
+        return 2
+    med = statistics.median(ms)
+    print(f"probe median {med:.0f}ms over {len(ms)} ok draws "
+          f"({failed} failed), bound {args.bound_ms:.0f}ms")
+    if med > args.bound_ms:
+        print("REFUSED: median over bound")
+        return 2
+
+    if not args.pid:
+        print("PASSED (no --pid given; nothing resumed)")
+        return 0
+
+    before = failures_in(args.watch_file) if args.watch_file else -1
+    os.kill(args.pid, 18)  # SIGCONT
+    print(f"RESUMED pid {args.pid}; watching {args.watch_s}s")
+
+    # ⭐ Verify the resume TOOK, not merely that it was issued. A SIGCONT to a
+    # process that is not stopped is a no-op that returns success.
+    time.sleep(2)
+    try:
+        st = subprocess.run(["ps", "-o", "stat=", "-p", str(args.pid)],
+                            capture_output=True, text=True).stdout.strip()
+        print(f"  post-CONT state: {st or '(gone)'}"
+              + ("  ⛔ STILL STOPPED" if st.startswith("T") else ""))
+    except Exception as e:
+        print(f"  could not confirm state: {e}")
+
+    time.sleep(args.watch_s)
+    after = failures_in(args.watch_file) if args.watch_file else -1
+    if before >= 0 and after - before > args.allow_new_failures:
+        os.kill(args.pid, 19)  # SIGSTOP
+        print(f"BACKED OFF: +{after - before} failures in {args.watch_s}s — re-paused")
+        return 3
+    print(f"HELD: +{max(0, after - before)} failures in {args.watch_s}s")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

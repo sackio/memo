@@ -1,0 +1,254 @@
+================================================================================
+QWEN3 QUERY INSTRUCT PREFIX — SECOND DRAW (seed 202), 5 bands, n=75
+memo-v2 · document path · 2026-08-02 05:05-05:15 EDT · qwen3-embedding-4b @2560
+================================================================================
+
+WHY THIS RUN EXISTS. `groton` took two draws of the same design at n=120 and got
+top-5 deltas of +1 and +10 points. My first draw reported top-5 +9.3pt at n=75 —
+i.e. MY EFFECT WAS THE SIZE OF THEIR NOISE, at a smaller n. `embeddings` said run
+a second seed before anyone trusts it. Everything identical except seed 7 -> 202.
+
+--------------------------------------------------------------------------------
+THE TWO DRAWS, SIDE BY SIDE (depth 10, paired, n=75 each)
+--------------------------------------------------------------------------------
+
+                      seed 7            seed 202          spread
+  rank-1        49.3% -> 70.7%     52.0% -> 72.0%
+                    +21.3pt            +20.0pt            1.3pt
+  top-5         74.7% -> 84.0%     76.0% -> 84.0%
+                     +9.3pt             +8.0pt            1.3pt
+  absent            15 -> 9            15 -> 9            0
+                     -40%               -40%
+  discordant rank-1  18 / 2            15 / 0
+  sign p            0.00020            0.00003
+
+✅ ALL THREE METRICS REPLICATE. top-5 moved 1.3 points between draws, against the
+~10 points of draw-to-draw variance `groton` observed in the same design. So the
+top-5 gain here is a real effect and not the draw I happened to take — which was
+the open question, and it is now closed in the favourable direction.
+
+⭐ THE ABSENT COLUMN REPRODUCED EXACTLY: 15 -> 9 in both draws, independently
+sampled. That column carries the cross-seat conclusion that memo's prefix RECALLS
+(changes WHAT is retrieved) while groton's only REORDERS (-1.8% and -3.6% in their
+two draws). I had one draw when I made that claim and flagged it as mine to
+retract. It does not need retracting: -40% twice against ~-3% twice is an order of
+magnitude apart and now reproducible on both sides.
+
+⇒ Fusion absorbs a reorder. It does not absorb a changed candidate set. The same
+change is therefore worth materially more at memo than at groton, and neither
+seat's number predicts the other's.
+
+--------------------------------------------------------------------------------
+⚠️ A THIRD DEMONSTRATION THAT n=15 CANNOT RESOLVE THE 2000+ BAND
+--------------------------------------------------------------------------------
+  2000+ at n=15, seed 7      2 improved / 0 worsened
+  2000+ at n=15, seed 202    3 improved / 0 worsened
+  2000+ at n=120, seed 101  14 improved / 9 WORSENED
+
+Two independent n=15 draws BOTH show zero harm in the band where n=120 finds nine
+demotions and two documents lost. ⛔ Read together, these are not three results —
+they are one result plus two failures to resolve, and the two failures are the ones
+that look reassuring. A small-n null in this band should be treated as no
+information, not as evidence of safety. (See instruct-prefix-2000plus-2026-08-02.txt.)
+
+--------------------------------------------------------------------------------
+PER-BAND, SEED 202 (b>i = bare>instruct)
+--------------------------------------------------------------------------------
+        band    n    r1 b>i    t5 b>i   abs b>i   r1 +/-  abs +/-
+       0-200   15     11>13     14>13       1>1      2/0      0/0
+     200-500   15      8>12     12>13       3>1      4/0      2/0
+    500-1000   15      9>12     14>14       1>1      3/0      0/0
+   1000-2000   15       4>7      8>13       5>2      3/0      3/0
+       2000+   15      7>10      9>10       5>4      3/0      1/0
+       TOTAL   75     39>54     57>63      15>9     15/0      6/0
+
+⚠️ 0-200 top-5 went 14 -> 13: one document left the top-5 under the prefix. Small,
+but it is the second draw in a row showing a casualty in the shortest band (seed 7
+lost one from rank-1 to ABSENT there). Relevant to seats whose corpora sit entirely
+below 200 tokens, where memo has the only evidence and it is thin.
+
+--------------------------------------------------------------------------------
+SCOPE — unchanged from the first draw, and still binding
+--------------------------------------------------------------------------------
+Measures ONE task string, not "prefixing":
+  "Instruct: Given a search query, retrieve relevant documents that match the
+   query\nQuery: {q}"
+Self-retrieval by title makes the correct answer true by construction. Read `bare`
+before the delta: bare rank-1 is 52.0% here, so the design has room and the result
+is not a ceiling artifact.
+
+⛔ Individual bands remain unresolvable at n=15 — that is the whole point of the
+2000+ section above — so no band-dependent routing is supported. Uniform or nothing
+WITHIN this corpus. That is a within-seat rule: groton (max 400 tok) and mind (max
+350) hold no documents in the band where the cost sits, so it cannot bind them.
+
+⛔ Nothing ships until embed_query()/embed_document() exist and ~21 call sites are
+reclassified by hand. memo has no chokepoint — see commit 2369889.
+
+================================================================================
+RAW RUN OUTPUT FOLLOWS
+================================================================================
+model qwen3-embedding-4b @ 2560
+
+--- band 0-200: 1216 docs, probing 15 ---
+instruct template: 'Instruct: Given a search query, retrieve relevant documents that match the query\nQuery: <query>'
+
+  a1e7d634  bare=2  instruct=0   quantum-feed: Dashboard unit-slip correction — entri
+  c59b0725  bare=0  instruct=0   Hone Health — Anastrozole + Enclomiphene shipped (Ma
+  ab66bdaf  bare=0  instruct=0   buffet-buster: v0.9.0: real food-photo background — 
+  51827f52  bare=0  instruct=0   ATC: Webhook provisioned for storybook at atc.pushbu
+  507a9764  bare=0  instruct=0   Email — BoA: scheduled payments in 3 days from Busin
+  a7e86030  bare=3  instruct=8   aloHA relay billing: $1/mo subscribe flow
+  16d74f91  bare=-  instruct=-   quantum-feed quantum-library Phase-B backend DELIVER
+  b455ccb3  bare=0  instruct=0   storybook: Email via AWS SES (boto3) for magic-link 
+  bb2a110b  bare=0  instruct=0   quantum-feed: guardian t086-holds: restore Amendment
+  bea52e50  bare=0  instruct=0   HA configuration.yaml: duplicate top-level block sil
+  0e51aeef  bare=0  instruct=0   Delivery: Kamoer NKP pump, BANGMENG brush dryer, SKI
+  e48528a8  bare=0  instruct=0   server4 frigate-s6 fstab: hardcoded .0.113 (10G IP) 
+  8787a892  bare=1  instruct=0   quantum-feed: close_status chip and terminal walk-pr
+  53569ae5  bare=0  instruct=0   storybook: Don't full re-render on draws/redraws — p
+  626b9596  bare=0  instruct=0   server5 networkd-dispatcher routable hook — 10-fix-b
+
+                rank-1     top-5
+bare          11/15     14/15   
+instruct      13/15     13/15   
+
+rank-1 delta: +2 of 15
+
+queries whose rank-1 outcome CHANGED (rank None = absent from top-10):
+  bare=2 -> instruct=0   quantum-feed: Dashboard unit-slip correction — entries vs St
+  bare=1 -> instruct=0   quantum-feed: close_status chip and terminal walk-progress r
+
+--- band 200-500: 2293 docs, probing 15 ---
+instruct template: 'Instruct: Given a search query, retrieve relevant documents that match the query\nQuery: <query>'
+
+  b27d3b7f  bare=4  instruct=0   quantum-feed basket-NBBO fill design: composite NBBO
+  d6dc21ce  bare=2  instruct=2   David Ferreira (The Power Pro) — SPAN + Generator Co
+  bd09e5a4  bare=0  instruct=0   Fifine USB microphone setup on office workstation
+  5e0099f9  bare=-  instruct=-   ATC broker + slack-bridge fixes rollup (2026-07-10/1
+  5cae0e57  bare=-  instruct=0   quantum-feed canonical database: qf_feed vs quantum_
+  b87bbd3f  bare=2  instruct=0   K8s barn cluster: forced to single-voter server5 — J
+  1c8d794d  bare=0  instruct=0   Voicemail: Austin (show the air and boiler / Central
+  c5d2d715  bare=-  instruct=6   quantum-feed dashboard: deployed state as of Jul-14/
+  cbc525d7  bare=0  instruct=0   atc: messages: reconnect-drain preserves old high-va
+  cf618030  bare=0  instruct=0   qf-parity-gym diagnostic shortcut — --only-signal + 
+  10ef0985  bare=0  instruct=0   seqr Docker Deployment — Login & CSRF Fix
+  f2a96018  bare=0  instruct=0   qf-guardian-const4b: docs(.reviews): GO-3 day-check 
+  9764bc6c  bare=0  instruct=0   quantum-feed batch-watcher respawn: rename-in-place 
+  5f5d31e6  bare=0  instruct=0   Broker URL from env, not service-name pattern (multi
+  6d51fcf9  bare=1  instruct=0   Plantry app rename + domains (2026-07-21) — was 'pan
+
+                rank-1     top-5
+bare           8/15     12/15   
+instruct      12/15     13/15   
+
+rank-1 delta: +4 of 15
+
+queries whose rank-1 outcome CHANGED (rank None = absent from top-10):
+  bare=4 -> instruct=0   quantum-feed basket-NBBO fill design: composite NBBO chosen 
+  bare=- -> instruct=0   quantum-feed canonical database: qf_feed vs quantum_reactor
+  bare=2 -> instruct=0   K8s barn cluster: forced to single-voter server5 — Jun 24 20
+  bare=1 -> instruct=0   Plantry app rename + domains (2026-07-21) — was 'pantry'
+
+--- band 500-1000: 2007 docs, probing 15 ---
+instruct template: 'Instruct: Given a search query, retrieve relevant documents that match the query\nQuery: <query>'
+
+  c710fc3c  bare=0  instruct=0   Locality-ladder Phase 1 (2026-07-16): redis-payload 
+  667267bd  bare=-  instruct=-   Sallyann 95 — Segment Outline
+  a737a685  bare=4  instruct=4   Phase-1 trade kernel COMPLETE — all 3 steps landed &
+  7acc71bb  bare=0  instruct=0   ⭐ NAV #70 state @08:30 07-25 — SPECIMEN LANDED: memo
+  6c70971e  bare=2  instruct=0   super-agent — deploy & build runbook (s4 server + An
+  e2b7e61b  bare=0  instruct=0   server4 kube-apiserver needs explicit --advertise-ad
+  34d931d3  bare=1  instruct=0   Ben's MacBook (macbook-ben): VPN SSH access + HDMI-a
+  3469eafc  bare=0  instruct=0   GELD HEAT Loan correction — no Mass Save HEAT Loan f
+  b142337b  bare=1  instruct=1   guardian ~09:50: L1+L2 @ 46e3583f CLEAN (8th verdict
+  6a3d5aec  bare=0  instruct=0   SPAN Home App API — Reverse Engineering Findings
+  fe123026  bare=0  instruct=0   Discovery sieve — M1 C6 keystone FOUNDATION green; w
+  1031f009  bare=0  instruct=0   qf-guardian-80abe60b: D-CONSUMER-ENFORCE L1 (lint-FI
+  71cd87c1  bare=0  instruct=0   Anti-spoof rule final form — multicast/broadcast L2 
+  753eaf4a  bare=0  instruct=0   mind credibility answer (2026-07-22): no creator bea
+  dbc76b91  bare=1  instruct=0   Garden Bramble Pruning Plan (raspberries + blackberr
+
+                rank-1     top-5
+bare           9/15     14/15   
+instruct      12/15     14/15   
+
+rank-1 delta: +3 of 15
+
+queries whose rank-1 outcome CHANGED (rank None = absent from top-10):
+  bare=2 -> instruct=0   super-agent — deploy & build runbook (s4 server + Android + 
+  bare=1 -> instruct=0   Ben's MacBook (macbook-ben): VPN SSH access + HDMI-audio aut
+  bare=1 -> instruct=0   Garden Bramble Pruning Plan (raspberries + blackberries)
+
+--- band 1000-2000: 1306 docs, probing 15 ---
+instruct template: 'Instruct: Given a search query, retrieve relevant documents that match the query\nQuery: <query>'
+
+  9c1d3d9b  bare=0  instruct=0   Decoupled-ack N:M WAL limitation (stream-seq contigu
+  b91d1408  bare=8  instruct=3   NFS Boot Resilience — Root Cause, Fix & Historical I
+  a40c8071  bare=0  instruct=0   HP DeskJet 1510 — Device Reference, HPLIP & Cleaning
+  549bccae  bare=-  instruct=-   quantum-assistant: And from the just-replaced commen
+  53726796  bare=7  instruct=2   Garden Soil-Moisture Watering — Ecowitt WH51 design 
+  a06c418c  bare=-  instruct=3   quantum-library DELTA 2026-06-16 ~00:42 ET — eval-co
+  16b3930c  bare=1  instruct=1   quantum-feed Constitutional Rules — No-Lookahead + C
+  aa1d0029  bare=0  instruct=0   Barn K8s Cluster — Topology and Node Roles (GPU/Tesl
+  aff09a38  bare=4  instruct=1   [quantum-library — PHASE-1 next-bar-open exit-fill: 
+  b33ff127  bare=-  instruct=0   quantum-library 2026-07-28 04:45 — T115 ADDENDUM: a 
+  0db146fc  bare=4  instruct=0   Bank Accounts — Ben Sack / WebVitalize LLC
+  cf62fb94  bare=-  instruct=-   Quantum-Feed — Distributed Cache-Gen System (March 2
+  8337c338  bare=-  instruct=0   KM15642 Sample Table and Clinical Information
+  5664e690  bare=0  instruct=0   [quantum-sieve-guardian] HONESTY-OF-REPORTING ATTEST
+  61a1b0bc  bare=1  instruct=3   quantum-library SIGNAL-COVERAGE-CORPUS progress — P1
+
+                rank-1     top-5
+bare           4/15      8/15   
+instruct       7/15     13/15   
+
+rank-1 delta: +3 of 15
+
+queries whose rank-1 outcome CHANGED (rank None = absent from top-10):
+  bare=- -> instruct=0   quantum-library 2026-07-28 04:45 — T115 ADDENDUM: a cross-pl
+  bare=4 -> instruct=0   Bank Accounts — Ben Sack / WebVitalize LLC
+  bare=- -> instruct=0   KM15642 Sample Table and Clinical Information
+
+--- band 2000-1000000000: 399 docs, probing 15 ---
+instruct template: 'Instruct: Given a search query, retrieve relevant documents that match the query\nQuery: <query>'
+
+  f6fdee4d  bare=0  instruct=0   Sallyann 95 — Research: Voice & Themes
+  7cc8d7c7  bare=-  instruct=-   Memo Minder Checkpoint — 2026-07-13 (p2/6)
+  cf0de660  bare=0  instruct=0   ⭐ quantum-cluster ANCHOR (2026-07-30 16:15). rdv tee
+  92fda2c7  bare=0  instruct=0   quantum-feed DATA (part 2): exhaustive units map fal
+  82f12c3b  bare=0  instruct=0   ⚠️ #007 LIFT GUARD — demand the RUN_ID; source "work
+  3fce1547  bare=0  instruct=0   PAPER-LOCK layer 3 independently re-verified 7/7 + t
+  3f0a7b8b  bare=-  instruct=-   Backfill checkpoint — server4 — 2026-07-17 06:58 (p5
+  d8d4b723  bare=0  instruct=0   Jay Moody HVAC Site Visit — 2026-05-18 (Leo, owner)
+  7f6c9934  bare=4  instruct=0   Quantum Reactor — Signal Discovery Scan Pipeline (Ph
+  1536e741  bare=0  instruct=0   ⚖️ PRE-MINT cert-schema audit @e304bc32 (v2 — sub-qu
+  87a8d80e  bare=5  instruct=6   Backfill checkpoint — server4 — 2026-07-22 06:58 (p4
+  8b8ae533  bare=-  instruct=-   Backfill checkpoint — server4 — 2026-07-21 07:04 (p9
+  8f1ee808  bare=-  instruct=-   Ben Sack Health Profile — Current State (2026)
+  0c05e05c  bare=1  instruct=0   ⭐⭐ NAV #52→#53 HANDOFF rev 2 — 18 landings attested 
+  9f760baf  bare=-  instruct=0   Quantum-Dojo Pipeline: Complete Operations & Scaling
+
+                rank-1     top-5
+bare           7/15      9/15   
+instruct      10/15     10/15   
+
+rank-1 delta: +3 of 15
+
+queries whose rank-1 outcome CHANGED (rank None = absent from top-10):
+  bare=4 -> instruct=0   Quantum Reactor — Signal Discovery Scan Pipeline (Phases, Ga
+  bare=1 -> instruct=0   ⭐⭐ NAV #52→#53 HANDOFF rev 2 — 18 landings attested (CLASS-B
+  bare=- -> instruct=0   Quantum-Dojo Pipeline: Complete Operations & Scaling Guide
+
+=== ALL BANDS: rank-1 / top-5, bare -> instruct ===
+        band    n   bare r1   inst r1   bare t5   inst t5
+       0-200   15        11        13        14        13
+     200-500   15         8        12        12        13
+    500-1000   15         9        12        14        14
+   1000-2000   15         4         7         8        13
+      2000-+   15         7        10         9        10
+       TOTAL   75        39        54        57        63
+
+rank-1 52.0% -> 72.0%   top-5 76.0% -> 84.0%
+
+⚠️ LOAD-BEARING: check the 2000+ row. qwen3 bare already BEAT 3-large there (42.4% vs 18.8%). If the prefix HURTS that band it is a trade-off, not a free win.

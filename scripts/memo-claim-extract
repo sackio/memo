@@ -1,0 +1,310 @@
+#!/usr/bin/env python3
+"""memo-claim-extract — pull network/service claims out of the corpus. [005 slice 1]
+
+First slice of specs/PROPOSAL-corpus-truth-verification.md, approved by Ben
+2026-08-02 18:09 EDT ("yes do whatever you recommend") on the recommendation of
+**report-only, network claims first**. This script only extracts; it never
+probes and never writes to the corpus. `memo-claim-sweep` does the probing.
+
+A claim is an assertion inside a memo that a machine can settle, paired with the
+observation that would settle it:
+
+    {doc_id, kind, target, probe, context, historical_hint}
+
+⭐ **A claim without an executable probe is not a claim, it is a note.** Nothing
+here emits a claim it cannot also emit a probe for.
+
+## What is deliberately NOT extracted, and why
+
+* **`file.rs:568` source references.** They match a naive `host:port` pattern and
+  they are not services. Measured 2026-08-02: they were over half of that class
+  (17.2% of the corpus fell to 7.3% once excluded). They ARE checkable — against
+  a git repo, not a socket — which makes them a different slice, not noise.
+* **`kubectl` / `k-barn` claims.** Probing them means running cluster commands.
+  Out of scope for a read-only first pass against a shared production cluster.
+* **Filesystem paths.** Checkable, but a path's existence on *which host* is
+  usually unstated, so the probe is ambiguous. Deferred rather than guessed.
+
+## The historical trap, handled by construction rather than by judgement
+
+Some memos assert addresses that SHOULD fail a probe — the clearest case in this
+corpus is the 2026-07-10 Span panel incident, which records an attacker beaconing
+to a Beijing address. A verifier that "corrects" that has destroyed the record.
+
+Two mechanisms, and the first one is the load-bearing one:
+
+1. **Public IPs are never probed.** Only RFC1918 / loopback targets get a socket
+   probe. This is both the safety rule (do not send unsolicited connects to
+   third-party hosts from Ben's network) and, not by coincidence, the rule that
+   removes almost every historical-attacker claim from the probe set. They are
+   emitted with `probe: null` and `kind: ipv4_public` so they are COUNTED as
+   unprobeable rather than silently dropped.
+2. `historical_hint` flags claim context containing incident/post-mortem
+   vocabulary. It is a HINT for the human reading the failure list, never an
+   automatic exclusion — a hint that silently dropped claims would be
+   indistinguishable from an extractor that missed them.
+
+    memo-claim-extract --url http://localhost:8091 --out claims.json
+"""
+from __future__ import annotations
+
+import argparse
+import ipaddress
+import json
+import re
+import socket
+import sys
+import urllib.parse
+import urllib.request
+
+CODE_EXT = (r"(?:rs|py|ts|tsx|js|jsx|go|sh|yml|yaml|toml|md|json|c|h|cpp|java"
+            r"|sql|tf|conf|txt|log|ini|cfg)")
+
+RE_SRCREF = re.compile(rf"\b[\w/.-]+\.{CODE_EXT}:\d+")
+# MAC addresses. Consumed before anything else, because `70:85:c2:75:be:17`
+# offers `c2:75` and `c4:82` to the host:port pattern. They resolve to nothing,
+# so they landed in `host_port_unresolvable` — which is the count of claims this
+# slice CANNOT settle, and inflating that with things that were never claims
+# misstates coverage in the one direction that flatters it.
+RE_MAC = re.compile(r"\b(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}\b")
+RE_URL = re.compile(r"https?://[A-Za-z0-9._~:/?#\[\]@!$&'*+,;=%-]+")
+RE_IP_PORT = re.compile(r"\b((?:\d{1,3}\.){3}\d{1,3}):(\d{2,5})\b")
+RE_IPV4 = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
+RE_HOST_PORT = re.compile(
+    rf"\b(?!\S+\.{CODE_EXT}:)([a-z][a-z0-9-]{{1,30}}(?:\.[a-z0-9-]{{1,30}})*)"
+    rf":(\d{{2,5}})\b")
+RE_SSH = re.compile(r"\bssh\s+(?:-\S+\s+)*(?:(\w[\w.-]*)@)?([a-z][\w.-]{1,40})\b")
+
+# Private ranges this host can actually reach. 10.0.0.0/8 on this network is
+# Calico pod/service space (10.1.x pod IPs, 10.152.x ClusterIPs) — those ARE
+# private and they ARE real addresses, but they are only routable from inside
+# the cluster, so a probe from server4 fails for a reason that has nothing to do
+# with whether the memo is stale. Flagged, not probed.
+LAN_NETS = [ipaddress.ip_network("192.168.0.0/16")]
+CLUSTER_NETS = [ipaddress.ip_network("10.0.0.0/8"),
+                ipaddress.ip_network("172.16.0.0/12")]
+
+# Hostnames whose A record exists. Populated by _resolves() so that "is this a
+# hostname or a code identifier?" is answered by MEASUREMENT rather than by a
+# hand-written allowlist. `evaluator:609` and `kernel:952` are line references;
+# `nas:5050` is a service. Nothing in the token distinguishes them — DNS does.
+_resolve_cache: dict[str, bool] = {}
+
+
+def _resolves(host: str) -> bool:
+    if host not in _resolve_cache:
+        try:
+            socket.getaddrinfo(host, None)
+            _resolve_cache[host] = True
+        except Exception:
+            _resolve_cache[host] = False
+    return _resolve_cache[host]
+
+# Words that mark a span as describing a past state. Chosen from the corpus, not
+# invented: the incident/post-mortem vocabulary is what produces claims that are
+# SUPPOSED to fail.
+RE_HISTORICAL = re.compile(
+    r"\b(incident|attacker|beacon(?:ing|ed)?|compromis\w+|post-?mortem|"
+    r"root cause|was\s+(?:at|on|running)|formerly|used to|decommission\w*|"
+    r"retired|no longer|removed|blackout|outage|breach)\b", re.I)
+
+# Hostnames that are only meaningful relative to the machine that wrote the memo.
+AMBIGUOUS_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0", "host.docker.internal"}
+
+
+def get(url, path, timeout=300):
+    with urllib.request.urlopen(url.rstrip("/") + path, timeout=timeout) as r:
+        return json.loads(r.read())
+
+
+def classify_ip(ip):
+    """Return (kind_suffix, probeable) for an IPv4 literal.
+
+    Every branch here was written after reading real extractions, not before:
+    `192.168.1.0` and `192.168.0.0` are network identifiers that ping can never
+    answer, and `10.1.85.182` / `10.152.183.175` are Calico pod and ClusterIP
+    addresses whose unreachability from this host says nothing about the memo.
+    Emitting either as a plain failure would fill the first failure list with
+    noise that looks exactly like a stale memo.
+    """
+    try:
+        addr = ipaddress.ip_address(ip)
+    except ValueError:
+        return None, False
+    if not addr.is_private:
+        return "public", False
+    octets = ip.split(".")
+    if octets[-1] in ("0", "255"):
+        return "network", False
+    if any(addr in n for n in CLUSTER_NETS):
+        return "cluster_internal", False
+    if any(addr in n for n in LAN_NETS) or addr.is_loopback:
+        return "", True
+    return "other_private", False
+
+
+def context(text, start, end, width=110):
+    s, e = max(0, start - width), min(len(text), end + width)
+    return " ".join(text[s:e].split())
+
+
+def claims_in(doc):
+    """Yield every claim in one memo. Spans already consumed are not re-matched."""
+    text = doc.get("content") or ""
+    if not text:
+        return
+    doc_id = doc["id"]
+    consumed = []  # (start, end) of source refs and URLs, so they are not re-parsed
+
+    def overlaps(a, b):
+        return any(a < e and b > s for s, e in consumed)
+
+    for m in RE_MAC.finditer(text):
+        consumed.append(m.span())
+
+    for m in RE_SRCREF.finditer(text):
+        consumed.append(m.span())
+
+    for m in RE_URL.finditer(text):
+        consumed.append(m.span())
+        url = m.group(0).rstrip(".,;)`\"'")
+        ctx = context(text, *m.span())
+        host = urllib.parse.urlsplit(url).hostname or ""
+        # ⚠️ A URL host is only a claim if it means the same thing from here as
+        # it did from wherever the memo was written. `http://localhost:8731` and
+        # `http://atc:3030/...` do not: the first is relative to the reader and
+        # the second is a docker-network name that resolves only inside a
+        # container. The first sweep reported both as FAIL — 14 claims of pure
+        # noise, indistinguishable in the output from a genuinely dead service.
+        if host in AMBIGUOUS_HOSTS:
+            kind, probe = "url_host_relative", None
+        elif "." not in host and not _resolves(host):
+            kind, probe = "url_unresolvable", None
+        elif (host.endswith((".pushbuild.com", ".sack.io", ".laurasack.com",
+                             ".local"))
+              or classify_ip(host)[1]
+              or ("." not in host and _resolves(host))):
+            kind, probe = "url", {"type": "http", "url": url}
+        else:
+            kind, probe = "url_external", {"type": "http", "url": url}
+        yield {"doc_id": doc_id, "kind": kind, "target": url, "probe": probe,
+               "context": ctx,
+               "historical_hint": bool(RE_HISTORICAL.search(ctx))}
+
+    for m in RE_IP_PORT.finditer(text):
+        if overlaps(*m.span()):
+            continue
+        consumed.append(m.span())
+        ip, port = m.group(1), int(m.group(2))
+        suffix, probeable = classify_ip(ip)
+        ctx = context(text, *m.span())
+        yield {"doc_id": doc_id,
+               "kind": "ip_port" + (f"_{suffix}" if suffix else ""),
+               "target": f"{ip}:{port}",
+               "probe": ({"type": "tcp", "host": ip, "port": port}
+                         if probeable else None),
+               "context": ctx,
+               "historical_hint": bool(RE_HISTORICAL.search(ctx))}
+
+    for m in RE_HOST_PORT.finditer(text):
+        if overlaps(*m.span()):
+            continue
+        host, port = m.group(1), int(m.group(2))
+        consumed.append(m.span())
+        ctx = context(text, *m.span())
+        # ⭐ DNS is the discriminator. `evaluator:609` and `kernel:952` are line
+        # references and `nas:5050` is a service; nothing in the token shape
+        # separates them, and a hand-written allowlist would go stale the first
+        # time Ben adds a host. An unresolvable name is emitted as unprobeable
+        # rather than dropped, so the count of things this slice cannot settle
+        # stays visible.
+        if host in AMBIGUOUS_HOSTS:
+            kind, probe = "host_port_ambiguous", None
+        elif _resolves(host):
+            kind, probe = "host_port", {"type": "tcp", "host": host,
+                                        "port": port}
+        else:
+            kind, probe = "host_port_unresolvable", None
+        yield {"doc_id": doc_id, "kind": kind, "target": f"{host}:{port}",
+               "probe": probe, "context": ctx,
+               "historical_hint": bool(RE_HISTORICAL.search(ctx))}
+
+    for m in RE_SSH.finditer(text):
+        user, host = m.group(1), m.group(2)
+        # Require either an explicit user@ or a name that actually resolves.
+        # Without this the pattern harvests the next word after "ssh" out of
+        # ordinary prose — the first run produced `ben`, `port`, `command` and
+        # `gets` as ssh targets, from sentences like "ssh runs must be tracked".
+        if host in AMBIGUOUS_HOSTS:
+            continue
+        if not user and not _resolves(host):
+            continue
+        ctx = context(text, *m.span())
+        # 4999 is the house convention and 22 is everything else — `ssh
+        # git@github.com` is a real claim in this corpus and would have been
+        # reported FAIL against a hard-coded 4999. Either port open satisfies it.
+        yield {"doc_id": doc_id, "kind": "ssh" if _resolves(host)
+               else "ssh_unresolvable", "target": host,
+               "probe": ({"type": "tcp", "host": host, "ports": [4999, 22]}
+                         if _resolves(host) else None),
+               "context": ctx,
+               "historical_hint": bool(RE_HISTORICAL.search(ctx))}
+
+    for m in RE_IPV4.finditer(text):
+        if overlaps(*m.span()):
+            continue
+        ip = m.group(0)
+        suffix, probeable = classify_ip(ip)
+        if suffix is None:
+            continue
+        ctx = context(text, *m.span())
+        # Unprobeable kinds are emitted, never dropped — see the docstring. A
+        # claim this slice cannot settle has to be COUNTED as unsettled.
+        yield {"doc_id": doc_id,
+               "kind": "ipv4" + (f"_{suffix}" if suffix else ""),
+               "target": ip,
+               "probe": {"type": "ping", "host": ip} if probeable else None,
+               "context": ctx,
+               "historical_hint": bool(RE_HISTORICAL.search(ctx))}
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--url", default="http://localhost:8091")
+    ap.add_argument("--out", default="claims.json")
+    args = ap.parse_args()
+
+    docs = get(args.url, "/documents?limit=20000")
+    claims = []
+    for d in docs:
+        claims.extend(claims_in(d))
+
+    kinds = {}
+    for c in claims:
+        kinds[c["kind"]] = kinds.get(c["kind"], 0) + 1
+    probeable = [c for c in claims if c["probe"]]
+    targets = {json.dumps(c["probe"], sort_keys=True) for c in probeable}
+    docs_with = {c["doc_id"] for c in claims}
+
+    print(f"corpus                 {len(docs):>6}")
+    print(f"memos with >=1 claim   {len(docs_with):>6}  "
+          f"({100.0*len(docs_with)/len(docs):.1f}%)")
+    print(f"claims                 {len(claims):>6}")
+    print(f"  probeable            {len(probeable):>6}")
+    print(f"  unprobeable          {len(claims)-len(probeable):>6}  "
+          f"(counted, never guessed at)")
+    print(f"distinct probe targets {len(targets):>6}")
+    print(f"historical-hinted      "
+          f"{sum(1 for c in claims if c['historical_hint']):>6}")
+    print("\nby kind:")
+    for k, v in sorted(kinds.items(), key=lambda kv: -kv[1]):
+        print(f"  {k:<22}{v:>6}")
+
+    with open(args.out, "w") as fh:
+        json.dump(claims, fh, indent=1)
+    print(f"\nwrote {args.out}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

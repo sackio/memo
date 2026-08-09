@@ -1,0 +1,1222 @@
+#!/usr/bin/env python3
+"""memo-qa-suite — the re-runnable comparison between memo builds. [002/FR-114]
+
+Ben, 2026-08-03: *"save all this benchmarking testing so that we can use it again
+and again as we make improvements to the system."*
+
+## ⭐ WHY A RESULTS STORE AND NOT JUST RE-RUNNING THE BENCHMARK
+
+Every number this project had before today was a one-off from a specific
+afternoon, quoted from chat. **Three of them turned out to be measuring something
+other than what their label said:**
+
+- `ok=490 fail=0` from the registry mirror — a post-hoc count over its own plan
+  file, which cannot see whether the plan covered the right repos.
+- R-14's "incumbent" — a **v2** build, not v1, so the headline "the cutover loses"
+  was comparing two candidates and calling one of them the status quo.
+- v1's rank-1 "0 in every band" — the harness called `/search-documents`, which
+  v1 does not expose. Every query 404'd. **The table read as a result and was an
+  instrument failure.**
+
+⇒ ⛔ **None of those were careless readings. They are what happens when a number
+is separated from the configuration that produced it.** So every run here records
+the config it measured, read back off the LIVE services, alongside the result.
+
+## ⭐ WHAT EACH RUN RECORDS, AND WHY EACH FIELD IS THERE
+
+| field | why |
+|---|---|
+| `git_sha`, `dirty` | a result from an uncommitted tree is not reproducible; say so |
+| `targets[].resolved` | model/dims/url read from the RUNNING service, never from compose — this host's shell exports `EMBEDDING_MODEL=3-small` and has silently won before |
+| `corpus` counts | a rank-1 % without its denominator cannot be re-checked later |
+| raw `rank1`/`top5`/`absent`/`failures` per band | percentages are derived; store the integers |
+| `failures` SEPARATE from `absent` | a query that never ran is not a retrieval miss. Conflating them is how a broken probe reads as a bad model |
+| `seed`, `per_band` | stratified n means composition CANNOT affect the total; anyone comparing totals needs to know that |
+
+⚠️ **The totals here are UNWEIGHTED MEANS of the five band rates**, because n is
+fixed per band. That makes them immune to corpus composition **by construction** —
+so do not "defend" a total with an argument about corpus mix; the design already
+excluded it. (`embeddings` seat, 2026-08-03, correcting exactly that error here.)
+⛔ **What composition DOES change is which memos populate each band.** A harder
+pool inside a band shows up as a lower band rate, and neither n nor seed touches
+it. That confound is real, unexamined, and not the one the stratification handles.
+
+## ⛔ EVERY PROBE MUST BE ABLE TO FAIL
+
+Each task records `control_ok`. A task whose positive control did not fire is
+reported as **`could_not_run`**, never as a score of zero. The three states are
+`ok` / `failed` / `could_not_run` and the third is never folded into the second.
+*A detector that has never been run against a known positive is not a detector.*
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import random
+import re
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.request
+from datetime import datetime, timezone
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[1]
+RESULTS = REPO / "bench" / "results"
+SAMPLES = REPO / "bench" / "samples"
+
+# Search paths differ per build. v1 exposes ONLY /search; v2 exposes the explicit
+# endpoints. Auto-detecting the wrong one is what made v1 look like it retrieved
+# nothing, so the suite probes and RECORDS which it used.
+CANDIDATE_PATHS = {
+    "document": "/search-documents",
+    "passages": "/search-passages",
+    "v1-search": "/search",
+}
+
+
+# ⛔ THE HARNESS MUST BE SEPARABLE FROM REAL TRAFFIC IN v1's query_log.
+# v1 logs every search with its user-agent so live usage can be replayed against
+# v2 (Ben, 2026-08-03: *"compare the results from our real live usage"*).
+# Measured 2026-08-03: 2,714 of 2,791 logged rows were `Python-urllib/3.10` from
+# 192.168.0.109 — server4, which is where this harness runs. **The benchmark was
+# drowning the log it exists to mine, and was indistinguishable from the fleet's
+# own hooks, which are also Python and also on these hosts.** Attributing it by
+# IP is an inference; a distinct agent string is a measurement.
+UA = "memo-qa-suite/2 (benchmark; EXCLUDE-FROM-MIRROR)"
+
+
+def _post(url: str, path: str, body: dict, timeout: float = 60.0):
+    req = urllib.request.Request(
+        url.rstrip("/") + path, data=json.dumps(body).encode(),
+        headers={"Content-Type": "application/json", "User-Agent": UA})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.loads(r.read())
+
+
+def _get(url: str, path: str, timeout: float = 180.0):
+    req = urllib.request.Request(url.rstrip("/") + path,
+                                 headers={"User-Agent": UA})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.loads(r.read())
+
+
+def git_state() -> dict:
+    def sh(*a):
+        try:
+            return subprocess.run(a, cwd=REPO, capture_output=True,
+                                  text=True, timeout=15).stdout.strip()
+        except Exception:
+            return ""
+    return {"sha": sh("git", "rev-parse", "--short", "HEAD"),
+            "dirty": bool(sh("git", "status", "--porcelain"))}
+
+
+def resolve_target(name: str, url: str, container: str | None,
+                   probe_timeout: float = 30.0) -> dict:
+    """Read the config off the RUNNING service, not off any file.
+
+    ⚠️ LOAD-BEARING. This host exports EMBEDDING_MODEL=…-3-small and
+    EMBEDDING_DIMENSIONS=1536 in the shell. A `${VAR:-default}` in compose takes
+    the SHELL's value, so a container has come up on 3-small while the file said
+    3-large — caught only because dimensions were read back off the live tables.
+    """
+    out = {"name": name, "url": url, "container": container,
+           "reachable": False, "resolved": None, "search_paths": {}}
+    try:
+        _get(url, "/health", timeout=10)
+        out["reachable"] = True
+    except Exception as e:
+        out["error"] = f"health: {e}"
+        return out
+
+    for label, p in CANDIDATE_PATHS.items():
+        try:
+            _post(url, p, {"query": "probe", "limit": 1},
+                  timeout=probe_timeout)
+            out["search_paths"][label] = "present"
+        except urllib.error.HTTPError as e:
+            out["search_paths"][label] = f"http {e.code}"
+        except Exception as e:
+            # ⚠️ RECORD THE BUDGET, not just the failure. A timeout here makes
+            # the whole target `could_not_run` ("no working search path"), so a
+            # service that is SLOW is reported identically to one that is
+            # ABSENT. Measured 2026-08-03: during a host IO storm v1 answered
+            # /search in 6.9s while a 30s probe had timed out minutes earlier —
+            # the difference between "degraded" and "gone" was the load at the
+            # instant I probed, and nothing in the record said so.
+            out["search_paths"][label] = (
+                f"err {type(e).__name__} (probe budget {probe_timeout}s)")
+
+    if container:
+        # ⚠️ `getattr(..., None)` per field, NOT attribute access. v1's settings
+        # has no `embedding_base_url` at all (it hard-codes OpenRouter in
+        # embeddings.py), so `s.embedding_base_url` raises AttributeError, stdout
+        # comes back EMPTY, and an stdout-only probe reports that as "docker exec
+        # returned nothing" — blaming the transport for a bug in the probe.
+        # ⇒ **Capture stderr, and let a build legitimately lack a field.**
+        code = ("import sys,json;sys.path.insert(0,'/app/src');"
+                "from memo.config import settings as s;"
+                "print(json.dumps({k:getattr(s,k,None) for k in "
+                "('embedding_model','embedding_dimensions','embedding_base_url',"
+                "'memo_retrieval_path')}))")
+        last_err = None
+        for _ in range(4):  # docker exec on this host DOES also intermittently return nothing
+            # ⛔ TimeoutExpired MUST be caught here. The retry loop originally
+            # handled only EMPTY stdout, so a slow docker daemon raised straight
+            # out of resolve_target and killed the entire run with a traceback —
+            # losing every task, for a CONFIG PROBE that is not the measurement.
+            # Under host load `docker exec` routinely exceeds 60s.
+            try:
+                r = subprocess.run(
+                    ["docker", "exec", container, "python3", "-c", code],
+                    capture_output=True, text=True, timeout=60)
+            except subprocess.TimeoutExpired:
+                last_err = "docker exec timed out after 60s"
+                time.sleep(2)
+                continue
+            except Exception as e:
+                last_err = f"{type(e).__name__}: {e}"
+                time.sleep(2)
+                continue
+            if r.stdout.strip():
+                try:
+                    d = json.loads(r.stdout.strip())
+                    out["resolved"] = {"model": d.get("embedding_model"),
+                                       "dims": d.get("embedding_dimensions"),
+                                       "url": d.get("embedding_base_url"),
+                                       # ⛔ WHICH INDEX ANSWERED. Two context_fit
+                                       # runs on one build can differ purely
+                                       # because this flipped, and without it
+                                       # recorded the delta reads as a code
+                                       # change. Same shape as R-14's
+                                       # "incumbent".
+                                       "retrieval_path": d.get("memo_retrieval_path")}
+                except Exception:
+                    out["resolved"] = {"raw": r.stdout.strip()[:200]}
+                break
+            last_err = (r.stderr or "").strip()[-300:] or f"exit {r.returncode}, no output"
+            time.sleep(2)
+        else:
+            # ⛔ Three states. This is `could_not_tell`, and it now carries WHY.
+            out["resolved"] = {"error": "could_not_tell", "detail": last_err}
+    return out
+
+
+def corpus(url: str) -> dict:
+    docs = _get(url, "/documents?limit=20000")
+    def toks(d):
+        return d.get("token_count") or max(1, len(d.get("content") or "") // 4)
+    return {"n": len(docs),
+            "ge_1000": sum(1 for d in docs if toks(d) >= 1000),
+            "ge_2000": sum(1 for d in docs if toks(d) >= 2000)}
+
+
+# ---------------------------------------------------------------- task: recall
+BANDS = [(0, 200), (200, 500), (500, 1000), (1000, 2000), (2000, 10 ** 9)]
+
+
+def _toks(d):
+    return d.get("token_count") or max(1, len(d.get("content") or "") // 4)
+
+
+# ⭐⭐ R-17 — WHY THE QUESTIONS ARE PINNED TO A FILE AND NOT REGENERATED PER RUN
+#
+# Until 2026-08-03 both recall tasks drew their sample with `rng.sample(pool)`
+# under a fixed seed, and the seed was believed to make two runs comparable.
+# **It does not.** `random.sample` over a CHANGED POOL draws different documents
+# even under the same seed: a seed makes a run reproducible against an UNCHANGED
+# corpus, which is the one situation a benchmark is never used in.
+#
+# Measured cost of not knowing this: v1 received no code change and 6 extra
+# documents, and moved −1.3pt on BOTH tasks. That made v1 an accidental control
+# and put the floor of the whole instrument at ±1.3pt — large enough to have
+# swallowed R-15's headline, which rested on a −0.3.
+#
+# ⇒ The sample is now a FILE of `{id, query}` pairs, minted once and re-used.
+# ⭐ **The QUERY TEXT is stored, not just the id.** Pinning ids alone fixes which
+# documents are asked about; it does not fix the QUESTION, because the
+# content_query excerpt is derived from the body and would silently change if the
+# body were edited. Storing the query makes a corpus edit change the corpus and
+# not the question — which is the whole claim R-17 makes.
+#
+# ⛔ **A pinned id that has left the corpus is `missing`, never `absent`.**
+# `absent` means the search failed to return a document that was there to return;
+# a document that does not exist cannot be retrieved, and scoring it as a miss
+# would charge a build for a corpus fact. Missing ids are excluded from n and
+# counted in the open, so an eroding sample announces itself rather than quietly
+# depressing every score. (Same shape as `failures` vs `absent`, already here.)
+
+
+def _pool_own_title(docs, lo, hi, ctx=None):
+    """Eligible (doc, query, extra) triples for own_title in one band."""
+    return [(d, (d.get("title") or "")[:200], {})
+            for d in docs
+            if lo <= _toks(d) < hi and (d.get("title") or "").strip()]
+
+
+def _pool_content_query(docs, lo, hi, ctx=None):
+    """Eligible (doc, query, extra) triples for content_query in one band.
+
+    ⛔ Skips documents whose excerpt would be mostly the title again (short
+    memos), because scoring those would quietly re-run own_title under a new name.
+    """
+    pool = []
+    for d in docs:
+        if not (lo <= _toks(d) < hi):
+            continue
+        body = (d.get("content") or "").strip()
+        title = (d.get("title") or "").strip()
+        # drop markdown headers/blank lines, then take a mid-body window
+        lines = [l.strip() for l in body.split("\n")
+                 if l.strip() and not l.strip().startswith(("#", ">", "|", "-", "*"))]
+        if len(lines) < 3:
+            continue
+        excerpt = " ".join(lines[len(lines) // 3:])[:180]
+        if len(excerpt) < 60:
+            continue
+        if title and title[:40].lower() in excerpt.lower():
+            continue  # would be own_title wearing a different name
+        pool.append((d, excerpt, {}))
+    return pool
+
+
+# ------------------------------------------- task: answer recall / context fit
+#
+# ⭐⭐ THE TWO TASKS ABOVE MEASURE RETRIEVAL. BEN ASKED ABOUT SOMETHING ELSE.
+#
+# Ben, 2026-08-03: *"ground truth … ensuring that we're returning efficient
+# context, not more not less than agents need."* `own_title` and `content_query`
+# both score **did the right document rank first** — which is not the question an
+# agent has. An agent asks *what port is the ATC broker on*, and is served or not
+# served by whether **the answer is in the text that came back**. A build can rank
+# the right document first and still hand back a passage that does not contain the
+# fact, or pack the fact out of the response to fit a token budget.
+#
+# ⭐ FREE SUPERVISION, NO LLM JUDGE: use memos containing a **distinctive literal**
+# — an IP, a MAC, a phone number, a dollar amount. The literal is the answer, and
+# checking for it is exact string containment. No labelling, no model in the loop,
+# nothing to drift. (An LLM judge would have been the obvious move and would have
+# made every future re-run incomparable to this one.)
+#
+# ⛔ THE LITERAL MUST BE UNIQUE IN THE CORPUS. If two memos carry the same IP, a
+# hit on the wrong memo contains the right string and scores as correct — the
+# probe would be measuring string frequency and reporting it as accuracy.
+# ⛔ AND UNIQUENESS IS A PROPERTY OF THE CORPUS BEING SCORED, NOT OF THE ONE THE
+# SAMPLE WAS MINTED FROM. v2 holds 88 documents v1 does not; a literal unique in
+# v1 may not be unique in v2. So uniqueness is RE-CHECKED at scoring time against
+# the live corpus and violations are excluded and counted, never scored.
+# ⛔ AND THE LITERAL MUST NOT APPEAR IN THE QUERY. The query is built from the
+# title plus the words leading up to the literal, with the literal stripped —
+# then asserted absent. Otherwise the probe measures echo, not recall.
+#
+# ⇒ THE THREE NUMBERS, and why all three are needed:
+#   `right_doc_top1`   the old metric, kept side by side so the gap is visible
+#   `answer_in_topk`   the answer came back at all           → GROUND TRUTH
+#   `answer_in_context` it survived /context's token budget  → RIGHT-SIZED
+# **`answer_in_topk` − `answer_in_context` is the answer the agent retrieved and
+# then had truncated away** — the "not less than agents need" half, measured.
+# `context_tokens` is the other half: what it cost to deliver.
+
+ANSWER_PATTERNS = [
+    # ⚠️ Deliberately few and deliberately strict. A wide pattern list looks more
+    # thorough and produces a pool of false positives that scores like a result.
+    ("ipv4", re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}(?::\d{2,5})?\b")),
+    ("mac", re.compile(r"\b(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}\b")),
+    ("phone", re.compile(r"\+1\d{10}\b")),
+    ("money", re.compile(r"\$\s?\d[\d,]{2,}(?:\.\d{2})?")),
+]
+
+
+def _literals(text: str):
+    """Extract candidate answer literals. Validates IPv4 octets, because
+    `0.3.7.1`-shaped version strings are otherwise indistinguishable."""
+    out = []
+    for kind, rx in ANSWER_PATTERNS:
+        for m in rx.finditer(text):
+            tok = m.group(0)
+            if kind == "ipv4":
+                host = tok.split(":")[0]
+                if any(not p.isdigit() or int(p) > 255 for p in host.split(".")):
+                    continue
+            out.append((kind, tok, m.start()))
+    return out
+
+
+def _prepare_answer(docs) -> dict:
+    """Count how many DOCUMENTS carry each literal, once, for the whole corpus."""
+    freq: dict[str, int] = {}
+    for d in docs:
+        for _, tok, _ in set((k, t, 0) for k, t, _ in
+                             _literals(d.get("content") or "")):
+            freq[tok] = freq.get(tok, 0) + 1
+    return {"freq": freq}
+
+
+def _pool_answer_recall(docs, lo, hi, ctx):
+    freq = ctx["freq"]
+    pool = []
+    for d in docs:
+        if not (lo <= _toks(d) < hi):
+            continue
+        body = (d.get("content") or "").strip()
+        title = (d.get("title") or "").strip()
+        if not title:
+            continue
+        for kind, tok, pos in _literals(body):
+            if freq.get(tok, 0) != 1:
+                continue                      # not unique → cannot be graded
+            if tok in title:
+                continue                      # the query would carry the answer
+            lead = body[max(0, pos - 140):pos].replace("\n", " ").strip()
+            query = f"{title} {lead}".strip()[:200]
+            query = query.replace(tok, "").strip()
+            if tok in query or len(query) < 40:
+                continue                      # ⛔ asserted, not assumed
+            pool.append((d, query, {"answer": tok, "answer_kind": kind}))
+            break                             # one question per document
+    return pool
+
+
+def _passage_text(hit) -> str:
+    """The span a passage hit actually delivers. Falls back to the document only
+    when there is no passage — and a silent fallback is exactly the confound the
+    caller is avoiding, so it is recorded per-hit rather than assumed."""
+    p = hit.get("passage")
+    if isinstance(p, dict) and (p.get("text") or "").strip():
+        return p["text"]
+    if isinstance(p, str) and p.strip():
+        return p
+    return (hit.get("document", hit) or {}).get("content") or ""
+
+
+def _score_answer_band(url, path, items, docs_by_id, freq, limit, budget):
+    """Grade one band: did the ANSWER come back in the SEARCH results.
+
+    ⚠️ `/context` is deliberately NOT called here. It takes a query and a budget
+    and does not take a search path, so calling it inside this per-path loop made
+    the SAME request once per path — two of every three were identical and
+    discarded. Measured: v2 fell to ~3 questions/min and the run projected past
+    four hours. `/context` is a property of the BUILD, so it is measured once per
+    target in `task_context_fit`.
+    """
+    n = right1 = in_top1 = in_topk = in_topk_doc = failures = missing = ambiguous = 0
+    for it in items:
+        if it["id"] not in docs_by_id:
+            missing += 1
+            continue
+        # ⛔ Re-check uniqueness against THIS corpus — see the note above.
+        if freq.get(it["answer"], 0) != 1:
+            ambiguous += 1
+            continue
+        n += 1
+        try:
+            hits = _post(url, CANDIDATE_PATHS[path],
+                         {"query": it["query"], "limit": limit})
+        except Exception:
+            failures += 1
+            continue
+        # ⛔ ON THE PASSAGES PATH, GRADE THE PASSAGE — NOT THE PARENT DOCUMENT.
+        # Reading `document.content` here would hand every passage hit the FULL
+        # document text, so `answer_in_topk` would collapse to recall@k and score
+        # identically on both paths BY CONSTRUCTION. The probe would then be
+        # unable to see the one thing passage retrieval changes — whether the
+        # SPAN that came back carries the fact — and would report that blindness
+        # as "no difference". What an agent receives is the passage.
+        texts = [(_passage_text(h) if path == "passages"
+                  else ((h.get("document", h) or {}).get("content") or ""))
+                 for h in hits]
+        ids = [(h.get("document", h) or {}).get("id") for h in hits]
+        if ids and ids[0] == it["id"]:
+            right1 += 1
+        if texts and it["answer"] in texts[0]:
+            in_top1 += 1
+        if any(it["answer"] in t for t in texts):
+            in_topk += 1
+        # ⭐⭐ SAME HITS, GRADED ON THE FULL DOCUMENT INSTEAD OF THE SPAN.
+        # `/search-passages` returns BOTH `passage.text` AND the complete
+        # `document.content`, so "did the answer come back" has two honest
+        # answers and MY GRADING CHOICE WOULD OTHERWISE DECIDE THE HEADLINE:
+        #   - grade the span  -> what passage retrieval BUYS you, if the caller
+        #                        reads the span (which is the entire point:
+        #                        fewer tokens for the same answer)
+        #   - grade the doc   -> what the caller ACTUALLY RECEIVES, since the
+        #                        full text is on the wire regardless
+        # Reporting one of these and not the other is an argument disguised as a
+        # measurement. Both are recorded; the GAP between them is the finding.
+        docs_text = [((h.get("document", h) or {}).get("content") or "")
+                     for h in hits]
+        if any(it["answer"] in t for t in docs_text):
+            in_topk_doc += 1
+    return {"n": n, "pinned": len(items), "missing": missing,
+            # ⛔ Separate from `missing`: the document is here, the QUESTION is no
+            # longer gradeable because the literal stopped being unique.
+            "ambiguous": ambiguous, "failures": failures,
+            "right_doc_top1": right1, "answer_in_top1": in_top1,
+            "answer_in_topk": in_topk, "answer_in_topk_fulldoc": in_topk_doc}
+
+
+def task_answer_recall(url: str, path: str, per_band: int, seed: int,
+                       sample=None, limit: int = 10) -> dict:
+    """Ground truth + context fit. See the block above ANSWER_PATTERNS."""
+    if sample is not None and "answer_recall" not in (sample.get("tasks") or {}):
+        return {"task": "answer_recall", "path": path, "status": "could_not_run",
+                "why": f"pinned sample {sample.get('sample_id')} has no "
+                       f"answer_recall questions — extend it with --mint-sample",
+                "control_ok": False}
+    docs = _get(url, "/documents?limit=20000")
+    docs_by_id = {d["id"]: d for d in docs}
+    freq = _prepare_answer(docs)["freq"]
+    if sample is not None:
+        src_bands = sample["tasks"]["answer_recall"]["bands"]
+        sample_id = sample.get("sample_id")
+    else:
+        src_bands = _draw_bands(docs, "answer_recall", per_band, seed)
+        sample_id = None
+    bands = []
+    for b in src_bands:
+        scored = _score_answer_band(url, path, b["items"], docs_by_id, freq,
+                                    limit, None)
+        scored["band"] = b["band"]
+        scored["pool"] = b.get("pool")
+        bands.append(scored)
+    ok = [b for b in bands if b["n"]]
+    def pct(key):
+        return round(100 * sum(b[key] / b["n"] for b in ok) / len(ok), 2) if ok else None
+    return {"task": "answer_recall", "path": path, "seed": seed,
+            "per_band": per_band, "pinned_sample": sample_id, "bands": bands,
+            "total_n": sum(b["n"] for b in bands),
+            "total_pinned": sum(b["pinned"] for b in bands),
+            "total_missing": sum(b["missing"] for b in bands),
+            "total_ambiguous": sum(b["ambiguous"] for b in bands),
+            "total_failures": sum(b["failures"] for b in bands),
+            "right_doc_top1_pct": pct("right_doc_top1"),
+            "answer_in_top1_pct": pct("answer_in_top1"),
+            # ⭐ GROUND TRUTH: the fact came back, not merely the document.
+            # Pair with context_fit.answer_in_context_pct on the SAME sample —
+            # the difference is what was retrieved and then truncated away.
+            "answer_in_topk_pct": pct("answer_in_topk"),
+            # ⭐ The same hits graded on the full document text the API also
+            # returns. On the `document` path these are identical by
+            # construction; on `passages` the gap is what the span costs.
+            "answer_in_topk_fulldoc_pct": pct("answer_in_topk_fulldoc"),
+            "span_cost_pt": (round(pct("answer_in_topk_fulldoc")
+                                   - pct("answer_in_topk"), 2) if ok else None),
+            # ⛔ control: the questions must have been asked AND gradeable. Zero
+            # answers over a real sample is a RESULT; zero because every literal
+            # went ambiguous is an instrument failure wearing its face.
+            "control_ok": bool(ok),
+            "status": "ok" if ok else "could_not_run"}
+
+
+def task_context_fit(url: str, per_band: int, seed: int, sample=None,
+                     budget: int = 4000, limit: int = 10) -> dict:
+    """⭐ BEN'S CONCERN (c): *"efficient context, not more not less than agents
+    need."* Both halves, on the same questions as answer_recall.
+
+    **NOT LESS:** `answer_in_context` — the fact survived the budget and reached
+    the caller. Read against answer_recall's `answer_in_topk` on the same sample,
+    the difference is the answer that was RETRIEVED and then truncated away.
+
+    **NOT MORE:** what the call cost, and how much of it was redundant.
+    `duplicate_docs_mean` counts returned documents whose content is byte-equal
+    to another in the SAME response. That is not a hypothetical: 203 title-groups
+    in this corpus hold 524 memos and 212k tokens of near-duplicate text, so a
+    budget can be spent two and three times on one fact.
+
+    ⛔ `/context` takes a query and a budget and NOT a search path, so this is a
+    property of the build and is measured ONCE per target. Running it inside the
+    per-path loop issued the identical request three times per question and put
+    the run on a four-hour trajectory for two-thirds waste.
+    """
+    if sample is not None and "answer_recall" not in (sample.get("tasks") or {}):
+        return {"task": "context_fit", "status": "could_not_run",
+                "why": f"pinned sample {sample.get('sample_id')} has no "
+                       f"answer_recall questions to reuse", "control_ok": False}
+    docs = _get(url, "/documents?limit=20000")
+    docs_by_id = {d["id"]: d for d in docs}
+    freq = _prepare_answer(docs)["freq"]
+    src = (sample["tasks"]["answer_recall"]["bands"] if sample is not None
+           else _draw_bands(docs, "answer_recall", per_band, seed))
+    n = in_ctx = failures = missing = ambiguous = trunc = 0
+    toks, ndocs, dups, matched = [], [], [], []
+    dropped = []   # server-reported dedupe, independent of any bundled change
+    for b in src:
+        for it in b["items"]:
+            if it["id"] not in docs_by_id:
+                missing += 1
+                continue
+            if freq.get(it["answer"], 0) != 1:
+                ambiguous += 1
+                continue
+            n += 1
+            try:
+                ctx = _post(url, "/context",
+                            {"query": it["query"], "token_budget": budget})
+            except Exception:
+                failures += 1
+                continue
+            body = ctx.get("content") or ""
+            if it["answer"] in body:
+                in_ctx += 1
+            toks.append(ctx.get("token_count") or 0)
+            ndocs.append(ctx.get("doc_count") or 0)
+            matched.append(ctx.get("matched_count") or 0)
+            # ⭐ ATTRIBUTION. Delivery moves for many reasons at once — here,
+            # dedupe AND 43 newly-superseded memos landed together. This field
+            # is reported by the server for the dedupe specifically, so its
+            # effect stays readable inside a bundled change. `None` means the
+            # build predates FR-119, which is NOT the same as zero duplicates.
+            dropped.append(ctx.get("duplicates_dropped"))
+            trunc += 1 if ctx.get("truncated") else 0
+            # ⛔ THE OUTPUT-SIDE DUPLICATE COUNTER IS DELETED, NOT FIXED.
+            # It split the packed markdown on "\n## " to recover sections — but
+            # memos ARE markdown and carry their own `## ` subheadings, so one
+            # 3-document response parsed as TWENTY sections and the "duplicates"
+            # it reported were coincidentally-equal sub-blocks. It disagreed with
+            # the server by 10x (0.35 vs 0.03) and the server was right.
+            # ⚠️ I had already "fixed" this metric once — for comparing whole
+            # sections including their differing score headers — which made a
+            # structurally wrong instrument marginally less wrong and left it
+            # measuring the same wrong thing.
+            # ⇒ `duplicates_dropped` is reported by the server from DOCUMENT
+            # IDENTITY. Re-deriving it by parsing formatted output is strictly
+            # worse: it can only add failure modes to a number already known.
+    mean = lambda xs: round(sum(xs) / len(xs), 2) if xs else None
+    return {"task": "context_fit", "token_budget": budget,
+            "pinned_sample": sample.get("sample_id") if sample else None,
+            "total_n": n, "total_missing": missing,
+            "total_ambiguous": ambiguous, "total_failures": failures,
+            "answer_in_context_pct": round(100 * in_ctx / n, 2) if n else None,
+            # ⭐⭐ THE COST METRIC. Ben, 2026-08-03: *"the more precise
+            # information we can give to LLMs the less we spend."*
+            #
+            # ⛔ EVERY OTHER NUMBER IN THIS SUITE REWARDS SPENDING MORE. A packer
+            # that fills its budget scores identically to one that answers in a
+            # tenth of the tokens, so "better" has silently meant "more tokens"
+            # for the whole project. Measured at the time this was added: 3,671
+            # tokens for 0.908 answers ≈ 4,043 tokens PER ANSWER DELIVERED —
+            # to return, in the common case, an IP address.
+            #
+            # ⚠️ Deliberately tokens ÷ ANSWERS, not tokens ÷ CALLS. Dividing by
+            # calls rewards a build that returns nothing: zero tokens, perfect
+            # score. Dividing by answers delivered makes silence expensive,
+            # which is the direction that matches what a caller actually buys.
+            # ⛔ So a build that spends FEWER tokens and delivers FEWER answers
+            # does NOT automatically win here — read it beside
+            # `answer_in_context_pct`, never alone. R-25 is the cautionary case:
+            # span windowing cut tokens AND cut answers, and on a
+            # tokens-per-call metric it would have looked like an improvement.
+            "tokens_per_answer_delivered": (
+                round((sum(toks) / len(toks)) / (in_ctx / n), 1)
+                if (toks and n and in_ctx) else None),
+            "context_tokens_mean": mean(toks),
+            "context_docs_mean": mean(ndocs),
+            "matched_count_mean": mean(matched),
+            # ⚠️ `truncated` counts responses that hit the ceiling — the budget
+            # bound the answer, rather than the corpus running out of matches.
+            "truncated_pct": round(100 * trunc / n, 2) if n else None,
+            # ⚠️ A LOWER BOUND on redundancy: exact repeats only, while the
+            # corpus's real problem is NEAR-duplicates (203 title-groups, 524
+            # memos, 212k tokens). A near-copy differing by one line counts as
+            # two distinct answers here — which is why 0.03/call is a finding
+            # about the RULE, not evidence the corpus is clean.
+            # ⛔ `None` means the build predates FR-119. NOT the same as zero.
+            "server_duplicates_dropped_mean": (
+                mean([d for d in dropped if d is not None])
+                if any(d is not None for d in dropped) else None),
+            "budget_used_pct": round(100 * (sum(toks) / len(toks)) / budget, 1)
+            if toks else None,
+            "control_ok": n > 0,
+            "status": "ok" if n > 0 else "could_not_run"}
+
+
+POOLS = {"own_title": _pool_own_title, "content_query": _pool_content_query,
+         "answer_recall": _pool_answer_recall}
+PREPARE = {"answer_recall": _prepare_answer}
+
+
+def _score_band(url, path, items, corpus_ids, limit, timed=False):
+    """Run one band's pinned questions and count outcomes.
+
+    `items` is a list of {"id", "query"}. `corpus_ids` is the set of ids the
+    target actually holds — pass None to skip the presence check.
+    """
+    rank1 = top5 = absent = failures = missing = 0
+    lat = []
+    for it in items:
+        if corpus_ids is not None and it["id"] not in corpus_ids:
+            missing += 1
+            continue
+        t0 = time.time()
+        try:
+            hits = _post(url, CANDIDATE_PATHS[path],
+                         {"query": it["query"], "limit": limit})
+        except Exception:
+            # ⛔ A query that never ran is NOT a retrieval miss. Counting it
+            # as `absent` is defensible; hiding it inside `absent` is not.
+            failures += 1
+            absent += 1
+            continue
+        lat.append((time.time() - t0) * 1000)
+        ids = [(h.get("document", h) or {}).get("id") for h in hits]
+        if ids and ids[0] == it["id"]:
+            rank1 += 1
+        if it["id"] in ids[:5]:
+            top5 += 1
+        if it["id"] not in ids:
+            absent += 1
+    lat.sort()
+    out = {"n": len(items) - missing, "pinned": len(items), "missing": missing,
+           "rank1": rank1, "top5": top5, "absent": absent, "failures": failures}
+    if timed:
+        out["p50_ms"] = round(lat[len(lat) // 2], 1) if lat else None
+        out["p90_ms"] = round(lat[int(len(lat) * 0.9)], 1) if lat else None
+    return out
+
+
+def _band_label(lo, hi):
+    return f"{lo}-{hi if hi < 10 ** 9 else ''}"
+
+
+def _draw_bands(docs, task, per_band, seed):
+    """Draw a fresh stratified sample — used to MINT a pinned file, and as the
+    fallback when no pinned sample is supplied."""
+    rng = random.Random(seed)
+    ctx = PREPARE[task](docs) if task in PREPARE else None
+    out = []
+    for lo, hi in BANDS:
+        pool = POOLS[task](docs, lo, hi, ctx)
+        sample = rng.sample(pool, min(per_band, len(pool)))
+        out.append({"band": _band_label(lo, hi), "pool": len(pool),
+                    "items": [dict(id=d["id"], query=q, **extra)
+                              for d, q, extra in sample]})
+    return out
+
+
+def _run_recall_task(task, url, path, per_band, seed, sample=None, limit=10):
+    """Shared body of own_title / content_query.
+
+    With `sample`, the questions come from the pinned file and are identical
+    across builds and across runs. Without it, they are drawn fresh — which is
+    only correct for minting, and is recorded as `pinned_sample: null` so a
+    reader can tell the two apart. ⛔ Do NOT compare a drawn run to a pinned one.
+    """
+    if sample is not None and task not in (sample.get("tasks") or {}):
+        # ⛔ Not a zero. The pinned file predates this task; it has no questions
+        # to ask, which is a different fact from asking them and getting nothing.
+        return {"task": task, "path": path, "status": "could_not_run",
+                "why": f"pinned sample {sample.get('sample_id')} has no "
+                       f"{task} questions — extend it with --mint-sample",
+                "control_ok": False}
+    docs = _get(url, "/documents?limit=20000")
+    corpus_ids = {d["id"] for d in docs}
+    if sample is not None:
+        src_bands = sample["tasks"][task]["bands"]
+        sample_id = sample.get("sample_id")
+    else:
+        src_bands = _draw_bands(docs, task, per_band, seed)
+        sample_id = None
+    bands = []
+    for b in src_bands:
+        scored = _score_band(url, path, b["items"], corpus_ids, limit,
+                             timed=(task == "own_title"))
+        scored["band"] = b["band"]
+        scored["pool"] = b.get("pool")
+        bands.append(scored)
+    ok_bands = [b for b in bands if b["n"]]
+    total_missing = sum(b["missing"] for b in bands)
+    return {"task": task, "path": path, "seed": seed, "per_band": per_band,
+            "pinned_sample": sample_id, "bands": bands,
+            "total_n": sum(b["n"] for b in bands),
+            "total_pinned": sum(b["pinned"] for b in bands),
+            # ⛔ Reported, never folded into absent — see the R-17 note above.
+            "total_missing": total_missing,
+            "total_rank1": sum(b["rank1"] for b in bands),
+            # ⚠️ UNWEIGHTED mean of band rates — immune to corpus composition BY
+            # CONSTRUCTION because n is fixed per band. Not a corpus-weighted score.
+            "unweighted_rank1_pct": round(
+                100 * sum(b["rank1"] / b["n"] for b in ok_bands) / len(ok_bands), 2)
+            if ok_bands else None,
+            "total_failures": sum(b["failures"] for b in bands),
+            # ⛔ control: the questions must have actually been ASKED. Zero rank-1
+            # over a real sample is a RESULT; zero rank-1 because every pinned id
+            # had left the corpus is an instrument failure wearing its face.
+            "control_ok": bool(ok_bands),
+            "status": "ok" if ok_bands else "could_not_run"}
+
+
+def task_own_title(url: str, path: str, per_band: int, seed: int,
+                   sample=None, limit: int = 10) -> dict:
+    """Search a memo's exact title; rank 1 is the only correct answer.
+
+    The own-title set is free supervision — every memo is a labelled example with
+    an unambiguous right answer, no hand-labelling and no LLM in the loop.
+    """
+    return _run_recall_task("own_title", url, path, per_band, seed, sample, limit)
+
+
+# ------------------------------------------------------ task: content query
+def task_content_query(url: str, path: str, per_band: int, seed: int,
+                       sample=None, limit: int = 10) -> dict:
+    """Query by a CONTENT excerpt instead of the exact title.
+
+    ⭐ **own_title is unrealistically easy and we have been treating it as the
+    whole picture.** Nobody searches memo by pasting a memo's exact title; they
+    search for something they half-remember from the body. This asks the harder
+    and more representative question — and it is still free supervision, because
+    the excerpt's source document is the unambiguous right answer.
+
+    ⚠️ Expect LOWER scores than own_title on both builds. That is the point — a
+    task everything passes cannot discriminate between builds.
+    ⛔ Skips documents whose excerpt would be mostly the title again (short
+    memos), because scoring those would quietly re-run own_title under a new name.
+
+    ⚠️ **This docstring used to claim "deterministic by construction: re-running
+    with the same seed asks the same questions."** That was true only of the
+    excerpt EXTRACTION, not of the sample — and the sample is where the questions
+    come from. See the R-17 note above `_pool_own_title`. Determinism now comes
+    from the pinned file, not from the seed.
+    """
+    return _run_recall_task("content_query", url, path, per_band, seed, sample, limit)
+
+
+
+# ------------------------------------------------------- task: supersession
+def task_supersession(url: str, path: str, edges_path: str,
+                      limit: int = 10) -> dict:
+    """⭐ BEN'S CONCERN (b): does newer information actually REPLACE older?
+
+    Reads the edge list written by `memo-regenerate-supersede-edges`. Each edge
+    carries a probe query taken from the OLD memo's BODY.
+
+    ⛔ NOT "is the old memo still returned" — FR-115 excludes it by construction,
+    so that question tests that a filter filters. **The question is what happened
+    to the QUERY.** A query that used to find the old memo must now find its
+    replacement. If it finds NEITHER, supersession destroyed recall rather than
+    updating it, and R-16 already found the replacement usually is not returned —
+    so that outcome is live, not hypothetical.
+
+    ⛔ The probe is never the shared TITLE. Both memos carry it, so a title hit
+    would say nothing about which VERSION the index prefers — that is own_title
+    wearing a costume, a confound this project has already built once.
+    """
+    try:
+        edges = json.loads(Path(edges_path).read_text())
+    except Exception as e:
+        return {"task": "supersession", "status": "could_not_run",
+                "why": f"no edge list at {edges_path}: {type(e).__name__}",
+                "control_ok": False}
+    new_1 = new_5 = old_back = neither = failures = 0
+    for e in edges:
+        try:
+            hits = _post(url, CANDIDATE_PATHS[path],
+                         {"query": e["probe_query"], "limit": limit})
+        except Exception:
+            failures += 1
+            continue
+        ids = [(h.get("document", h) or {}).get("id") for h in hits]
+        if ids and ids[0] == e["new_id"]:
+            new_1 += 1
+        if e["new_id"] in ids[:5]:
+            new_5 += 1
+        # ⛔ Must be 0 while FR-115 is active. Any hit here means the exclusion
+        # is not working, and every other number in this row is then untrustworthy.
+        if e["old_id"] in ids:
+            old_back += 1
+        if e["new_id"] not in ids and e["old_id"] not in ids:
+            neither += 1
+    n = len(edges) - failures
+    pct = lambda k: round(100 * k / n, 2) if n else None
+    return {"task": "supersession", "path": path, "edges": len(edges),
+            "n_ran": n, "failures": failures,
+            "replacement_at_1_pct": pct(new_1),
+            "replacement_in_top5_pct": pct(new_5),
+            # ⭐ THE COST OF SUPERSEDING: the query used to land on the old memo
+            # and now lands on nothing relevant.
+            "neither_returned_pct": pct(neither),
+            "superseded_still_returned": old_back,
+            "control_ok": n > 0 and old_back == 0,
+            "status": "ok" if n > 0 else "could_not_run",
+            "why": ("superseded memos are STILL being returned — FR-115 is not "
+                    "filtering, so the rest of this row is meaningless"
+                    if old_back else None)}
+
+
+# ------------------------------------------------------- task: set-stability
+def task_set_stability(url: str, path: str, n: int, seed: int,
+                       replicates: int = 3) -> dict:
+    """T287: is retrieval SET-stable, not merely RANK-stable?
+
+    Measured 2026-08-03: target rank never varied (0/25) while the returned ID
+    LIST varied 11/25. ⇒ two identical /recall calls can cite different
+    SUPPORTING documents. Whether that is a defect is a REQUIREMENTS question
+    and is deliberately not decided here — this only measures it.
+    """
+    import random
+    docs = _get(url, "/documents?limit=20000")
+    rng = random.Random(seed)
+    sample = rng.sample([d for d in docs if (d.get("title") or "").strip()],
+                        min(n, len(docs)))
+    rank_var = set_var = ran = 0
+    for d in sample:
+        seen = []
+        for _ in range(replicates):
+            try:
+                hits = _post(url, CANDIDATE_PATHS[path],
+                             {"query": (d.get("title") or "")[:200], "limit": 10})
+            except Exception:
+                seen = []
+                break
+            seen.append([(h.get("document", h) or {}).get("id") for h in hits])
+        if len(seen) != replicates:
+            continue
+        ran += 1
+        if len({s[0] if s else None for s in seen}) > 1:
+            rank_var += 1
+        if len({tuple(s) for s in seen}) > 1:
+            set_var += 1
+    return {"task": "set_stability", "path": path, "n_requested": n, "n_ran": ran,
+            "replicates": replicates,
+            "rank1_varied": rank_var, "id_list_varied": set_var,
+            "control_ok": ran > 0,
+            "status": "ok" if ran > 0 else "could_not_run"}
+
+
+# ------------------------------------------------- task: API surface contract
+def task_api_surface(url: str) -> dict:
+    """Route inventory + response SHAPE. A cutover breaks on shape, not accuracy.
+
+    Records routes and the observed shape of a search hit so two builds can be
+    diffed structurally rather than by eyeballing one response each.
+    """
+    out = {"task": "api_surface", "routes": None, "search_shape": {}}
+    try:
+        spec = _get(url, "/openapi.json", timeout=30)
+        out["routes"] = sorted(spec.get("paths", {}).keys())
+    except Exception as e:
+        out["routes_error"] = str(e)
+    for label, p in CANDIDATE_PATHS.items():
+        try:
+            hits = _post(url, p, {"query": "barn cluster node inventory", "limit": 2})
+        except Exception as e:
+            out["search_shape"][label] = {"error": type(e).__name__}
+            continue
+        row = hits[0] if isinstance(hits, list) and hits else None
+        out["search_shape"][label] = {
+            "container": type(hits).__name__,
+            "row_keys": sorted(row.keys()) if isinstance(row, dict) else None,
+            "doc_keys": sorted((row.get("document") or {}).keys())
+            if isinstance(row, dict) and isinstance(row.get("document"), dict) else None,
+        }
+    out["control_ok"] = bool(out.get("routes"))
+    out["status"] = "ok" if out["control_ok"] else "could_not_run"
+    return out
+
+
+# ------------------------------------------------------------- sample minting
+def mint_sample(path: Path, url: str, per_band: int, seed: int,
+                stamp: str, check_url: str | None = None) -> int:
+    """Draw one stratified sample and freeze it as the question set.
+
+    ⭐ **Mint from the corpus the builds are SYNCED TO, not from a candidate.**
+    Minting from v2 would pin questions about the 88 documents v2 holds and v1
+    does not, and every one of them would score `missing` on v1 — an artefact of
+    where the sample came from, reported as a property of v1.
+
+    ⚠️ Re-minting resets the baseline. Every stored result names the sample it
+    used (`run.sample.id`); `memo-qa-diff` refuses to subtract across two ids.
+
+    ⭐ **EXTENDING IS ADDITIVE-ONLY, AND THAT IS ENFORCED HERE RATHER THAN ASKED
+    FOR IN A COMMENT.** A new task needs questions minted for it, but re-drawing
+    the EXISTING tasks would change them silently: v1 is live and takes writes, so
+    the same seed over tomorrow's corpus draws a different sample (that is R-17).
+    Two runs would then carry the same `sample_id` and different questions — the
+    exact failure the id exists to prevent. So an extend adds tasks the file does
+    not have, never touches the ones it does, and refuses if asked to.
+    ⇒ `sample_id` means "these questions", and stays valid for every task both
+    runs actually ran. A task absent from the sample is `could_not_run`, and a
+    missing task is never a zero.
+    """
+    docs = _get(url, "/documents?limit=20000")
+    if not docs:
+        print(f"✗ {url} returned no documents — refusing to mint an empty sample",
+              file=sys.stderr)
+        return 1
+    existing = None
+    if path.exists():
+        existing = json.loads(path.read_text())
+        print(f"extending {path} ({existing.get('sample_id')}) — existing tasks "
+              f"are NOT redrawn: {', '.join(sorted(existing.get('tasks') or {}))}")
+    if existing:
+        out = existing
+        out.setdefault("revisions", [{"rev": 1, "created_utc":
+                                      out.get("created_utc"), "added":
+                                      sorted(out.get("tasks") or {})}])
+    else:
+        out = {"schema": 2, "sample_id": f"s-{stamp}", "created_utc": stamp,
+               "minted_from": {"url": url, "corpus_n": len(docs)},
+               "git": git_state(), "seed": seed, "per_band": per_band,
+               "tasks": {}, "revisions": []}
+    added = []
+    for task in ("own_title", "content_query", "answer_recall"):
+        if task in out["tasks"]:
+            print(f"  {task}: kept as-is "
+                  f"({sum(len(b['items']) for b in out['tasks'][task]['bands'])} "
+                  f"questions)")
+            continue
+        bands = _draw_bands(docs, task, per_band, seed)
+        out["tasks"][task] = {"bands": bands, "minted_utc": stamp,
+                              "minted_from": {"url": url, "corpus_n": len(docs)}}
+        added.append(task)
+        if task == "answer_recall" and check_url:
+            # ⛔ A question must be gradeable on EVERY build it will be scored on,
+            # or the builds are scored over different question sets and the totals
+            # will not say so. A literal unique in v1 need not be unique in v2 —
+            # v2 holds 88 documents v1 does not. Drop those here, ONCE, rather
+            # than letting each target drop its own at run time.
+            other = _get(check_url, "/documents?limit=20000")
+            ofreq = _prepare_answer(other)["freq"]
+            dropped = 0
+            for b in bands:
+                keep = [i for i in b["items"] if ofreq.get(i["answer"], 0) <= 1]
+                dropped += len(b["items"]) - len(keep)
+                b["items"] = keep
+            out["tasks"][task]["uniqueness_checked_against"] = {
+                "url": check_url, "corpus_n": len(other), "dropped": dropped}
+            print(f"  {task}: dropped {dropped} not-unique-on-{check_url}")
+        n = sum(len(b["items"]) for b in bands)
+        thin = [b["band"] for b in bands if len(b["items"]) < per_band]
+        print(f"  {task}: {n} questions across {len(bands)} bands"
+              + (f"  ⚠️ under-filled: {', '.join(thin)}" if thin else ""))
+    if existing and not added:
+        print("nothing to add — sample unchanged")
+        return 0
+    if existing:
+        out["revisions"].append({"rev": len(out["revisions"]) + 1,
+                                 "created_utc": stamp, "added": added})
+    # ⛔ A sample whose questions are not unique would score the same document
+    # twice and quietly weight it double.
+    for task, spec in out["tasks"].items():
+        ids = [i["id"] for b in spec["bands"] for i in b["items"]]
+        if len(ids) != len(set(ids)):
+            print(f"✗ {task}: {len(ids) - len(set(ids))} duplicate ids",
+                  file=sys.stderr)
+            return 1
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(out, indent=2))
+    print(f"\nwrote {path}  (sample_id {out['sample_id']})")
+    return 0
+
+
+# ------------------------------------------------------------------- runner
+TASKS = ("own_title", "content_query", "answer_recall", "context_fit",
+         "supersession", "set_stability", "api_surface")
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--v1-url", default="http://server4:8000")
+    ap.add_argument("--v2-url", default="http://localhost:8091")
+    # ⛔ THE SLOTS ARE STRUCTURAL; THE NAMES ARE NOT. Nothing stops --v1-url
+    # pointing at a second v2 build — which is the right way to isolate one
+    # variable, and is also EXACTLY how R-14 came to call a v2 build "the
+    # incumbent" and conclude the cutover lost. The slot keys stay v1/v2 so
+    # stored results keep one shape; what a reader SEES is set here.
+    ap.add_argument("--v1-name", default=None,
+                    help="honest display name for the --v1-url build "
+                         "(e.g. 'v2@3-large'). Defaults to the slot key.")
+    ap.add_argument("--v2-name", default=None)
+    ap.add_argument("--v1-container", default="memo")
+    ap.add_argument("--v2-container", default="memo-v2")
+    ap.add_argument("--per-band", type=int, default=60)
+    ap.add_argument("--seed", type=int, default=7)
+    ap.add_argument("--stability-n", type=int, default=25)
+    ap.add_argument("--edges", default=str(SAMPLES / "supersede-edges.json"),
+                    help="supersession edge list (memo-regenerate-supersede-edges --out)")
+    ap.add_argument("--probe-timeout", type=float, default=30.0,
+                    help="per-path reachability probe budget. Raise it on a "
+                         "loaded host: a timeout drops the WHOLE target to "
+                         "could_not_run, so slow reads as gone.")
+    ap.add_argument("--token-budget", type=int, default=4000,
+                    help="/context budget for answer_recall (both builds default "
+                         "to 4000; changing it changes what is being measured)")
+    ap.add_argument("--tasks", default=",".join(TASKS))
+    ap.add_argument("--label", default="", help="free-text note stored with the run")
+    ap.add_argument("--out", default=None)
+    ap.add_argument("--sample", default=str(SAMPLES / "default.json"),
+                    help="pinned question file (see --mint-sample). "
+                         "Pass 'none' to draw fresh — NOT comparable across runs.")
+    ap.add_argument("--mint-sample", metavar="PATH", default=None,
+                    help="draw a fresh stratified sample from --mint-from and "
+                         "write it as a pinned question file, then exit")
+    ap.add_argument("--mint-check", default=None,
+                    help="second corpus answer literals must ALSO be unique in "
+                         "(default: --v2-url). Pass 'none' to skip.")
+    ap.add_argument("--mint-from", default=None,
+                    help="corpus to mint from (default: --v1-url, the corpus both "
+                         "builds are synced to)")
+    args = ap.parse_args()
+
+    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H%M%SZ")
+
+    if args.mint_sample:
+        return mint_sample(Path(args.mint_sample), args.mint_from or args.v1_url,
+                           args.per_band, args.seed, stamp,
+                           check_url=(None if (args.mint_check or '').lower()=='none'
+                                      else (args.mint_check or args.v2_url)))
+
+    sample = None
+    if args.sample and args.sample.lower() != "none":
+        p = Path(args.sample)
+        if p.exists():
+            sample = json.loads(p.read_text())
+            print(f"pinned sample: {p} ({sample.get('sample_id')})", flush=True)
+        else:
+            # ⛔ Do not silently fall back to drawing. A drawn run and a pinned run
+            # look identical in the results file except for one null field, and
+            # the whole point of R-17 is that the difference is invisible in the
+            # NUMBERS. Say it here, loudly, at the moment it becomes true.
+            print(f"⚠️  no pinned sample at {p} — DRAWING FRESH. This run is "
+                  f"reproducible but NOT comparable to any other run.\n"
+                  f"    Mint one:  {Path(__file__).name} --mint-sample {p}",
+                  file=sys.stderr, flush=True)
+
+    want = [t.strip() for t in args.tasks.split(",") if t.strip()]
+    run = {"schema": 2, "run_id": stamp, "label": args.label,
+           "git": git_state(), "seed": args.seed, "per_band": args.per_band,
+           "sample": ({"id": sample.get("sample_id"), "path": args.sample,
+                       "minted_from": sample.get("minted_from")}
+                      if sample else None),
+           "targets": [], "results": {}}
+
+    targets = [("v1", args.v1_url, args.v1_container),
+               ("v2", args.v2_url, args.v2_container)]
+    display = {"v1": args.v1_name or "v1", "v2": args.v2_name or "v2"}
+    run["display_names"] = display
+    run["probe_timeout_s"] = args.probe_timeout
+    for name, url, cont in targets:
+        t = resolve_target(name, url, cont, probe_timeout=args.probe_timeout)
+        t["display_name"] = display[name]
+        if t["reachable"]:
+            try:
+                t["corpus"] = corpus(url)
+            except Exception as e:
+                t["corpus"] = {"error": str(e)}
+        run["targets"].append(t)
+        print(f"{display[name]} [slot {name}]: reachable={t['reachable']} "
+              f"resolved={t.get('resolved')}", flush=True)
+        print(f"    paths={t['search_paths']}", flush=True)
+
+    for name, url, _ in targets:
+        tgt = next(t for t in run["targets"] if t["name"] == name)
+        if not tgt["reachable"]:
+            run["results"][name] = {"status": "could_not_run",
+                                    "why": "service unreachable"}
+            continue
+        # Pick the search path this build actually exposes, and RECORD it.
+        paths = [p for p, v in tgt["search_paths"].items() if v == "present"]
+        primary = ("document" if "document" in paths
+                   else "v1-search" if "v1-search" in paths
+                   else (paths[0] if paths else None))
+        if primary is None:
+            run["results"][name] = {"status": "could_not_run",
+                                    "why": "no working search path"}
+            continue
+        res = {"primary_path": primary, "paths_present": paths}
+        for task in want:
+            print(f"  [{name}] {task} …", flush=True)
+            t0 = time.time()
+            try:
+                if task == "own_title":
+                    r = {p: task_own_title(url, p, args.per_band, args.seed, sample)
+                         for p in paths}
+                elif task == "content_query":
+                    r = {p: task_content_query(url, p, args.per_band, args.seed,
+                                               sample)
+                         for p in paths}
+                elif task == "answer_recall":
+                    r = {p: task_answer_recall(url, p, args.per_band, args.seed,
+                                               sample)
+                         for p in paths}
+                elif task == "context_fit":
+                    r = task_context_fit(url, args.per_band, args.seed, sample,
+                                         budget=args.token_budget)
+                elif task == "supersession":
+                    r = {p: task_supersession(url, p, args.edges)
+                         for p in paths}
+                elif task == "set_stability":
+                    r = task_set_stability(url, primary, args.stability_n, args.seed)
+                elif task == "api_surface":
+                    r = task_api_surface(url)
+                else:
+                    r = {"status": "could_not_run", "why": f"unknown task {task}"}
+            except Exception as e:
+                r = {"status": "could_not_run", "why": f"{type(e).__name__}: {e}"}
+            if isinstance(r, dict):
+                r["elapsed_s"] = round(time.time() - t0, 1)
+            res[task] = r
+        run["results"][name] = res
+
+    RESULTS.mkdir(parents=True, exist_ok=True)
+    out = Path(args.out) if args.out else RESULTS / f"qa-{stamp}.json"
+    out.write_text(json.dumps(run, indent=2))
+    print(f"\nwrote {out}")
+
+    for name in ("v1", "v2"):
+        r = run["results"].get(name, {})
+        ar = r.get("answer_recall") or {}
+        for path, v in (ar.items() if isinstance(ar, dict)
+                        and "task" not in ar else []):
+            if isinstance(v, dict) and v.get("status") == "ok":
+                print(f"  {name:3} answer_recall  {path:10} "
+                      f"right-doc {v['right_doc_top1_pct']}% · "
+                      f"ANSWER in span {v['answer_in_topk_pct']}% / "
+                      f"in full doc {v['answer_in_topk_fulldoc_pct']}% "
+                      f"(span costs {v['span_cost_pt']}pt)"
+                      + (f" · {v['total_ambiguous']} ungradeable"
+                         if v.get("total_ambiguous") else ""))
+        sup = r.get("supersession") or {}
+        for path, v in (sup.items() if isinstance(sup, dict)
+                        and "task" not in sup else []):
+            if isinstance(v, dict) and v.get("status") == "ok":
+                print(f"  {name:3} supersession   {path:10} "
+                      f"replacement @1 {v['replacement_at_1_pct']}% · "
+                      f"top5 {v['replacement_in_top5_pct']}% · "
+                      f"NEITHER returned {v['neither_returned_pct']}% · "
+                      f"old still returned {v['superseded_still_returned']}"
+                      + ("  ⛔ FR-115 NOT FILTERING"
+                         if v['superseded_still_returned'] else ""))
+        cf = r.get("context_fit")
+        if isinstance(cf, dict) and cf.get("status") == "ok":
+            print(f"  {name:3} context_fit                answer in /context "
+                  f"{cf['answer_in_context_pct']}% · {cf['context_tokens_mean']} "
+                  f"tok ({cf['budget_used_pct']}% of budget) · "
+                  f"{cf['context_docs_mean']} docs, "
+                  f"{cf['server_duplicates_dropped_mean']} deduped/call · "
+                  f"⭐ {cf['tokens_per_answer_delivered']} tok/ANSWER · "
+                  f"truncated {cf['truncated_pct']}%")
+        for task in ("own_title", "content_query"):
+            tr = r.get(task) or {}
+            for path, v in (tr.items() if isinstance(tr, dict)
+                            and "task" not in tr else []):
+                if not (isinstance(v, dict) and v.get("status") == "ok"):
+                    continue
+                # ⚠️ `missing` is printed on the SAME line as the score, not in a
+                # footnote — a score computed over a shrunken denominator must not
+                # be readable without the denominator that produced it.
+                miss = v.get("total_missing") or 0
+                print(f"  {name:3} {task:14} {path:10} unweighted rank-1 "
+                      f"{v['unweighted_rank1_pct']}%  "
+                      f"({v['total_rank1']}/{v['total_n']}, "
+                      f"{v['total_failures']} query failures"
+                      + (f", ⚠️ {miss} pinned ids NOT IN THIS CORPUS" if miss else "")
+                      + ")")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

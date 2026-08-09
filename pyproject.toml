@@ -4,8 +4,18 @@ build-backend = "hatchling.build"
 
 [project]
 name = "memo"
-version = "0.4.2"
-description = "Lightweight HTTP API + MCP server for SQLite vector document storage (single-global on server4 as of 2026-06-29)"
+# ⚠️ alpha2, not alpha1: this tree is the renovation branch PLUS the 34 commits
+# of v1 fixes that shipped to :8000 while the branch sat unmerged (0.3.4→0.4.2 —
+# thread-local sqlite, the context-budget fix, response-ambiguity, and the
+# memo_store receipt). Same version string over materially different content is
+# the "two things with one label" failure this codebase keeps finding in other
+# people's data; not going to introduce one here.
+#
+# ⛔ MAIN NO LONGER DESCRIBES WHAT RUNS ON :8000. That service is 0.4.2 and is
+# live fleet infrastructure written to by ~50 seats. Rebuilding it from main now
+# deploys v2. Do not, without an explicit decision.
+version = "2.0.0-alpha2"
+description = "Memo v2 — bi-temporal + mediated + integration-ready knowledge substrate for a fleet of agents. See specs/001-memo-renovation/ for the design."
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115.0",
@@ -16,6 +26,8 @@ dependencies = [
     # and serve correctly here, but memo-v2 pins <1.29 over a fastmcp import
     # path change; matching that band keeps the two trees on one story and
     # keeps this service on what it has proven since 2026-07-22.
+    # ⇒ Both sides of the merge reached this same pin independently, for the
+    # same reason. Keeping the longer note: it names the fleet-wide outage.
     "mcp>=1.23.0,<1.29.0",
     "openai>=1.0.0",
     "sqlite-vec>=0.1.6",
@@ -23,6 +35,21 @@ dependencies = [
     "pydantic>=2.0.0",
     "pydantic-settings>=2.0.0",
     "tiktoken>=0.7.0",
+    # Runtime dep, not just a test one: providers/llm/claude_session.py talks
+    # to ATC over HTTP. It currently arrives transitively via `openai`, but
+    # depending on a transitive is how a working image breaks on an unrelated
+    # upgrade.
+    "httpx>=0.27.0",
+]
+
+[project.optional-dependencies]
+# Test-only deps. Kept out of the runtime image; installed by the Dockerfile's
+# `test` stage. httpx is required by fastapi's TestClient, which the Phase 3
+# mediator contract tests need.
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+    "httpx>=0.27.0",
 ]
 
 [project.scripts]
@@ -31,3 +58,11 @@ memo-hooks = "memo.hooks:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/memo"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Strict mode: async tests declare @pytest.mark.asyncio and async fixtures MUST
+# use @pytest_asyncio.fixture. A plain @pytest.fixture async generator is never
+# awaited in strict mode and silently becomes a no-op — pinned explicitly here
+# so the mode can't drift and quietly disable fixture teardown.
+asyncio_mode = "strict"

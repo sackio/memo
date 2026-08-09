@@ -1,0 +1,74 @@
+{
+  "url": "http://localhost:8091",
+  "seed": 7,
+  "per_band": 2500,
+  "limit": 10,
+  "path": "passages",
+  "both_indexed_only": true,
+  "corpus": 7336,
+  "bands": [
+    {
+      "band": "0-200",
+      "n": 1216,
+      "rank1": 937,
+      "top5": 1159,
+      "absent": 35,
+      "rank1_pct": 77.1,
+      "median_score": 0.734
+    },
+    {
+      "band": "200-500",
+      "n": 2293,
+      "rank1": 1651,
+      "top5": 2146,
+      "absent": 98,
+      "rank1_pct": 72.0,
+      "median_score": 0.701
+    },
+    {
+      "band": "500-1000",
+      "n": 2007,
+      "rank1": 1495,
+      "top5": 1839,
+      "absent": 124,
+      "rank1_pct": 74.5,
+      "median_score": 0.711
+    },
+    {
+      "band": "1000-2000",
+      "n": 1306,
+      "rank1": 895,
+      "top5": 1170,
+      "absent": 96,
+      "rank1_pct": 68.5,
+      "median_score": 0.706
+    },
+    {
+      "band": "2000+",
+      "n": 399,
+      "rank1": 190,
+      "top5": 268,
+      "absent": 121,
+      "rank1_pct": 47.6,
+      "median_score": 0.692
+    }
+  ],
+  "content_share": {
+    ">=1000": {
+      "memos": 1761,
+      "token_pct": 57.2
+    },
+    ">=2000": {
+      "memos": 405,
+      "token_pct": 25.3
+    }
+  },
+  "factset": {
+    "n": 30,
+    "rank1": 14,
+    "top5": 26,
+    "absent": 2,
+    "skipped_unindexed": 0,
+    "rank1_pct": 46.7
+  }
+}

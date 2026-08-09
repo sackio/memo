@@ -1,0 +1,445 @@
+{
+  "schema": 2,
+  "run_id": "2026-08-03T195822Z",
+  "label": "ground truth (answer_recall) + context fit, first measurement",
+  "git": {
+    "sha": "d405242",
+    "dirty": true
+  },
+  "seed": 7,
+  "per_band": 60,
+  "sample": {
+    "id": "s-2026-08-03T184827Z",
+    "path": "/mnt/nas/data/code/memo-v2/bench/samples/default.json",
+    "minted_from": {
+      "url": "http://server4:8000",
+      "corpus_n": 7937
+    }
+  },
+  "targets": [
+    {
+      "name": "v1",
+      "url": "http://server4:8000",
+      "container": "memo",
+      "reachable": true,
+      "resolved": {
+        "model": "openai/text-embedding-3-small",
+        "dims": 1536,
+        "url": null
+      },
+      "search_paths": {
+        "document": "http 404",
+        "passages": "http 404",
+        "v1-search": "present"
+      },
+      "display_name": "v1",
+      "corpus": {
+        "n": 7940,
+        "ge_1000": 1907,
+        "ge_2000": 398
+      }
+    },
+    {
+      "name": "v2",
+      "url": "http://localhost:8091",
+      "container": "memo-v2",
+      "reachable": true,
+      "resolved": {
+        "model": "openai/text-embedding-3-large",
+        "dims": 3072,
+        "url": "https://openrouter.ai/api/v1"
+      },
+      "search_paths": {
+        "document": "present",
+        "passages": "present",
+        "v1-search": "present"
+      },
+      "display_name": "v2",
+      "corpus": {
+        "n": 8014,
+        "ge_1000": 1971,
+        "ge_2000": 469
+      }
+    }
+  ],
+  "results": {
+    "v1": {
+      "primary_path": "v1-search",
+      "paths_present": [
+        "v1-search"
+      ],
+      "answer_recall": {
+        "v1-search": {
+          "task": "answer_recall",
+          "path": "v1-search",
+          "seed": 7,
+          "per_band": 60,
+          "pinned_sample": "s-2026-08-03T184827Z",
+          "bands": [
+            {
+              "n": 17,
+              "pinned": 17,
+              "missing": 0,
+              "ambiguous": 0,
+              "failures": 0,
+              "right_doc_top1": 15,
+              "answer_in_top1": 16,
+              "answer_in_topk": 17,
+              "band": "0-200",
+              "pool": 17
+            },
+            {
+              "n": 59,
+              "pinned": 59,
+              "missing": 0,
+              "ambiguous": 0,
+              "failures": 0,
+              "right_doc_top1": 50,
+              "answer_in_top1": 50,
+              "answer_in_topk": 58,
+              "band": "200-500",
+              "pool": 68
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "ambiguous": 0,
+              "failures": 0,
+              "right_doc_top1": 49,
+              "answer_in_top1": 49,
+              "answer_in_topk": 60,
+              "band": "500-1000",
+              "pool": 101
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "ambiguous": 0,
+              "failures": 0,
+              "right_doc_top1": 40,
+              "answer_in_top1": 40,
+              "answer_in_topk": 59,
+              "band": "1000-2000",
+              "pool": 109
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "ambiguous": 0,
+              "failures": 0,
+              "right_doc_top1": 23,
+              "answer_in_top1": 24,
+              "answer_in_topk": 52,
+              "band": "2000-",
+              "pool": 67
+            }
+          ],
+          "total_n": 256,
+          "total_pinned": 256,
+          "total_missing": 0,
+          "total_ambiguous": 0,
+          "total_failures": 0,
+          "right_doc_top1_pct": 71.93,
+          "answer_in_top1_pct": 73.44,
+          "answer_in_topk_pct": 96.66,
+          "control_ok": true,
+          "status": "ok"
+        },
+        "elapsed_s": 110.2
+      },
+      "context_fit": {
+        "task": "context_fit",
+        "token_budget": 4000,
+        "pinned_sample": "s-2026-08-03T184827Z",
+        "total_n": 256,
+        "total_missing": 0,
+        "total_ambiguous": 0,
+        "total_failures": 0,
+        "answer_in_context_pct": 85.55,
+        "context_tokens_mean": 3669.63,
+        "context_docs_mean": 5.96,
+        "matched_count_mean": 9.94,
+        "truncated_pct": 88.67,
+        "duplicate_sections_mean": 0.28,
+        "budget_used_pct": 91.7,
+        "control_ok": true,
+        "status": "ok",
+        "elapsed_s": 108.4
+      }
+    },
+    "v2": {
+      "primary_path": "document",
+      "paths_present": [
+        "document",
+        "passages",
+        "v1-search"
+      ],
+      "answer_recall": {
+        "document": {
+          "task": "answer_recall",
+          "path": "document",
+          "seed": 7,
+          "per_band": 60,
+          "pinned_sample": "s-2026-08-03T184827Z",
+          "bands": [
+            {
+              "n": 17,
+              "pinned": 17,
+              "missing": 0,
+              "ambiguous": 0,
+              "failures": 0,
+              "right_doc_top1": 16,
+              "answer_in_top1": 16,
+              "answer_in_topk": 17,
+              "band": "0-200",
+              "pool": 17
+            },
+            {
+              "n": 59,
+              "pinned": 59,
+              "missing": 0,
+              "ambiguous": 0,
+              "failures": 0,
+              "right_doc_top1": 53,
+              "answer_in_top1": 53,
+              "answer_in_topk": 58,
+              "band": "200-500",
+              "pool": 68
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "ambiguous": 0,
+              "failures": 0,
+              "right_doc_top1": 47,
+              "answer_in_top1": 47,
+              "answer_in_topk": 60,
+              "band": "500-1000",
+              "pool": 101
+            },
+            {
+              "n": 59,
+              "pinned": 60,
+              "missing": 1,
+              "ambiguous": 0,
+              "failures": 0,
+              "right_doc_top1": 44,
+              "answer_in_top1": 44,
+              "answer_in_topk": 57,
+              "band": "1000-2000",
+              "pool": 109
+            },
+            {
+              "n": 56,
+              "pinned": 60,
+              "missing": 0,
+              "ambiguous": 4,
+              "failures": 0,
+              "right_doc_top1": 20,
+              "answer_in_top1": 21,
+              "answer_in_topk": 48,
+              "band": "2000-",
+              "pool": 67
+            }
+          ],
+          "total_n": 251,
+          "total_pinned": 256,
+          "total_missing": 1,
+          "total_ambiguous": 4,
+          "total_failures": 0,
+          "right_doc_top1_pct": 74.51,
+          "answer_in_top1_pct": 74.87,
+          "answer_in_topk_pct": 96.13,
+          "control_ok": true,
+          "status": "ok"
+        },
+        "passages": {
+          "task": "answer_recall",
+          "path": "passages",
+          "seed": 7,
+          "per_band": 60,
+          "pinned_sample": "s-2026-08-03T184827Z",
+          "bands": [
+            {
+              "n": 17,
+              "pinned": 17,
+              "missing": 0,
+              "ambiguous": 0,
+              "failures": 0,
+              "right_doc_top1": 16,
+              "answer_in_top1": 16,
+              "answer_in_topk": 17,
+              "band": "0-200",
+              "pool": 17
+            },
+            {
+              "n": 59,
+              "pinned": 59,
+              "missing": 0,
+              "ambiguous": 0,
+              "failures": 0,
+              "right_doc_top1": 54,
+              "answer_in_top1": 52,
+              "answer_in_topk": 56,
+              "band": "200-500",
+              "pool": 68
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "ambiguous": 0,
+              "failures": 0,
+              "right_doc_top1": 49,
+              "answer_in_top1": 35,
+              "answer_in_topk": 43,
+              "band": "500-1000",
+              "pool": 101
+            },
+            {
+              "n": 59,
+              "pinned": 60,
+              "missing": 1,
+              "ambiguous": 0,
+              "failures": 0,
+              "right_doc_top1": 50,
+              "answer_in_top1": 33,
+              "answer_in_topk": 37,
+              "band": "1000-2000",
+              "pool": 109
+            },
+            {
+              "n": 56,
+              "pinned": 60,
+              "missing": 0,
+              "ambiguous": 4,
+              "failures": 0,
+              "right_doc_top1": 39,
+              "answer_in_top1": 26,
+              "answer_in_topk": 33,
+              "band": "2000-",
+              "pool": 67
+            }
+          ],
+          "total_n": 251,
+          "total_pinned": 256,
+          "total_missing": 1,
+          "total_ambiguous": 4,
+          "total_failures": 0,
+          "right_doc_top1_pct": 84.34,
+          "answer_in_top1_pct": 68.59,
+          "answer_in_topk_pct": 77.64,
+          "control_ok": true,
+          "status": "ok"
+        },
+        "v1-search": {
+          "task": "answer_recall",
+          "path": "v1-search",
+          "seed": 7,
+          "per_band": 60,
+          "pinned_sample": "s-2026-08-03T184827Z",
+          "bands": [
+            {
+              "n": 17,
+              "pinned": 17,
+              "missing": 0,
+              "ambiguous": 0,
+              "failures": 0,
+              "right_doc_top1": 16,
+              "answer_in_top1": 16,
+              "answer_in_topk": 17,
+              "band": "0-200",
+              "pool": 17
+            },
+            {
+              "n": 59,
+              "pinned": 59,
+              "missing": 0,
+              "ambiguous": 0,
+              "failures": 0,
+              "right_doc_top1": 53,
+              "answer_in_top1": 53,
+              "answer_in_topk": 58,
+              "band": "200-500",
+              "pool": 68
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "ambiguous": 0,
+              "failures": 0,
+              "right_doc_top1": 47,
+              "answer_in_top1": 47,
+              "answer_in_topk": 60,
+              "band": "500-1000",
+              "pool": 101
+            },
+            {
+              "n": 59,
+              "pinned": 60,
+              "missing": 1,
+              "ambiguous": 0,
+              "failures": 0,
+              "right_doc_top1": 44,
+              "answer_in_top1": 44,
+              "answer_in_topk": 57,
+              "band": "1000-2000",
+              "pool": 109
+            },
+            {
+              "n": 56,
+              "pinned": 60,
+              "missing": 0,
+              "ambiguous": 4,
+              "failures": 0,
+              "right_doc_top1": 20,
+              "answer_in_top1": 21,
+              "answer_in_topk": 48,
+              "band": "2000-",
+              "pool": 67
+            }
+          ],
+          "total_n": 251,
+          "total_pinned": 256,
+          "total_missing": 1,
+          "total_ambiguous": 4,
+          "total_failures": 0,
+          "right_doc_top1_pct": 74.51,
+          "answer_in_top1_pct": 74.87,
+          "answer_in_topk_pct": 96.13,
+          "control_ok": true,
+          "status": "ok"
+        },
+        "elapsed_s": 490.3
+      },
+      "context_fit": {
+        "task": "context_fit",
+        "token_budget": 4000,
+        "pinned_sample": "s-2026-08-03T184827Z",
+        "total_n": 251,
+        "total_missing": 1,
+        "total_ambiguous": 4,
+        "total_failures": 0,
+        "answer_in_context_pct": 87.65,
+        "context_tokens_mean": 3689.23,
+        "context_docs_mean": 6.21,
+        "matched_count_mean": 10.0,
+        "truncated_pct": 86.85,
+        "duplicate_sections_mean": 0.47,
+        "budget_used_pct": 92.2,
+        "control_ok": true,
+        "status": "ok",
+        "elapsed_s": 121.3
+      }
+    }
+  },
+  "display_names": {
+    "v1": "v1",
+    "v2": "v2"
+  }
+}

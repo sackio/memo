@@ -1,0 +1,71 @@
+# memo-v2-small — v2's CODE on v1's ENCODER. [002/FR-114]
+#
+# ⭐ WHY THIS EXISTS. R-19 measured `v1 /search` → `v2 document` at +3.6pt on
+# own_title and **−3.3pt on the realistic content_query**. That row bundles TWO
+# changes — the encoder (3-small@1536 → 3-large@3072) AND the entire v2 build —
+# and the obvious reading, blaming the encoder because it is the salient
+# difference, is not supported by it. This service holds the build fixed and
+# moves ONLY the encoder, which is the one comparison that can attribute it.
+#
+# It also answers the cheaper question directly: if 3-small + passages matches or
+# beats 3-large + passages, the expensive half of the cutover buys nothing — no
+# re-embed of 8k documents at 3072, no per-call cost delta, and v1's existing
+# vectors would not have to be thrown away at all.
+#
+# ⛔ A SEPARATE VOLUME AND A SEPARATE PORT, DELIBERATELY. Re-embedding memo-v2 in
+# place would answer the same question and destroy the 3-large build doing it —
+# leaving nothing to compare against and no way back except another re-embed.
+# Two live services cost disk; a destroyed baseline costs the experiment.
+#
+#   docker compose -f docker-compose.small.yml up -d --build
+#   # then seed the corpus from the 3-large volume and re-embed IN THIS container
+#
+# ⚠️ EXPECT IT TO REFUSE READS UNTIL THE RE-EMBED SWAPS. The seeded DB carries
+# 3072-wide vectors while this config says 1536, and `EmbeddingModelMismatch` is
+# the guard doing its job — not a broken container. That refusal is the whole
+# reason the mismatch check exists: sqlite-vec would otherwise accept a
+# same-width write from a different model and return confidently wrong
+# neighbours with nothing raised and nothing logged.
+
+services:
+  memo-v2-small:
+    build: .
+    container_name: memo-v2-small
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - memo_v2_small_data:/data
+    environment:
+      DEFAULT_DB_PATH: /data/memo.db
+      # ⛔ 8092 IS TAKEN by `inkling` (127.0.0.1:8092), and 8093/8094 by
+      # inkling-staging and friends. This service binds 0.0.0.0, and a wildcard
+      # bind cannot coexist with a loopback bind on the same port — so it
+      # crash-looped 8 times before `system` spotted it. Hard-coded rather than
+      # `${VAR:-default}` for the same reason as the embedding settings above:
+      # a port that silently moves is a port that silently collides again.
+      PORT: 8095
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      # ⛔ ALL FOUR REQUIRED, and hard-coded rather than `${VAR:-default}`.
+      # This host's shell exports EMBEDDING_MODEL=…-3-small and
+      # EMBEDDING_DIMENSIONS=1536 — which happen to be what this service wants,
+      # and that is exactly why they must not be inherited. A config that is
+      # correct because the shell agreed with it is not a config; the next shell
+      # that disagrees changes the experiment silently.
+      # And omitting BASE_URL does NOT fall back to OpenRouter: config.py's
+      # default moved to the qwen3 LAN service on 2026-08-01, so a "removed"
+      # line re-selects a third model while this file still reads 3-small.
+      EMBEDDING_MODEL: openai/text-embedding-3-small
+      EMBEDDING_DIMENSIONS: 1536
+      EMBEDDING_BASE_URL: https://openrouter.ai/api/v1
+      EMBEDDING_API_KEY: ${OPENROUTER_API_KEY}
+      MEMO_CONDUCTOR_PROVIDER: ${MEMO_CONDUCTOR_PROVIDER:-atc}
+      MEMO_AGENT_CONTROLLER_PROVIDER: ${MEMO_AGENT_CONTROLLER_PROVIDER:-agents_supervisor}
+      MEMO_V2_VERSION: 2.0.0-alpha1-small
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8095/health')"]
+      interval: 300s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  memo_v2_small_data:

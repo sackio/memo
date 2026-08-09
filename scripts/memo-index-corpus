@@ -1,0 +1,178 @@
+#!/usr/bin/env python3
+"""memo-index-corpus — build the passage index over the WHOLE live corpus. [002/FR-110]
+
+T271. `memo-index-factset-targets` is deliberately narrow (it touches only the
+memos a fact set names, so it cannot quietly become a backfill); this is the
+backfill it refuses to be.
+
+**The honest note this script exists to carry.** T271 says the corpus should be
+"chunked once rather than embedded twice". Run 3 (2026-08-01) did not chunk
+inline — it wrote document embeddings only — so this pass IS the second embed
+T271 wanted to avoid. That is a real deviation, not a rounding error: it costs
+one extra full-corpus embed (~$0.85 at 3-large). It is being paid because the
+alternative is a third full migration, which costs more. Chunking inline is
+still the right shape for the NEXT migration; see R-09.
+
+Accounting is discriminated, because a partial index that reports success is the
+exact failure the 2026-07-31 backfill shipped (3,489 of 7,657 memos failed and
+the run exited 0, having folded every exception into `skipped`, which also counts
+deliberate no-ops). Here:
+
+  - `indexed`  — passages written
+  - `empty`    — 0 passages because the memo has no content. NOT an error.
+  - `errored`  — an exception. Counted separately, and exit code 2.
+
+Resume-safe: memos that already have passages are skipped, so an interrupted run
+is re-runnable without re-embedding what already landed. Unlike the migration
+backfill, that resume is honest here — the skip test reads the DATABASE, not a
+set this run happens to have accumulated.
+
+    docker compose exec -d memo-v2 python /app/scripts/memo-index-corpus \\
+        --log /data/passage-index.log
+"""
+from __future__ import annotations
+
+import argparse
+import asyncio
+import json
+import sys
+import time
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, "/app/src")
+
+from memo import db, passages  # noqa: E402
+
+
+def _todo(limit: int | None) -> list[tuple[str, str, int]]:
+    """Live memos with content and no passages, biggest first.
+
+    Biggest-first is not cosmetic: the long memos are what this whole feature
+    exists to rescue, so if the run is interrupted the part that landed is the
+    part that matters. It also front-loads the slowest calls, which makes the
+    early rate estimate pessimistic rather than flattering.
+    """
+    conn = db._get_or_create_conn(db.global_path())
+    rows = conn.execute(
+        "SELECT d.id, d.content, coalesce(d.token_count, 0) AS tc "
+        "FROM documents d "
+        "LEFT JOIN (SELECT DISTINCT doc_id FROM document_chunks) c "
+        "  ON c.doc_id = d.id "
+        "WHERE c.doc_id IS NULL AND d.valid_until IS NULL "
+        "  AND length(coalesce(d.content, '')) > 0 "
+        "ORDER BY tc DESC").fetchall()
+    out = [(r[0], r[1] or "", r[2]) for r in rows]
+    return out[:limit] if limit else out
+
+
+async def index_all(todo, index_fn, *, concurrency: int = 10,
+                    progress_every: int = 100, now=time.time) -> dict:
+    """Index every (doc_id, content) in `todo`, returning discriminated counts.
+
+    Extracted from `main` so the accounting is reachable from a test WITHOUT a
+    database, a corpus, or a network. That is not tidiness: the identical logic
+    living inline in the migration backfill is how a run that failed 3,489 of
+    7,657 memos exited 0 on 2026-07-31, and nothing could have caught it because
+    nothing could call it.
+
+    `index_fn` is injected for the same reason `index_document` takes
+    `embed_batch` — the test must be able to raise on demand.
+    """
+    started = now()
+    done = {"indexed": 0, "empty": 0, "errored": 0, "passages": 0}
+    failures: list[tuple[str, str]] = []
+    sem = asyncio.Semaphore(concurrency)
+
+    async def one(doc_id: str, content: str):
+        async with sem:
+            try:
+                n = await index_fn(doc_id, content)
+            except Exception as e:  # discriminated: an error is NOT a skip
+                done["errored"] += 1
+                failures.append((doc_id, f"{type(e).__name__}: {e}"))
+            else:
+                done["passages"] += n
+                # A memo that chunks to nothing is `empty`, not `indexed`: it
+                # contributes no passages, so counting it as a success would
+                # overstate coverage by exactly the memos that have none.
+                done["indexed" if n else "empty"] += 1
+            finished = done["indexed"] + done["empty"] + done["errored"]
+            if progress_every and finished % progress_every == 0:
+                el = max(now() - started, 1e-9)
+                rate = finished / el * 60
+                eta = (len(todo) - finished) / max(rate, 1e-9)
+                print(f"  {finished}/{len(todo)} ({100*finished/len(todo):.1f}%) "
+                      f"· {done['passages']} passages · {done['errored']} errored "
+                      f"· {rate:.0f}/min · ETA {eta:.0f} min", flush=True)
+
+    await asyncio.gather(*(one(i, c) for i, c in todo))
+
+    return {"attempted": len(todo), "indexed": done["indexed"],
+            "empty": done["empty"], "errored": done["errored"],
+            "passages_written": done["passages"],
+            "error_pct": round(100 * done["errored"] / max(1, len(todo)), 3),
+            "elapsed_min": round((now() - started) / 60, 1),
+            "failures": failures}
+
+
+def exit_code(stats: dict, remaining: int, *, limit: int | None) -> int:
+    """0 only when the corpus is actually, fully indexed.
+
+    Two distinct ways to be incomplete, and both must be loud:
+      - something errored          → 2, and the caller is told to re-run
+      - nothing errored but memos remain → 2, because a silent shortfall is the
+        failure mode that shipped last time
+
+    The one exception is `--limit`, where a remainder is present BY CONSTRUCTION.
+    Failing there would train the reader to ignore exit 2 from this script, which
+    is the single signal that has to stay meaningful.
+    """
+    if stats["errored"]:
+        return 2
+    if limit:
+        return 0
+    return 0 if remaining == 0 else 2
+
+
+async def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--concurrency", type=int, default=10)
+    ap.add_argument("--limit", type=int, default=None,
+                    help="index at most N memos (rehearsal)")
+    ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--progress-every", type=int, default=100)
+    args = ap.parse_args()
+
+    todo = _todo(args.limit)
+    tokens = sum(t for _, _, t in todo)
+    print(f"{len(todo)} memo(s) to index, {tokens:,} content tokens "
+          f"(chunk overlap adds ~15%)", flush=True)
+    if args.dry_run or not todo:
+        return 0
+
+    stats = await index_all([(i, c) for i, c, _ in todo],
+                            passages.index_document,
+                            concurrency=args.concurrency,
+                            progress_every=args.progress_every)
+    failures = stats.pop("failures")
+    print(json.dumps(stats, indent=2), flush=True)
+
+    for doc_id, err in failures[:20]:
+        print(f"  FAILED {doc_id[:8]}: {err}", file=sys.stderr, flush=True)
+    if failures:
+        print(f"\n{len(failures)} memo(s) errored. Re-run this script — it is "
+              f"resume-safe (the skip test reads the database), so a re-run "
+              f"retries exactly the failures and re-embeds nothing.",
+              file=sys.stderr, flush=True)
+
+    remaining = len(_todo(None))
+    print(f"live memos still without passages: {remaining}", flush=True)
+    return exit_code(stats, remaining, limit=args.limit)
+
+
+if __name__ == "__main__":
+    rc = asyncio.run(main())
+    print(f"EXIT={rc}", flush=True)
+    raise SystemExit(rc)

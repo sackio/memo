@@ -1,0 +1,264 @@
+================================================================================
+QWEN3 QUERY INSTRUCT PREFIX — the 2000+ band at power (n=120 of 399)
+memo-v2 · document path · 2026-08-02 04:50-05:04 EDT · qwen3-embedding-4b @2560
+================================================================================
+
+WHY THIS RUN EXISTS. The 5-band confirmation ran n=15 per band. `embeddings`
+pointed out that 2000+ is the band where the prefix could plausibly HURT — bare
+qwen3 already BEATS 3-large there (42.4% vs 18.8%) — and that n=15 cannot support
+"no harm" when you are looking for a decrease against your strongest baseline.
+Correct, so the band was re-run at n=120, seed 101, paired, depth 10.
+
+SAMPLE IS REPRESENTATIVE: bare rank-1 here is 54/120 = 45.0%, against the full
+census's 42.4% on the same band. The draw is not flattering itself.
+
+--------------------------------------------------------------------------------
+RESULT — read the discordant pairs, not the net
+--------------------------------------------------------------------------------
+
+                bare      instruct    net    improved  worsened  one-sided sign p
+  rank-1      54/120      59/120      +5        14         9         0.202
+  top-5       73/120      79/120      +6         9         3         0.073
+  absent      41/120      35/120      -6         8         2         0.055
+
+⛔ THE PREFIX DOES NOT DEMONSTRABLY HELP RANK-1 IN THIS BAND. 14 improved against
+9 worsened is p=0.20 — a coin flip's distance from noise. The +5 net is not
+evidence of anything on its own, which is exactly what the pairs exist to show.
+
+⚠️ AND THE HARM IS REAL AND SPECIFIC. NINE documents that were rank-1 under a bare
+query are no longer rank-1 with the prefix:
+
+    bare=0 -> instruct=2   Server4 — docker-heal status
+    bare=0 -> instruct=1   ⭐ NAV RESUME STATE for #82 (banked 2026-07-30 15:05)
+    bare=0 -> instruct=1   Sol-Ark Cloud (write-capable) HA custom_component
+    bare=0 -> instruct=1   [SUPERSEDED 2026-06-11 -> 1d2559d4: campaign complete]
+    bare=0 -> instruct=1   quantum-feed: stream_router: ZFS floor override
+    bare=0 -> instruct=2   quantum-assistant: Triage plan — full reconciliation
+    bare=0 -> instruct=2   quantum-assistant: Discovery pipeline audit
+    bare=0 -> instruct=1   quantum-dashboard: 005/T029 landed — terminal-reset
+    bare=0 -> instruct=1   nav #81 RESUME STATE — halt continues, baseline frozen
+
+⇒ All nine are DEMOTIONS to rank 1 or 2, not losses — they stay in the top-5.
+
+⚠️ SEPARATELY, TWO DOCUMENTS BECAME UNRETRIEVABLE (in the top-10 bare, absent with
+the prefix). That is the worse failure and it is not visible in the rank-1 or
+top-5 rows; it only appears in the absent decomposition. Against 8 that became
+retrievable, so the absent column nets FAVOURABLE (-6, p=0.055) — but "6 fewer
+misses" and "2 documents you can no longer find" are both true at once, and the
+net prices them identically.
+
+⚠️ MULTIPLICITY — three metrics on one dataset. A p=0.055 among three tests is
+roughly what noise produces at least once, so the two marginal rows carry less
+than their face value. The decisive point is which metric was named FIRST:
+
+  PRIMARY   rank-1 discordant pairs. Pre-registered before the run, in this
+            script's docstring and in the collection instruction: "worsened == 0
+            is the only thing that supports 'prefix everywhere'." It is NULL
+            (p=0.202) and worsened is 9.
+  SECONDARY top-5 (p=0.073) and absent (p=0.055).
+
+⛔ A MARGINAL SECONDARY DOES NOT RESCUE A NULL PRIMARY. Reading it as though it
+did is the standard route by which an equivocal result becomes a positive one,
+and it would be especially available here because the secondaries both point the
+flattering way. (Raised by `embeddings`; it hardens the reading rather than
+softening it.)
+
+--------------------------------------------------------------------------------
+WHAT THIS DOES AND DOES NOT ESTABLISH
+--------------------------------------------------------------------------------
+
+✅ ESTABLISHED, and it was the point of the run: n=15 was not enough. The n=15 look
+   at this band showed +2 rank-1 with ZERO worsened. At n=120 there are NINE
+   worsened. "No harm" at n=15 was not a finding, it was an absence of resolution.
+
+⛔ NOT ESTABLISHED: that the prefix helps in this band. p=0.20.
+⛔ NOT ESTABLISHED: that it is safe here. Nine demotions and two documents lost.
+⛔ NOT ESTABLISHED: band-dependent routing. Two seats (memo, groton) independently
+   failed to resolve individual bands; that reproducibility makes it a property of
+   the effect size, not of one sample. There is no basis to route by length, so the
+   choice is uniform-or-nothing WITHIN this corpus.
+
+⚠️ THIS IS NOT THE NEGATIVE RESULT I PRE-REGISTERED AGAINST. I said a negative
+   2000+ would mean "don't apply it anywhere yet". This is not negative — it is a
+   NULL on rank-1 with a marginal favourable absent column and a real, enumerable
+   set of harmed documents. Saying "the prefix hurts long documents" would overstate
+   it in the opposite direction to my original error. It does not help them, and it
+   moves nine of them the wrong way.
+
+--------------------------------------------------------------------------------
+PROPORTION, so this band is not read as the whole decision
+--------------------------------------------------------------------------------
+The 2000+ band is 399 of 7,221 documents — 5.5% of the corpus. The three short
+bands, where the effect is strong and significant, hold 5,516 documents — 76%.
+Uniform application is expected to be a large net win whose cost is concentrated
+here. That trade is Ben's to make, not mine to pre-empt, and it should be made
+with the nine titles above visible rather than as a summary statistic.
+
+⛔ REGARDLESS: nothing ships until embed_query()/embed_document() exist and ~21
+call sites are reclassified by hand. memo has no chokepoint — see the commit
+message on 2369889.
+
+SCOPE. Measures THE TASK STRING BELOW, not "prefixing" in general. `groton`
+measured 5/10 generic vs 7/10 domain-specific on their corpus, the better one with
+the worse tail — the string is a live variable.
+  "Instruct: Given a search query, retrieve relevant documents that match the
+   query\nQuery: {q}"
+Self-retrieval by title makes the correct answer true by construction; read `bare`
+before the delta. Bare is 45.0% here, so the design has room and a null is readable.
+
+⚠️ The run executed a build of the script that predates these two scope notes by
+~30 seconds; they are recorded here rather than in the run's stdout. The numbers
+are unaffected. Stated because a file that implies a caveat was printed when it
+was not is worse than one carrying no caveat.
+
+================================================================================
+RAW RUN OUTPUT FOLLOWS
+================================================================================
+model qwen3-embedding-4b @ 2560
+band 2000+: 399 docs in band, probing 120 (seed 101)
+instruct template: 'Instruct: Given a search query, retrieve relevant documents that match the query\nQuery: <query>'
+
+  [  1/120] b3cad8ca  bare=0  instruct=2   Server4 — docker-heal status
+  [  2/120] 3efbc48b  bare=0  instruct=1   ⭐ NAV RESUME STATE for #82 (banked 2026-07-30 15
+  [  3/120] a32c54b4  bare=1  instruct=0   Technical Indicators XML Schema — quantum-reacto
+  [  4/120] 7198fb39  bare=-  instruct=-   Backfill checkpoint — server4 — 2026-07-30 07:13
+  [  5/120] 9207a96c  bare=-  instruct=-   Backfill checkpoint — server5 — 2026-07-20 06:58
+  [  6/120] 1238dbb5  bare=4  instruct=4   Ben Sack — Current Health Profile (May 2026)
+  [  7/120] d2b386ae  bare=-  instruct=-   Backfill checkpoint — server5 — 2026-07-20 06:58
+  [  8/120] 99ed1f85  bare=1  instruct=1   Whole Foods (Westford) in-store trip history — N
+  [  9/120] 45409972  bare=9  instruct=0   quantum-library 2026-06-11 ~18:37 — SMOKE BUILD-
+  [ 10/120] bce61591  bare=0  instruct=0   Laura M. Sack, PhD, FACMG — CV / Career Corpus
+  [ 11/120] 4765ab2c  bare=0  instruct=0   ⛔ quantum-liverun-impl — HALTED 2026-07-29 17:07
+  [ 12/120] 5b48001e  bare=0  instruct=0   ⭐ L-B2 FINAL TENDER BAR (6 conditions + 2 riders
+  [ 13/120] 95c0281b  bare=1  instruct=1   120 Reedy Meadow — Exterior LED Lighting Design
+  [ 14/120] dddab214  bare=2  instruct=7   ⭐ quantum-planner UNIFIED PLAN 2026-06-19 — sign
+  [ 15/120] 43f8f005  bare=-  instruct=-   Backfill checkpoint — server4 — 2026-07-19 06:53
+  [ 16/120] 6429b72b  bare=5  instruct=8   Memo Minder Checkpoint — 2026-07-13 (p5/6)
+  [ 17/120] 8a29044b  bare=-  instruct=-   Backfill checkpoint — server5 — 2026-07-20 06:58
+  [ 18/120] 19c746fa  bare=0  instruct=0   Dell iDRAC Management — All Servers
+  [ 19/120] 500131b4  bare=2  instruct=5   Backfill checkpoint — server4 — 2026-07-22 06:58
+  [ 20/120] 3ec7e927  bare=0  instruct=0   Ben's purchasing profile (rolling)
+  [ 21/120] 362367f6  bare=0  instruct=0   quantum-library RESUME STATE 2026-07-30 — HALT i
+  [ 22/120] 1f012819  bare=0  instruct=1   Sol-Ark Cloud (write-capable) HA custom_componen
+  [ 23/120] 8dbe3f0e  bare=-  instruct=-   Backfill checkpoint — server4 — 2026-07-21 07:04
+  [ 24/120] a314656c  bare=-  instruct=1   fishtank-ato-cycling-automation — HA entity surf
+  [ 25/120] 733222e3  bare=-  instruct=-   Backfill checkpoint — office — 2026-07-20 06:58 
+  [ 26/120] ef2b7719  bare=0  instruct=0   Polygon data reality for backtesting (measured 2
+  [ 27/120] 933afbca  bare=0  instruct=1   [SUPERSEDED 2026-06-11 → 1d2559d4: "campaign com
+  [ 28/120] 63f8681f  bare=0  instruct=1   quantum-feed: stream_router: allow ZFS floor ove
+  [ 29/120] 4d1f7799  bare=0  instruct=0   Guardian rewarm pins 73f3a43e + 856f5ef3 archive
+  [ 30/120] c8ac21f1  bare=0  instruct=0   quantum-feed: .reviews: qf-xsect-demux-defense —
+  [ 31/120] 808797c4  bare=0  instruct=0   VyOS WAN failback bug — eth1 flap incident 2026-
+  [ 32/120] 85ee3c1d  bare=3  instruct=4   Brooke (Sack dog) — Health & Veterinary History
+  [ 33/120] 42379e5d  bare=0  instruct=0   quantum-feed: qf-types + qf-realtime: normalize 
+  [ 34/120] 1888ef54  bare=0  instruct=0   NFS topology, configs, pitfalls, and incidents (
+  [ 35/120] 87bbcac5  bare=1  instruct=0   bvol-179 UNION COMPLETE (912×179=163,248) throug
+  [ 36/120] f9d261b4  bare=0  instruct=0   MCC WES Data Appendix — table a_degradation_curv
+  [ 37/120] 60ded1a2  bare=-  instruct=-   Backfill checkpoint — office — 2026-07-20 06:58 
+  [ 38/120] f1f130d7  bare=-  instruct=0   Quantum Reactor - Ticker Universes, ETF Constitu
+  [ 39/120] 26005881  bare=0  instruct=0   Shaw's trip history — complete 4.5-year backfill
+  [ 40/120] d016bf6d  bare=2  instruct=0   quantum-feed: qf-realtime: add benzinga_news_v1 
+  [ 41/120] c4efffda  bare=0  instruct=0   Omada Switch Config — SG3428X-M2 (Current + Hist
+  [ 42/120] d9ea6078  bare=2  instruct=1   quantum-memo-keeper: standing focus + last-pass 
+  [ 43/120] f145443c  bare=0  instruct=0   ⚠️ RETRACTED — the \"alpaca relocated to server4
+  [ 44/120] d2f92405  bare=-  instruct=-   Backfill checkpoint — server4 — 2026-07-20 06:58
+  [ 45/120] 548a82b3  bare=0  instruct=0   quantum-feed: qf-realtime: Stage 4 eviction in e
+  [ 46/120] 7f02a2f7  bare=0  instruct=0   Claude Code Hooks, Commands, and Permissions
+  [ 47/120] 7aecbb5f  bare=0  instruct=0   PROPOSAL: passage-level embedding for memo v2 — 
+  [ 48/120] 495f02b2  bare=-  instruct=-   Backfill checkpoint — server4 — 2026-07-16 07:03
+  [ 49/120] e7bf590f  bare=0  instruct=2   quantum-assistant: Triage plan — full reconcilia
+  [ 50/120] 1cee21e4  bare=0  instruct=0   Respawn invalidates every pin claim about the de
+  [ 51/120] 80ee0793  bare=0  instruct=0   ⭐ quantum-data ADDENDUM 2026-07-30 (rev. post-ex
+  [ 52/120] d485ef83  bare=0  instruct=0   ⚠️ quantum-dashboard RENDER GAP (2026-07-30, que
+  [ 53/120] 855fb1f1  bare=0  instruct=0   HVAC Replacement Plan — 120 Reedy Meadow Rd, Gro
+  [ 54/120] 0185fc41  bare=1  instruct=0   Quantum Reactor — Signal Types Reference
+  [ 55/120] 91f0100e  bare=0  instruct=2   quantum-assistant: Discovery pipeline audit — qf
+  [ 56/120] 462b2dd8  bare=0  instruct=0   Grocery shopping responsibility — Claude owns it
+  [ 57/120] a0a59295  bare=0  instruct=0   Convention-batch queue OVERFLOW-2 (items 46+) — 
+  [ 58/120] 2062872a  bare=0  instruct=0   HMS Faculty of Medicine CV — Format Rules & Sect
+  [ 59/120] 6d301bc8  bare=2  instruct=0   HVAC orchestration — ecobee (warm mode / rapid c
+  [ 60/120] 0596fd9f  bare=1  instruct=0   ATC — Air Traffic Control coordination system (c
+  [ 61/120] 750a96be  bare=7  instruct=7   Backfill checkpoint — server4 — 2026-07-22 06:58
+  [ 62/120] 71f5bf89  bare=-  instruct=-   Backfill checkpoint — server4 — 2026-07-17 06:58
+  [ 63/120] 027a46c8  bare=-  instruct=-   Backfill checkpoint — server4 — 2026-07-16 07:03
+  [ 64/120] 52cda29a  bare=-  instruct=0   quantum-feed: stream_router: quotes_v1 K=16 → K=
+  [ 65/120] ac22af6a  bare=6  instruct=0   Server4 — Critical Single-Point-of-Failure Inven
+  [ 66/120] 32ee1d1a  bare=0  instruct=0   Sallyann 95 — Research: People & Relationships
+  [ 67/120] 0b6e92f0  bare=1  instruct=0   Twilio Group MMS — Working Configuration & Archi
+  [ 68/120] 89794daa  bare=0  instruct=0   quantum-parity-guardian STAND-DOWN state bank 20
+  [ 69/120] 3c30c28a  bare=2  instruct=2   Memo Minder Checkpoint — 2026-07-12 (p1/6)
+  [ 70/120] 573ef795  bare=-  instruct=-   Backfill checkpoint — server4 — 2026-07-18 06:58
+  [ 71/120] 18929ddd  bare=-  instruct=-   Backfill checkpoint — office — 2026-07-20 06:58 
+  [ 72/120] 322c69a7  bare=3  instruct=-   quantum-navigator RESUME UPDATE-6 — idx verdict 
+  [ 73/120] e0481422  bare=7  instruct=-   Ben Sack — Current Health Profile (May 2026)
+  [ 74/120] 72931278  bare=-  instruct=5   Git pulse: quantum-feed — 2026-07-26 → 2026-07-2
+  [ 75/120] af65d265  bare=0  instruct=0   ⚖️ nav RESUME 2026-06-15 ~22:05 — badge-the-rest
+  [ 76/120] 944286a6  bare=0  instruct=0   HVAC System — 120 Reedy Meadow Road (Current Sta
+  [ 77/120] 38279060  bare=-  instruct=-   Backfill checkpoint — server5 — 2026-07-20 06:58
+  [ 78/120] 983e5a83  bare=0  instruct=0   quantum-library BASELINE 2026-06-25 — ①parity RE
+  [ 79/120] 9aacb8fa  bare=1  instruct=1   Bank Accounts — Sack Family Financial Inventory
+  [ 80/120] 620741c7  bare=0  instruct=0   Endless Energy Manual J (Conduit Tech lidar, 202
+  [ 81/120] cf0de660  bare=0  instruct=0   ⭐ quantum-cluster ANCHOR (2026-07-30 16:15). rdv
+  [ 82/120] 9fee1a7b  bare=0  instruct=0   Sprinkler/Irrigation System — 120 Reedy Meadow (
+  [ 83/120] d6bd36f6  bare=-  instruct=-   Backfill checkpoint — server4 — 2026-07-16 07:03
+  [ 84/120] 1e240640  bare=-  instruct=-   Backfill checkpoint — office — 2026-07-20 06:58 
+  [ 85/120] cba55715  bare=0  instruct=0   Memo Minder Checkpoint — 2026-07-12 (p5/6)
+  [ 86/120] 09944011  bare=-  instruct=-   Backfill checkpoint — server4 — 2026-07-17 06:58
+  [ 87/120] b1eaa449  bare=1  instruct=0   Jay Moody HVAC Quote — Bosch $51,894 / Bryant Cr
+  [ 88/120] 6dc00eba  bare=-  instruct=0   Barn Data Center — Infrastructure Inventory (Mar
+  [ 89/120] d9e24e97  bare=-  instruct=-   Backfill checkpoint — office — 2026-07-20 06:58 
+  [ 90/120] 8b8ae533  bare=-  instruct=-   Backfill checkpoint — server4 — 2026-07-21 07:04
+  [ 91/120] 271f6a33  bare=-  instruct=-   Backfill checkpoint — server4 — 2026-07-21 07:04
+  [ 92/120] 910af679  bare=0  instruct=0   T110 follow-on 2026-07-25 — MEASURED per-shard w
+  [ 93/120] 2f13a187  bare=-  instruct=-   Backfill checkpoint — server4 — 2026-07-17 06:58
+  [ 94/120] 3bd2e7d2  bare=-  instruct=-   Backfill checkpoint — server5 — 2026-07-20 06:58
+  [ 95/120] 3ff1799a  bare=0  instruct=0   ⭐⭐ NAV #41 — T095 item ① LANDED @1e563e4c (parse
+  [ 96/120] a679be23  bare=0  instruct=0   Whole Foods Fresh delivery (UFF) trip history — 
+  [ 97/120] 8dda135d  bare=0  instruct=0   VectorBT Pro Fork — Streaming Indicators Archite
+  [ 98/120] ba75f283  bare=1  instruct=2   quantum-assistant: Discovery Architecture & Pipe
+  [ 99/120] 1d38f499  bare=-  instruct=-   Backfill checkpoint — office — 2026-07-20 06:58 
+  [100/120] 3178c4f0  bare=0  instruct=1   quantum-dashboard: 005/T029 landed — the termina
+  [101/120] e09da707  bare=0  instruct=0   ⚖️ 2026-07-29 ingest miss — EXPOSURE was a full 
+  [102/120] 68b2d6fa  bare=-  instruct=-   Backfill checkpoint — server4 — 2026-07-19 06:53
+  [103/120] 78846708  bare=-  instruct=-   Backfill checkpoint — server4 — 2026-07-20 06:58
+  [104/120] 18b29312  bare=-  instruct=6   server4 + server5 boot-state cleanup — 2026-05-1
+  [105/120] 171a247c  bare=0  instruct=0   Magill Reunion — Paradisus Pro Tips (Reddit-sour
+  [106/120] b88db1bd  bare=0  instruct=0   Sack family insurance — MASTER INDEX (all lines,
+  [107/120] a6f876c3  bare=-  instruct=-   Backfill checkpoint — server4 — 2026-07-20 06:58
+  [108/120] 6fef684a  bare=-  instruct=2   MCC WES Data Appendix (de-identified by duo) — t
+  [109/120] d4a8ca75  bare=8  instruct=0   quantum-assistant: What CLAUDE.md does well and 
+  [110/120] 16a741f4  bare=-  instruct=-   Backfill checkpoint — server4 — 2026-07-20 06:58
+  [111/120] ebd1b74c  bare=-  instruct=-   quantum-data 2026-07-30 13:00Z SESSION STATE: ow
+  [112/120] cbad3011  bare=0  instruct=1   nav #81 RESUME STATE — halt continues, baseline 
+  [113/120] 6413e45c  bare=-  instruct=1   quantum-library 2026-07-28 18:30 — T115 re-run: 
+  [114/120] 1fb30263  bare=-  instruct=-   quantum-library #40 (2026-07-24 ~18:15 EDT): L-B
+  [115/120] 5794b354  bare=-  instruct=-   Backfill checkpoint — server4 — 2026-07-15 06:41
+  [116/120] e0b05d9a  bare=-  instruct=-   quantum-library 2026-06-13 ~05:25 — WAVE-2 cs-84
+  [117/120] 4fa96df9  bare=0  instruct=0   ✅ CLOSED at ea13f6d0 (verified at origin) — guar
+  [118/120] 9201c834  bare=-  instruct=-   Backfill checkpoint — server4 — 2026-07-17 06:58
+  [119/120] 40f0aa16  bare=0  instruct=0   quantum-data — role / responsibilities spine (fo
+  [120/120] 862d1b3c  bare=0  instruct=0   ⭐⭐ NAV #40 — CDL pre-declare + site enumeration 
+
+                  rank-1       top-5
+bare              54/120      73/120
+instruct          59/120      79/120
+delta                 +5          +6
+
+--- DISCORDANT PAIRS (the sign test; net delta alone would hide these) ---
+  rank-1  improved  14   worsened   9   unchanged  97
+  top-5   improved   9   worsened   3   unchanged 108
+
+⚠️ QUERIES THE PREFIX BROKE (were rank-1 bare, no longer):
+    bare=0 -> instruct=2   Server4 — docker-heal status
+    bare=0 -> instruct=1   ⭐ NAV RESUME STATE for #82 (banked 2026-07-30 15:05 EDT,
+    bare=0 -> instruct=1   Sol-Ark Cloud (write-capable) HA custom_component — usag
+    bare=0 -> instruct=1   [SUPERSEDED 2026-06-11 → 1d2559d4: "campaign complete / 
+    bare=0 -> instruct=1   quantum-feed: stream_router: allow ZFS floor override vi
+    bare=0 -> instruct=2   quantum-assistant: Triage plan — full reconciliation of 
+    bare=0 -> instruct=2   quantum-assistant: Discovery pipeline audit — qf-discove
+    bare=0 -> instruct=1   quantum-dashboard: 005/T029 landed — the terminal-reset 
+    bare=0 -> instruct=1   nav #81 RESUME STATE — halt continues, baseline frozen @
+
+CONTEXT: 3-large on this band scored 18.8% rank-1 / 40.6% top-5 (75/399, 162/399, full census). Bare qwen3 measured 42.4% / 58.9%.
+READING IT: worsened >> 0 means length-dependent ROUTING (prefix short queries, bare for long), not a fix. worsened == 0 at this n is the only thing that supports 'prefix everywhere'.
+EXIT=0
