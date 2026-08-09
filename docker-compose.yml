@@ -1,4 +1,60 @@
+# ⛔⛔ READ THIS BEFORE RUNNING ANY `docker compose` COMMAND IN THIS DIRECTORY.
+#
+# The LIVE FLEET service on :8000 is the `memo` container below. ~50 agent seats
+# write to it. Its compose labels point at THIS FILE — and until 2026-08-09 this
+# file did not define it, because the 001-memo-renovation merge replaced a
+# v1-shaped compose (service `memo`) with a v2-shaped one (service `memo-v2`).
+#
+# ⛔ THAT MADE THE LIVE CONTAINER AN ORPHAN OF ITS OWN COMPOSE PROJECT, and
+# `docker compose up -d --remove-orphans` — the form this fleet's own standing
+# instructions recommend — WOULD HAVE DELETED IT. Nothing would have warned; the
+# container simply is not in the file it claims to belong to.
+#
+# ⚠️ THE MERGE DID THIS SILENTLY. `docker-compose.yml` was not in the 8 files
+# that conflicted, because only ONE side changed it — which is exactly the case
+# git resolves without asking. A clean auto-merge is not a working merge, and
+# here it rewired the deployment topology of live infrastructure.
+#
+# ⇒ `memo` is redefined below so the file manages what it claims to manage.
 services:
+  # ⛔ IMAGE, NOT `build: .` — DELIBERATELY, AND DO NOT "FIX" IT.
+  # This directory is now the v2 tree (2.0.0-alpha*). A `build: .` here would
+  # rebuild the LIVE v1 service from v2 source on the next `up`, which is the
+  # cutover — an operator decision that has not been taken. The image is built
+  # from the v1 line explicitly:
+  #
+  #   docker build -t memo-memo:0.4.3 /mnt/nas/data/code/.memo-v1-hotfix
+  #   docker compose up -d memo
+  #
+  # (worktree of branch `v1-hotfix-ready`, cut from tag pre-merge-main-2026-08-08)
+  memo:
+    image: memo-memo:0.4.3
+    container_name: memo
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8000}:8000"
+    volumes:
+      - memo_data:/data
+    environment:
+      DEFAULT_DB_PATH: /data/memo.db
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      # ⛔ v1 STAYS ON 3-small/1536. Never qwen3, never 3-large — the corpus is
+      # 9,076 documents embedded at this width and a change here mis-ranks every
+      # one of them silently.
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-openai/text-embedding-3-small}
+      EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-1536}
+    healthcheck:
+      # ⚠️ /health is LIVENESS ONLY and has been green through two fleet-wide
+      # outages (2026-08-03, 2026-08-09) while /search timed out. v0.4.3 adds
+      # /ready, which exercises the sqlite connection AND the vec0 index. Left on
+      # /health here because a failing healthcheck restarts the container, and
+      # restarting during an I/O storm makes it worse — /ready is for MONITORING,
+      # not for the restart policy. Alert on it externally; do not gate on it.
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 300s
+      timeout: 10s
+      retries: 3
+
   memo-v2:
     build: .
     container_name: memo-v2
@@ -123,4 +179,5 @@ services:
       DEFAULT_DB_PATH: /tmp/memo-test.db
 
 volumes:
+  memo_data:
   memo_v2_data:
