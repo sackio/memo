@@ -235,6 +235,69 @@ def resolve_target(name: str, url: str, container: str | None,
     return out
 
 
+def host_env() -> dict:
+    """Host load and I/O pressure, recorded BESIDE every number. [2026-08-09]
+
+    ⭐ WHY THIS FIELD EXISTS, and it is not diligence — it is a SLOT.
+
+    This file already stores the git sha, the model, the dimensions, the corpus
+    counts, the seed and the probe budget. It stored **nothing about the machine
+    the numbers came off**. On 2026-08-09 a run spent three hours against a host
+    at load 119 with `io full` at 44% — a `zfs send` and a scrub — and every
+    latency figure it would have written was a measurement of the storm.
+
+    ⛔ `models`, independently and twenty minutes earlier, found the identical
+    hole in their own latency method. Their statement of it is the general one:
+    **you record what you VARY and what you MEASURE; the environment is neither,
+    so it gets no field — and it is exactly what makes the run irreproducible.**
+    The schema gets built around the hypothesis; the environment is by
+    definition outside it.
+
+    ⛔ AND IT FAILS WORSE THAN A WRONG VALUE. A wrong number can be recomputed
+    from the record. An unrecorded environmental variable **cannot be recovered
+    at all** — the run is over, the load is gone, and the file looks complete.
+    ⭐ *A floor measured under I/O pressure looks exactly like a real per-call
+    floor* (`models`), and nothing in the artifact ever contradicts it.
+
+    ⇒ So this returns a dict with the keys ALWAYS PRESENT, carrying `None` and a
+    reason when it cannot read them. **An empty field is a question; a missing
+    field is not even a question.**
+    """
+    out = {"load1": None, "load5": None, "load15": None,
+           "io_some_avg60": None, "io_full_avg60": None, "error": None}
+    try:
+        with open("/proc/loadavg") as fh:
+            a = fh.read().split()
+        out["load1"], out["load5"], out["load15"] = (float(a[0]), float(a[1]),
+                                                     float(a[2]))
+    except Exception as e:
+        out["error"] = f"loadavg: {type(e).__name__}"
+    try:
+        with open("/proc/pressure/io") as fh:
+            for line in fh:
+                kind, *rest = line.split()
+                vals = dict(p.split("=") for p in rest)
+                if kind == "some":
+                    out["io_some_avg60"] = float(vals.get("avg60", "nan"))
+                elif kind == "full":
+                    out["io_full_avg60"] = float(vals.get("avg60", "nan"))
+    except Exception as e:
+        out["error"] = ((out["error"] or "") + f" pressure: {type(e).__name__}").strip()
+    return out
+
+
+# Above these, a run is measuring the machine rather than the service. Not a
+# hard stop — the run still happens and still records — but the summary says so,
+# because a number nobody flagged is a number somebody will quote.
+LOAD_SUSPECT = 25.0
+IO_FULL_SUSPECT = 12.0
+
+
+def env_is_suspect(env: dict) -> bool:
+    return ((env.get("load1") or 0) > LOAD_SUSPECT
+            or (env.get("io_full_avg60") or 0) > IO_FULL_SUSPECT)
+
+
 def corpus(url: str) -> dict:
     docs = _get(url, "/documents?limit=20000")
     def toks(d):
@@ -1498,6 +1561,14 @@ def main() -> int:
         print(f"replay: {len(replay_queries)} real MCP queries from {replay_container}",
               flush=True)
     run["replicates"] = args.replicates
+    run["host_env_start"] = host_env()
+    if env_is_suspect(run["host_env_start"]):
+        print(f"⚠️  HOST IS LOADED at start: load1="
+              f"{run['host_env_start'].get('load1')} "
+              f"io_full_avg60={run['host_env_start'].get('io_full_avg60')}%. "
+              f"Latency figures from this run measure the MACHINE, not the "
+              f"service — and a floor measured under I/O pressure looks exactly "
+              f"like a real per-call floor.", file=sys.stderr, flush=True)
 
     for name, url, _ in targets:
         tgt = next(t for t in run["targets"] if t["name"] == name)
@@ -1560,6 +1631,10 @@ def main() -> int:
                              "why": f"{type(e).__name__}: {e}"}, None
             if isinstance(r, dict):
                 r["elapsed_s"] = round(time.time() - t0, 1)
+                # ⭐ PER TASK, not just per run. A 3-hour run crosses I/O windows;
+                # a single reading at the start would have said "calm" about a
+                # task that executed inside a storm two hours later.
+                r["host_env"] = host_env()
                 if reps > 1:
                     r["replicates"] = reps
                 if spread:
@@ -1568,6 +1643,7 @@ def main() -> int:
             res[task] = r
         run["results"][name] = res
 
+    run["host_env_end"] = host_env()
     RESULTS.mkdir(parents=True, exist_ok=True)
     out = Path(args.out) if args.out else RESULTS / f"qa-{stamp}.json"
     out.write_text(json.dumps(run, indent=2))
@@ -1691,6 +1767,22 @@ def main() -> int:
               f"{per[slowest]}s · " +
               " ".join(f"{t}={v}s" for t, v in sorted(per.items(),
                                                       key=lambda kv: -kv[1])[:4]))
+    # ⭐ THE ENVIRONMENT, REPORTED WITH THE NUMBERS RATHER THAN REMEMBERED.
+    suspect = [(n, t, node["host_env"])
+               for n in ("v1", "v2")
+               for t, node in (run["results"].get(n) or {}).items()
+               if isinstance(node, dict) and isinstance(node.get("host_env"), dict)
+               and env_is_suspect(node["host_env"])]
+    s0, s1 = run.get("host_env_start", {}), run.get("host_env_end", {})
+    print(f"\n  HOST load1 {s0.get('load1')} → {s1.get('load1')} · "
+          f"io_full_avg60 {s0.get('io_full_avg60')}% → "
+          f"{s1.get('io_full_avg60')}%")
+    if suspect:
+        print(f"  ⛔ {len(suspect)} task(s) RAN UNDER LOAD — their latency is a "
+              f"property of the machine, not the service:")
+        for n, t, e in suspect[:8]:
+            print(f"       {n:3} {t:14} load1={e.get('load1')} "
+                  f"io_full={e.get('io_full_avg60')}%")
     cd = run.get("common_denominator")
     if cd:
         print(f"\n  answer_recall scored over {cd['n']} items common to every "
