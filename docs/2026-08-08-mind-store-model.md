@@ -660,6 +660,35 @@ able to see.
 group-bys are possible — closer to a warehouse table a trader can query than an application
 with endpoints. **Structure is ours; conclusions are theirs.**
 
+### ✅ Latency — measured and decomposed, and it retires two things
+
+`mind` first quoted 5.0–7.2s end-to-end and correctly labelled it undecomposed. Decomposed:
+
+| stage | cold | warm |
+|---|--:|--:|
+| pool + collection lookup | 0.090s | |
+| embed query (OpenRouter round-trip) | 1.122s | **0.201s** |
+| ANN top-10 over 3.5M vectors | 0.483s | **0.025s** |
+| **in-process total** | ~1.70s | ⭐ **~0.32s** |
+| CLI end-to-end | 5.0–7.2s | |
+
+⇒ ⭐ **3.3–5.5s of the original figure was `docker exec` + interpreter start + module imports.**
+The read path is **~320ms warm**, which is comfortably fast enough to sit in front of a trader.
+
+⇒ ⭐ **The latency lever is process lifetime, not model placement.** Anything served through
+the long-lived API sees ~320ms; anything shelling out to the CLI pays 3–5s of startup per call.
+⚑ **Same underlying fact as the ingest micro-batching rule (§10), from the write side.**
+
+⛔ **And it settles the local-encoder question against the intuitive answer.** I had cautioned
+that "we have a local model" must not read as "the query embed is free", since the corpus is
+`halfvec(3072)` and the local model serves at 2560. Measured, it is worse than that: the
+round-trip is **201ms warm**, so a local encoder would save ~0.2s **at the cost of re-embedding
+3.5M rows.** ⇒ **Latency is not an argument for the 2560 collection. Nothing currently is.**
+
+⚑ **Downgrade the 161s finding accordingly** — the ANN index does top-10 over 3.5M vectors in
+25ms. That was **100% query shape and 0% engine**: a probe vector passed as a correlated
+subquery instead of a literal or parameter silently becomes a full scan.
+
 ---
 
 ## 10. Build order
