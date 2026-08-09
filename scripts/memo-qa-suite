@@ -67,6 +67,13 @@ REPO = Path(__file__).resolve().parents[1]
 RESULTS = REPO / "bench" / "results"
 SAMPLES = REPO / "bench" / "samples"
 
+# ⭐ A path probe gets more than one shot. See resolve_target for why: a single
+# transient timeout silently deleted a column from the comparison table on
+# 2026-08-09, and the two runs it happened between disagreed about which paths
+# the services even had.
+PROBE_ATTEMPTS = 3
+PROBE_RETRY_SLEEP_S = 3.0
+
 # Search paths differ per build. v1 exposes ONLY /search; v2 exposes the explicit
 # endpoints. Auto-detecting the wrong one is what made v1 look like it retrieved
 # nothing, so the suite probes and RECORDS which it used.
@@ -132,23 +139,46 @@ def resolve_target(name: str, url: str, container: str | None,
         out["error"] = f"health: {e}"
         return out
 
+    # ⭐ RETRIED, because a one-shot probe silently changes WHAT GOT MEASURED.
+    # Measured 2026-08-09: two runs an hour apart against the same two services
+    # disagreed about which paths existed — the first timed out on `document`
+    # and scored `passages`, the second did the reverse. Neither run was wrong
+    # about itself; the comparison table simply changed shape between them, and
+    # nothing flagged that as a difference. A transient timeout must not be able
+    # to remove a column.
+    # ⛔ An HTTPError is NOT retried: 404 is a real answer about the API surface.
+    # Only timeouts and transport errors get another attempt.
     for label, p in CANDIDATE_PATHS.items():
-        try:
-            _post(url, p, {"query": "probe", "limit": 1},
-                  timeout=probe_timeout)
-            out["search_paths"][label] = "present"
-        except urllib.error.HTTPError as e:
-            out["search_paths"][label] = f"http {e.code}"
-        except Exception as e:
-            # ⚠️ RECORD THE BUDGET, not just the failure. A timeout here makes
-            # the whole target `could_not_run` ("no working search path"), so a
-            # service that is SLOW is reported identically to one that is
-            # ABSENT. Measured 2026-08-03: during a host IO storm v1 answered
-            # /search in 6.9s while a 30s probe had timed out minutes earlier —
-            # the difference between "degraded" and "gone" was the load at the
-            # instant I probed, and nothing in the record said so.
+        attempts, last = 0, None
+        for attempt in range(1, PROBE_ATTEMPTS + 1):
+            attempts = attempt
+            try:
+                _post(url, p, {"query": "probe", "limit": 1},
+                      timeout=probe_timeout)
+                out["search_paths"][label] = "present"
+                last = None
+                break
+            except urllib.error.HTTPError as e:
+                out["search_paths"][label] = f"http {e.code}"
+                last = None
+                break
+            except Exception as e:
+                # ⚠️ RECORD THE BUDGET, not just the failure. A timeout here makes
+                # the whole target `could_not_run` ("no working search path"), so a
+                # service that is SLOW is reported identically to one that is
+                # ABSENT. Measured 2026-08-03: during a host IO storm v1 answered
+                # /search in 6.9s while a 30s probe had timed out minutes earlier —
+                # the difference between "degraded" and "gone" was the load at the
+                # instant I probed, and nothing in the record said so.
+                last = e
+                if attempt < PROBE_ATTEMPTS:
+                    time.sleep(PROBE_RETRY_SLEEP_S)
+        if last is not None:
             out["search_paths"][label] = (
-                f"err {type(e).__name__} (probe budget {probe_timeout}s)")
+                f"err {type(last).__name__} (probe budget {probe_timeout}s, "
+                f"{attempts} attempts)")
+        if attempts > 1:
+            out.setdefault("probe_attempts", {})[label] = attempts
 
     if container:
         # ⚠️ `getattr(..., None)` per field, NOT attribute access. v1's settings
@@ -392,7 +422,38 @@ def _passage_text(hit) -> str:
     return (hit.get("document", hit) or {}).get("content") or ""
 
 
-def _score_answer_band(url, path, items, docs_by_id, freq, limit, budget):
+def _gradeable_answer_ids(url: str, sample) -> set:
+    """Which pinned answer_recall items THIS corpus can grade. [2026-08-09]
+
+    ⭐ Exists so every target is scored over the SAME questions.
+
+    ⛔ THE BUG THIS CLOSES. Gradeability is a property of the corpus being
+    scored, not of the sample: an item is dropped if its document is absent, or
+    if its answer literal stopped being unique here. v2 holds 89 documents v1
+    does not — so the two builds dropped DIFFERENT items and were scored over
+    different denominators (229 vs 228 on 2026-08-09) while the output presented
+    both as `answer_in_topk_pct`. Small that day, structural, and it grows with
+    every divergence between the corpora.
+
+    ⚠️ Returns ids, not counts. The intersection has to be taken across targets
+    before any query runs, which is why this is a separate cheap pre-pass: it
+    reads the corpus and nothing else.
+    """
+    if sample is None or "answer_recall" not in (sample.get("tasks") or {}):
+        return set()
+    docs = _get(url, "/documents?limit=20000")
+    docs_by_id = {d["id"] for d in docs}
+    freq = _prepare_answer(docs)["freq"]
+    ok = set()
+    for b in sample["tasks"]["answer_recall"]["bands"]:
+        for it in b["items"]:
+            if it["id"] in docs_by_id and freq.get(it["answer"], 0) == 1:
+                ok.add(it["id"])
+    return ok
+
+
+def _score_answer_band(url, path, items, docs_by_id, freq, limit, budget,
+                       only_ids=None):
     """Grade one band: did the ANSWER come back in the SEARCH results.
 
     ⚠️ `/context` is deliberately NOT called here. It takes a query and a budget
@@ -403,6 +464,7 @@ def _score_answer_band(url, path, items, docs_by_id, freq, limit, budget):
     target in `task_context_fit`.
     """
     n = right1 = in_top1 = in_topk = in_topk_doc = failures = missing = ambiguous = 0
+    off_common = 0
     for it in items:
         if it["id"] not in docs_by_id:
             missing += 1
@@ -410,6 +472,12 @@ def _score_answer_band(url, path, items, docs_by_id, freq, limit, budget):
         # ⛔ Re-check uniqueness against THIS corpus — see the note above.
         if freq.get(it["answer"], 0) != 1:
             ambiguous += 1
+            continue
+        # ⭐ COMMON DENOMINATOR. Gradeable here but not on every target, so it is
+        # excluded from ALL of them and counted separately. Scoring it would make
+        # this target's percentage rest on a question its rival never answered.
+        if only_ids is not None and it["id"] not in only_ids:
+            off_common += 1
             continue
         n += 1
         try:
@@ -454,12 +522,15 @@ def _score_answer_band(url, path, items, docs_by_id, freq, limit, budget):
             # ⛔ Separate from `missing`: the document is here, the QUESTION is no
             # longer gradeable because the literal stopped being unique.
             "ambiguous": ambiguous, "failures": failures,
+            # Gradeable HERE, dropped anyway so every target answers the same
+            # questions. Distinct from `ambiguous`, which is about this corpus.
+            "off_common": off_common,
             "right_doc_top1": right1, "answer_in_top1": in_top1,
             "answer_in_topk": in_topk, "answer_in_topk_fulldoc": in_topk_doc}
 
 
 def task_answer_recall(url: str, path: str, per_band: int, seed: int,
-                       sample=None, limit: int = 10) -> dict:
+                       sample=None, limit: int = 10, only_ids=None) -> dict:
     """Ground truth + context fit. See the block above ANSWER_PATTERNS."""
     if sample is not None and "answer_recall" not in (sample.get("tasks") or {}):
         return {"task": "answer_recall", "path": path, "status": "could_not_run",
@@ -478,7 +549,7 @@ def task_answer_recall(url: str, path: str, per_band: int, seed: int,
     bands = []
     for b in src_bands:
         scored = _score_answer_band(url, path, b["items"], docs_by_id, freq,
-                                    limit, None)
+                                    limit, None, only_ids=only_ids)
         scored["band"] = b["band"]
         scored["pool"] = b.get("pool")
         bands.append(scored)
@@ -491,6 +562,11 @@ def task_answer_recall(url: str, path: str, per_band: int, seed: int,
             "total_pinned": sum(b["pinned"] for b in bands),
             "total_missing": sum(b["missing"] for b in bands),
             "total_ambiguous": sum(b["ambiguous"] for b in bands),
+            "total_off_common": sum(b.get("off_common", 0) for b in bands),
+            # ⭐ Whether the common-denominator gate was applied at all. Without
+            # this, a run where every target happened to agree and a run where
+            # the gate was never passed in look identical.
+            "common_denominator": only_ids is not None,
             "total_failures": sum(b["failures"] for b in bands),
             "right_doc_top1_pct": pct("right_doc_top1"),
             "answer_in_top1_pct": pct("answer_in_top1"),
@@ -845,6 +921,198 @@ def task_supersession(url: str, path: str, edges_path: str,
                     if old_back else None)}
 
 
+# ------------------------------------------------------ task: hard negatives
+def task_hard_negatives(url: str, path: str, sample=None,
+                        limit: int = 10, only_ids=None) -> dict:
+    """⭐ Can the store tell the RIGHT value from a memo ABOUT that kind of value?
+
+    Every other task here asks *did the right document come back*. This one asks
+    whether a document carrying a **plausible wrong answer** outranks it.
+
+    ⛔ WHY IT EXISTS. Measured 2026-08-06 on market theses: embedding similarity
+    scores TOPIC, not CLAIM — 6 of 7 single-word polarity flips beat the true
+    paraphrase, and *buy* lost to *sue* on one consonant. memo's corpus is far
+    more exposed to this than that one: it is dense with near-identical infra
+    facts separated by a single token — one octet of an IP, a port, a hostname.
+    Nothing in this suite could distinguish *a memo about server4's IP* from
+    *the memo with the correct IP*.
+
+    ⇒ THE PROBE, and it needs no new corpus. Reuse the answer_recall items: each
+    is (query, target document, unique answer literal). Run the query, then look
+    only at hits ranked ABOVE the target. A hit is CONFUSABLE if it carries a
+    literal of the SAME KIND with a DIFFERENT VALUE — an agent reading top-down
+    finds a well-formed, wrong answer before the right one.
+
+    ⛔ THE POSITIVE CONTROL IS THE WHOLE DESIGN. `confusable_present_pct` counts
+    items where a confusable appeared ANYWHERE in top-k, above the target or
+    below it. Without it, `confusable_above_target_pct: 0` is ambiguous between
+    *"ranking is robust"* and *"this corpus has nothing to confuse it with"* —
+    and the healthy-looking reading is the wrong one exactly when the sample is
+    degenerate. That is the near-duplicate-detector trap from 2026-08-06,
+    which returned CLEAN on a corpus with nothing to duplicate.
+    """
+    if sample is None or "answer_recall" not in (sample.get("tasks") or {}):
+        return {"task": "hard_negatives", "path": path, "status": "could_not_run",
+                "why": "needs the answer_recall items from a pinned sample",
+                "control_ok": False}
+    docs = _get(url, "/documents?limit=20000")
+    docs_by_id = {d["id"]: d for d in docs}
+    freq = _prepare_answer(docs)["freq"]
+
+    n = failures = rank1 = above = present = target_absent = 0
+    examples = []
+    for b in sample["tasks"]["answer_recall"]["bands"]:
+        for it in b["items"]:
+            if it["id"] not in docs_by_id or freq.get(it["answer"], 0) != 1:
+                continue
+            if only_ids is not None and it["id"] not in only_ids:
+                continue
+            kind = next((k for k, tok, _ in _literals(it["answer"]) if tok == it["answer"]),
+                        None)
+            if kind is None:
+                continue
+            n += 1
+            try:
+                hits = _post(url, CANDIDATE_PATHS[path],
+                             {"query": it["query"], "limit": limit})
+            except Exception:
+                failures += 1
+                n -= 1
+                continue
+            ids = [(h.get("document", h) or {}).get("id") for h in hits]
+            texts = [((h.get("document", h) or {}).get("content") or "") for h in hits]
+            if ids and ids[0] == it["id"]:
+                rank1 += 1
+            try:
+                tpos = ids.index(it["id"])
+            except ValueError:
+                tpos = None
+                target_absent += 1
+
+            def _confusable(text):
+                return [tok for k, tok, _ in _literals(text)
+                        if k == kind and tok != it["answer"]]
+
+            any_conf = False
+            above_conf = None
+            for i, (hid, txt) in enumerate(zip(ids, texts)):
+                if hid == it["id"]:
+                    continue
+                c = _confusable(txt)
+                if not c:
+                    continue
+                any_conf = True
+                if tpos is None or i < tpos:
+                    above_conf = above_conf or c[0]
+            if any_conf:
+                present += 1
+            if above_conf:
+                above += 1
+                if len(examples) < 12:
+                    examples.append({"query": it["query"][:110],
+                                     "right": it["answer"],
+                                     "wrong_ranked_higher": above_conf})
+
+    pct = lambda k: round(100 * k / n, 2) if n else None
+    return {"task": "hard_negatives", "path": path, "n": n, "failures": failures,
+            "target_rank1_pct": pct(rank1),
+            "target_absent_from_topk": target_absent,
+            # ⭐ THE HEADLINE: a well-formed WRONG value outranked the right one.
+            "confusable_above_target_pct": pct(above),
+            # ⛔ THE CONTROL: how often a confusable was even available to win.
+            # A low headline is only meaningful if this is not also low.
+            "confusable_present_pct": pct(present),
+            "examples": examples,
+            "control_ok": n > 0 and present > 0,
+            "status": "ok" if n > 0 else "could_not_run",
+            "why": (None if n == 0 or present > 0 else
+                    "NO confusable literals appeared anywhere in top-k — a clean "
+                    "headline here says nothing about ranking, only that this "
+                    "sample had nothing to confuse the model with")}
+
+
+# ------------------------------------------------------- task: query replay
+def task_query_replay(url: str, path: str, queries: list, limit: int = 10) -> dict:
+    """Replay REAL agent queries. [2026-08-09]
+
+    ⭐ Every other task asks a synthetic question. `own_title` searches for a
+    document using its own title, which is close to the easiest retrieval task
+    that exists. Agents do not do that.
+
+    ⛔ WHAT THIS CAN AND CANNOT MEASURE. There is no ground truth for a real
+    query — nobody recorded what the right answer was. So this does NOT score
+    correctness, and any number here that looks like accuracy is a mistake.
+    What it honestly measures is COVERAGE and COST: did the store return
+    anything at all, and how long did it take. The returned top-1 ids are kept
+    so two builds can be compared for AGREEMENT, which is also not correctness —
+    two builds agreeing can both be wrong.
+
+    ⚠️ Queries are filtered to real MCP traffic by the caller. The log is ~29%
+    the benchmark's own requests; grading against those would be the suite
+    marking its own homework.
+    """
+    if not queries:
+        return {"task": "query_replay", "path": path, "status": "could_not_run",
+                "why": "no real queries available (see --replay-source)",
+                "control_ok": False}
+    lat, empty, failures, top1 = [], 0, 0, {}
+    for q in queries:
+        t0 = time.time()
+        try:
+            hits = _post(url, CANDIDATE_PATHS[path], {"query": q, "limit": limit})
+        except Exception:
+            failures += 1
+            continue
+        lat.append(time.time() - t0)
+        if not hits:
+            empty += 1
+        else:
+            top1[q] = (hits[0].get("document", hits[0]) or {}).get("id")
+    n = len(lat)
+    srt = sorted(lat)
+    p = lambda f: round(srt[min(int(len(srt) * f), len(srt) - 1)], 3) if srt else None
+    return {"task": "query_replay", "path": path, "n": n,
+            "requested": len(queries), "failures": failures,
+            "returned_nothing": empty,
+            "returned_nothing_pct": round(100 * empty / n, 2) if n else None,
+            "latency_p50_s": p(0.5), "latency_p95_s": p(0.95),
+            "latency_max_s": round(max(lat), 3) if lat else None,
+            "top1_by_query": top1,
+            # ⛔ Not a correctness control — there is none. This only asserts the
+            # replay actually ran against a live path.
+            "control_ok": n > 0,
+            "status": "ok" if n > 0 else "could_not_run"}
+
+
+def load_replay_queries(container: str | None, n: int, seed: int) -> list:
+    """Pull real MCP queries out of a build's own query_log.
+
+    ⛔ EXCLUDES the benchmark's own traffic. Measured 2026-08-09: of 9,263 logged
+    queries, 2,711 carry the suite's user-agent and 3,559 are bare urllib. Only
+    `mcp:%` is real agent usage (2,593 rows, 1,687 of them memo_context).
+    Replaying our own probes would be the suite grading its own homework.
+    """
+    if not container:
+        return []
+    code = (
+        "import sqlite3,json;"
+        "c=sqlite3.connect('/data/memo.db');"
+        "rows=c.execute(\"SELECT DISTINCT query FROM query_log WHERE "
+        "user_agent LIKE 'mcp:%' AND query IS NOT NULL AND length(query)>8 "
+        "ORDER BY query\").fetchall();"
+        "print(json.dumps([r[0] for r in rows]))")
+    try:
+        r = subprocess.run(["docker", "exec", container, "python3", "-c", code],
+                           capture_output=True, text=True, timeout=60)
+        qs = json.loads((r.stdout or "[]").strip() or "[]")
+    except Exception:
+        return []
+    # Deterministic subset: same seed -> same queries, so two runs are comparable.
+    rnd = random.Random(seed)
+    rnd.shuffle(qs)
+    return qs[:n]
+
+
 # ------------------------------------------------------- task: set-stability
 def task_set_stability(url: str, path: str, n: int, seed: int,
                        replicates: int = 3) -> dict:
@@ -1013,7 +1281,70 @@ def mint_sample(path: Path, url: str, per_band: int, seed: int,
 
 # ------------------------------------------------------------------- runner
 TASKS = ("own_title", "content_query", "answer_recall", "context_fit",
-         "supersession", "set_stability", "api_surface")
+         "supersession", "hard_negatives", "query_replay", "set_stability",
+         "api_surface")
+
+# Tasks worth repeating to establish their OWN noise floor. context_fit and
+# query_replay are excluded on cost, api_surface and set_stability because
+# neither produces a rate to spread.
+REPLICABLE = ("own_title", "content_query", "answer_recall", "supersession",
+              "hard_negatives")
+
+
+def _numeric_pcts(node: dict) -> dict:
+    return {k: v for k, v in node.items()
+            if k.endswith("_pct") and isinstance(v, (int, float))}
+
+
+def _spread(runs: list) -> dict:
+    """Observed range per metric across replicates of ONE task on ONE path.
+
+    ⭐ WHY PER-METRIC AND NOT ONE GLOBAL FIGURE. This suite has been quoted with
+    a single ~2.4pt noise floor applied to everything, and that cannot be right
+    for metrics whose n differs by an order of magnitude: `own_title` runs
+    n=300, `supersession` n=29. One flip on the latter is 3.4 points — already
+    wider than the global figure it was being judged against.
+
+    ⇒ The floor is measured here rather than remembered, and it is reported
+    NEXT TO the number it applies to. A delta smaller than its own metric's
+    spread is not a result.
+    """
+    if len(runs) < 2:
+        return {}
+    keys = set()
+    for r in runs:
+        keys |= set(_numeric_pcts(r))
+    out = {}
+    for k in sorted(keys):
+        vals = [r[k] for r in runs if isinstance(r.get(k), (int, float))]
+        if len(vals) < 2:
+            continue
+        out[k] = {"min": min(vals), "max": max(vals),
+                  "range_pt": round(max(vals) - min(vals), 2)}
+    return out
+
+
+def _run_replicated(fn, replicates: int):
+    """Run a task fn `replicates` times; return (primary_result, spread).
+
+    The FIRST run stays the primary so stored results keep one shape and older
+    readers keep working. Spread is attached beside it, never folded into it.
+    """
+    runs = [fn() for _ in range(max(1, replicates))]
+    primary = runs[0]
+    if len(runs) < 2:
+        return primary, None
+    # Two result shapes in this suite: a flat dict, or {path: dict}.
+    if "task" in primary:
+        return primary, {"_": _spread(runs)}
+    sp = {}
+    for path in primary:
+        if path == "elapsed_s":
+            continue
+        per = [r[path] for r in runs if isinstance(r.get(path), dict)]
+        if len(per) >= 2:
+            sp[path] = _spread(per)
+    return primary, sp
 
 
 def main() -> int:
@@ -1045,6 +1376,20 @@ def main() -> int:
                     help="/context budget for answer_recall (both builds default "
                          "to 4000; changing it changes what is being measured)")
     ap.add_argument("--tasks", default=",".join(TASKS))
+    ap.add_argument("--replicates", type=int, default=1,
+                    help="repeat each replicable task N times and record the "
+                         "OBSERVED RANGE per metric. N=1 records no spread, so "
+                         "any delta you then quote rests on a floor you did not "
+                         "measure in this run.")
+    ap.add_argument("--replay-n", type=int, default=120,
+                    help="real MCP queries to replay (0 disables). Drawn "
+                         "deterministically from --seed so runs are comparable.")
+    ap.add_argument("--replay-from", default=None,
+                    help="container whose query_log supplies real queries "
+                         "(default: --v1-container, the corpus both are synced to)")
+    ap.add_argument("--no-common-denominator", action="store_true",
+                    help="score each target over whatever IT can grade. ⛔ Then "
+                         "the percentages rest on different question sets.")
     ap.add_argument("--label", default="", help="free-text note stored with the run")
     ap.add_argument("--out", default=None)
     ap.add_argument("--sample", default=str(SAMPLES / "default.json"),
@@ -1111,6 +1456,49 @@ def main() -> int:
               f"resolved={t.get('resolved')}", flush=True)
         print(f"    paths={t['search_paths']}", flush=True)
 
+    # ⭐ COMMON DENOMINATOR, computed BEFORE any query runs. Each target reports
+    # which pinned answer_recall items IT can grade; the intersection is what
+    # every target is then scored on. Cheap — one corpus read per target, no
+    # searches. See _gradeable_answer_ids for the bug this closes.
+    common_ids = None
+    if not args.no_common_denominator and sample is not None:
+        per_target, reach = {}, [t for t in run["targets"] if t["reachable"]]
+        for t in reach:
+            try:
+                per_target[t["name"]] = _gradeable_answer_ids(t["url"], sample)
+            except Exception as e:
+                print(f"⚠️  gradeability pre-pass failed for {t['name']}: "
+                      f"{type(e).__name__}: {e} — scoring WITHOUT a common "
+                      f"denominator", file=sys.stderr, flush=True)
+                per_target = {}
+                break
+        if len(per_target) >= 2:
+            common_ids = set.intersection(*per_target.values())
+            run["common_denominator"] = {
+                "n": len(common_ids),
+                "per_target_gradeable": {k: len(v) for k, v in per_target.items()},
+                "dropped_to_align": {k: len(v) - len(common_ids)
+                                     for k, v in per_target.items()},
+            }
+            print(f"common denominator: {len(common_ids)} answer items gradeable "
+                  f"on every target "
+                  f"({ {k: len(v) for k, v in per_target.items()} } individually)",
+                  flush=True)
+
+    replay_container = args.replay_from or args.v1_container
+    replay_queries = (load_replay_queries(replay_container, args.replay_n, args.seed)
+                      if args.replay_n else [])
+    run["replay"] = {"requested": args.replay_n, "loaded": len(replay_queries),
+                     "from_container": replay_container}
+    if args.replay_n and not replay_queries:
+        print(f"⚠️  no real queries loaded from {replay_container} — query_replay "
+              f"will report could_not_run rather than a score of zero",
+              file=sys.stderr, flush=True)
+    else:
+        print(f"replay: {len(replay_queries)} real MCP queries from {replay_container}",
+              flush=True)
+    run["replicates"] = args.replicates
+
     for name, url, _ in targets:
         tgt = next(t for t in run["targets"] if t["name"] == name)
         if not tgt["reachable"]:
@@ -1130,34 +1518,53 @@ def main() -> int:
         for task in want:
             print(f"  [{name}] {task} …", flush=True)
             t0 = time.time()
+            reps = args.replicates if task in REPLICABLE else 1
             try:
                 if task == "own_title":
-                    r = {p: task_own_title(url, p, args.per_band, args.seed, sample)
-                         for p in paths}
+                    fn = lambda: {p: task_own_title(url, p, args.per_band,
+                                                    args.seed, sample)
+                                  for p in paths}
                 elif task == "content_query":
-                    r = {p: task_content_query(url, p, args.per_band, args.seed,
-                                               sample)
-                         for p in paths}
+                    fn = lambda: {p: task_content_query(url, p, args.per_band,
+                                                        args.seed, sample)
+                                  for p in paths}
                 elif task == "answer_recall":
-                    r = {p: task_answer_recall(url, p, args.per_band, args.seed,
-                                               sample)
-                         for p in paths}
+                    fn = lambda: {p: task_answer_recall(url, p, args.per_band,
+                                                        args.seed, sample,
+                                                        only_ids=common_ids)
+                                  for p in paths}
                 elif task == "context_fit":
-                    r = task_context_fit(url, args.per_band, args.seed, sample,
-                                         budget=args.token_budget)
+                    fn = lambda: task_context_fit(url, args.per_band, args.seed,
+                                                  sample, budget=args.token_budget)
                 elif task == "supersession":
-                    r = {p: task_supersession(url, p, args.edges)
-                         for p in paths}
+                    fn = lambda: {p: task_supersession(url, p, args.edges)
+                                  for p in paths}
+                elif task == "hard_negatives":
+                    fn = lambda: {p: task_hard_negatives(url, p, sample,
+                                                         only_ids=common_ids)
+                                  for p in paths}
+                elif task == "query_replay":
+                    fn = lambda: {p: task_query_replay(url, p, replay_queries)
+                                  for p in paths}
                 elif task == "set_stability":
-                    r = task_set_stability(url, primary, args.stability_n, args.seed)
+                    fn = lambda: task_set_stability(url, primary,
+                                                    args.stability_n, args.seed)
                 elif task == "api_surface":
-                    r = task_api_surface(url)
+                    fn = lambda: task_api_surface(url)
                 else:
-                    r = {"status": "could_not_run", "why": f"unknown task {task}"}
+                    fn = lambda: {"status": "could_not_run",
+                                  "why": f"unknown task {task}"}
+                r, spread = _run_replicated(fn, reps)
             except Exception as e:
-                r = {"status": "could_not_run", "why": f"{type(e).__name__}: {e}"}
+                r, spread = {"status": "could_not_run",
+                             "why": f"{type(e).__name__}: {e}"}, None
             if isinstance(r, dict):
                 r["elapsed_s"] = round(time.time() - t0, 1)
+                if reps > 1:
+                    r["replicates"] = reps
+                if spread:
+                    # ⛔ Beside the numbers, never folded into them.
+                    r["observed_spread"] = spread
             res[task] = r
         run["results"][name] = res
 
@@ -1183,13 +1590,41 @@ def main() -> int:
         for path, v in (sup.items() if isinstance(sup, dict)
                         and "task" not in sup else []):
             if isinstance(v, dict) and v.get("status") == "ok":
+                # ⚠️ n ON THE SAME LINE. It is n=29, so ONE flip is 3.4pt —
+                # wider than the ~2.4pt floor this suite gets quoted with. A
+                # rate whose denominator is only in the JSON gets compared as if
+                # it had the same resolution as the n=300 tasks.
                 print(f"  {name:3} supersession   {path:10} "
                       f"replacement @1 {v['replacement_at_1_pct']}% · "
                       f"top5 {v['replacement_in_top5_pct']}% · "
                       f"NEITHER returned {v['neither_returned_pct']}% · "
-                      f"old still returned {v['superseded_still_returned']}"
+                      f"old still returned {v['superseded_still_returned']} "
+                      f"(n={v.get('n_ran')}, 1 flip = "
+                      f"{round(100 / v['n_ran'], 1) if v.get('n_ran') else '?'}pt)"
                       + ("  ⛔ FR-115 NOT FILTERING"
                          if v['superseded_still_returned'] else ""))
+        hn = r.get("hard_negatives") or {}
+        for path, v in (hn.items() if isinstance(hn, dict)
+                        and "task" not in hn else []):
+            if isinstance(v, dict) and v.get("status") == "ok":
+                ctl = ("" if v.get("control_ok") else
+                       "  ⛔ NO CONFUSABLES PRESENT — headline says nothing")
+                print(f"  {name:3} hard_negatives {path:10} "
+                      f"WRONG value outranked right "
+                      f"{v['confusable_above_target_pct']}% · "
+                      f"confusable present {v['confusable_present_pct']}% "
+                      f"(control) · target rank-1 {v['target_rank1_pct']}% "
+                      f"(n={v['n']}){ctl}")
+        qr = r.get("query_replay") or {}
+        for path, v in (qr.items() if isinstance(qr, dict)
+                        and "task" not in qr else []):
+            if isinstance(v, dict) and v.get("status") == "ok":
+                print(f"  {name:3} query_replay   {path:10} "
+                      f"n={v['n']} real queries · returned nothing "
+                      f"{v['returned_nothing_pct']}% · "
+                      f"p50 {v['latency_p50_s']}s · p95 {v['latency_p95_s']}s "
+                      f"· max {v['latency_max_s']}s  "
+                      f"⚠️ coverage+cost only, NOT correctness")
         cf = r.get("context_fit")
         if isinstance(cf, dict) and cf.get("status") == "ok":
             print(f"  {name:3} context_fit                answer in /context "
@@ -1215,6 +1650,51 @@ def main() -> int:
                       f"{v['total_failures']} query failures"
                       + (f", ⚠️ {miss} pinned ids NOT IN THIS CORPUS" if miss else "")
                       + ")")
+
+    # ⭐ MEASURED NOISE FLOORS, PER METRIC. Printed as its own block because a
+    # delta smaller than its metric's own observed range is not a finding, and
+    # that comparison has to be cheap to make.
+    any_spread = False
+    for name in ("v1", "v2"):
+        for task, node in (run["results"].get(name) or {}).items():
+            if not isinstance(node, dict):
+                continue
+            sp = node.get("observed_spread") or {}
+            for path, metrics in sp.items():
+                for metric, s in (metrics or {}).items():
+                    if s.get("range_pt", 0) > 0:
+                        any_spread = True
+                        print(f"  ~   NOISE {name:3} {task:14} {path:10} "
+                              f"{metric}: ±{s['range_pt']}pt observed "
+                              f"({s['min']}–{s['max']} over "
+                              f"{node.get('replicates')} runs)")
+    if run.get("replicates", 1) > 1 and not any_spread:
+        print(f"  ~   NOISE: every replicated metric was IDENTICAL across "
+              f"{run['replicates']} runs — floor below reporting resolution")
+    elif run.get("replicates", 1) == 1:
+        print("  ~   NOISE: --replicates 1, so NO floor was measured this run. "
+              "Any delta quoted from it rests on an assumed one.")
+
+    # ⭐ COST, alongside quality. v2 ran 2.4x slower than v1 on 2026-08-09 and
+    # the summary did not say so — retrieval quality without its cost is half of
+    # the decision this suite exists to inform.
+    print()
+    for name in ("v1", "v2"):
+        r = run["results"].get(name) or {}
+        per = {t: n.get("elapsed_s") for t, n in r.items()
+               if isinstance(n, dict) and n.get("elapsed_s") is not None}
+        if not per:
+            continue
+        total = round(sum(per.values()), 1)
+        slowest = max(per, key=per.get)
+        print(f"  {name:3} ELAPSED total {total}s · slowest {slowest} "
+              f"{per[slowest]}s · " +
+              " ".join(f"{t}={v}s" for t, v in sorted(per.items(),
+                                                      key=lambda kv: -kv[1])[:4]))
+    cd = run.get("common_denominator")
+    if cd:
+        print(f"\n  answer_recall scored over {cd['n']} items common to every "
+              f"target; dropped to align: {cd['dropped_to_align']}")
     return 0
 
 
