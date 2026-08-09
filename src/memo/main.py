@@ -121,6 +121,59 @@ async def _store_receipt(db_path: str | None, doc_id: str) -> dict:
         return {}
 
 
+def _resolve_doc_token_cap(max_tokens: int | None,
+                           max_doc_tokens: int | None) -> int | None:
+    """One filter, two names. [2026-08-09, reported by `models`]
+
+    ⭐ WHY THE ALIAS. `max_tokens` reads as *cap the size of the response* and
+    actually means *only return documents smaller than N*. Measured: three
+    independent misuses in four hours by two seats who both know better, each
+    reaching for it to bound context cost, each getting an empty list that reads
+    as "no such memos". **Three instances is a property of the name, not of the
+    callers.** `max_doc_tokens` cannot form the wrong mental model.
+
+    ⛔ `max_tokens` KEEPS WORKING. There are live callers across four hosts and an
+    MCP layer in front; renaming outright would break working integrations to
+    punish a name I chose. The old name is never removed.
+
+    ⚠️ If both arrive and DISAGREE, the explicit one wins and the collision is
+    logged — silently picking one would reproduce the original bug in a new place.
+    """
+    if max_doc_tokens is None:
+        return max_tokens
+    if max_tokens is not None and max_tokens != max_doc_tokens:
+        print(f"PARAM-COLLISION memo: max_tokens={max_tokens} and "
+              f"max_doc_tokens={max_doc_tokens} disagree — using max_doc_tokens "
+              f"({max_doc_tokens}). They are the same filter.", flush=True)
+    return max_doc_tokens
+
+
+def _thin(rows: list[dict], ids_only: bool) -> list[dict]:
+    """Drop document bodies when the caller only wants to know WHICH memos.
+
+    ⭐ THIS IS THE THING EVERY `max_tokens` MISUSE WAS ACTUALLY REACHING FOR:
+    *"return me ids cheaply, don't dump full documents into my window."* There was
+    no way to ask for it, so callers reached for the nearest-sounding parameter
+    and got a silent empty result. **The fix that removes the motive beats the
+    fix that redirects it.**
+
+    ⚠️ Keeps `id`, `title`, `tags`, `token_count`, `created_at` and the score —
+    enough to decide what to fetch — and drops only `content` and `metadata`.
+    An ids-only mode that returned bare uuids would send everyone straight back
+    to a second round-trip, which is the cost they were trying to avoid.
+    """
+    if not ids_only:
+        return rows
+    keep = ("id", "title", "tags", "token_count", "created_at", "updated_at")
+    out = []
+    for r in rows:
+        doc = r.get("document", r) or {}
+        thin = {k: doc[k] for k in keep if k in doc}
+        out.append({**{k: v for k, v in r.items() if k != "document"},
+                    "document": thin} if "document" in r else thin)
+    return out
+
+
 def _log_phantom_fields(req, endpoint: str, doc_id: str | None = None,
                         user_agent: str | None = None) -> None:
     """Record any field a caller sent that this API does not have. [Ben, 2026-08-05]
@@ -395,6 +448,8 @@ async def memo_search(
     before: float | None = None,
     min_tokens: int | None = None,
     max_tokens: int | None = None,
+    max_doc_tokens: int | None = None,
+    ids_only: bool = False,
     db_path: str | None = None,
     scope: str = "local",
 ) -> list[dict]:
@@ -410,13 +465,24 @@ async def memo_search(
     Filters:
     - tags: only return docs that have at least one of these tags
     - after/before: Unix timestamps bounding created_at
-    - min_tokens/max_tokens: bound by stored token_count of content
+    - min_tokens/max_tokens: ⛔ **FILTERS WHICH DOCUMENTS COME BACK, BY THEIR
+      STORED SIZE. IT DOES NOT CAP OUTPUT LENGTH — for that use `limit`, or
+      `ids_only=True`.** Reported by `models` 2026-08-09: three independent
+      misuses in four hours by two seats who both know better, every one of them
+      reaching for it to bound context cost and every one getting an EMPTY LIST
+      that reads as "no such memos" and means "no memos under N tokens".
+      ⚠️ The worst instance was `quantum-data` verifying their own memo tag
+      coverage — a false null ABOUT THE EXACT PROPERTY BEING MEASURED, plausible
+      and self-critical, which they nearly acted on.
+      ⭐ `max_doc_tokens` is the same parameter under a name that cannot form the
+      wrong mental model; prefer it. `max_tokens` is kept working forever.
     """
     # ⛔ LOGGED HERE, NOT ONLY ON THE HTTP ROUTE. Agents reach memo through the
     # MCP tool, which calls db directly — logging only POST /search would
     # capture a small, unrepresentative slice and the bias would be invisible
     # in the resulting numbers. [v0.3.8]
     _t0 = _time.time()
+    max_tokens = _resolve_doc_token_cap(max_tokens, max_doc_tokens)
     embedding = await embeddings.embed_query(query)
     kwargs = dict(embedding=embedding, limit=limit, min_score=min_score, tags=tags or [],
                   after=after, before=before, min_tokens=min_tokens, max_tokens=max_tokens)
@@ -434,7 +500,9 @@ async def memo_search(
         result_ids=[r["document"]["id"] for r in out],
         result_scores=[r["score"] for r in out],
         latency_ms=(_time.time() - _t0) * 1000, user_agent="mcp:memo_search")
-    return out
+    # ⛔ AFTER the log, so the query record still shows what retrieval actually
+    # returned. Trimming the response must not trim the evidence.
+    return _thin(out, ids_only)
 
 
 @mcp.tool()
@@ -509,6 +577,8 @@ async def memo_list(
     max_tokens: int | None = None,
     limit: int = 100,
     min_score: float | None = None,
+    max_doc_tokens: int | None = None,
+    ids_only: bool = False,
     db_path: str | None = None,
     scope: str = "local",
 ) -> list[dict]:
@@ -524,9 +594,20 @@ async def memo_list(
     Filters:
     - tags: only return docs that have at least one of these tags
     - after/before: Unix timestamps bounding created_at
-    - min_tokens/max_tokens: bound by stored token_count of content
+    - min_tokens/max_tokens: ⛔ **FILTERS WHICH DOCUMENTS COME BACK, BY THEIR
+      STORED SIZE. IT DOES NOT CAP OUTPUT LENGTH — for that use `limit`, or
+      `ids_only=True`.** Reported by `models` 2026-08-09: three independent
+      misuses in four hours by two seats who both know better, every one of them
+      reaching for it to bound context cost and every one getting an EMPTY LIST
+      that reads as "no such memos" and means "no memos under N tokens".
+      ⚠️ The worst instance was `quantum-data` verifying their own memo tag
+      coverage — a false null ABOUT THE EXACT PROPERTY BEING MEASURED, plausible
+      and self-critical, which they nearly acted on.
+      ⭐ `max_doc_tokens` is the same parameter under a name that cannot form the
+      wrong mental model; prefer it. `max_tokens` is kept working forever.
     - min_score: minimum cosine similarity (only applies when query is provided)
     """
+    max_tokens = _resolve_doc_token_cap(max_tokens, max_doc_tokens)
     if query is not None:
         embedding = await embeddings.embed_query(query)
         kwargs = dict(embedding=embedding, limit=limit, min_score=min_score, tags=tags or [],
@@ -538,19 +619,19 @@ async def memo_list(
             results = await db.search_multi(paths, **kwargs)
         else:
             results = await db.search(db_path=db_path, **kwargs)
-        return [r["document"] for r in results]
+        return _thin([r["document"] for r in results], ids_only)
 
     kwargs = dict(tags=tags or [], limit=limit, after=after, before=before,
                   min_tokens=min_tokens, max_tokens=max_tokens)
 
     if scope == "global" or (scope == "local" and db_path is None):
-        return await db.list_docs(db_path=None, **kwargs)
+        return _thin(await db.list_docs(db_path=None, **kwargs), ids_only)
 
     if scope == "all" and db_path is not None:
         paths = list({db.global_path(), db._resolve_path(db_path)})
-        return await db.list_docs_multi(paths, **kwargs)
+        return _thin(await db.list_docs_multi(paths, **kwargs), ids_only)
 
-    return await db.list_docs(db_path=db_path, **kwargs)
+    return _thin(await db.list_docs(db_path=db_path, **kwargs), ids_only)
 
 
 @mcp.tool()
