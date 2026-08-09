@@ -28,19 +28,40 @@ comes first, not last.
 | local LLM ~70 tok/s steady, ~21 tok/s first call after idle | `embeddings`, 08-06 |
 | GPU allocation is whole-card exclusive; one embedding model served | `embeddings`, 08-06 |
 
-**⚠️ ASSUMED, because EDGAR entered scope today and I have not measured mind's side of it.**
-Six questions went to `mind` at 20:14. Until they answer, the following are assumptions and
-are marked as such wherever they matter:
+**✅ ANSWERED — `mind` measured all six against the live DB at 20:19, within five minutes of
+being asked. Three of my five assumptions were wrong.** The original assumptions are kept
+below so the corrections are legible rather than laundered:
 
-- **A1.** mind does not yet ingest EDGAR, or ingests filing text without XBRL facts. §3's
-  `facts` table is therefore specced as greenfield.
-- **A2.** There is no `ticker ↔ CIK ↔ name` resolution layer. §2 is specced as new work.
-- **A3.** `ingest_ts` is not recorded separately from `event_ts`. §4 treats this as a gap.
-- **A4.** `claims` is still YouTube-only (keyed on `video_id`), with no news or filing claims.
-- **A5.** The engine is SQLite or Postgres with a vector extension, not a columnar store.
+| | I assumed | measured | verdict |
+|---|---|---|---|
+| **A1** | EDGAR not ingested, or text without XBRL | `edgar_filing` **6,446 rows**, filed 08-06→08-08. **Metadata + `items` only — no full-text column, no XBRL facts table.** Poller and filing index are real | ⚠️ **half wrong** — the index exists; the fact layer is greenfield |
+| **A2** | no entity resolution at all | ⛔ `cik` appears in **exactly one column in the entire schema** (`edgar_filing.cik`), joined to nothing. **But a rich ticker layer already exists**: `tickers` 247,785 rows **with `effective_date` — already point-in-time** · `ticker_aliases` 21,027 · `ticker_mentions` 296,931 | ⚠️ **half wrong, and in the good direction** — see §2 |
+| **A3** | `ingest_ts` missing | ⛔ **wrong — bitemporal exists on all three sources.** `news_articles`, `videos`, `edgar_filing` each carry event *and* ingest time | ✅ **already built** |
+| **A4** | `claims` still YouTube-only | **61,872 rows / 6,338 videos, `video_id IS NULL` on zero of them.** Nothing from news or filings | ✅ correct |
+| **A5** | Postgres or SQLite, non-columnar | **Postgres + pgvector, 162 GB.** HNSW on five tables, all `halfvec(3072)` | ✅ correct |
 
-⇒ **If A1–A5 are wrong, the build order in §10 shortens; nothing in §1–§9 changes.** The model
-does not depend on them. The *estimate of how much is left to do* entirely does.
+⛔ **AND THE MEASUREMENT THAT ACTUALLY CHANGES THE DESIGN — §5 is rewritten around it.**
+News publishers, **whole corpus**, not a sample:
+
+| publisher | articles | |
+|---|--:|--:|
+| **Benzinga** | **3,528,685** | **99.4%** |
+| GlobeNewswire Inc. | 738 | 0.02% |
+| The Motley Fool | 693 | 0.02% |
+| *(null publisher)* | 18,181 | |
+
+⇒ ⭐ **NEWS IS EFFECTIVELY SINGLE-SOURCE.** Consensus arithmetic over news publishers is
+computing over n=1 with rounding error attached.
+
+⚠️ **This is not a rehabilitation of the claim Ben corrected on 08-06, and it must not be read
+as one.** He said *"mind has tons of publishers, and YouTube channels to boot"* and told me to
+stop assessing the universe. **He was right about the universe: 63 creators all-time, 48 active
+in the last 30 days, 41 carrying credibility scores.** The diversity is real — it is *entirely
+on the creator axis*, and none of it is on the news-publisher axis. **Both facts are true and
+only one of them is about the source I happened to measure first.**
+
+⇒ **The multi-source axis is `YouTube creators × EDGAR × news-as-one-source`.** That is a
+modelling decision, not an accounting one, and §5 now turns on it.
 
 ---
 
@@ -75,10 +96,22 @@ and **link** them (§6c). Never blend them into one voting population.
 ⇒ **Two things EDGAR buys that no amount of extra commentary would:**
 
 1. ⭐ **A contradiction check that needs no oracle** (§6c). "This creator says margins are
-   expanding" against the filed gross margin is checkable *today*, without waiting for a
-   market outcome. On 08-06 the only ground truth in this family was market resolution, over a
-   12.3% resolvable slice with known selection bias — and Ben put resolution out of scope.
-   EDGAR restores a ground-truth axis inside the scope he kept.
+   expanding" against the filed gross margin is checkable without waiting for a market outcome.
+   On 08-06 the only ground truth in this family was market resolution, over a 12.3% resolvable
+   slice with known selection bias — and Ben put resolution out of scope. **EDGAR restores a
+   ground-truth axis inside the scope he kept.**
+
+   ⛔ **IN PRINCIPLE. NOT YET, AND `mind` was right to hit this hardest** — it is the
+   load-bearing claim of the document. **`edgar_filing` spans 2026-08-06 → 08-08. Three days.**
+   The claims corpus is 61,872 rows over 6,338 videos going back years, so **the overlap is
+   approximately nothing.** Today this check would run against claims made this week.
+
+   ⇒ **What that costs is a correction to §10, not to §1:** the axis is real and worth
+   building toward, and **the work to make it usable — historical EDGAR backfill, a
+   document-text layer, an XBRL fact layer, none of which exist — is the largest single item in
+   the plan.** I had it as "independent of 2–3, can run in parallel", which read as cheap.
+   ⭐ **A capability that is architecturally sound and empirically three days deep will describe
+   itself in the language of the first fact.**
 2. ⭐ **It pays for the entity resolution the other two sources need but cannot fund** (§2).
    SEC publishes an authoritative CIK ↔ ticker ↔ name mapping. That is the join key for the
    whole store, and it arrives free with the source that needs it least.
@@ -99,10 +132,27 @@ many sources are talking about it — which is the entire question.
 z=4.1, above a real +17% earnings move.** A publication was read as a ticker. That is not a
 tuning problem; it is a missing resolution layer.
 
+### ✅ Measured: most of this exists, and the missing piece is exactly one join
+
+**`mind` already has the harder half.** `tickers` (247,785 rows) carries `effective_date` —
+⭐ **the alias map is already point-in-time**, which is the piece most implementations get
+wrong and I had specced as new work. Plus `ticker_aliases` (21,027) and `ticker_mentions`
+(296,931), and claims carry a resolved `ticker`.
+
+⛔ **What is missing is the CIK bridge: `cik` appears in exactly one column in the entire
+schema — `edgar_filing.cik` — and joins to nothing.** EDGAR rows carry their own `tickers`
+array, so the link exists per-filing and nowhere else.
+
+⇒ **Step 0 is therefore much smaller than §10 originally implied: bridge CIK into the existing
+point-in-time ticker layer.** The SEC's own `company_tickers.json` is the authoritative source
+and it is a file download. ⚠️ **But per-filing ticker arrays are not a substitute for a
+standing map** — they resolve *that filing*, and cannot answer "which CIK is this creator
+talking about", which is the direction every cross-source query runs.
+
 ⛔ **Tickers are not stable identifiers. CIK is.** Tickers change on rebrand, and are *re-used*
 after delisting — so `AAPL` in 1996 and `AAPL` today are the same company, while some recycled
-symbols are not. **The alias map is itself time-varying**, which is the piece most
-implementations get wrong:
+symbols are not. That is why the map is time-varying, and mind's `effective_date` is already
+the right shape:
 
 ```
 entities        entity_id, cik, legal_name, sic, first_seen
@@ -195,6 +245,12 @@ embeddings      object_kind{chunk|claim|canonical}, object_id,
    prompt and every cluster shifts underneath you — old and new claims silently stop
    clustering together. `canon_model` + `canon_prompt_version` on the row make that a reindex
    instead of invisible drift.
+   ⚑ **And a silent-filter hazard `mind` hit today, worth sitting next to this rule because
+   canonicalization pipelines are full of them:** `{r["article_id"]: r for r in rows}` over a
+   **non-unique key silently keeps the last duplicate** — it cost 5,760 articles and surfaced
+   as a *sha mismatch*, so the suspected cause was corruption and the actual cause was picking
+   the wrong duplicate. ⭐ **A dict comprehension over a non-unique key is a filter that
+   reports no error and no missing data.**
 2. ⭐ **Whatever produced a derived value lives in the row beside it.** `decided_by` on cluster
    membership and on fact links; `model_name` in the embeddings key. Same discipline, three
    places.
@@ -238,9 +294,28 @@ tape look like on the 3rd", any evaluation of a creator's call is **look-ahead b
 the store can answer *as of a moment*. Late-arriving documents are normal — a filing indexed
 hours after `filed_ts`, a transcript available days after publication.
 
-⇒ **Every query carries an as-of: `event_ts <= T AND ingest_ts <= T`.** Costs two columns and
-an index. ⚠️ Retrofitting is impossible — `ingest_ts` for existing rows is unrecoverable — so
-this is cheap today and gone tomorrow. **(A3: I believe this is currently missing.)**
+⇒ **Every query carries an as-of: `event_ts <= T AND ingest_ts <= T`.**
+
+✅ **A3 was wrong — this is already built on all three sources.** `news_articles`
+(`published_at` + `ingested_at`), `videos` (+ `first_seen_at`), `edgar_filing` (`filed_at` +
+`first_seen_at` + `doc_fetched_at`). The column that would have been unrecoverable was
+recorded from the start.
+
+⛔ **But `mind` surfaced a trap inside it that I would have walked straight into, and it is the
+sharpest instance yet of §3 rule 5.** `videos.published_at_precision` is `'date'` on **3,703
+rows — meaning the time of day is UNKNOWN, not midnight.**
+
+⇒ ⭐ **Any intraday ordering or look-ahead test must filter `published_at_precision = 'second'`
+or it will silently treat unknown as `00:00:00`** — which places every one of those videos
+*before* everything else that day. **A field recording that a timestamp is unknown, sitting
+next to a timestamp that reads as perfectly precise.** The bitemporal machinery is present and
+correct and would still have produced a biased backtest, in the favourable direction, with no
+error and no missing data.
+
+⚠️ **Note what this is an instance of.** The absent-value hazard is not confined to judgement
+fields like sentiment or `test_window` — **it reaches the temporal layer, which is exactly
+where look-ahead bias lives**, and there the default is not merely wrong but *systematically
+advantageous*. A backtest that silently front-runs 3,703 videos looks like alpha.
 
 ### 4b. Supersession — and EDGAR makes it the clean case
 
@@ -313,18 +388,66 @@ check returns *clean* on a corpus with nothing to duplicate, and clean reads as 
 ⚠️ **Distinct sources, not distinct claims or documents.** One creator posting the same thesis
 nine times is one source. This is the single most common way a consensus number lies.
 
-⛔ **The news axis is not currently usable for consensus and the YouTube axis is.** One
-publisher dominates the news side, and Benzinga carries PR-wire reprints under its own label,
-so real syndication survives *inside* a single publisher string, invisible to any
-publisher-level count. Meanwhile there are 40+ creators with durable identity.
+### ⛔ Measured: news is one source. Model it as one source.
 
-⇒ **Two mitigations for news, in order of value:**
+99.4% Benzinga across 3.5M articles; two other publishers at 0.02% each (§0). Against **48
+creators active in 30 days**.
 
-1. ⭐ **Extract the originating wire at ingest.** Reprints usually carry the marker in the body
-   — "(Reuters)", "GlobeNewswire", a dateline. Cheap, and it is the *actual* fix: it recovers
-   the provenance ingest is throwing away, at the moment it is still present.
-2. Near-duplicate clustering **within** a publisher, to recover what (1) misses. ⛔ **Label it
-   what it is: intra-publisher provenance recovery, never a source-independence metric.**
+⇒ ⭐ **NEWS ENTERS THE `(source, item, value)` TABLE AS A SINGLE PARTICIPANT — one
+`source_id`, not one per publisher and emphatically not one per article.**
+
+⛔ **The concrete harm if it doesn't, and it is severe enough to decide this on its own: the
+volume asymmetry is 3.5M news rows against 61,872 claims from 63 creators.** Admit news at
+article granularity and **~98% of the voting population is one opinion, restated.** Every
+aggregator in §5 would ratify it, the result would carry a high agreement score, and nothing in
+the output would indicate that a single publisher had voted three and a half million times.
+⭐ **This is the distinct-source rule at its most expensive: the failure is not a wrong number,
+it is a confident one.**
+
+⚠️ **And the collapse is optimistic, not conservative.** Benzinga carries PR-wire reprints
+under its own label, so syndication survives *inside* the publisher string — the true source
+count for news is **≤ 1 named source plus an unknown number of laundered wire originators**,
+not exactly one.
+
+### ⛔ The mitigation I proposed does not do what I said — measured, and it inverts
+
+I proposed extracting the originating wire at ingest as *"the only route to news contributing
+more than one voice."* **`mind` measured Benzinga bodies, July 2026, n=19,971:**
+
+| marker | articles | |
+|---|--:|---|
+| **no marker** | 18,775 | 94.0% |
+| **AccessWire / Newsfile / Cision** | **1,099** | 5.5% — ⭐ **small-cap press-release wires** |
+| PRNewswire | 59 | |
+| AP · Reuters · BusinessWire · GlobeNewswire | **38 combined** | **0.19%** |
+
+⇒ ⭐⭐ **THE MARKERS WE CAN RECOVER ARE OVERWHELMINGLY NOT EDITORIAL SYNDICATION — THEY ARE THE
+COMPANY TALKING ABOUT ITSELF.** 1,099 of 1,196 are PR wires. Genuine third-party reportage —
+Reuters, AP, BusinessWire — is **36 articles in 19,971.**
+
+⛔ **So the extraction inverts in sign.** Recovering "this is an AccessWire release" is
+genuinely valuable *provenance*, but those items belong **EXCLUDED from a consensus population,
+not counted as an additional source.** In mind's words: **a company's own PR agreeing with a
+company's own PR is not two sources agreeing.** I proposed it as a way to *add* voices; it is
+in fact a way to *remove* ones that were never independent.
+
+⇒ **The conclusion — news out of consensus counts — survives its own mitigation, for a reason
+the mitigation was not testing.** ⚠️ **That is worth more than the conclusion.** I designed a
+remedy for the problem I had diagnosed, and it turned out to be useful against a *different*
+problem in the same data, in the opposite direction. Had it not been measured it would have
+shipped as a diversity fix and quietly inflated exactly the number it was meant to protect.
+
+**What the two mitigations are actually for, restated honestly:**
+
+1. **Wire-marker extraction → labelling and EXCLUSION**, not diversity. Tag PR-wire origin so
+   those rows can be held out of any consensus population and surfaced as what they are.
+2. **Near-duplicate clustering within the publisher** → intra-publisher provenance recovery.
+   ⛔ Still never a source-independence metric.
+
+⚠️ **None of this makes news useless — it makes it evidence rather than a vote.** 3.5M articles
+are the best available record of *what was reported and when*, which is what §6c and the
+filing-calendar axis (§7) actually consume. **Volume is a virtue for coverage and a hazard for
+consensus, and the store has to hold both readings at once.**
 
 ### The contract
 
@@ -440,6 +563,11 @@ Did the thesis appear before the 8-K or after it? A thesis that *precedes* the f
 different object from one that follows it. ⛔ **We do not say which is better.** We make the
 axis queryable and the trader decides what it means.
 
+⛔ **Not an axis yet, and for the same reason as §1: it is computable only inside the 3-day
+filing window.** It becomes an axis when 4a lands, not before — and `mind` is right that it
+would otherwise ship as a column that is present, correct, and empty for every claim older than
+this week.
+
 ### ⛔ THE GATE — clustering by embedding similarity does not work, and this was measured
 
 `embeddings` ran a 30-pair hard-negative benchmark against `qwen3-embedding-4b`:
@@ -538,16 +666,51 @@ with endpoints. **Structure is ours; conclusions are theirs.**
 
 Each step is testable on its own, and the ones that gate others come first.
 
-| # | step | why here | gates |
+✅ **Revised after mind's measurements — two steps are already done and one is much smaller
+than specced.**
+
+| # | step | status | why here |
 |---|---|---|---|
-| **0** | **Entity resolution** (§2) — CIK primary, ticker as dated alias | nothing cross-source works without it, and a live wrong answer (`NYT` z=4.1) depends on it | everything |
-| **1** | **Bitemporal columns** (§4a) — `event_ts` + `ingest_ts` everywhere | two columns today, **unrecoverable tomorrow** | anything retrospective |
-| **2** | **Canonicalization at ingest** (local LLM) | decides whether the thesis axis exists at all | 3, 5 |
-| **3** | **Clustering = vector recall + LLM adjudication** (§7) | ⛔ **test canonicalized vs raw first**, margin > 3.3pt or repeat runs | 5, 6a |
-| **4** | **EDGAR facts + `claim_fact_links`** (§6c) | independent of 2–3; can run in parallel | 6c |
-| **5** | **Trends** over `cluster_members` (§7) | pure query work once 3 lands | — |
-| **6** | **Self-consistency** (§6b) | ⭐ nearly free once claims carry source + cluster + ts | — |
-| **7** | Consensus aggregator (§5) | ⚠️ **only if annotation proves insufficient** | — |
+| ~~0a~~ | ~~bitemporal columns~~ | ✅ **already built** | ⚠️ but see the `published_at_precision` trap (§4a) — filter `= 'second'` for anything intraday |
+| ~~0b~~ | ~~point-in-time ticker aliases~~ | ✅ **already built** — `tickers.effective_date` | the hard half of §2 was done before I specced it |
+| **0** | **The CIK bridge** (§2) — join `edgar_filing.cik` to the existing ticker layer | ⛔ **missing; `cik` joins to nothing** | a file download from SEC. **Small, and everything cross-source waits on it** |
+| **1** | **Collapse news to one `source_id`** (§5) | ⛔ **not done** | ⭐ **cheapest high-value item here.** Without it any aggregator is ~98% one opinion and says so confidently |
+| **2** | **Canonicalization at ingest** (local LLM) | — | decides whether the thesis axis exists at all |
+| **3** | **Clustering = vector recall + LLM adjudication** (§7) | — | ⛔ **test canonicalized vs raw first**, margin > 3.3pt or repeat runs |
+| **4a** | ⛔ **Historical EDGAR acquisition** | **greenfield, unscoped, and gating** | ⭐ **the largest item in the plan, and it was not in the plan** — see below |
+| **4b** | **EDGAR text + XBRL facts + `claim_fact_links`** (§6c) | ⚠️ greenfield — the filing *index* exists (6,446 rows), the fact layer does not | code is independent of 2–3; **usefulness is not independent of 4a** |
+| **5** | **Trends** over `cluster_members` (§7) | — | pure query work once 3 lands |
+| **6** | **Self-consistency** (§6b) | — | ⭐ nearly free once claims carry source + cluster + ts |
+| **7** | Consensus aggregator (§5) | — | ⚠️ **only if annotation proves insufficient** |
+
+⭐ **Steps 0 and 1 are both small and both gate everything downstream** — a file download and a
+`source_id` collapse. That is a better position than the original ordering suggested.
+
+### ⛔ 4a — the item that waiting does not fix
+
+**`mind-edgar` runs `mind edgar-poll --seconds <float>`. That is the entire CLI surface: no
+`--start`, no `--end`, no date range, no backfill.** It watches the feed forward, as a
+long-lived container.
+
+⇒ ⭐ **EDGAR depth grows in real time and only in real time. Nothing in the codebase can reach
+backwards.** It is 3 days deep today and will be 10 days deep next week — against a claims
+corpus spanning years.
+
+⇒ ⛔ **The claim-vs-filing axis does not become available by waiting. It becomes available by
+someone writing a historical fetcher, and that work appeared nowhere in my build order** — I
+had specced the consumer of a dataset that has no producer. **A forward-only poller and a
+complete archive present the same interface**, and the table it fills answers "is there EDGAR
+data" with a yes.
+
+⚠️ **Sizing note if 4a reuses the poll path:** `edgar_poll_log` is 737,138 rows / 97 MB against
+a 3.4 MB filings table — **28× the data it produced.** Yield per poll is very low, which is
+tolerable for a live tail and probably not for a multi-year fetch.
+
+⚑ **And one thing already checked, so it is not re-derived as an incident:** the newest filing
+is 22.5 hours old with zero in the last hour, and **that is healthy, not a stall.** It is
+Saturday; EDGAR accepts filings until 22:00 ET on business days and the last landed Friday
+21:54. ⭐ **A weekend and a dead lane produce the identical reading, and only one of them is a
+problem** — mind nearly reported the wrong one before asking what healthy looks like.
 
 ⚠️ **Ingest must micro-batch.** The local model decodes at ~21 tok/s on the first call after
 idle against ~70 steady — the penalty amortises to nothing in a batch and **dominates** for
@@ -567,12 +730,13 @@ a schema's clothes.
 
 | finding | consequence |
 |---|---|
-| **distinct active creators < ~15** in a typical window | consensus arithmetic is theatre. Stop at annotation (§8); do not build §5 or §7 |
+| ~~**distinct active creators < ~15**~~ | ✅ **RUN AND PASSED — 48 active in 30d, 63 all-time, 41 scored. Clears by 3×.** The creator axis is real and consensus over it is not theatre |
 | **canonicalized clustering does not beat raw by > 3.3pt** over repeat runs | ⛔ the thesis axis does not exist. Trends (§7) are unbuildable. Fall back to entity + time + direction, which still supports §6b and §6c |
 | **claim→fact linkage precision < ~0.7** by eye on 50 hand-checked pairs | do not ship §6c; the link is worse than no link because it looks authoritative |
 | **XBRL tags too heterogeneous** to match a claim's subject to a fact | §6c narrows to a small high-value tag set (revenue, margin, guidance) rather than being abandoned |
 | **`unresolved` is rare** in `claim_fact_links` | the adjudicator is overconfident — §6c's output is not trustworthy yet |
-| news wire-marker extraction recovers **< ~10%** of reprints | intra-publisher provenance is not recoverable at ingest; news stays out of consensus counts permanently |
+| ~~news wire-marker extraction recovers **< ~10%** of reprints~~ | ⛔ **WITHDRAWN — NOT EVALUABLE AS WRITTEN. The denominator is *reprints*, which is precisely what the extraction is trying to discover.** ⭐ A falsifier whose denominator is the unknown quantity is not a falsifier. (`mind`) |
+| **restated:** articles carrying any wire marker | ✅ **measured: 5.99% of 19,971**, and ⭐ **1,099 of 1,196 are PR wires, not editorial syndication** — so this measures self-promotion, not independence, and the *exclusion* reading (§5) is the useful one |
 
 ⚠️ **And the meta-check, which is the one I keep failing:** before trusting any of these
 instruments, ask not *"could this check fail?"* but *"is the task hard enough that a real
@@ -588,12 +752,34 @@ own reliability, and every one of them read as a clean pass.
 Six positions in the predecessor document were wrong and changed on evidence. The ones most
 likely to be wrong in *this* one, so they can be checked rather than inherited:
 
-1. **A1–A5 (§0)** — every assumption about mind's current EDGAR, entity and bitemporal state.
-   Six questions are out; unanswered ones stay marked.
-2. **§1's claim that EDGAR needs no consensus machinery.** True for XBRL facts. Filing *prose*
+1. ~~**A1–A5**~~ — ✅ **all six answered within five minutes; three were wrong** (§0). Kept
+   visible rather than silently corrected.
+2. ⛔ **§1's EDGAR claim was right in principle and empty in practice, and that is the worst
+   failure mode in the document** — the axis it rests on is 3 days deep against a corpus
+   spanning years, and the poller that fills it **cannot reach backwards** (§10, 4a). I specced
+   a consumer for a dataset with no producer. ⭐ **A forward-only poller and a complete archive
+   present the same interface, and the table answers "is there EDGAR data" with a yes.**
+3. ⛔ **My news mitigation inverted on measurement** (§5). I proposed wire extraction to *add*
+   source diversity; 92% of what it recovers is small-cap PR wire — the company talking about
+   itself — which belongs *excluded* from a consensus population. **It would have shipped as a
+   diversity fix and inflated the number it was meant to protect.**
+4. ⛔ **My wire falsifier was not evaluable** — its denominator was the unknown quantity (§11).
+   ⭐ **I have spent two days cataloguing instruments that cannot detect what they are pointed
+   at, and then wrote one into the falsifier list of the document making the case.**
+5. **§1's claim that EDGAR needs no consensus machinery.** True for XBRL facts. Filing *prose*
    — MD&A, risk factors — is closer to a claim than a fact, and I have modelled it as neither.
-3. **§6c's feasibility.** Linking a spoken claim to an XBRL tag is the least-proven step here
-   and I have specced it without prototyping it. §11 row 3 is the test.
-4. **§4c's half-life table** is reasoned, not measured. It is used only to argue *against* a
+   **Still unexamined.**
+6. **§6c's feasibility.** Linking a spoken claim to an XBRL tag is the least-proven step here
+   and I specced it without prototyping it. §11 row 3 is the test — ⚠️ and it cannot run until
+   4a exists.
+7. **§4c's half-life table** is reasoned, not measured. It is used only to argue *against* a
    global constant, which does not depend on the numbers being right — but do not quote them as
    findings.
+
+⭐ **The pattern across 2, 3 and 4 is one thing, and it is not the same as the 08-06 error.**
+That one was over-generalizing a measurement. These are the reverse: **three claims that were
+structurally sound and empirically untested, each of which read as finished work.** A design
+document is unusually good at concealing this — architecture and availability are written in
+the same voice, and nothing in the prose distinguishes "this is the right shape" from "this
+runs today." ⇒ **Every capability claim in a spec needs a depth figure next to it, or it will
+be read as available.**
