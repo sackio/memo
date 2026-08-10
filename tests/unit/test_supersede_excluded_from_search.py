@@ -16,7 +16,7 @@ from memo import db
 
 
 @pytest.mark.asyncio
-async def test_superseded_document_is_excluded_and_opt_in_reaches_it(tmp_memo_db):
+async def test_superseded_document_is_excluded_and_opt_in_reaches_it(temp_db):
     """The exclusion, and the escape hatch, in one test."""
     vec = [0.1] * db.settings.embedding_dimensions
     old_id = await db.store(db_path=None, content="gate code is 1111",
@@ -41,7 +41,7 @@ async def test_superseded_document_is_excluded_and_opt_in_reaches_it(tmp_memo_db
 
 
 @pytest.mark.asyncio
-async def test_passage_search_still_returns_results(tmp_memo_db):
+async def test_passage_search_still_returns_results(temp_db):
     """⛔ REGRESSION GUARD for a silent zero.
 
     `include_superseded` was first appended POSITIONALLY to the `to_thread` call
