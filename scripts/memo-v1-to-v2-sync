@@ -264,15 +264,26 @@ def main() -> int:
             break
         src = v1[i]
         meta = dict(src.get("metadata") or {})
-        meta["sync_src_id"] = i              # the idempotency key
+        meta["sync_src_id"] = i              # provenance; the id below is now the real key
         meta["sync_src"] = "memo-v1:8000"
         meta["synced_at"] = _now()
         try:
+            # ⭐ id + timestamps are what make this a MIRROR rather than a copy.
+            # Without `id`, every reference to a synced doc 404s the moment v2 is
+            # promoted to :8000 — memo ids are cited in pins, in other memos, and
+            # between agents. Without the timestamps, every mirrored doc claims it
+            # was created at copy time, which silently rewrites the age of the
+            # corpus. A colliding id is a 409 and counts as a failure here, which
+            # is correct: it means something already owns that id and this script
+            # must not overwrite it.
             _req(f"{V2}/documents", "POST", {
                 "content": src.get("content") or "",
                 "title": src.get("title"),
                 "tags": src.get("tags") or [],
                 "metadata": meta,
+                "id": i,
+                "created_at": src.get("created_at"),
+                "updated_at": src.get("updated_at"),
             }, timeout=180)
             added += 1
         except Exception as e:  # noqa: BLE001
