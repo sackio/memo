@@ -1,17 +1,27 @@
 #!/usr/bin/env python3
-"""Keep memo v2 (:8091) continuously caught up with memo v1 (:8000).
+"""Mirror one memo store onto the other. Runs BOTH directions, one at a time.
+
+  --direction v1-to-v2   (default) pre-cutover: keep the v2 candidate hot.
+  --direction v2-to-v1             post-cutover: keep v1 warm so ROLLBACK is a
+                                   restart rather than a data-loss decision.
 
 Ben, 2026-08-10: "get V2 fully synced with the latest from V1 ... a script that
 does this and keeps doing it on an hourly basis. I'll decide on the cut over
-later but at least at any given time you'll be ready for it."
+later but at least at any given time you'll be ready for it." Then: "I want to
+plan for cutting over and then cutting back if we need to if there are issues."
+
+⭐ ONE SCRIPT, NOT TWO. The reverse direction is the same algorithm with the
+endpoints swapped. Shipping it as a second file would have meant two copies of
+the prune guard, the empty-source rule and the blast-radius cap, drifting apart
+exactly when the rollback path is least exercised and most needed. The safety
+rules live in one place and both directions inherit them.
 
 ═══════════════════════════════════════════════════════════════════════════════
-⛔ V1 IS LIVE FLEET INFRASTRUCTURE. THIS SCRIPT IS READ-ONLY AGAINST IT.
+⛔ THE LIVE STORE IS NEVER A DESTINATION — see LIVE_PORT below.
 ═══════════════════════════════════════════════════════════════════════════════
-:8000 is written by ~50 agent seats. Every request this script makes to V1 goes
-through `_get_v1()`, which hard-refuses any method but GET. Do not add a write
-path "just for one field" — there is no such thing as a small write to a store
-that fifty writers depend on.
+:8000 is written by ~50 agent seats. Whichever store is on it, this script only
+ever READS from it. That one rule is what keeps each direction from being run in
+the topology where it would be destructive.
 
 ═══════════════════════════════════════════════════════════════════════════════
 ⭐ WHY THIS IS NOT A DATABASE COPY
@@ -66,8 +76,26 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 
-V1 = "http://localhost:8000"   # LIVE fleet store — GET ONLY
-V2 = "http://localhost:8091"   # the v2 candidate
+V1 = "http://localhost:8000"   # v1. LIVE today.
+V2 = "http://localhost:8091"   # v2 candidate. Becomes :8000 at cutover.
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ⭐⭐ THE ONE INVARIANT: THIS SCRIPT NEVER WRITES TO :8000.
+# ═══════════════════════════════════════════════════════════════════════════════
+# :8000 is whatever is serving the fleet right now — v1 today, v2 after cutover.
+# Refusing to write to that port makes BOTH catastrophic misuses structurally
+# impossible, rather than relying on a runbook step somebody has to remember:
+#
+#   · forward sync (v1->v2) run AFTER cutover would see every live write as an
+#     orphan and delete it, an hour at a time. Post-cutover its destination is
+#     :8000 -> refused.
+#   · reverse sync (v2->v1) run BEFORE cutover would clobber the live store with
+#     the standby's state. Pre-cutover its destination is :8000 -> refused.
+#
+# Each direction is safe in exactly one topology, and the port says which
+# topology you are in. So the rollback procedure brings v1 up on :8092 as a warm
+# standby — NOT on :8000 — drains into it hourly, and only swaps ports at the end.
+LIVE_PORT = ":8000"
 
 PRUNE_LIST_IN_V2 = "/data/pruned-dupes-2026-08-09.json"
 
@@ -81,9 +109,9 @@ def _req(url: str, method: str = "GET", body: dict | None = None, timeout: int =
         return json.loads(raw) if raw else None
 
 
-def _get_v1(path: str, timeout: int = 180):
-    """The ONLY way this script may touch V1. GET is structurally the only option."""
-    return _req(f"{V1}{path}", method="GET", timeout=timeout)
+def _get_src(src: str, path: str, timeout: int = 180):
+    """Reads from the source. GET is structurally the only option here."""
+    return _req(f"{src}{path}", method="GET", timeout=timeout)
 
 
 def _sha(s: str | None) -> str:
@@ -150,32 +178,57 @@ def main() -> int:
     ap.add_argument("--max-deletes", type=int, default=200,
                     help="Blast-radius cap. If more docs look orphaned than this, delete "
                          "NOTHING and fail loudly. See the cutover hazard below.")
+    ap.add_argument("--direction", choices=("v1-to-v2", "v2-to-v1"), default="v1-to-v2",
+                    help="v1-to-v2 = normal pre-cutover mirroring. v2-to-v1 = the ROLLBACK "
+                         "drain, valid only once v2 serves :8000 and v1 is a standby on "
+                         "another port.")
+    ap.add_argument("--src-url", default=None, help="Override source base URL.")
+    ap.add_argument("--dst-url", default=None, help="Override destination base URL.")
     args = ap.parse_args()
 
+    if args.direction == "v1-to-v2":
+        SRC, DST, src_name, dst_name = V1, V2, "v1", "v2"
+    else:
+        SRC, DST, src_name, dst_name = V2, V1, "v2", "v1"
+    SRC = args.src_url or SRC
+    DST = args.dst_url or DST
+
+    # ⭐ THE INVARIANT. See the block at the top of this file — this single check
+    # makes both catastrophic misuses impossible without anyone remembering a
+    # runbook step. Do not "temporarily" relax it; the two topologies it separates
+    # look identical from inside a running script.
+    if LIVE_PORT in DST:
+        log(f"FATAL refusing to write to {DST} — that is the LIVE port. "
+            f"Direction {args.direction} is only valid when the destination is a "
+            f"standby on another port. If you are rolling back, bring v1 up on :8092 "
+            f"and drain into that, then swap ports.")
+        return 1
+
     t0 = time.time()
-    log(f"=== v1->v2 sync starting (dry_run={args.dry_run} mirror_deletes={args.mirror_deletes})")
+    log(f"=== {src_name}->{dst_name} sync starting ({SRC} -> {DST}) "
+        f"dry_run={args.dry_run} mirror_deletes={args.mirror_deletes}")
 
     # ---- preflight -----------------------------------------------------------
     try:
-        r1 = _get_v1("/ready", timeout=30)
-        r2 = _req(f"{V2}/ready", timeout=30)
+        r1 = _get_src(SRC, "/ready", timeout=30)
+        r2 = _req(f"{DST}/ready", timeout=30)
     except Exception as e:  # noqa: BLE001
         log(f"FATAL preflight failed: {e}")
         return 1
 
     n1, n2 = r1.get("documents", 0), r2.get("documents", 0)
-    log(f"    v1 ready: {n1} docs | v2 ready: {n2} docs")
+    log(f"    {src_name} ready: {n1} docs | {dst_name} ready: {n2} docs")
 
     if n1 < args.min_v1_docs:
-        log(f"FATAL v1 reports {n1} docs (< --min-v1-docs {args.min_v1_docs}). "
+        log(f"FATAL {src_name} reports {n1} docs (< --min-v1-docs {args.min_v1_docs}). "
             f"An empty source is a FAILURE, not an empty delta. Refusing to sync.")
         return 1
 
     # Guard against both URLs resolving to the SAME store, which would make every
     # comparison trivially equal and every run a confident no-op.
     if n1 == n2:
-        probe1 = _get_v1("/documents?limit=1")
-        probe2 = _req(f"{V2}/documents?limit=1")
+        probe1 = _get_src(SRC, "/documents?limit=1")
+        probe2 = _req(f"{DST}/documents?limit=1")
         if probe1 and probe2 and probe1[0].get("id") == probe2[0].get("id") \
                 and _sha(probe1[0].get("content")) == _sha(probe2[0].get("content")):
             log("WARN v1 and v2 look identical at the head; counts equal. "
@@ -184,8 +237,8 @@ def main() -> int:
 
     # ---- fetch ---------------------------------------------------------------
     log("    fetching corpora ...")
-    d1 = _get_v1("/documents?limit=50000")
-    d2 = _req(f"{V2}/documents?limit=50000", timeout=180)
+    d1 = _get_src(SRC, "/documents?limit=50000")
+    d2 = _req(f"{DST}/documents?limit=50000", timeout=180)
     v1 = {d["id"]: d for d in d1}
     v2 = {d["id"]: d for d in d2}
 
@@ -197,7 +250,7 @@ def main() -> int:
         if (d.get("metadata") or {}).get("sync_src_id")
     }
     mirrored = set(mirror_map)
-    log(f"    v1={len(v1)} v2={len(v2)} already-mirrored-by-metadata={len(mirrored)}")
+    log(f"    {src_name}={len(v1)} {dst_name}={len(v2)} already-mirrored-by-metadata={len(mirrored)}")
 
     pruned = load_prune_list()
     if pruned is None:
@@ -276,7 +329,7 @@ def main() -> int:
             # corpus. A colliding id is a 409 and counts as a failure here, which
             # is correct: it means something already owns that id and this script
             # must not overwrite it.
-            _req(f"{V2}/documents", "POST", {
+            _req(f"{DST}/documents", "POST", {
                 "content": src.get("content") or "",
                 "title": src.get("title"),
                 "tags": src.get("tags") or [],
@@ -299,7 +352,7 @@ def main() -> int:
             break
         src = v1[src_id]
         try:
-            _req(f"{V2}/documents/{tgt_id}", "PATCH", {
+            _req(f"{DST}/documents/{tgt_id}", "PATCH", {
                 "content": src.get("content") or "",
                 "title": src.get("title"),
                 "tags": src.get("tags") or [],
@@ -329,15 +382,15 @@ def main() -> int:
     if args.mirror_deletes:
         for i in orphans:
             try:
-                _req(f"{V2}/documents/{i}", "DELETE", timeout=60)
+                _req(f"{DST}/documents/{i}", "DELETE", timeout=60)
                 deleted += 1
             except Exception as e:  # noqa: BLE001
                 failed += 1
                 log(f"    ERR delete {i[:8]}: {e}")
 
     # ---- verify by effect, not by exit code ----------------------------------
-    after = _req(f"{V2}/ready", timeout=30).get("documents", 0)
-    log(f"    v2 docs {n2} -> {after} (expected +{added}-{deleted} = {n2+added-deleted})")
+    after = _req(f"{DST}/ready", timeout=30).get("documents", 0)
+    log(f"    {dst_name} docs {n2} -> {after} (expected +{added}-{deleted} = {n2+added-deleted})")
     ok = after == n2 + added - deleted
     if not ok:
         log("WARN post-sync count does not match the expected delta — investigate before trusting v2")
