@@ -1,0 +1,320 @@
+#!/usr/bin/env python3
+"""Keep memo v2 (:8091) continuously caught up with memo v1 (:8000).
+
+Ben, 2026-08-10: "get V2 fully synced with the latest from V1 ... a script that
+does this and keeps doing it on an hourly basis. I'll decide on the cut over
+later but at least at any given time you'll be ready for it."
+
+═══════════════════════════════════════════════════════════════════════════════
+⛔ V1 IS LIVE FLEET INFRASTRUCTURE. THIS SCRIPT IS READ-ONLY AGAINST IT.
+═══════════════════════════════════════════════════════════════════════════════
+:8000 is written by ~50 agent seats. Every request this script makes to V1 goes
+through `_get_v1()`, which hard-refuses any method but GET. Do not add a write
+path "just for one field" — there is no such thing as a small write to a store
+that fifty writers depend on.
+
+═══════════════════════════════════════════════════════════════════════════════
+⭐ WHY THIS IS NOT A DATABASE COPY
+═══════════════════════════════════════════════════════════════════════════════
+V1 embeds with `text-embedding-3-small` at 1536 dims. V2 embeds with self-hosted
+`qwen3-embedding-4b` at 2560. **Cosine between two models is meaningless, not
+merely noisier** — so vectors cannot be copied, only regenerated. This script
+therefore ships *content* and lets V2 embed it. Consequences you must respect:
+
+  · it is slower than a file copy, and bounded by the LAN embedding service;
+  · if that service is down, writes fail — and this script must EXIT NON-ZERO
+    rather than log a tidy "0 synced" (see the empty-source rule below);
+  · a partially-embedded corpus scores nonsense silently, which is exactly what
+    the 2560-vs-1536 dimension split is designed to make impossible: sqlite-vec
+    REJECTS a mismatched insert instead of quietly accepting it.
+
+═══════════════════════════════════════════════════════════════════════════════
+⭐ ID PRESERVATION — THE THING THAT MAKES THIS IDEMPOTENT
+═══════════════════════════════════════════════════════════════════════════════
+V2's existing 9,076 shared ids match V1 only because that corpus was copied at
+the DATABASE level. `POST /documents` has no `id` field (see models.StoreRequest),
+so anything this script creates gets a FRESH id.
+
+⛔ Naively diffing on id alone would therefore re-add every synced doc on every
+run, forever — the doc would be present in V2 under a new id while its V1 id
+still looked "missing". A duplicate-factory on an hourly timer.
+
+✅ So every doc this script creates carries `metadata.sync_src_id = <v1 id>`, and
+the "what's missing" set subtracts BOTH V2's own ids AND every `sync_src_id`
+already recorded. That makes re-runs free and makes the mapping auditable from
+the data itself rather than from a sidecar file that can drift.
+
+═══════════════════════════════════════════════════════════════════════════════
+⭐ AN EMPTY SOURCE IS A FAILURE, NOT A SUCCESS
+═══════════════════════════════════════════════════════════════════════════════
+Earned next door, `scripts@dea6b81` (2026-08-09): `backup-memo-live` and
+`backup-memo-to-nas` backed up NOTHING from 15:17 and reported success each
+time, because an empty enumeration exited 0. Cronguard recorded four consecutive
+successes over four consecutive failures. "Found nothing" and "failed to look"
+must never be the same value. Hence `--min-v1-docs`.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import sys
+import time
+import urllib.error
+import urllib.request
+from datetime import datetime, timezone
+
+V1 = "http://localhost:8000"   # LIVE fleet store — GET ONLY
+V2 = "http://localhost:8091"   # the v2 candidate
+
+PRUNE_LIST_IN_V2 = "/data/pruned-dupes-2026-08-09.json"
+
+
+def _req(url: str, method: str = "GET", body: dict | None = None, timeout: int = 120):
+    data = json.dumps(body).encode() if body is not None else None
+    headers = {"Content-Type": "application/json"} if data else {}
+    r = urllib.request.Request(url, data=data, headers=headers, method=method)
+    with urllib.request.urlopen(r, timeout=timeout) as resp:
+        raw = resp.read()
+        return json.loads(raw) if raw else None
+
+
+def _get_v1(path: str, timeout: int = 180):
+    """The ONLY way this script may touch V1. GET is structurally the only option."""
+    return _req(f"{V1}{path}", method="GET", timeout=timeout)
+
+
+def _sha(s: str | None) -> str:
+    return hashlib.sha256((s or "").encode()).hexdigest()
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
+
+
+def log(msg: str) -> None:
+    print(f"{_now()} {msg}", flush=True)
+
+
+def load_prune_list() -> set[str]:
+    """Ids hidden by the 2026-08-09 non-destructive prune. NEVER re-add these.
+
+    ⚠️ The file's key is `hidden`, NOT `pruned` — guessing it wrong yields an
+    empty set, and an empty set makes the "did I just undo the prune?" check pass
+    trivially. A reassuring zero from a set you never loaded is not evidence.
+    """
+    import shutil
+    import subprocess
+
+    # ⚠️ cron's PATH is /usr/bin:/bin. On this host docker lives at
+    # /snap/bin/docker, so a bare "docker" resolves interactively and NOT under
+    # cron — the job would refuse to run every hour while working perfectly by
+    # hand. It fails CLOSED (safe), but a permanently-refusing job is still a
+    # dead job. Resolve explicitly. (Found before first install, 2026-08-10.)
+    docker = shutil.which("docker") or next(
+        (p for p in ("/snap/bin/docker", "/usr/bin/docker", "/usr/local/bin/docker")
+         if os.path.exists(p)), None)
+    if not docker:
+        log("WARN docker binary not found on PATH or in the usual places")
+        return None
+    try:
+        out = subprocess.run(
+            [docker, "exec", "memo-v2", "cat", PRUNE_LIST_IN_V2],
+            capture_output=True, text=True, timeout=30,
+        )
+        if out.returncode != 0 or not out.stdout.strip():
+            log(f"WARN prune list unreadable (rc={out.returncode}) — refusing to add anything")
+            return None  # distinct from empty: caller must treat as fatal
+        ids = set(json.loads(out.stdout)["hidden"])
+        if not ids:
+            log("WARN prune list parsed but EMPTY — treating as unreadable")
+            return None
+        return ids
+    except Exception as e:  # noqa: BLE001
+        log(f"WARN prune list read failed: {e} — refusing to add anything")
+        return None
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--mirror-deletes", action="store_true",
+                    help="Also DELETE from v2 the docs that no longer exist in v1. "
+                         "OFF by default: destructive, and Ben's call (asked 2026-08-10).")
+    ap.add_argument("--min-v1-docs", type=int, default=1000,
+                    help="Refuse to run if v1 reports fewer than this. An empty or "
+                         "tiny source is a FAILURE, not a no-op cycle.")
+    ap.add_argument("--limit", type=int, default=0, help="Cap writes this run (0 = no cap).")
+    args = ap.parse_args()
+
+    t0 = time.time()
+    log(f"=== v1->v2 sync starting (dry_run={args.dry_run} mirror_deletes={args.mirror_deletes})")
+
+    # ---- preflight -----------------------------------------------------------
+    try:
+        r1 = _get_v1("/ready", timeout=30)
+        r2 = _req(f"{V2}/ready", timeout=30)
+    except Exception as e:  # noqa: BLE001
+        log(f"FATAL preflight failed: {e}")
+        return 1
+
+    n1, n2 = r1.get("documents", 0), r2.get("documents", 0)
+    log(f"    v1 ready: {n1} docs | v2 ready: {n2} docs")
+
+    if n1 < args.min_v1_docs:
+        log(f"FATAL v1 reports {n1} docs (< --min-v1-docs {args.min_v1_docs}). "
+            f"An empty source is a FAILURE, not an empty delta. Refusing to sync.")
+        return 1
+
+    # Guard against both URLs resolving to the SAME store, which would make every
+    # comparison trivially equal and every run a confident no-op.
+    if n1 == n2:
+        probe1 = _get_v1("/documents?limit=1")
+        probe2 = _req(f"{V2}/documents?limit=1")
+        if probe1 and probe2 and probe1[0].get("id") == probe2[0].get("id") \
+                and _sha(probe1[0].get("content")) == _sha(probe2[0].get("content")):
+            log("WARN v1 and v2 look identical at the head; counts equal. "
+                "If they are the same store this run is meaningless — continuing, "
+                "but the delta below should be zero for a real reason.")
+
+    # ---- fetch ---------------------------------------------------------------
+    log("    fetching corpora ...")
+    d1 = _get_v1("/documents?limit=50000")
+    d2 = _req(f"{V2}/documents?limit=50000", timeout=180)
+    v1 = {d["id"]: d for d in d1}
+    v2 = {d["id"]: d for d in d2}
+
+    # v1-id -> the v2 doc we created for it. Recorded in the data itself, not a
+    # sidecar file that can drift out of step with the store it describes.
+    mirror_map = {
+        (d.get("metadata") or {}).get("sync_src_id"): d
+        for d in d2
+        if (d.get("metadata") or {}).get("sync_src_id")
+    }
+    mirrored = set(mirror_map)
+    log(f"    v1={len(v1)} v2={len(v2)} already-mirrored-by-metadata={len(mirrored)}")
+
+    pruned = load_prune_list()
+    if pruned is None:
+        log("FATAL cannot confirm the prune list; adding docs now could silently "
+            "undo the 151-duplicate prune. Refusing.")
+        return 1
+    log(f"    prune list: {len(pruned)} hidden ids (will never be re-added)")
+
+    # ---- diff ----------------------------------------------------------------
+    adds = sorted(set(v1) - set(v2) - mirrored - pruned)
+
+    # UPDATE covers BOTH addressing schemes. A doc reaches v2 one of two ways:
+    #   (a) it was in the original database-level copy  -> same id in both
+    #   (b) this script created it                      -> new v2 id, v1 id in metadata
+    # Comparing only (a) would silently stop tracking edits to everything the
+    # script itself has ever synced — a blind spot that grows every hour.
+    updates = []            # (v1_id, v2_id) — PATCH targets the V2 id
+    for i in set(v1) & set(v2):
+        if _sha(v1[i].get("content")) != _sha(v2[i].get("content")):
+            updates.append((i, i))
+    for src_id, tgt in mirror_map.items():
+        if src_id in v1 and _sha(v1[src_id].get("content")) != _sha(tgt.get("content")):
+            updates.append((src_id, tgt["id"]))
+    updates.sort()
+
+    # ⛔ ORPHANS — THE BUG THAT WOULD HAVE MADE THIS AN ADD/DELETE OSCILLATOR.
+    # A doc this script created has a NEW v2 id that by construction does not
+    # exist in v1, so a naive `set(v2) - set(v1)` flags all 123 freshly-synced
+    # docs as orphans and the next hourly run DELETES exactly what the previous
+    # one added — forever, at no-error, with the counts looking plausible each
+    # time. Caught 2026-08-10 by verifying the result independently instead of
+    # trusting the script's own "+123 ~75 -89 failed=0" summary.
+    # Correct rule, keyed on how the doc got here:
+    #   · carries sync_src_id -> orphaned iff that SOURCE is gone from v1
+    #   · no sync_src_id      -> orphaned iff its own id is gone from v1
+    orphans = []
+    for d in d2:
+        src = (d.get("metadata") or {}).get("sync_src_id")
+        if src is not None:
+            if src not in v1:
+                orphans.append(d["id"])       # we mirrored it; the original is gone
+        elif d["id"] not in v1:
+            orphans.append(d["id"])           # original-copy doc, deleted upstream
+    orphans.sort()
+
+    log(f"    ADD {len(adds)} | UPDATE {len(updates)} | ORPHANED {len(orphans)}"
+        f"{' (will delete)' if args.mirror_deletes else ' (left alone)'}")
+
+    if args.dry_run:
+        for i in adds[:10]:
+            log(f"      + {i[:8]} {str(v1[i].get('title'))[:70]}")
+        for i in updates[:10]:
+            log(f"      ~ {i[:8]} {str(v1[i].get('title'))[:70]}")
+        log(f"=== DRY RUN — nothing written ({time.time()-t0:.1f}s)")
+        return 0
+
+    # ---- apply ---------------------------------------------------------------
+    added = updated = deleted = failed = 0
+    budget = args.limit or 10**9
+
+    for i in adds:
+        if added + updated >= budget:
+            log(f"    NOTE write budget {budget} reached — {len(adds)-added} adds deferred to next run")
+            break
+        src = v1[i]
+        meta = dict(src.get("metadata") or {})
+        meta["sync_src_id"] = i              # the idempotency key
+        meta["sync_src"] = "memo-v1:8000"
+        meta["synced_at"] = _now()
+        try:
+            _req(f"{V2}/documents", "POST", {
+                "content": src.get("content") or "",
+                "title": src.get("title"),
+                "tags": src.get("tags") or [],
+                "metadata": meta,
+            }, timeout=180)
+            added += 1
+        except Exception as e:  # noqa: BLE001
+            failed += 1
+            log(f"    ERR add {i[:8]}: {e}")
+            if failed >= 10:
+                log("FATAL 10 consecutive-ish write failures — embedding service likely down. "
+                    "Stopping so this does not report a tidy partial success.")
+                return 1
+
+    for src_id, tgt_id in updates:
+        if added + updated >= budget:
+            break
+        src = v1[src_id]
+        try:
+            _req(f"{V2}/documents/{tgt_id}", "PATCH", {
+                "content": src.get("content") or "",
+                "title": src.get("title"),
+                "tags": src.get("tags") or [],
+            }, timeout=180)
+            updated += 1
+        except Exception as e:  # noqa: BLE001
+            failed += 1
+            log(f"    ERR update {src_id[:8]}->{tgt_id[:8]}: {e}")
+
+    if args.mirror_deletes:
+        for i in orphans:
+            try:
+                _req(f"{V2}/documents/{i}", "DELETE", timeout=60)
+                deleted += 1
+            except Exception as e:  # noqa: BLE001
+                failed += 1
+                log(f"    ERR delete {i[:8]}: {e}")
+
+    # ---- verify by effect, not by exit code ----------------------------------
+    after = _req(f"{V2}/ready", timeout=30).get("documents", 0)
+    log(f"    v2 docs {n2} -> {after} (expected +{added}-{deleted} = {n2+added-deleted})")
+    ok = after == n2 + added - deleted
+    if not ok:
+        log("WARN post-sync count does not match the expected delta — investigate before trusting v2")
+
+    log(f"=== done: +{added} ~{updated} -{deleted} failed={failed} "
+        f"in {time.time()-t0:.1f}s")
+    return 0 if (failed == 0 and ok) else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
