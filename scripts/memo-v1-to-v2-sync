@@ -26,17 +26,38 @@ the topology where it would be destructive.
 ═══════════════════════════════════════════════════════════════════════════════
 ⭐ WHY THIS IS NOT A DATABASE COPY
 ═══════════════════════════════════════════════════════════════════════════════
-V1 embeds with `text-embedding-3-small` at 1536 dims. V2 embeds with self-hosted
-`qwen3-embedding-4b` at 2560. **Cosine between two models is meaningless, not
-merely noisier** — so vectors cannot be copied, only regenerated. This script
-therefore ships *content* and lets V2 embed it. Consequences you must respect:
+V1 embeds with `text-embedding-3-small` at 1536 dims. V2 embeds with
+`openai/text-embedding-3-large` at 3072. **Cosine between two models is
+meaningless, not merely noisier** — so vectors cannot be copied, only
+regenerated. This script therefore ships *content* and lets V2 embed it.
 
-  · it is slower than a file copy, and bounded by the LAN embedding service;
-  · if that service is down, writes fail — and this script must EXIT NON-ZERO
-    rather than log a tidy "0 synced" (see the empty-source rule below);
-  · a partially-embedded corpus scores nonsense silently, which is exactly what
-    the 2560-vs-1536 dimension split is designed to make impossible: sqlite-vec
-    REJECTS a mismatched insert instead of quietly accepting it.
+⛔ **CORRECTED 2026-08-10 — AND THE CORRECTION IS THE POINT.** This block said
+V2 used self-hosted `qwen3-embedding-4b` at 2560 on the LAN. **It does not, and
+never has.** `src/memo/config.py` on main *specifies* qwen3/2560, but the running
+container was built from the older clone and reports
+`text-embedding-3-large / 3072 / https://openrouter.ai/api/v1`. Confirmed from
+the data, not the config: all **26,329** chunks in v2 carry
+`embedding_model = openai/text-embedding-3-large`.
+
+⭐ **I read the INTENDED config and asserted it as the DEPLOYED one.** The same
+error shape as three others in one day — `py_compile` for an import, a working
+tree for an image, a settings file for a live process. **A config file states an
+intention; only the running process states a fact.**
+
+⚠️ **OPERATIONAL CONSEQUENCE:** every doc this script syncs is embedded through a
+**paid external API**, and after cutover every fleet *search* would be too. That
+is a live dependency and a per-query cost, not a detail. Raised with Ben
+2026-08-10; a rebuild from main would move it to the free LAN service at the
+price of re-embedding the whole corpus.
+
+Consequences you must respect either way:
+
+  · it is slower than a file copy, and bounded by the embedding provider;
+  · if that provider is down or rate-limited, writes fail — and this script must
+    EXIT NON-ZERO rather than log a tidy "0 synced" (see the empty-source rule);
+  · a partially-embedded corpus scores nonsense silently. The dimension split
+    (3072 vs 1536) is what makes that loud instead: sqlite-vec REJECTS a
+    mismatched insert rather than quietly accepting it.
 
 ═══════════════════════════════════════════════════════════════════════════════
 ⭐ ID PRESERVATION — THE THING THAT MAKES THIS IDEMPOTENT

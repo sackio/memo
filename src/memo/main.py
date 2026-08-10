@@ -30,8 +30,6 @@ from memo.models import (
     AutoStoreResponse,
     ContextRequest,
     ContextResponse,
-    CopyMoveRequest,
-    CopyMoveResponse,
     DeleteResponse,
     Document,
     SearchRequest,
@@ -522,49 +520,6 @@ async def memo_delete(id: str, db_path: str | None = None) -> dict:
     """
     deleted = await db.delete(db_path=db_path, doc_id=id)
     return {"deleted": deleted}
-
-
-@mcp.tool()
-async def memo_copy(
-    id: str,
-    to_db_path: str | None = None,
-    from_db_path: str | None = None,
-) -> dict | None:
-    """NO-OP since the 2026-06-29 single-global refactor — there is only one
-    database, so there is nowhere to copy TO.
-
-    Returns {id: <the same id>, copied: false, reason: "single_global_db"} if
-    the memo exists, or {copied: false, reason: "not_found"} if it doesn't.
-    It does NOT duplicate the memo and never has since June. The id coming back
-    is the ORIGINAL — do not read it as a new copy.
-    """
-    new_id = await db.copy(from_db_path=from_db_path, doc_id=id, to_db_path=to_db_path)
-    if not new_id:
-        return {"copied": False, "reason": "not_found", "requested_id": id}
-    # The response carries the truth because the docstring can't: MCP tool
-    # descriptions are cached per session at startup, so a long-running session
-    # still reads the pre-2026-07-30 text promising a new uuid. The response is
-    # the only channel that reaches a caller with stale docs.
-    return {"id": new_id, "copied": False, "reason": "single_global_db"}
-
-
-@mcp.tool()
-async def memo_move(
-    id: str,
-    to_db_path: str | None = None,
-    from_db_path: str | None = None,
-) -> dict | None:
-    """NO-OP since the 2026-06-29 single-global refactor — there is only one
-    database, so there is nowhere to move TO.
-
-    Returns {id: <the same id>, moved: false, reason: "single_global_db"} if the
-    memo exists, or {moved: false, reason: "not_found"} if it doesn't. The memo
-    is not relocated and nothing is deleted.
-    """
-    new_id = await db.move(from_db_path=from_db_path, doc_id=id, to_db_path=to_db_path)
-    if not new_id:
-        return {"moved": False, "reason": "not_found", "requested_id": id}
-    return {"id": new_id, "moved": False, "reason": "single_global_db"}
 
 
 @mcp.tool()
@@ -1692,22 +1647,6 @@ async def update_document(doc_id: str, req: UpdateRequest, request: Request):
 async def delete_document(doc_id: str, db_path: str | None = Query(default=None)):
     deleted = await db.delete(db_path=db_path, doc_id=doc_id)
     return DeleteResponse(deleted=deleted)
-
-
-@app.post("/documents/{doc_id}/copy", response_model=CopyMoveResponse)
-async def copy_document(doc_id: str, req: CopyMoveRequest):
-    new_id = await db.copy(from_db_path=req.from_db_path, doc_id=doc_id, to_db_path=req.to_db_path)
-    if new_id is None:
-        raise HTTPException(status_code=404, detail="Document not found")
-    return CopyMoveResponse(id=new_id)
-
-
-@app.post("/documents/{doc_id}/move", response_model=CopyMoveResponse)
-async def move_document(doc_id: str, req: CopyMoveRequest):
-    new_id = await db.move(from_db_path=req.from_db_path, doc_id=doc_id, to_db_path=req.to_db_path)
-    if new_id is None:
-        raise HTTPException(status_code=404, detail="Document not found")
-    return CopyMoveResponse(id=new_id)
 
 
 @app.post("/search-passages")

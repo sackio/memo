@@ -10,11 +10,18 @@ would have meant reporting either a lost memo or a successful correction, both
 wrong. Session-ids and memo-ids are both 36-char UUIDs, so passing the wrong
 KIND of id lands in the same undifferentiated null.
 
-memo_copy/memo_move are the sharper case: they have been no-ops since the
-2026-06-29 single-global refactor while returning {id: ...}, which reads as a
-successful duplicate. The response has to carry that truth because MCP tool
-descriptions are cached per session at startup — a corrected docstring never
-reaches an already-running session, but a corrected response does.
+memo_copy/memo_move were the sharper case: no-ops since the 2026-06-29
+single-global refactor that still returned {id: ...}, which reads as a
+successful duplicate. They were made to return an honest discriminator on
+2026-07-30 — and REMOVED entirely on 2026-08-10, which is the better fix.
+
+⭐ The lesson survives the tools: making a misleading response honest is a
+mitigation; deleting the thing that could only ever mislead is a cure. A tool
+whose every successful call means "I did nothing" costs tool-list context in
+every session on every host and invites callers to reach for it. Prefer removal
+once a capability is provably inert — but note that removal only reaches a
+session when it next restarts, because MCP tool lists are cached at startup.
+That caching is exactly why the honest-response fix was worth making first.
 """
 
 import asyncio
@@ -70,41 +77,3 @@ def test_update_success_carries_the_same_discriminator(existing_memo):
     assert result["id"] == "abc", "the memo's own fields survive"
     assert result["content"] == "hello"
 
-
-def test_copy_does_not_pretend_to_have_duplicated_anything(monkeypatch):
-    async def _same_id(**_kwargs):
-        return "abc"
-
-    monkeypatch.setattr(main.db, "copy", _same_id)
-
-    result = _run(main.memo_copy(id="abc"))
-
-    assert result["copied"] is False, "copy has been a no-op since 2026-06-29"
-    assert result["reason"] == "single_global_db"
-    assert result["id"] == "abc", "the id returned is the ORIGINAL, not a new copy"
-
-
-def test_move_does_not_pretend_to_have_moved_anything(monkeypatch):
-    async def _same_id(**_kwargs):
-        return "abc"
-
-    monkeypatch.setattr(main.db, "move", _same_id)
-
-    result = _run(main.memo_move(id="abc"))
-
-    assert result["moved"] is False
-    assert result["reason"] == "single_global_db"
-
-
-@pytest.mark.parametrize("tool,verb", [("memo_copy", "copied"), ("memo_move", "moved")])
-def test_copy_and_move_distinguish_missing_from_no_op(monkeypatch, tool, verb):
-    async def _missing(**_kwargs):
-        return None
-
-    monkeypatch.setattr(main.db, tool.replace("memo_", ""), _missing)
-
-    result = _run(getattr(main, tool)(id="nope"))
-
-    assert result[verb] is False
-    assert result["reason"] == "not_found", "a missing memo is not the same as a no-op"
-    assert "id" not in result, "no id should be returned for a memo that isn't there"

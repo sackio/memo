@@ -1126,31 +1126,6 @@ async def search_multi(
     return merged[:limit]
 
 
-async def copy(from_db_path: str | None, doc_id: str, to_db_path: str | None) -> str | None:
-    # 2026-06-29 refactor: both paths resolve to the single global DB.
-    # Copy is a no-op now — the doc is already where the caller wants it.
-    src = _resolve_path(from_db_path)
-    dst = _resolve_path(to_db_path)
-    if src == dst:
-        # Verify the doc exists; return its id if so, else None.
-        conn = _get_or_create_conn(src)
-        row = conn.execute("SELECT id FROM documents WHERE id = ?", (doc_id,)).fetchone()
-        return row["id"] if row else None
-    return await asyncio.to_thread(_sync_copy, src, doc_id, dst)
-
-
-async def move(from_db_path: str | None, doc_id: str, to_db_path: str | None) -> str | None:
-    # 2026-06-29 refactor: both paths resolve to the single global DB.
-    # Move is a no-op now (the doc is already at the destination).
-    src = _resolve_path(from_db_path)
-    dst = _resolve_path(to_db_path)
-    if src == dst:
-        conn = _get_or_create_conn(src)
-        row = conn.execute("SELECT id FROM documents WHERE id = ?", (doc_id,)).fetchone()
-        return row["id"] if row else None
-    return await asyncio.to_thread(_sync_move, src, doc_id, dst)
-
-
 def _sync_recount_tokens(db_path: str) -> dict:
     """Recalculate token_count for docs where token_count=0 but content is non-empty."""
     conn = _get_or_create_conn(db_path)
