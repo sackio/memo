@@ -431,10 +431,34 @@ def _matches_filters(doc: dict, tags: list[str], after: float | None, before: fl
 # --- Sync DB operations (called via asyncio.to_thread) ---
 
 def _sync_store(db_path: str, content: str, title: str | None, tags: list[str],
-                metadata: dict, embedding: list[float]) -> str:
+                metadata: dict, embedding: list[float],
+                doc_id: str | None = None,
+                created_at: float | None = None,
+                updated_at: float | None = None) -> str:
+    """`doc_id`/`created_at`/`updated_at` exist for ONE caller: the v1<->v2 mirror.
+
+    ⭐ WHY IDS MUST BE PRESERVABLE. memo ids are a public reference format — rewarm
+    pins cite them, memos cite other memos by id, agents pass them between seats.
+    A mirror that mints fresh ids looks correct in every count and every diff, and
+    then every one of those references 404s the moment the mirror is promoted to
+    serve :8000. Measured 2026-08-10: doc `2ef1eabe` was 200 on v1 and 404 on v2,
+    across 123 docs and growing hourly.
+
+    ⭐ WHY TIMESTAMPS TOO. Without them every mirrored doc claims it was created
+    the moment it was copied, which silently rewrites the age of the corpus. Age
+    is load-bearing here — recency ranking, and `valid_from` below — which is
+    exactly why the standing operator rule is that age alone must never denote
+    supersession. A mirror that fabricates ages makes that rule unenforceable.
+
+    ⛔ NOT general-purpose client fields. A caller supplying an id that already
+    exists gets an IntegrityError from the primary key, which the endpoint turns
+    into a 409 rather than silently overwriting someone else's document.
+    """
     conn = _get_or_create_conn(db_path)
-    doc_id = str(uuid.uuid4())
+    doc_id = doc_id or str(uuid.uuid4())
     now = time()
+    created = created_at if created_at is not None else now
+    updated = updated_at if updated_at is not None else now
     token_count = _count_tokens(content)
     # valid_from MUST be set explicitly. Migration 001 adds the column with
     # `NOT NULL DEFAULT 0` and backfills existing rows once, but an INSERT that
@@ -444,7 +468,8 @@ def _sync_store(db_path: str, content: str, title: str | None, tags: list[str],
     conn.execute(
         "INSERT INTO documents (id, content, title, tags, metadata, token_count, created_at, updated_at, valid_from) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (doc_id, content, title, json.dumps(tags), json.dumps(metadata), token_count, now, now, now),
+        (doc_id, content, title, json.dumps(tags), json.dumps(metadata), token_count,
+         created, updated, created),
     )
     conn.execute(
         "INSERT INTO document_embeddings (doc_id, embedding) VALUES (?, ?)",
@@ -791,9 +816,13 @@ def _sync_list(db_path: str, tags: list[str], limit: int, after: float | None,
 # --- Async wrappers ---
 
 async def store(db_path: str | None, content: str, title: str | None,
-                tags: list[str], metadata: dict, embedding: list[float]) -> str:
+                tags: list[str], metadata: dict, embedding: list[float],
+                doc_id: str | None = None,
+                created_at: float | None = None,
+                updated_at: float | None = None) -> str:
     path = _resolve_path(db_path)
-    return await asyncio.to_thread(_sync_store, path, content, title, tags, metadata, embedding)
+    return await asyncio.to_thread(_sync_store, path, content, title, tags, metadata,
+                                   embedding, doc_id, created_at, updated_at)
 
 
 def _sync_search_passages(db_path: str, embedding: list[float], limit: int,

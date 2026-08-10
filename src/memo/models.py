@@ -56,6 +56,13 @@ class StoreRequest(PermissiveRequest):
     tags: list[str] = []
     metadata: dict[str, Any] = {}
     db_path: str | None = None
+    # Mirror-only fields — see db._sync_store for why they exist. A mirror that
+    # mints fresh ids passes every count and diff, then 404s every cited id the
+    # moment it is promoted to serve :8000. Supplying an id that already exists
+    # is a 409, never a silent overwrite.
+    id: str | None = None
+    created_at: float | None = None
+    updated_at: float | None = None
 
 
 class StoreResponse(BaseModel):

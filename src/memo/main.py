@@ -1,4 +1,5 @@
 import asyncio
+import sqlite3
 import contextlib
 import hashlib
 import logging
@@ -975,14 +976,24 @@ async def store_document(req: StoreRequest, request: Request):
         raise HTTPException(status_code=422, detail=str(e))
     _t0 = _time.time()
     embedding = await embeddings.embed_document(req.content)
-    doc_id = await db.store(
-        db_path=req.db_path,
-        content=req.content,
-        title=req.title,
-        tags=req.tags,
-        metadata=req.metadata,
-        embedding=embedding,
-    )
+    try:
+        doc_id = await db.store(
+            db_path=req.db_path,
+            content=req.content,
+            title=req.title,
+            tags=req.tags,
+            metadata=req.metadata,
+            embedding=embedding,
+            doc_id=req.id,
+            created_at=req.created_at,
+            updated_at=req.updated_at,
+        )
+    except sqlite3.IntegrityError as e:
+        # An explicit `id` that already exists. 409, NOT a silent overwrite —
+        # the mirror must never clobber a document it did not create.
+        raise HTTPException(
+            status_code=409, detail=f"document id already exists: {req.id}",
+        ) from e
     await db.log_query_async(
         req.db_path, "store", query=req.title or (req.content or "")[:200],
         tags=req.tags, result_ids=[doc_id],
