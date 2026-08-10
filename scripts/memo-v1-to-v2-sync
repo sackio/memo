@@ -147,6 +147,9 @@ def main() -> int:
                     help="Refuse to run if v1 reports fewer than this. An empty or "
                          "tiny source is a FAILURE, not a no-op cycle.")
     ap.add_argument("--limit", type=int, default=0, help="Cap writes this run (0 = no cap).")
+    ap.add_argument("--max-deletes", type=int, default=200,
+                    help="Blast-radius cap. If more docs look orphaned than this, delete "
+                         "NOTHING and fail loudly. See the cutover hazard below.")
     args = ap.parse_args()
 
     t0 = time.time()
@@ -294,6 +297,23 @@ def main() -> int:
         except Exception as e:  # noqa: BLE001
             failed += 1
             log(f"    ERR update {src_id[:8]}->{tgt_id[:8]}: {e}")
+
+    # ⛔⛔ THE CUTOVER HAZARD — READ BEFORE RAISING --max-deletes.
+    # This script assumes V1 IS THE LIVE STORE. The moment :8000 serves v2, that
+    # assumption inverts: v1 freezes, v2 takes the writes, and every doc written
+    # to v2 afterwards is (a) absent from v1 and (b) carries no sync_src_id — so
+    # it is classified ORPHANED and, with --mirror-deletes, DELETED. The hourly
+    # job would quietly eat live production writes, one hour at a time.
+    #
+    # The runbook says "disable this cron as step 1 of cutover". A runbook step
+    # that must be remembered is a step that will eventually be forgotten, so the
+    # cap below makes the failure LOUD instead of silent. Normal steady-state
+    # orphan counts are single digits; the historic one-off was 89.
+    if args.mirror_deletes and len(orphans) > args.max_deletes:
+        log(f"FATAL {len(orphans)} orphans exceeds --max-deletes {args.max_deletes}. "
+            f"Deleting NOTHING. If :8000 now serves v2, this job must be DISABLED — "
+            f"it is about to delete live writes. Adds/updates above were applied.")
+        return 1
 
     if args.mirror_deletes:
         for i in orphans:
