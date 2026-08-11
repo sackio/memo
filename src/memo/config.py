@@ -110,14 +110,37 @@ class Settings(BaseSettings):
     # subscription — never a per-token API, and never `claude -p`, which bills
     # as API usage.
     #
-    # DEFAULT STAYS `null` even though the claude_session adapter now exists
-    # (T085a deviation, 2026-07-30). Flipping the default would make the v2
-    # container immediately try to reach a `memo-llm` session that HAS NOT BEEN
-    # CREATED on this fleet yet, and — working exactly as designed — DM the
-    # `agents` supervisor about the outage. Shipping a default that pages the
-    # supervisor about missing infrastructure is not a good default.
+    # ⚠️ CORRECTED 2026-08-10. This comment previously said "the claude_session
+    # adapter now exists" and told you to set `MEMO_LLM_PROVIDER=claude_session`.
+    # BOTH WERE FALSE: that adapter was REMOVED on 2026-07-30 (see the note in
+    # providers/llm/__init__.py, which was accurate the whole time), so following
+    # this comment set an unknown provider name — which falls back to `null` with
+    # a warning and looks exactly like leaving it alone. ⭐ A stale comment that
+    # names a specific symbol is worse than no comment: the specificity reads as
+    # evidence somebody checked. Third time this file's comments were trusted over
+    # the code in one week.
     #
-    # To turn it on, once `memo-llm` exists:  MEMO_LLM_PROVIDER=claude_session
+    # ⭐ AND THERE IS NO REPLACEMENT ADAPTER, BY DESIGN. Do not write one.
+    #
+    # RECALL SYNTHESIS IS THE CALLER'S JOB. Every caller of `/recall` is itself a
+    # Claude Code session with subagents on the Max subscription: it is already
+    # running, already holds the question, and can spawn a background subagent that
+    # reconciles the candidates and returns only the conclusion. A server-side LLM
+    # would add a network hop, a queue, and a dependency that can be down — to do
+    # worse what the caller does locally. The `/recall` skill implements this.
+    #
+    # ⚠️ 2026-08-10: an `atc_session` adapter (memo → `memo-llm` seat → subagent →
+    # ATC reply zone) was written and then REMOVED UNSHIPPED on the same day, once
+    # Ben pointed out the caller already is the LLM. ⭐ It was a re-implementation
+    # of exactly what had been deleted on 07-30 — written by someone who had read
+    # the note recording that deletion an hour earlier and filed it as stale trivia.
+    # **A comment saying "we deliberately removed X" is a design decision, not
+    # archaeology.** If a third adapter ever seems necessary, the question to answer
+    # first is why the caller cannot do it.
+    #
+    # ⇒ `null` is not a placeholder awaiting a real provider. It is the setting that
+    # makes the mediators degrade and report it, which is what lets the caller know
+    # to synthesise. The `degraded:` anomaly is the interface.
     memo_llm_provider: str = "null"
     memo_llm_timeout_seconds: float = 10.0
     # Fallback fires when more than this many candidates survive dedup +
