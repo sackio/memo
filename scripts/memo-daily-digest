@@ -166,9 +166,26 @@ def analyze(docs):
     # Source-provenance signal — Ben's ground-truth mandate needs source-tag discipline
     # (most memos DO have rich topic tags — this counts memos missing the *-sourced suffix
     # that memo-minder A.6 mandates so per-source counters + digest breakdown can work).
+    # ⛔ DO NOT restore the old wording: "… memo-minder A.6.5b tag-fixup will infer +
+    # backfill". That was a promise the tool CANNOT keep, and it re-fired every single day
+    # while nothing happened. Measured 2026-08-11: tag-fixup scanned 239 memos and applied
+    # 0/0 — correctly, because its inference rules only recognise memo-minder's OWN title
+    # formats ("Git pulse:", "Voicemail:", "SMS thread:", "# Session UUID"). The memos in
+    # this bucket are seat-authored with free-form titles, which no rule matches.
+    # ⭐ A flag that names a remedy nobody performs reads as "handled" and is worse than
+    # a flag that names the gap — this one made a standing defect look like a queue.
+    # ⛔ And do NOT "fix" it by teaching tag-fixup to guess: a fabricated source tag is
+    # worse than an absent one, because it looks authoritative. Provenance has to be
+    # stamped at WRITE time (v2's memo_store already stamps `provenance-pending` on its own
+    # MCP path — 13 of 235 recent memos), not inferred afterwards from a title.
     nsc = result["ingest_24h"].get('no-source-suffix', 0)
     if total_ingest > 20 and nsc / max(total_ingest,1) > 0.5:
-        result["health_flags"].append(f"⚠️ {nsc}/{total_ingest} ({nsc*100//total_ingest}%) new memos lack *-sourced provenance tag — memo-minder A.6.5b tag-fixup will infer + backfill")
+        result["health_flags"].append(
+            f"⚠️ {nsc}/{total_ingest} ({nsc*100//total_ingest}%) new memos lack a *-sourced "
+            f"provenance tag. NOT self-healing: tag-fixup only recognises memo-minder's own "
+            f"title formats, so seat-authored memos never match it and it reports 0/0. The "
+            f"fix is write-time stamping (v2 memo_store's `provenance-pending`), not "
+            f"after-the-fact inference. See memo 8ffd0a3b / cycle 2026-08-11.")
 
     return result
 
