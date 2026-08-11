@@ -1,0 +1,162 @@
+#!/bin/bash
+# memo-daily-digest-dm — run the digest + DM Ben via ATC HTTP.
+#
+# Wires the memo-daily-digest output to ben's Slack via the ATC broker's HTTP
+# messages endpoint (server4:3030). No in-session cron dependency — runs as
+# system crontab so it survives session death (the class of failure that
+# caused the 2026-07-23→26 gap).
+#
+# Cron:  30 6 * * * /mnt/nas/data/code/memo/scripts/memo-daily-digest-dm
+# Runs after memo-minder (06:17) + memo-perproject-reconcile (06:27) so their
+# outputs land in the 24h window the digest reports.
+
+set -o pipefail
+
+# --dry-run: assemble the payload, print it to stdout with the above-fold size,
+# and send NOTHING. Exists so the fold can be checked against a REAL digest
+# without DMing Ben — the reason the length bounce went unnoticed is that the
+# only way to exercise this path was to fire it at him for real.
+# --reuse-digest: skip regenerating the digest, use today's existing file.
+DRY_RUN=0; REUSE=0
+for a in "$@"; do
+  case "$a" in
+    --dry-run) DRY_RUN=1 ;;
+    --reuse-digest) REUSE=1 ;;
+    *) echo "unknown argument: $a" >&2; exit 64 ;;
+  esac
+done
+
+DIGEST_FILE=/tmp/memo-daily-digest-$(date +%Y%m%d).txt
+LOG=/tmp/memo-daily-digest-dm.log
+
+if [ "$DRY_RUN" -eq 0 ]; then
+  exec >>"$LOG" 2>&1
+fi
+# NOT `${DRY_RUN:+...}` — DRY_RUN is the string "0" when off, which is non-empty,
+# so `:+` would expand on every run and label real fires as dry ones.
+[ "$DRY_RUN" -eq 1 ] && LABEL=" (dry-run)" || LABEL=""
+echo "=== $(date -Iseconds) fire${LABEL} ==="
+
+# 1. Run the digest
+if [ "$REUSE" -eq 1 ] && [ -s "$DIGEST_FILE" ]; then
+  echo "reusing existing $DIGEST_FILE"
+else
+  /mnt/nas/data/code/memo/scripts/memo-daily-digest --file "$DIGEST_FILE" \
+    || { echo "ERR: digest script failed"; exit 1; }
+fi
+
+# 2. Prepend a TL;DR line
+CORPUS=$(grep -oP 'Corpus: \K[0-9]+' "$DIGEST_FILE" || echo "?")
+TOTAL_INGEST=$(awk '/📥 INGEST/,/^$/' "$DIGEST_FILE" | grep -oP 'TOTAL\s+\K[0-9]+' | head -1)
+TOTAL_RECON=$(awk '/🔄 RECONCILE/,/^$/' "$DIGEST_FILE" | grep -oP 'TOTAL\s+\K[0-9]+' | head -1)
+TOTAL_PRUNE=$(awk '/🗑 PRUNE/,/^$/' "$DIGEST_FILE" | grep -oP 'TOTAL\s+\K[0-9]+' | head -1)
+# Excludes the "🚨 HEALTH FLAGS" section header, which carries a flag glyph but is
+# not itself a flag — counting it made the TL;DR claim 3 flags while listing 2.
+FLAGS=$(grep '🚨\|🔴\|⚠️' "$DIGEST_FILE" | grep -vc 'HEALTH FLAGS' || echo 0)
+
+TLDR="TL;DR — memo daily digest $(date +%Y-%m-%d) · corpus ${CORPUS:-?} · ingest ${TOTAL_INGEST:-0} · reconcile ${TOTAL_RECON:-0} · prune ${TOTAL_PRUNE:-0} · flags ${FLAGS:-0}"
+
+# 3. Assemble the DM payload — FOLDED.
+#
+# ⛔ THE WHOLE DIGEST MUST NEVER GO ABOVE THE FOLD. Ben's Slack budget is 225
+# tokens above a line containing only `---thread---`, and an over-budget message
+# with no fold is REJECTED OUTRIGHT, not trimmed — he sees nothing at all.
+#
+# ⚠️ AND THE SENDER CANNOT SEE THAT HAPPEN. The broker returns 201 for a message
+# the bridge later refuses, so this script logged `POST OK: 201` on 2026-08-11
+# for a digest Ben never received. The 2026-07-29 note below records the SAME
+# shape (broker accepted, bridge dropped, log said fine) — that is twice now.
+# ⭐ A 201 from the broker is ACCEPTANCE, not DELIVERY.
+#
+# Above the fold: the TL;DR plus the health flags, because the flags are the only
+# part that ever asks anything of him. Everything else is reference and belongs
+# below, where it costs him nothing unless he opens it.
+DIGEST_BODY=$(cat "$DIGEST_FILE")
+DM_TEXT=$(TLDR="$TLDR" DIGEST_BODY="$DIGEST_BODY" python3 - <<'PYEOF'
+import os, re
+
+tldr = os.environ["TLDR"]
+body = os.environ["DIGEST_BODY"]
+
+# Health flags = the lines carrying a flag glyph, minus the section header.
+flags = [ln.strip() for ln in body.splitlines()
+         if re.search(r'[🚨🔴⚠️]', ln) and 'HEALTH FLAGS' not in ln]
+
+# Hard sender-side guard. The fold chooses WHERE the cut falls, not WHETHER
+# there is a limit — the part above it still has to fit 225 tokens. Budget in
+# chars (~4/token) with headroom, and drop flags until it fits rather than
+# trusting that today's digest happens to be short. A digest that grows a new
+# flag section must not be able to silently reintroduce the bounce.
+BUDGET = 700
+
+def above(fs, elided=0):
+    parts = [tldr]
+    if fs:
+        parts.append("")
+        parts += [f"· {f[:200]}" for f in fs]
+    if elided:
+        parts.append(f"· (+{elided} more flag(s) below)")
+    return "\n".join(parts)
+
+kept = list(flags)
+while kept and len(above(kept, len(flags) - len(kept))) > BUDGET:
+    kept.pop()
+
+print(above(kept, len(flags) - len(kept)))
+print()
+print("---thread---")
+print()
+print(body)
+PYEOF
+)
+
+if [ "$DRY_RUN" -eq 1 ]; then
+  ABOVE=$(printf '%s' "$DM_TEXT" | sed -n '1,/^---thread---$/p' | head -n -1)
+  echo "--- ABOVE THE FOLD ($(printf '%s' "$ABOVE" | wc -c) chars, ~$(( $(printf '%s' "$ABOVE" | wc -c) / 4 )) tokens; limit 225) ---"
+  printf '%s\n' "$ABOVE"
+  echo "--- fold marker present: $(printf '%s' "$DM_TEXT" | grep -c '^---thread---$') ---"
+  echo "=== dry-run: nothing sent ==="
+  exit 0
+fi
+
+# 4. POST to the ATC broker's messages endpoint (server4:3030)
+#    kind:"info" (not "action") — it's a report, not a work-ask.
+#    Falls back to a raw payload file at /tmp if the broker is unreachable.
+#    ⛔ DM_TEXT is passed by ENVIRONMENT, not interpolated into the heredoc.
+#    The old form was `dm_text = """$DM_TEXT"""` with an unquoted heredoc, so the
+#    digest's own text was pasted into Python source — a memo title containing a
+#    quote, a backslash or `"""` would have produced a SyntaxError or silently
+#    truncated the payload, and the failure would have looked like a bad digest
+#    rather than a quoting bug.
+DM_TEXT="$DM_TEXT" python3 - <<'PYEOF'
+import json, urllib.request, urllib.error, os, sys
+dm_text = os.environ["DM_TEXT"]
+body = json.dumps({
+    "to": "slack:U0NGEHS2J",
+    "from": "memo",       # 2026-07-29 fix: "memo-daily-digest" was unregistered ATC sender-name
+                          # → broker accepted the POST but Slack-bridge did not relay it (unknown from → silent drop).
+                          # "memo" is the registered session-id, which routes correctly through the bridge.
+    "kind": "dm",
+    "priority": "info",
+    "subject": "Memo daily digest",
+    "content": dm_text,
+})
+try:
+    req = urllib.request.Request("http://server4:3030/messages", data=body.encode(),
+        headers={"Content-Type": "application/json"}, method="POST")
+    with urllib.request.urlopen(req, timeout=15) as r:
+        # ⚠️ "ACCEPTED", not "OK". This status says the BROKER took the message.
+        # The Slack bridge relays it afterwards and can still refuse it (length,
+        # unknown sender), which this call cannot observe. Logging it as OK is
+        # what hid a non-delivery on 2026-08-11 and again on 2026-07-29.
+        print("POST ACCEPTED BY BROKER (not confirmed delivered):",
+              r.status, r.read()[:200])
+except (urllib.error.URLError, TimeoutError) as e:
+    print(f"POST FAIL: {e}", file=sys.stderr)
+    fallback = f"/tmp/memo-daily-digest-dm-failed-{os.getpid()}.txt"
+    with open(fallback, "w") as f: f.write(dm_text)
+    print(f"Wrote fallback: {fallback}", file=sys.stderr)
+    sys.exit(2)
+PYEOF
+
+echo "=== done ==="

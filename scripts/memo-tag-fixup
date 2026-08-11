@@ -1,0 +1,131 @@
+#!/usr/bin/env python3
+"""memo-tag-fixup — infer + backfill missing *-sourced provenance tags on recent memos.
+
+Fleet writes rarely follow memo-minder A.6's source-tag mandate — most memos
+carry rich topic/project tags but miss the `<source>-sourced` suffix that
+the daily digest + per-source counters depend on. This script infers the
+source from title/content patterns and PATCHes the tag in.
+
+Rules (LLM-free — pure pattern match, safe to fire daily):
+  title starts with "Git pulse:"                         → git-sourced
+  title starts with "Backfill checkpoint"                 → backfill-checkpoint (already tagged usually)
+  content starts with "# Session UUID"  or has "session_id:"  → session-sourced
+  content contains "Gmail msg id:" or "email-sourced"    → email-sourced (verify)
+  title starts with "Voicemail:"                          → voicemail-sourced
+  title starts with "SMS thread:"                         → sms-sourced
+  title starts with "Call with"                           → sms-sourced (phony)
+  title starts with "Operator decision:" or "Operator commitment:" → dm-sourced
+  title starts with "Git pulse:" already handled           → git-sourced
+  content contains "authored_by:" or "assistant-sourced"   → assistant-sourced (verify)
+  title contains "commit " with hex sha                    → git-sourced
+
+Skip: memos already carrying any *-sourced tag; memos tagged historical/reap-candidate.
+
+Usage:
+  memo-tag-fixup --dry-run    # default; report proposed patches, no writes
+  memo-tag-fixup --apply      # actually PATCH tags
+  memo-tag-fixup --window-days N  # scan last N days (default 3)
+
+Cron: intended for daily 06:37 EDT on server4 (after memo-minder 06:17 lands).
+Ships with memo-minder as its downstream tag-hygiene pass.
+"""
+import argparse, json, re, sys, urllib.request
+from datetime import datetime, timedelta
+
+MEMO_URL = "http://server4:8000"
+SOURCE_SUFFIXES = {
+    "session-sourced","email-sourced","sms-sourced","voicemail-sourced",
+    "atc-sourced","dm-sourced","git-sourced","automemory-sourced",
+    "assistant-sourced","backfill-checkpoint","git-pulse-rollup",
+}
+
+# Pattern → tag to add
+RULES = [
+    (re.compile(r"^Git pulse:", re.I), "git-sourced"),
+    (re.compile(r"^Backfill checkpoint", re.I), "backfill-checkpoint"),
+    (re.compile(r"^Voicemail:", re.I), "voicemail-sourced"),
+    (re.compile(r"^SMS thread:", re.I), "sms-sourced"),
+    (re.compile(r"^Call with", re.I), "sms-sourced"),
+    (re.compile(r"^Operator (decision|commitment):", re.I), "dm-sourced"),
+    (re.compile(r"^atc[- ]sourced ", re.I), "atc-sourced"),
+    (re.compile(r"^Assistant (Inbox|Calendar|Comms|Laura) Sweep", re.I), "assistant-sourced"),
+]
+CONTENT_RULES = [
+    (re.compile(r"^# Session UUID|session_id:|session_uuid:", re.I | re.M), "session-sourced"),
+    (re.compile(r"^Gmail msg id:|thread_id:.*gmail|email_thread_id:", re.I | re.M), "email-sourced"),
+    (re.compile(r"^Voicemail from|voicemail_id:", re.I | re.M), "voicemail-sourced"),
+    (re.compile(r"^commit [0-9a-f]{7,}", re.I | re.M), "git-sourced"),
+    (re.compile(r"authored_by.*assistant|assistant-sourced", re.I), "assistant-sourced"),
+]
+
+SKIP_TAGS = {"historical","superseded","backfill-log","backfill-checkpoint","maintenance","audit-report"}
+
+
+def infer_source(memo):
+    title = memo.get("title") or ""
+    content = memo.get("content") or ""
+    for pat, tag in RULES:
+        if pat.search(title):
+            return tag
+    for pat, tag in CONTENT_RULES:
+        if pat.search(content[:2000]):
+            return tag
+    return None
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap.add_argument("--apply", action="store_true", help="Actually PATCH tags (default: dry-run)")
+    ap.add_argument("--dry-run", action="store_true", help="Explicit dry-run")
+    ap.add_argument("--window-days", type=int, default=3)
+    ap.add_argument("--verbose", action="store_true")
+    args = ap.parse_args()
+    apply_mode = args.apply and not args.dry_run
+
+    cutoff = (datetime.now() - timedelta(days=args.window_days)).timestamp()
+
+    with urllib.request.urlopen(f"{MEMO_URL}/documents?limit=15000", timeout=90) as r:
+        docs = json.loads(r.read())
+    recent = [d for d in docs if d.get("created_at", 0) > cutoff]
+    print(f"[tag-fixup] scanning {len(recent)} memos created in last {args.window_days}d (of {len(docs)} total)")
+
+    proposals = []
+    for d in recent:
+        tags = set(d.get("tags") or [])
+        if tags & SOURCE_SUFFIXES:
+            continue
+        if tags & SKIP_TAGS:
+            continue
+        inferred = infer_source(d)
+        if inferred:
+            proposals.append((d, inferred))
+
+    print(f"[tag-fixup] {len(proposals)} memos would get a source tag")
+    applied = 0
+    by_source = {}
+    for d, tag in proposals:
+        by_source[tag] = by_source.get(tag, 0) + 1
+        if args.verbose:
+            print(f"  {d['id'][:8]}  +{tag}  {(d.get('title') or '')[:70]}")
+        if apply_mode:
+            new_tags = sorted(set(d.get("tags") or []) | {tag})
+            body = json.dumps({"tags": new_tags}).encode()
+            req = urllib.request.Request(f"{MEMO_URL}/documents/{d['id']}", data=body,
+                headers={"Content-Type":"application/json"}, method="PATCH")
+            try:
+                with urllib.request.urlopen(req, timeout=15):
+                    applied += 1
+            except Exception as e:
+                print(f"  FAIL {d['id'][:8]}: {e}", file=sys.stderr)
+
+    print(f"\n[tag-fixup] proposed by source:")
+    for src, n in sorted(by_source.items(), key=lambda x: -x[1]):
+        print(f"    {src:24s}  {n}")
+    if apply_mode:
+        print(f"\n[tag-fixup] applied: {applied}/{len(proposals)}")
+    else:
+        print(f"\n[tag-fixup] DRY-RUN — no changes. Pass --apply to write.")
+
+
+if __name__ == "__main__":
+    main()

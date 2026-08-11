@@ -1,0 +1,254 @@
+#!/usr/bin/env python3
+"""memo-daily-digest — 24h reconciliation + ingest + pruning report for Ben.
+
+Runs after memo-minder / L2 perproject / L3b infra-probe crons (07:30 EDT).
+Emits a compact text digest covering:
+  - Ingest by source (new memos in last 24h)
+  - Reconciliations by layer (L1 SessionStop / L2 perproject / L3b infra / A.6.5)
+  - Pruning stats (deletes, supersedes, historicals, banners)
+  - Health flags (any layer with 0 output on 100+ opportunities → suspect)
+  - Corpus growth rate
+
+Output modes:
+  --stdout  (default)  — print to stdout
+  --file PATH          — write to file
+  --json               — machine-readable JSON
+
+Usage:
+  memo-daily-digest                    # human-readable to stdout
+  memo-daily-digest --file /tmp/x.txt  # write to file for atc_send
+  memo-daily-digest --json             # JSON for programmatic consumers
+
+Consumed by the memo session's daily cron end-step which atc_sends the output to
+slack:U0NGEHS2J. Not a cron-daemon itself.
+"""
+import argparse, json, os, sys, urllib.request, urllib.error
+from datetime import datetime, timedelta
+from collections import defaultdict
+
+MEMO_URL = os.environ.get("MEMO_URL", "http://server4:8000")
+NOW = datetime.now()
+WINDOW_HOURS = 24
+WINDOW_START = (NOW - timedelta(hours=WINDOW_HOURS)).timestamp()
+
+
+def fetch_docs():
+    """Fetch full corpus. The API's `offset` parameter is IGNORED (returns the same
+    first N rows regardless), but `limit` up to ~10000 is respected. Verified
+    2026-07-28: limit=8000 returns 7304 unique docs (the real corpus size)."""
+    try:
+        with urllib.request.urlopen(f"{MEMO_URL}/documents?limit=15000", timeout=60) as r:
+            return json.loads(r.read())
+    except (urllib.error.URLError, TimeoutError) as e:
+        print(f"WARN: fetch failed: {e}", file=sys.stderr)
+        return []
+
+
+def has_source_tag(d, sfx):
+    return any(t == sfx for t in (d.get('tags') or []))
+
+
+def has_source_prefix(d, prefix):
+    return any(t.startswith(prefix) for t in (d.get('tags') or []))
+
+
+def _project_of(tags):
+    """Return the canonical project slug for a memo — first repo-/project-/bare-slug tag.
+    Collapses repo-qf-guardian-nx / repo-qf-guardian-pf etc. into `quantum-feed-worktrees` bucket
+    so the digest isn't dominated by per-worktree tag noise.
+    """
+    for t in tags:
+        if t.startswith('repo-') or t.startswith('project-'):
+            slug = t.split('-', 1)[1] if '-' in t else t
+            # Collapse quantum-feed worktree family
+            if slug.startswith('qf-') and slug not in ('qf-t115','qf-t115base','qf-t115c'):
+                return 'quantum-feed-worktrees'
+            return slug
+    return None
+
+
+def analyze(docs):
+    result = {
+        "generated_at": NOW.isoformat(timespec='seconds'),
+        "window_hours": WINDOW_HOURS,
+        "corpus_size": len(docs),
+        "ingest_24h": defaultdict(int),
+        "reconcile_24h": defaultdict(int),
+        "prune_24h": defaultdict(int),
+        "health_flags": [],
+        "per_project": defaultdict(lambda: {
+            'added': 0, 'edited': 0, 'superseded': 0,
+            'reconciled': 0, 'retagged': 0, 'total_lifetime': 0
+        }),
+    }
+
+    for d in docs:
+        ct = d.get('created_at', 0)
+        ut = d.get('updated_at', 0)
+        tags = d.get('tags') or []
+        title = d.get('title') or ''
+        content = d.get('content') or ''
+        is_new = ct >= WINDOW_START
+        is_edited = ut >= WINDOW_START and not is_new
+        project = _project_of(tags)
+
+        # Lifetime project total (context for the ratio column)
+        if project:
+            result['per_project'][project]['total_lifetime'] += 1
+
+        # INGEST — by source-tag
+        if is_new:
+            for tag_key, src in [
+                ('session-sourced','session'),
+                ('email-sourced','gmail'),
+                ('sms-sourced','sms'),
+                ('voicemail-sourced','voicemail'),
+                ('atc-sourced','atc-board'),
+                ('dm-sourced','atc-dm'),
+                ('git-sourced','git-pulse'),
+                ('automemory-sourced','auto-memory'),
+                ('backfill-checkpoint','checkpoint'),
+                ('assistant-sourced','assistant'),
+            ]:
+                if tag_key in tags:
+                    result["ingest_24h"][src] += 1
+                    break
+            else:
+                result["ingest_24h"]['no-source-suffix'] += 1
+            if project:
+                result['per_project'][project]['added'] += 1
+
+        # RECONCILE — layer signatures
+        if any(t.startswith('reconciled-') for t in tags) and ut >= WINDOW_START:
+            result["reconcile_24h"]['L1_L2_reconciled_tag'] += 1
+            if project:
+                result['per_project'][project]['reconciled'] += 1
+        if is_edited and content[:300].startswith('> Superseded'):
+            result["reconcile_24h"]['SUPERSEDE_banner_applied'] += 1
+            if project:
+                result['per_project'][project]['superseded'] += 1
+        if 'superseded' in tags and ut >= WINDOW_START:
+            result["reconcile_24h"]['superseded_tag_added'] += 1
+
+        # PRUNE — signatures
+        if is_edited and ('[UNREACHABLE]' in title or 'infra-probe-historical' in tags):
+            result["prune_24h"]['L3b_infra_banner_or_historical'] += 1
+        if is_edited and 'HISTORICAL' in title[:20]:
+            result["prune_24h"]['demoted_to_historical'] += 1
+
+        # RETAGGED signal — memo edited in window but not new + not superseded (pure tag/content edit)
+        if is_edited and project and not any(t.startswith('reconciled-') for t in tags):
+            result['per_project'][project]['edited'] += 1
+
+    result["ingest_24h"] = dict(result["ingest_24h"])
+    result["reconcile_24h"] = dict(result["reconcile_24h"])
+    result["prune_24h"] = dict(result["prune_24h"])
+    # Convert per_project defaultdict → sorted list of tuples (project, stats), by ADDED desc
+    projs = [(k, v) for k, v in result["per_project"].items() if v['added'] + v['edited'] + v['superseded'] > 0]
+    result['per_project'] = sorted(projs, key=lambda x: -(x[1]['added'] + x[1]['edited']))
+
+    # Health flags
+    total_ingest = sum(result["ingest_24h"].values())
+    total_reconcile = sum(result["reconcile_24h"].values())
+    total_prune = sum(result["prune_24h"].values())
+
+    if total_ingest > 100 and total_reconcile == 0:
+        result["health_flags"].append(f"🔴 100+ new memos but 0 reconciliations — reconcile layers not firing")
+    elif total_ingest > 50 and total_reconcile < 2:
+        result["health_flags"].append(f"⚠️ ingest {total_ingest} vs reconcile {total_reconcile} — bloat ratio {total_ingest//max(total_reconcile,1)}:1")
+
+    if result["reconcile_24h"].get('L1_L2_reconciled_tag', 0) == 0:
+        result["health_flags"].append("⚠️ L1+L2 both: 0 reconciliations (verify L1 hook wiring + L2 cron output)")
+
+    if not result["prune_24h"]:
+        result["health_flags"].append("⚠️ 0 prunes today — no infra-probe demotions, no historicals")
+
+    # Source-provenance signal — Ben's ground-truth mandate needs source-tag discipline
+    # (most memos DO have rich topic tags — this counts memos missing the *-sourced suffix
+    # that memo-minder A.6 mandates so per-source counters + digest breakdown can work).
+    nsc = result["ingest_24h"].get('no-source-suffix', 0)
+    if total_ingest > 20 and nsc / max(total_ingest,1) > 0.5:
+        result["health_flags"].append(f"⚠️ {nsc}/{total_ingest} ({nsc*100//total_ingest}%) new memos lack *-sourced provenance tag — memo-minder A.6.5b tag-fixup will infer + backfill")
+
+    return result
+
+
+def format_human(r):
+    lines = []
+    lines.append(f"═══ MEMO DAILY DIGEST — {r['generated_at']} ═══")
+    lines.append(f"Corpus: {r['corpus_size']} memos  ·  Window: last {r['window_hours']}h")
+    lines.append("")
+
+    lines.append("📥 INGEST (last 24h)")
+    if r['ingest_24h']:
+        for src, n in sorted(r['ingest_24h'].items(), key=lambda x: -x[1]):
+            lines.append(f"    {src:22s}  {n:4d}")
+        lines.append(f"    {'TOTAL':22s}  {sum(r['ingest_24h'].values()):4d}")
+    else:
+        lines.append("    (none)")
+    lines.append("")
+
+    lines.append("🔄 RECONCILE (last 24h)")
+    if r['reconcile_24h']:
+        for layer, n in sorted(r['reconcile_24h'].items(), key=lambda x: -x[1]):
+            lines.append(f"    {layer:32s}  {n:4d}")
+        lines.append(f"    {'TOTAL':32s}  {sum(r['reconcile_24h'].values()):4d}")
+    else:
+        lines.append("    (none)")
+    lines.append("")
+
+    lines.append("🗑 PRUNE (last 24h)")
+    if r['prune_24h']:
+        for layer, n in sorted(r['prune_24h'].items(), key=lambda x: -x[1]):
+            lines.append(f"    {layer:32s}  {n:4d}")
+        lines.append(f"    {'TOTAL':32s}  {sum(r['prune_24h'].values()):4d}")
+    else:
+        lines.append("    (none)")
+    lines.append("")
+
+    if r['health_flags']:
+        lines.append("🚨 HEALTH FLAGS")
+        for flag in r['health_flags']:
+            lines.append(f"    {flag}")
+        lines.append("")
+
+    if r['per_project']:
+        lines.append("🏗 PER-PROJECT ACTIVITY (24h) — sorted by added+edited")
+        lines.append(f"    {'project':26s}  {'added':>5s}  {'edited':>6s}  {'super':>5s}  {'recon':>5s}  {'recon%':>6s}  {'total':>6s}")
+        lines.append("    " + "-" * 76)
+        for proj, s in r['per_project'][:15]:
+            add, edt, sup, rec, tot = s['added'], s['edited'], s['superseded'], s['reconciled'], s['total_lifetime']
+            ratio = 100 * (rec + sup) / tot if tot else 0
+            marker = ""
+            if add >= 3 and (rec + sup) == 0: marker = " ← +growth, 0 reconcile"
+            lines.append(f"    {proj:26s}  {add:5d}  {edt:6d}  {sup:5d}  {rec:5d}  {ratio:5.1f}%  {tot:6d}{marker}")
+        lines.append("")
+        lines.append("    Columns: added (new memos), edited (non-reconcile edits), super (superseded this window),")
+        lines.append("             recon (reconcile-tagged this window), recon% (lifetime reconcile ratio), total (lifetime memo count).")
+        lines.append("    Marker ← +growth 0 reconcile: project is accumulating without pruning — reconcile-debt.")
+        lines.append("")
+
+    lines.append(f"═══ Written by /mnt/nas/data/code/memo/scripts/memo-daily-digest ═══")
+    return "\n".join(lines)
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
+    ap.add_argument("--file", help="Write digest to file instead of stdout")
+    ap.add_argument("--json", action="store_true", help="Emit JSON instead of human-readable")
+    args = ap.parse_args()
+
+    docs = fetch_docs()
+    result = analyze(docs)
+
+    out = json.dumps(result, indent=2, default=str) if args.json else format_human(result)
+    if args.file:
+        with open(args.file, 'w') as f:
+            f.write(out)
+        print(f"wrote {args.file} ({len(out)} bytes)", file=sys.stderr)
+    else:
+        print(out)
+
+
+if __name__ == "__main__":
+    main()
