@@ -66,17 +66,29 @@ async def test_store_analysis_passes_through():
 
 
 @pytest.mark.asyncio
-async def test_store_analysis_skips_when_llm_unavailable():
-    """Opportunistic capture: a missed memo is cheap, a hallucinated one is not."""
+async def test_store_analysis_errors_when_llm_unavailable():
+    """Stores NOTHING, and says so as an ERROR rather than as a judgement.
+
+    ⚠️ This test asserted `should_store is False` until the 001-branch merge.
+    That was the fail-closed *action* — which is correct and unchanged — wearing
+    the label of a decision nobody made. `/auto-store` renders it as
+    `action="skipped"`, and a caller banking state at the end of a turn reads
+    that as "nothing was worth keeping" and compacts. [v0.3.7]
+    """
     result = await auto_store.analyze_for_store("x", provider=StubLLM(None))
-    assert result["should_store"] is False
-    assert "unavailable" in result["reason"].lower()
+    assert "error" in result
+    assert result.get("should_store") is not False, (
+        "must not also carry a should_store verdict — a caller checking that "
+        "key first would never reach the error")
+    assert result["error"]["retryable"] is True
 
 
 @pytest.mark.asyncio
-async def test_store_analysis_skips_on_unparseable_reply():
+async def test_store_analysis_errors_on_unparseable_reply():
+    """An unparseable reply is a failure to hear, not a decision to skip."""
     result = await auto_store.analyze_for_store("x", provider=StubLLM("sorry, what?"))
-    assert result["should_store"] is False
+    assert "error" in result
+    assert result.get("should_store") is not False
 
 
 # --- analyze_for_merge: fails toward CREATE ---
@@ -89,21 +101,37 @@ async def test_merge_analysis_passes_through():
 
 
 @pytest.mark.asyncio
-async def test_merge_analysis_creates_when_llm_unavailable():
-    """Opposite fail direction from analyze_for_store, deliberately.
+async def test_merge_analysis_errors_when_llm_unavailable():
+    """⛔ The create-bias applies to what the model SAYS, not to whether we heard it.
 
-    A spurious extra memo is visible and mergeable later; a wrong merge
-    rewrites an existing memo's content and silently destroys it.
+    Degrading to `create` on a provider failure is the QUIETER half of the v0.3.7
+    bug: it doesn't lose a memo, it duplicates one — and a duplicate is much
+    harder to notice than an absence. The caller asked "merge or not?"; a failure
+    is not an answer.
     """
     result = await auto_store.analyze_for_merge("old", "new", provider=StubLLM(None))
-    assert result["action"] == "create"
-    assert "unavailable" in result["reason"].lower()
+    assert "error" in result
+    assert result.get("action") != "create"
 
 
 @pytest.mark.asyncio
-async def test_merge_analysis_creates_on_unparseable_reply():
+async def test_merge_analysis_errors_on_unparseable_reply():
     result = await auto_store.analyze_for_merge("old", "new", provider=StubLLM("hmm"))
+    assert "error" in result
+    assert result.get("action") != "create"
+
+
+@pytest.mark.asyncio
+async def test_merge_still_creates_when_the_MODEL_says_create():
+    """The genuine create-bias survives — it just has to come from an answer.
+
+    Kept as the positive control for the two tests above: without it, "never
+    return create" would pass by never returning create at all.
+    """
+    llm = StubLLM('{"action": "create", "reason": "distinct enough"}')
+    result = await auto_store.analyze_for_merge("old", "new", provider=llm)
     assert result["action"] == "create"
+    assert "error" not in result
 
 
 # --- R-17 structural guarantee ---

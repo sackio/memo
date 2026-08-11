@@ -1,7 +1,11 @@
 import asyncio
-import contextlib
-import logging
 import sqlite3
+import contextlib
+import hashlib
+import json
+import logging
+import sys
+import time as _time
 from time import time as _now
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -29,8 +33,6 @@ from memo.models import (
     AutoStoreResponse,
     ContextRequest,
     ContextResponse,
-    CopyMoveRequest,
-    CopyMoveResponse,
     DeleteResponse,
     Document,
     SearchRequest,
@@ -89,6 +91,123 @@ mcp_starlette.router.lifespan_context = lambda app: contextlib.AsyncExitStack()
 
 _LEAK_MARKER = "</content>"
 _LEAK_FRAGMENTS = ("<parameter name=", "<tags>", "</invoke>")
+
+
+async def _store_receipt(db_path: str | None, doc_id: str) -> dict:
+    """Post-write read of what the DB actually holds, for the caller to verify against.
+
+    ⛔ READS THE DOCUMENT BACK. Does NOT hash the request body. Hashing the input
+    would confirm only that the request was parsed and would pass unchanged if the
+    write silently truncated, wrote elsewhere, or did nothing — the exact failure
+    this exists to catch. [mind, 2026-08-06]
+
+    ⚠️ This is a receipt, not a durability guarantee: it proves the row is readable
+    now, not that it survived to disk. That is a strictly weaker claim than callers
+    may want and is deliberately not overstated — but it is unboundedly stronger
+    than `{id}`, which proves only that a request was accepted.
+
+    Returns {} rather than raising if the read-back fails: a store that succeeded
+    must not be reported as failed because its receipt could not be produced.
+    """
+    try:
+        doc = await db.get(db_path, doc_id)
+        if not doc:
+            return {}
+        content = doc.get("content") or ""
+        return {
+            "content_sha256": hashlib.sha256(content.encode("utf-8")).hexdigest(),
+            "token_count": int(doc.get("token_count") or 0),
+        }
+    except Exception:
+        return {}
+
+
+def _resolve_doc_token_cap(max_tokens: int | None,
+                           max_doc_tokens: int | None) -> int | None:
+    """One filter, two names. [2026-08-09, reported by `models`]
+
+    ⭐ WHY THE ALIAS. `max_tokens` reads as *cap the size of the response* and
+    actually means *only return documents smaller than N*. Measured: three
+    independent misuses in four hours by two seats who both know better, each
+    reaching for it to bound context cost, each getting an empty list that reads
+    as "no such memos". **Three instances is a property of the name, not of the
+    callers.** `max_doc_tokens` cannot form the wrong mental model.
+
+    ⛔ `max_tokens` KEEPS WORKING. There are live callers across four hosts and an
+    MCP layer in front; renaming outright would break working integrations to
+    punish a name I chose. The old name is never removed.
+
+    ⚠️ If both arrive and DISAGREE, the explicit one wins and the collision is
+    logged — silently picking one would reproduce the original bug in a new place.
+    """
+    if max_doc_tokens is None:
+        return max_tokens
+    if max_tokens is not None and max_tokens != max_doc_tokens:
+        print(f"PARAM-COLLISION memo: max_tokens={max_tokens} and "
+              f"max_doc_tokens={max_doc_tokens} disagree — using max_doc_tokens "
+              f"({max_doc_tokens}). They are the same filter.", flush=True)
+    return max_doc_tokens
+
+
+def _thin(rows: list[dict], ids_only: bool) -> list[dict]:
+    """Drop document bodies when the caller only wants to know WHICH memos.
+
+    ⭐ THIS IS THE THING EVERY `max_tokens` MISUSE WAS ACTUALLY REACHING FOR:
+    *"return me ids cheaply, don't dump full documents into my window."* There was
+    no way to ask for it, so callers reached for the nearest-sounding parameter
+    and got a silent empty result. **The fix that removes the motive beats the
+    fix that redirects it.**
+
+    ⚠️ Keeps `id`, `title`, `tags`, `token_count`, `created_at` and the score —
+    enough to decide what to fetch — and drops only `content` and `metadata`.
+    An ids-only mode that returned bare uuids would send everyone straight back
+    to a second round-trip, which is the cost they were trying to avoid.
+    """
+    if not ids_only:
+        return rows
+    keep = ("id", "title", "tags", "token_count", "created_at", "updated_at")
+    out = []
+    for r in rows:
+        doc = r.get("document", r) or {}
+        thin = {k: doc[k] for k in keep if k in doc}
+        out.append({**{k: v for k, v in r.items() if k != "document"},
+                    "document": thin} if "document" in r else thin)
+    return out
+
+
+def _log_phantom_fields(req, endpoint: str, doc_id: str | None = None,
+                        user_agent: str | None = None) -> None:
+    """Record any field a caller sent that this API does not have. [Ben, 2026-08-05]
+
+    ⛔ IT DOES NOT REJECT, DELIBERATELY. Ben: *"better for backwards compatibility
+    and live integration to not let it fail if they pass phantom parameters but we
+    should log what's getting passed."* A 422 would break live callers to punish a
+    harmless typo; the caller keeps working and the mistake stops being invisible.
+
+    ⚠️ THIS IS THE DETECTOR FOR THE BUG THAT PRODUCED v0.4.0. `append=` was sent for
+    weeks, dropped before the handler saw it, and the update ran with every field
+    None — a no-op that bumped `updated_at` and returned `updated: true`. Nothing
+    anywhere recorded that a parameter had been discarded. **The fix for `append`
+    was one parameter; this is the fix for the next one.**
+
+    ⚠️ SCOPE, STATED SO NOBODY READS MORE INTO A QUIET LOG THAN IT MEANS: this sees
+    only what reaches the HTTP layer. **MCP tool calls are validated against the
+    Python signature by FastMCP and unknown kwargs are dropped upstream of here**,
+    so an MCP caller's phantom parameter still vanishes silently and this log
+    stays empty. ⇒ **An empty phantom log is NOT evidence that nobody is passing
+    phantom parameters** — it is evidence about the HTTP path only.
+    """
+    extra = getattr(req, "model_extra", None) or {}
+    if not extra:
+        return
+    # Log keys and value TYPES, never values: a phantom field on a write endpoint
+    # may carry the very content the caller meant to store.
+    shape = ", ".join(f"{k}:{type(v).__name__}" for k, v in sorted(extra.items()))
+    print(f"PHANTOM-FIELD {endpoint}"
+          f"{f' doc={doc_id}' if doc_id else ''}"
+          f"{f' ua={user_agent}' if user_agent else ''}"
+          f" ignored={{{shape}}} — accepted and DISCARDED; this call did not do what "
+          f"the caller thinks it did", flush=True)
 
 
 async def _reject_leaked_tool_call(content: str | None, tags: list[str] | None,
@@ -161,9 +280,42 @@ async def memo_store(
       - "reject"   -> not stored. `reason` says why; `how_to_authorize` says
                       what would make it succeed.
 
+    ⭐ **On a stored action you also get `content_sha256` and `token_count`, read
+    back from the database AFTER the write.** Compare the hash against sha256 of
+    what you sent to confirm the store landed intact. Without that you know the
+    call was *issued*, not that it *succeeded*: a timed-out call and a slow
+    successful one look identical from the caller's side, and the difference
+    lands in the durable artifact where nothing surfaces it later.
+    [v0.4.2; mind, 2026-08-06]
+
+    ⚠️ An empty `content_sha256` means the read-back itself failed, NOT that the
+    store failed. Re-read with `memo_get` before concluding anything.
+
+    ⚠️ **`action` and the receipt answer different questions.** `action` says what
+    the mediator DECIDED; the receipt says what the database HOLDS. A merge that
+    decided correctly and wrote partially is only visible in the second.
+
+    ⛔ **SIZE CEILING: documents over ~8,192 tokens are REJECTED and cannot be
+    stored. Split before storing.** The embedding provider refuses them and this
+    raises a 500 carrying the provider's own message —
+    `maximum context length is 8192 tokens`.
+
+    ⚠️ **That error is loud about the wrong subject.** It reads as *your query is
+    too long* or *the model's context is full*; it actually means *this document
+    will never land*. A caller who takes it at face value goes looking in the wrong
+    place. [mind, 2026-08-06 — who also noted the useful framing: an undocumented
+    misdirecting error is worse than a documented constraint.]
+
+    ⚠️ **This is a HARD SIZE limit, distinct from the OTHER failure mode**: a large
+    store can also abort on timeout mid-embed (~300s observed), and *that* one is
+    silent — indistinguishable from a slow success, which is what
+    `content_sha256` exists to catch. Over-8k fails loudly; the timeout fails
+    quietly. Do not diagnose one as the other.
+
     db_path is accepted for backward compatibility and ignored (single-global).
     """
     await _reject_leaked_tool_call(content, tags, "memo_store")
+    _t0 = _time.time()
     result = await store_mediator.store(MediatorStoreRequest(
         content=content,
         title=title,
@@ -177,6 +329,18 @@ async def memo_store(
     payload = result.model_dump(exclude_none=True)
     # v1 compatibility: callers read ["id"]. Keep it, even when null.
     payload["id"] = result.memo_id
+    # ⛔ The v0.4.2 receipt, carried onto the mediator path. Without this the
+    # merge would have silently regressed a verified fix: the branch predates
+    # it, so taking the branch's return wholesale looks like a clean resolution
+    # and quietly removes the only thing that distinguishes an issued write from
+    # a landed one. Skipped when nothing was stored (clarify / reject).
+    if result.memo_id:
+        payload.update(await _store_receipt(db_path, result.memo_id))
+    await db.log_query_async(
+        db_path, "store", query=title or (content or "")[:200], tags=tags or [],
+        result_ids=[result.memo_id] if result.memo_id else [],
+        latency_ms=(_time.time() - _t0) * 1000,
+        user_agent="mcp:memo_store")
     return payload
 
 
@@ -187,18 +351,63 @@ async def memo_update(
     title: str | None = None,
     tags: list[str] | None = None,
     metadata: dict[str, Any] | None = None,
+    append: str | None = None,
     db_path: str | None = None,
 ) -> dict | None:
     """Update an existing memo by ID. Only provided fields are changed.
 
     If content is updated, the embedding and token_count are recomputed automatically.
+
+    ⭐ `append` adds text to the END of the existing content, re-embedding the
+    result. [v0.4.0]
+
+    ⛔ WHY IT EXISTS. Callers were already passing `append=` — it was not a
+    parameter, the MCP layer silently DISCARDED the unknown kwarg, and
+    `memo_update` then ran with every field None: a no-op that still bumped
+    `updated_at` and returned `updated: true`. Reported by `agents` 2026-08-03
+    mid corpus-migration, reproduced here in one call. **Any invented parameter
+    name behaved this way; `append` is simply the one people reached for.**
+    ⇒ The fix is not a guard. It is to make the call people were already making
+    do the thing they meant.
+
+    ⛔ APPENDS VERBATIM — no separator is inserted. If you want a newline, send
+    one. A silently injected character is the same class of surprise as the bug
+    this replaces, and a write API should be predictable before it is convenient.
+
+    ⛔ `append` and `content` together is REFUSED, not merged. One replaces and
+    one extends; guessing which the caller meant is how a write API loses data.
+
+    ⚠️ Append is read-modify-write, so a concurrent append could drop one side.
+    The read content is passed back as a compare-and-set guard: if the memo
+    changed underneath, this returns `{updated: false, reason: "conflict"}`
+    rather than overwriting. Re-read and re-apply.
+
     Returns the updated memo with `updated: true`. If the ID matched nothing,
-    returns `{updated: false, reason: "not_found", requested_id: <id>}` — NOT
-    null. A bare null could not distinguish a mistyped id from a memo that has
-    genuinely vanished, and two of those readings are alarming while one is a
-    typo. Check `updated`; false means re-look-up the id, not that it is gone.
+    returns `{updated: false, reason: "not_found", requested_id: <id>}` —
+    NOT null. A bare null could not distinguish a mistyped id from a memo that
+    has genuinely vanished, and two of those readings are alarming while one is
+    a typo. Check `updated`; a false means re-look-up the id, not that the memo
+    is gone.
     """
     await _reject_leaked_tool_call(content, tags, "memo_update")
+
+    expect_content = None
+    if append is not None:
+        if content is not None:
+            return {"updated": False, "reason": "ambiguous_content_and_append",
+                    "detail": "`content` replaces and `append` extends. Send one. "
+                              "Guessing which you meant is how a write API loses data.",
+                    "requested_id": id}
+        current = await db.get(db_path, id)
+        if current is None:
+            return {"updated": False, "reason": "not_found", "requested_id": id}
+        expect_content = current.get("content") or ""
+        # ⛔ Verbatim — no separator injected. See the docstring.
+        content = expect_content + append
+
+    # embed_document, not embed_query: this is stored text. The two encode
+    # differently on an asymmetric model and mixing them fails SILENTLY —
+    # plausible, slightly-wrong neighbours forever, with no error to notice.
     embedding = await embeddings.embed_document(content) if content is not None else None
     result = await db.update(
         db_path=db_path,
@@ -208,11 +417,24 @@ async def memo_update(
         tags=tags,
         metadata=metadata,
         embedding=embedding,
+        expect_content=expect_content,
     )
+    if isinstance(result, dict) and result.get("conflict"):
+        # ⚠️ A LOUD refusal. The bug this replaces was a silent no-op reporting
+        # success; overwriting a concurrent append would be the same data loss
+        # with a different cause.
+        return {"updated": False, "reason": "conflict", "requested_id": id,
+                "detail": "the memo changed between read and write; re-read and "
+                          "re-apply your append",
+                "current_updated_at": result.get("current_updated_at")}
+    await db.log_query_async(
+        db_path, "update", query=title or id, tags=tags or [],
+        result_ids=[id] if result is not None else [], user_agent="mcp:memo_update")
     if result is None:
-        # Ported from v1 0.3.6. Session-ids and memo-ids are both 36-char
-        # UUIDs, so the wrong KIND of id landed in the same undifferentiated
-        # null as a genuinely absent memo.
+        # 2026-07-30: was a bare null, which collapsed "bad id", "memo absent"
+        # and (from the caller's seat) "applied, nothing returned" into one
+        # answer. Session-ids and memo-ids are both 36-char UUIDs, so passing
+        # the wrong KIND of id lands here too and looked identical.
         return {"updated": False, "reason": "not_found", "requested_id": id}
     return {**result, "updated": True}
 
@@ -227,93 +449,200 @@ async def memo_search(
     before: float | None = None,
     min_tokens: int | None = None,
     max_tokens: int | None = None,
+    max_doc_tokens: int | None = None,
+    ids_only: bool = False,
     db_path: str | None = None,
     scope: str = "local",
 ) -> list[dict]:
     """Search documents by semantic similarity with optional filters.
 
-    db_path: directory path (uses <dir>/.memo.db), explicit .db file, or None for global DB.
-    scope controls which database(s) to search:
-    - "local" (default): only the DB specified by db_path (or global if db_path is None)
-    - "global": only the global DB, ignoring db_path
-    - "all": search both db_path DB and global DB, merge results by score
+    db_path / scope: ACCEPTED AND IGNORED. Since the 2026-06-29 single-global
+    refactor there is exactly ONE database, and "local", "global" and "all"
+    all search it — they are the same code path, not three. Both parameters
+    are kept for backward compatibility. If you are choosing a scope to
+    control WHICH memos you see, that choice has no effect; filter on tags
+    instead.
 
     Filters:
     - tags: only return docs that have at least one of these tags
     - after/before: Unix timestamps bounding created_at
-    - min_tokens/max_tokens: bound by stored token_count of content
+    - min_tokens/max_tokens: ⛔ **FILTERS WHICH DOCUMENTS COME BACK, BY THEIR
+      STORED SIZE. IT DOES NOT CAP OUTPUT LENGTH — for that use `limit`, or
+      `ids_only=True`.** Reported by `models` 2026-08-09: three independent
+      misuses in four hours by two seats who both know better, every one of them
+      reaching for it to bound context cost and every one getting an EMPTY LIST
+      that reads as "no such memos" and means "no memos under N tokens".
+      ⚠️ The worst instance was `quantum-data` verifying their own memo tag
+      coverage — a false null ABOUT THE EXACT PROPERTY BEING MEASURED, plausible
+      and self-critical, which they nearly acted on.
+      ⭐ `max_doc_tokens` is the same parameter under a name that cannot form the
+      wrong mental model; prefer it. `max_tokens` is kept working forever.
     """
+    # ⛔ LOGGED HERE, NOT ONLY ON THE HTTP ROUTE. Agents reach memo through the
+    # MCP tool, which calls db directly — logging only POST /search would
+    # capture a small, unrepresentative slice and the bias would be invisible
+    # in the resulting numbers. [v0.3.8]
+    _t0 = _time.time()
+    max_tokens = _resolve_doc_token_cap(max_tokens, max_doc_tokens)
     embedding = await embeddings.embed_query(query)
     kwargs = dict(embedding=embedding, limit=limit, min_score=min_score, tags=tags or [],
                   after=after, before=before, min_tokens=min_tokens, max_tokens=max_tokens)
 
     if scope == "global" or (scope == "local" and db_path is None):
-        return await db.search(db_path=None, **kwargs)
-
-    if scope == "all" and db_path is not None:
+        out = await db.search(db_path=None, **kwargs)
+    elif scope == "all" and db_path is not None:
         paths = list({db.global_path(), db._resolve_path(db_path)})
-        return await db.search_multi(paths, **kwargs)
+        out = await db.search_multi(paths, **kwargs)
+    else:
+        out = await db.search(db_path=db_path, **kwargs)
 
-    return await db.search(db_path=db_path, **kwargs)
+    await db.log_query_async(
+        db_path, "search", query=query, arg_limit=limit, tags=tags or [],
+        result_ids=[r["document"]["id"] for r in out],
+        result_scores=[r["score"] for r in out],
+        latency_ms=(_time.time() - _t0) * 1000, user_agent="mcp:memo_search")
+    # ⛔ AFTER the log, so the query record still shows what retrieval actually
+    # returned. Trimming the response must not trim the evidence.
+    return _thin(out, ids_only)
 
 
 @mcp.tool()
 async def memo_get(id: str, db_path: str | None = None) -> dict | None:
     """Retrieve a document by ID.
 
-    db_path: directory path (uses <dir>/.memo.db), explicit .db file, or None for global DB.
+    db_path: ACCEPTED AND IGNORED — one global DB since 2026-06-29.
     """
     return await db.get(db_path=db_path, doc_id=id)
+
+
+@mcp.tool()
+async def memo_transcript_search(
+    pattern: str | None = None,
+    role: str = "instruction,response",
+    project: str | None = None,
+    session: str | None = None,
+    since: str | None = None,
+    ignore_case: bool = True,
+    max_matches: int = 25,
+    list_sessions: bool = False,
+    all_hosts: bool = False,
+) -> dict:
+    """Search Claude Code session transcripts on THIS HOST (server4 only).
+
+    Structure-aware: a `tool_result` carries `type: "user"` exactly like a human
+    instruction does, so "what did the operator actually ask?" is not a text
+    search. Roles: instruction, response, thinking, tool_use, tool_result,
+    system, any (comma-separated; default instruction,response).
+
+    ⛔ COVERAGE IS server4 ONLY. `~/.claude/projects` is host-local, so office,
+    server5 and server3 hold DIFFERENT sessions under the same project slugs and
+    this cannot see them. The response always carries `coverage` and
+    `fleet_wide_command` saying so. **An empty result here does NOT mean nobody
+    said it** — it means nobody said it on server4.
+
+    Every response includes `sessions_scanned`. A zero there is a coverage
+    failure, not a quiet corpus; treat it as broken rather than as an answer.
+    """
+    argv = ["/usr/local/bin/transcript-search", "--json", "--max-matches", str(max_matches)]
+    if pattern:
+        argv.append(pattern)
+    for r in [x.strip() for x in (role or "").split(",") if x.strip()]:
+        argv += ["--role", r]
+    if project:
+        argv += ["--project", project]
+    if session:
+        argv += ["--session", session]
+    if since:
+        argv += ["--since", since]
+    if ignore_case:
+        argv.append("-i")
+    if list_sessions:
+        argv.append("--list-sessions")
+    if all_hosts:
+        argv.append("--all-hosts")
+    else:
+        # ⛔ ALWAYS name a host explicitly — never fall through to the "local"
+        # path. This container's local view of transcripts is empty (snap Docker
+        # cannot mount /fast4), and an unqualified run would scan nothing while
+        # looking entirely healthy.
+        argv += ["--host", "server4"]
+
+    # ⛔ ON ANY FAILURE PATH, SAY "NOTHING WAS SEARCHED" — NEVER A COUNT.
+    # The three error returns below used to pair their message with
+    # `sessions_scanned: 0` and `coverage: "server4 only"`. Both are false comfort:
+    # zero reads as "the corpus holds nothing matching", and the coverage string
+    # asserts a search that never ran. A caller skimming the result sees a clean
+    # empty answer.
+    # ⭐ A crash must not be able to render as a valid negative result. That is the
+    # worst failure shape for a search tool, because the caller's next move after
+    # "0 results" is to believe it. (Earned 2026-08-11: the `--since` ISO bug made
+    # every timestamped call exit 2, and it reached `agents` as sessions_scanned: 0
+    # on the first call Ben asked them to make.)
+    FAILED = {"sessions_scanned": None,
+              "coverage": "NOTHING WAS SEARCHED — this is an error, not an empty "
+                          "result. Do not read it as 'no matches'.",
+              "results": None}
+
+    proc = await asyncio.create_subprocess_exec(
+        sys.executable, *argv,
+        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+    )
+    try:
+        out, err = await asyncio.wait_for(proc.communicate(), timeout=180)
+    except asyncio.TimeoutError:
+        proc.kill()
+        return {"error": "transcript search timed out after 180s", **FAILED}
+    if proc.returncode != 0:
+        return {"error": f"transcript-search exited {proc.returncode}: "
+                         f"{err.decode(errors='replace')[:400]}", **FAILED}
+    try:
+        result = json.loads(out.decode(errors="replace"))
+    except Exception:
+        return {"error": "unparseable output from transcript-search", **FAILED}
+
+    # --all-hosts returns a LIST (one entry per host); a single host returns a dict.
+    per_host = result if isinstance(result, list) else [result]
+    hosts_ok = [r["host"] for r in per_host if not r.get("error")]
+    hosts_failed = {r["host"]: r["error"] for r in per_host if r.get("error")}
+
+    # ⭐ The coverage caveat travels WITH the data, not in the docstring. A tool
+    # description is read once by whoever wires it up; the result is read every
+    # time, often by an agent that never saw the description. And a host that
+    # FAILED must never be silently absent from the denominator — a partial corpus
+    # is more dangerous than an unavailable one, because it answers.
+    return {
+        # ⛔ COVERAGE IS DERIVED FROM WHAT SUCCEEDED, NOT FROM WHAT WAS REQUESTED.
+        # A first version said "all four hosts" whenever all_hosts was passed —
+        # and printed exactly that while three of the four had failed on a host-key
+        # error. ⭐ A field that reports the REQUEST while claiming to describe the
+        # RESULT is worse than no field: it is the reassuring signal, generated by
+        # the very code meant to prevent one.
+        "coverage": (f"searched {len(hosts_ok)} host(s): {', '.join(hosts_ok)}"
+                     + (f" — ⚠️ {len(hosts_failed)} FAILED and were NOT searched: "
+                        f"{', '.join(hosts_failed)}. Results are PARTIAL."
+                        if hosts_failed else
+                        ("" if all_hosts else
+                         " — ~/.claude/projects is host-local; pass all_hosts=true "
+                         "for the whole fleet."))),
+        "hosts_searched": hosts_ok,
+        "hosts_failed": hosts_failed or None,
+        "sessions_scanned": sum(r.get("scanned", 0) for r in per_host),
+        "unreadable": sum(r.get("unreadable", 0) for r in per_host),
+        "truncated": any(r.get("truncated") for r in per_host),
+        "matches": [h for r in per_host for h in (r.get("hits") or [])],
+        "sessions": [s for r in per_host for s in (r.get("sessions") or [])]
+                    if list_sessions else [],
+    }
 
 
 @mcp.tool()
 async def memo_delete(id: str, db_path: str | None = None) -> dict:
     """Delete a document by ID.
 
-    db_path: directory path (uses <dir>/.memo.db), explicit .db file, or None for global DB.
+    db_path: ACCEPTED AND IGNORED — one global DB since 2026-06-29.
     """
     deleted = await db.delete(db_path=db_path, doc_id=id)
     return {"deleted": deleted}
-
-
-@mcp.tool()
-async def memo_copy(
-    id: str,
-    to_db_path: str | None = None,
-    from_db_path: str | None = None,
-) -> dict | None:
-    """Copy a memo to another database without re-embedding.
-
-    from_db_path: source DB (None = global default).
-    to_db_path: destination DB (None = global default).
-    Returns {id: <new_uuid>} for the copy, or null if the source memo was not found.
-    """
-    new_id = await db.copy(from_db_path=from_db_path, doc_id=id, to_db_path=to_db_path)
-    if not new_id:
-        return {"copied": False, "reason": "not_found", "requested_id": id}
-    # The response carries the truth because the docstring cannot: MCP tool
-    # descriptions are cached per session at startup, so a long-running session
-    # still reads text promising a new uuid for a copy that never happens.
-    return {"id": new_id, "copied": False, "reason": "single_global_db"}
-
-
-@mcp.tool()
-async def memo_move(
-    id: str,
-    to_db_path: str | None = None,
-    from_db_path: str | None = None,
-) -> dict | None:
-    """Move a memo to another database without re-embedding.
-
-    Copies the memo to to_db_path then deletes it from from_db_path.
-    from_db_path: source DB (None = global default).
-    to_db_path: destination DB (None = global default).
-    Returns {id: <new_uuid>} in the destination, or null if source memo not found.
-    """
-    new_id = await db.move(from_db_path=from_db_path, doc_id=id, to_db_path=to_db_path)
-    if not new_id:
-        return {"moved": False, "reason": "not_found", "requested_id": id}
-    return {"id": new_id, "moved": False, "reason": "single_global_db"}
 
 
 @mcp.tool()
@@ -326,6 +655,8 @@ async def memo_list(
     max_tokens: int | None = None,
     limit: int = 100,
     min_score: float | None = None,
+    max_doc_tokens: int | None = None,
+    ids_only: bool = False,
     db_path: str | None = None,
     scope: str = "local",
 ) -> list[dict]:
@@ -335,18 +666,26 @@ async def memo_list(
     semantic similarity (same engine as memo_search). Without query, returns
     documents in reverse-chronological order via SQL.
 
-    db_path: directory path (uses <dir>/.memo.db), explicit .db file, or None for global DB.
-    scope controls which database(s) to list from:
-    - "local" (default): only the DB specified by db_path (or global if db_path is None)
-    - "global": only the global DB, ignoring db_path
-    - "all": list from both db_path DB and global DB, merged by created_at desc
+    db_path / scope: ACCEPTED AND IGNORED — one global DB since the 2026-06-29
+    single-global refactor. "local", "global" and "all" all list from it.
 
     Filters:
     - tags: only return docs that have at least one of these tags
     - after/before: Unix timestamps bounding created_at
-    - min_tokens/max_tokens: bound by stored token_count of content
+    - min_tokens/max_tokens: ⛔ **FILTERS WHICH DOCUMENTS COME BACK, BY THEIR
+      STORED SIZE. IT DOES NOT CAP OUTPUT LENGTH — for that use `limit`, or
+      `ids_only=True`.** Reported by `models` 2026-08-09: three independent
+      misuses in four hours by two seats who both know better, every one of them
+      reaching for it to bound context cost and every one getting an EMPTY LIST
+      that reads as "no such memos" and means "no memos under N tokens".
+      ⚠️ The worst instance was `quantum-data` verifying their own memo tag
+      coverage — a false null ABOUT THE EXACT PROPERTY BEING MEASURED, plausible
+      and self-critical, which they nearly acted on.
+      ⭐ `max_doc_tokens` is the same parameter under a name that cannot form the
+      wrong mental model; prefer it. `max_tokens` is kept working forever.
     - min_score: minimum cosine similarity (only applies when query is provided)
     """
+    max_tokens = _resolve_doc_token_cap(max_tokens, max_doc_tokens)
     if query is not None:
         embedding = await embeddings.embed_query(query)
         kwargs = dict(embedding=embedding, limit=limit, min_score=min_score, tags=tags or [],
@@ -358,19 +697,19 @@ async def memo_list(
             results = await db.search_multi(paths, **kwargs)
         else:
             results = await db.search(db_path=db_path, **kwargs)
-        return [r["document"] for r in results]
+        return _thin([r["document"] for r in results], ids_only)
 
     kwargs = dict(tags=tags or [], limit=limit, after=after, before=before,
                   min_tokens=min_tokens, max_tokens=max_tokens)
 
     if scope == "global" or (scope == "local" and db_path is None):
-        return await db.list_docs(db_path=None, **kwargs)
+        return _thin(await db.list_docs(db_path=None, **kwargs), ids_only)
 
     if scope == "all" and db_path is not None:
         paths = list({db.global_path(), db._resolve_path(db_path)})
-        return await db.list_docs_multi(paths, **kwargs)
+        return _thin(await db.list_docs_multi(paths, **kwargs), ids_only)
 
-    return await db.list_docs(db_path=db_path, **kwargs)
+    return _thin(await db.list_docs(db_path=db_path, **kwargs), ids_only)
 
 
 @mcp.tool()
@@ -394,14 +733,21 @@ async def memo_context(
 
     queries: optional list of additional search angles run alongside query.
              More angles = better recall at the cost of more embedding calls.
-    token_budget: maximum tokens in the returned content string.
-    scope: "local" (default), "global", or "all" (merge local + global DBs).
+    token_budget: maximum tokens in the returned content string. If the
+                  top-ranked memo alone exceeds it, you get that memo excerpted
+                  and marked, never an empty result.
+    db_path / scope: ACCEPTED AND IGNORED — one global DB since the 2026-06-29
+                  single-global refactor. "local", "global" and "all" all
+                  search it.
 
     Returns:
       content: formatted markdown string of results within budget
       token_count: actual token count of content
-      doc_count: number of memos included
-      truncated: true if results were cut off by the budget
+      doc_count: number of memos INCLUDED in content
+      matched_count: number of memos that MATCHED the query. doc_count 0 with
+                     matched_count > 0 means the budget was too small for any
+                     single memo — NOT that the corpus has nothing on the topic.
+      truncated: true if any match was left out or excerpted
     """
     all_queries = [query] + (queries or [])
     search_kwargs = dict(
@@ -484,7 +830,7 @@ async def memo_context(
     # Greedily fill token budget. A doc that doesn't fit is SKIPPED, not
     # terminal: one oversized top-ranked memo must not starve every smaller
     # one below it (2026-07-30 — `break` here returned zero docs whenever the
-    # top hit exceeded the budget; ported from v1 0.3.3).
+    # top hit exceeded the budget).
     parts: list[str] = []
     total_tokens = 0
     truncated = False
@@ -560,6 +906,16 @@ async def memo_context(
             truncated = True
 
     content = "\n".join(parts)
+    # ⭐ `ranked` is what retrieval chose; `parts` is what survived the token
+    # budget. Logging the RANKED ids (not the packed ones) keeps this comparable
+    # to a plain search — otherwise a replay would be measuring the packer's
+    # budget arithmetic and calling it a retrieval difference. [v0.3.8]
+    await db.log_query_async(
+        db_path, "context", query=query, arg_limit=limit_per_query,
+        tags=tags or [],
+        result_ids=[r["document"]["id"] for r in ranked],
+        result_scores=[r["score"] for r in ranked],
+        user_agent="mcp:memo_context")
     return {
         "content": content,
         "token_count": total_tokens,
@@ -730,6 +1086,8 @@ async def ready(timeout_s: float = 5.0):
 
 @app.post("/documents", response_model=StoreResponse)
 async def store_document(req: StoreRequest, request: Request):
+    _log_phantom_fields(req, "POST /documents",
+                        user_agent=request.headers.get("user-agent"))
     try:
         await _reject_leaked_tool_call(
             req.content, req.tags, "POST /documents",
@@ -738,7 +1096,27 @@ async def store_document(req: StoreRequest, request: Request):
         )
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
-    embedding = await embeddings.embed_document(req.content)
+    _t0 = _time.time()
+    try:
+        embedding = await embeddings.embed_document(req.content)
+    except embeddings.EmbeddingInputTooLarge as e:
+        # ⭐ 413, not 500. This previously escaped as a bare "Internal Server
+        # Error", which tells the caller their memo was lost but not that it was
+        # lost for a reason they can act on — and reads as "memo is broken" rather
+        # than "this document is too big to embed".
+        # ⛔ We do NOT truncate to make it fit (see embeddings.MAX_INPUT_TOKENS):
+        # a 20k-token memo embedded as its first 16k is a plausible vector, not a
+        # correct one, and nothing downstream would ever reveal the difference.
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                f"Document too large to embed ({e.chars:,} characters). The embedding "
+                f"model's context limit is {embeddings.MAX_INPUT_TOKENS:,} tokens and this "
+                f"content exceeds it. Split it into separate memos — memo does not "
+                f"truncate, because a partial embedding is indistinguishable from a "
+                f"correct one. Provider said: {e.provider_message[:300]}"
+            ),
+        )
     try:
         doc_id = await db.store(
             db_path=req.db_path,
@@ -753,12 +1131,17 @@ async def store_document(req: StoreRequest, request: Request):
         )
     except sqlite3.IntegrityError as e:
         # An explicit `id` that already exists. 409, NOT a silent overwrite —
-        # the mirror must never be able to clobber a document it did not create.
+        # the mirror must never clobber a document it did not create.
         raise HTTPException(
-            status_code=409,
-            detail=f"document id already exists: {req.id}",
+            status_code=409, detail=f"document id already exists: {req.id}",
         ) from e
-    return StoreResponse(id=doc_id)
+    await db.log_query_async(
+        req.db_path, "store", query=req.title or (req.content or "")[:200],
+        tags=req.tags, result_ids=[doc_id],
+        latency_ms=(_time.time() - _t0) * 1000,
+        user_agent=request.headers.get("user-agent"),
+        source_ip=request.client.host if request.client else None)
+    return StoreResponse(id=doc_id, **await _store_receipt(req.db_path, doc_id))
 
 
 # HTTP status per contracts/mediator-store.md. write-new is the only 201:
@@ -1365,6 +1748,8 @@ async def get_document(doc_id: str, db_path: str | None = Query(default=None)):
 
 @app.patch("/documents/{doc_id}", response_model=Document)
 async def update_document(doc_id: str, req: UpdateRequest, request: Request):
+    _log_phantom_fields(req, "PATCH /documents/{id}", doc_id,
+                        user_agent=request.headers.get("user-agent"))
     try:
         await _reject_leaked_tool_call(
             req.content, req.tags, "PATCH /documents/{id}",
@@ -1373,16 +1758,38 @@ async def update_document(doc_id: str, req: UpdateRequest, request: Request):
         )
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
-    embedding = await embeddings.embed_document(req.content) if req.content is not None else None
+    # ⭐ append: same semantics as the MCP tool — verbatim, mutually exclusive
+    # with content, and compare-and-set so a concurrent append is REFUSED rather
+    # than silently overwritten. [v0.4.0]
+    new_content, expect_content = req.content, None
+    if req.append is not None:
+        if req.content is not None:
+            raise HTTPException(
+                status_code=422,
+                detail="`content` replaces and `append` extends — send one, not both")
+        current = await db.get(req.db_path, doc_id)
+        if current is None:
+            raise HTTPException(status_code=404, detail="Memo not found")
+        expect_content = current.get("content") or ""
+        new_content = expect_content + req.append
+
+    embedding = await embeddings.embed_document(new_content) if new_content is not None else None
     result = await db.update(
         db_path=req.db_path,
         doc_id=doc_id,
-        content=req.content,
+        content=new_content,
         title=req.title,
         tags=req.tags,
         metadata=req.metadata,
         embedding=embedding,
+        expect_content=expect_content,
     )
+    if isinstance(result, dict) and result.get("conflict"):
+        # 409, not a silent overwrite. The bug this accompanies was a no-op that
+        # reported success; losing a concurrent append would be the same class.
+        raise HTTPException(
+            status_code=409,
+            detail="memo changed between read and write; re-read and re-apply")
     if result is None:
         raise HTTPException(status_code=404, detail="Memo not found")
     return Document(**result)
@@ -1392,22 +1799,6 @@ async def update_document(doc_id: str, req: UpdateRequest, request: Request):
 async def delete_document(doc_id: str, db_path: str | None = Query(default=None)):
     deleted = await db.delete(db_path=db_path, doc_id=doc_id)
     return DeleteResponse(deleted=deleted)
-
-
-@app.post("/documents/{doc_id}/copy", response_model=CopyMoveResponse)
-async def copy_document(doc_id: str, req: CopyMoveRequest):
-    new_id = await db.copy(from_db_path=req.from_db_path, doc_id=doc_id, to_db_path=req.to_db_path)
-    if new_id is None:
-        raise HTTPException(status_code=404, detail="Document not found")
-    return CopyMoveResponse(id=new_id)
-
-
-@app.post("/documents/{doc_id}/move", response_model=CopyMoveResponse)
-async def move_document(doc_id: str, req: CopyMoveRequest):
-    new_id = await db.move(from_db_path=req.from_db_path, doc_id=doc_id, to_db_path=req.to_db_path)
-    if new_id is None:
-        raise HTTPException(status_code=404, detail="Document not found")
-    return CopyMoveResponse(id=new_id)
 
 
 @app.post("/search-passages")
@@ -1428,7 +1819,25 @@ async def search_passages_endpoint(req: SearchRequest):
     return results
 
 
-async def _document_search(req: SearchRequest) -> list[SearchResult]:
+async def _document_search(req: SearchRequest,
+                           request: Request = None) -> list[SearchResult]:
+    """Document-path search, plus the v0.3.8 query logging.
+
+    ⚠️ MERGE NOTE. On main this body WAS the `/search` route; on the renovation
+    branch `/search` became a config-driven dispatcher and this became a helper.
+    Both definitions survived the merge as two `@app.post("/search")` decorators
+    — and FastAPI matches routes in registration order, so main's would have won
+    and the configurable one would have been **dead code that still reads as
+    live**. ⛔ Two routes on one path do not error; the loser simply never runs.
+
+    ⇒ The dispatcher is the product surface (see `/search` below). The logging
+    that main had on the route moves here, so it still covers the document path
+    however that path is reached.
+    """
+    # Timed around the work, logged AFTER the response is built. [v0.3.8]
+    # ⛔ The log must never delay or fail the query it records — see
+    # db.log_query's docstring. This is live fleet infrastructure.
+    _t0 = _time.time()
     embedding = await embeddings.embed_query(req.query)
     results = await db.search(
         db_path=req.db_path,
@@ -1441,7 +1850,15 @@ async def _document_search(req: SearchRequest) -> list[SearchResult]:
         min_tokens=req.min_tokens,
         max_tokens=req.max_tokens,
     )
-    return [SearchResult(document=Document(**r["document"]), score=r["score"]) for r in results]
+    out = [SearchResult(document=Document(**r["document"]), score=r["score"]) for r in results]
+    await db.log_query_async(
+        req.db_path, "search", query=req.query, arg_limit=req.limit,
+        tags=req.tags, result_ids=[r["document"]["id"] for r in results],
+        result_scores=[r["score"] for r in results],
+        latency_ms=(_time.time() - _t0) * 1000,
+        user_agent=(request.headers.get("user-agent") if request else None),
+        source_ip=(request.client.host if request and request.client else None))
+    return out
 
 
 @app.post("/search-documents", response_model=list[SearchResult])
@@ -1455,7 +1872,8 @@ async def search_documents_endpoint(req: SearchRequest):
 
 
 @app.post("/search", response_model=list[SearchResult])
-async def search_documents(req: SearchRequest, response: Response):
+async def search_documents(req: SearchRequest, response: Response,
+                           request: Request = None):
     """The product surface: serves whichever path is configured. [002/FR-113]
 
     `settings.memo_retrieval_path` selects it; the default is `document` and
@@ -1472,6 +1890,7 @@ async def search_documents(req: SearchRequest, response: Response):
     that is the result-shape question (FR-107/FR-107a, T240–T241) still open with
     the operator as T201, and inventing an answer would pre-empt it.
     """
+    _log_phantom_fields(req, "POST /search")
     path = settings.memo_retrieval_path
     response.headers["X-Memo-Retrieval-Path"] = path
     if path == "size-routed":
@@ -1483,7 +1902,7 @@ async def search_documents(req: SearchRequest, response: Response):
             req.after, req.before, req.min_tokens, req.max_tokens)
         return [SearchResult(document=Document(**r["document"]), score=r["score"])
                 for r in results]
-    return await _document_search(req)
+    return await _document_search(req, request)
 
 
 async def _size_routed_search(req: SearchRequest) -> list[SearchResult]:
@@ -1622,6 +2041,15 @@ async def auto_store(req: AutoStoreRequest):
 
     # 1. LLM: is this worth storing?
     analysis = await analyze_for_store(req.content)
+    if analysis.get("error"):
+        # A provider failure is NOT a skip. Nothing was stored and the caller must
+        # be able to tell — an agent that reads this as "skipped" will compact or
+        # respawn believing it banked state it never banked.
+        err = analysis["error"]
+        return AutoStoreResponse(
+            action="error", error_kind=err.get("kind"), retryable=err.get("retryable", False),
+            reason=f"auto-store analysis failed ({err.get('kind')}): {err.get('detail')}",
+        )
     if not analysis.get("should_store"):
         return AutoStoreResponse(action="skipped", reason=analysis.get("reason", "not worth storing"))
 
@@ -1660,6 +2088,15 @@ async def auto_store(req: AutoStoreRequest):
 
         # 3. LLM: merge into existing, create separate, or skip?
         merge = await analyze_for_merge(best["content"], extracted)
+        if merge.get("error"):
+            # Falling through to "create" here would silently duplicate the memo
+            # we just found. The question "merge or not?" went unanswered, so say
+            # so rather than guessing the more destructive way.
+            err = merge["error"]
+            return AutoStoreResponse(
+                action="error", error_kind=err.get("kind"), retryable=err.get("retryable", False),
+                reason=f"auto-store merge analysis failed ({err.get('kind')}): {err.get('detail')}",
+            )
         action = merge.get("action", "create")
 
         if action == "skip":
@@ -1721,6 +2158,7 @@ async def auto_store(req: AutoStoreRequest):
 
 @app.post("/context", response_model=ContextResponse)
 async def context_documents(req: ContextRequest):
+    _log_phantom_fields(req, "POST /context")
     result = await memo_context(
         query=req.query,
         token_budget=req.token_budget,
@@ -1737,6 +2175,28 @@ async def context_documents(req: ContextRequest):
 
 
 def main():
+    # ⛔ BIND DUAL-STACK ("::"), NOT "0.0.0.0" — three of the four fleet hosts are
+    # REMOTE clients of this service, and they reach it by NAME.
+    #
+    # `0.0.0.0` accepts IPv4 on every interface and nothing on IPv6. v1 listened on
+    # BOTH `0.0.0.0:8000` and `[::]:8000`; the 2026-08-10 cutover to v2 silently
+    # dropped the v6 listener, and the only thing that kept the fleet up was that
+    # `server4` happens to have no AAAA record. That is a fact about DNS which this
+    # project does not own and nobody guards — one /etc/hosts edit or router change
+    # flips it, glibc then prefers the v6 address, and every remote host fails at
+    # once.
+    # ⭐ The failure would present as HEALTHY from server4, which is exactly where
+    # anyone would check: local calls resolve to 127.0.0.1/IPv4 and keep working.
+    # A monitor would have to probe from the other three hosts to see it at all.
+    # ⇒ Restore the property instead of watching for its absence. (`agents`,
+    # 2026-08-10: "a latent fleet-wide outage gated on someone else's config is
+    # worth removing, not documenting.")
+    #
+    # `::` covers BOTH families only because `net.ipv6.bindv6only=0` (Linux
+    # default, verified on this host). If that sysctl is ever 1, this binds v6 ONLY
+    # and breaks every IPv4 client — the exact mirror of the bug it fixes.
+    # REFUTE: `ss -ltn | grep :8000` must show a `[::]:8000` row, and an IPv4 curl
+    # from a remote host must still return 200.
     uvicorn.run("memo.main:app", host="0.0.0.0", port=settings.port, reload=False)
 
 
