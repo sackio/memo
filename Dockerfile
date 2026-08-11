@@ -55,6 +55,17 @@ CMD ["tests/", "-q"]
 FROM python:3.12-slim
 WORKDIR /app
 
+# ssh client for fleet-wide transcript search (2026-08-10). The container reaches
+# office/server5/server3 with a RESTRICTED key whose authorized_keys entry pins
+# command="…/transcript-search-forced" — it can run one search and nothing else,
+# no shell, no chaining. See docker-compose.yml.
+# ⚠️ The base image ships no ssh client, and its absence fails at RUNTIME as
+# "ssh: command not found" inside a subprocess — which surfaces as an empty
+# remote result, i.e. exactly like "that host has no matching transcripts".
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends openssh-client \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN pip install uv
 
 COPY pyproject.toml .

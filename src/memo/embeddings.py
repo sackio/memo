@@ -1,3 +1,4 @@
+import openai
 from openai import AsyncOpenAI
 from memo.config import settings
 
@@ -62,7 +63,48 @@ _client = AsyncOpenAI(
 # 8,458 chars to reach 7,277 tokens — 1.16 chars/token, four times denser than
 # this corpus's 3.179 mean. Any limit derived from a mean is wrong for the tail,
 # which is exactly where the long documents live.
-MAX_INPUT_TOKENS = 8192
+# ⚑ RAISED 8192 → 16384 on 2026-08-10, measured against the live endpoint by
+# binary search (~16,000 words OK; ~20,000 rejected with "maximum context length
+# is 16384 tokens"). This is the moment the note above anticipated: the serving
+# flag was a VRAM decision, not a model property, and it has been doubled.
+#
+# ⛔ THE NO-TRUNCATION DECISION STANDS — do not revisit it because the number
+# moved. Truncating would bake whatever `--max-model-len` happens to be today
+# into the corpus permanently, and a 20k-token memo embedded as its first 16k is
+# not the same vector as the whole, merely a plausible one.
+#
+# ⚠️ THIS CONSTANT IS DOCUMENTATION, NOT ENFORCEMENT, AND THAT IS DELIBERATE.
+# It was referenced by nothing when this line was written — a dead constant with
+# a long comment, which reads as a guard and is not one. It stays dead ON PURPOSE:
+# our only tokenizer is `cl100k_base` (chunking.count_tokens) and Qwen3's produces
+# ~1.107x more tokens for the same text, so any client-side check would be an
+# ESTIMATE IN THE WRONG UNIT — rejecting documents the provider would have
+# accepted, and passing some it won't. ⭐ The provider is the authority on its own
+# limit; the honest design is to let it decide and translate its refusal
+# faithfully. See `EmbeddingInputTooLarge` below.
+MAX_INPUT_TOKENS = 16384
+
+
+class EmbeddingInputTooLarge(ValueError):
+    """The embedding provider refused the input as over its context limit.
+
+    ⭐ EXISTS SO THE REFUSAL IS LEGIBLE. Before this, an over-length document
+    surfaced as `openai.BadRequestError` escaping through ASGI as a bare
+    **500 Internal Server Error** — which reads as "memo is broken", not "this
+    document is too big to embed". A caller storing a large memo got an opaque
+    server error and no way to know their write was rejected for a reason they
+    could act on.
+
+    ⛔ That mattered more than it sounds: the previous note here argued for
+    failing loudly rather than truncating, on the grounds that "the refusal IS
+    the reminder". A refusal is only a reminder if it says what it is. An
+    unhandled 500 is the *quietest* possible loud failure.
+    """
+
+    def __init__(self, provider_message: str, chars: int):
+        self.provider_message = provider_message
+        self.chars = chars
+        super().__init__(provider_message)
 
 
 # ⛔ THERE IS DELIBERATELY NO `embed()`. Call `embed_query` or `embed_document`.
@@ -135,10 +177,20 @@ async def embed_document(text: str) -> list[float]:
     document that was wrongly sent through `embed_query` fails loudly here. Make
     the two agree about the prefix and both halves of that guard go blind at once.
     """
-    response = await _client.embeddings.create(
-        model=settings.embedding_model,
-        input=text,
-    )
+    try:
+        response = await _client.embeddings.create(
+            model=settings.embedding_model,
+            input=text,
+        )
+    except openai.BadRequestError as e:
+        # ⭐ Translate the ONE provider rejection we can actually explain, and let
+        # every other 400 through untouched. Catching broadly here would relabel
+        # unrelated provider faults as "your document is too big" — a confident,
+        # specific, wrong diagnosis, which is worse than the opaque 500 it replaces.
+        msg = str(e)
+        if "maximum context length" in msg or "input_tokens" in msg:
+            raise EmbeddingInputTooLarge(msg, len(text)) from e
+        raise
     return response.data[0].embedding
 
 
