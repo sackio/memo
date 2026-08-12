@@ -388,9 +388,16 @@ async def _write_new(req: MediatorStoreRequest, payload: dict, embedding: list[f
                          "tagged provenance-pending for later attribution")
         trace.append("provenance: missing -> tagged provenance-pending")
 
+    # ⛔ Was hardcoded `metadata={}`, which silently DISCARDED whatever the caller
+    # sent. `memo_store` has advertised a `metadata` parameter the whole time; it was
+    # accepted, returned `write-new` with a real id, and dropped the value. Found
+    # 2026-08-11 within minutes of shipping the source_files/git_sha convention that
+    # depends on it — the convention would have been inert through the primary write
+    # path while looking like it worked. ⭐ The PATCH path persisted metadata fine,
+    # so the two write paths disagreed and only one of them was ever tested.
     doc_id = await db.store(
         db_path=None, content=req.content, title=req.title, tags=tags,
-        metadata={}, embedding=embedding,
+        metadata=req.metadata or {}, embedding=embedding,
     )
     await _apply_v2_columns(doc_id, payload)
 

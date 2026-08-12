@@ -473,6 +473,11 @@ class MediatorStoreRequest(BaseModel):
     time_scope: TimeScope | None = None
     reopenability: Reopenability | None = None
     session_id: str
+    # Free-form caller metadata, persisted verbatim. Carries the code-provenance
+    # convention (`repo` / `source_files` / `git_sha` / `observed_at`) that
+    # `memo-code-staleness` reads. Added 2026-08-11: the field did not exist, so the
+    # mediator wrote `metadata={}` and every value a caller sent was discarded.
+    metadata: dict[str, Any] | None = None
     operator_directive_ref: dict[str, Any] | None = None
     bypass_mediator: bool = False
     clarification_response: dict[str, Any] | None = None

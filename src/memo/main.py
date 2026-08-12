@@ -341,6 +341,7 @@ async def memo_store(
         content=content,
         title=title,
         tags=tags or [],
+        metadata=metadata,
         provenance=Provenance(**provenance) if provenance else None,
         session_id=session_id or "mcp:unknown",
         operator_directive_ref=operator_directive_ref,
