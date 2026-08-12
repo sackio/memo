@@ -295,16 +295,37 @@ async def memo_store(
     the mediator DECIDED; the receipt says what the database HOLDS. A merge that
     decided correctly and wrote partially is only visible in the second.
 
-    ⛔ **SIZE CEILING: documents over ~8,192 tokens are REJECTED and cannot be
-    stored. Split before storing.** The embedding provider refuses them and this
-    raises a 500 carrying the provider's own message —
-    `maximum context length is 8192 tokens`.
+    ⭐⭐ **IF THIS MEMO IS ABOUT CODE, RECORD WHAT IT WAS TRUE OF.** Put in
+    `metadata`:
 
-    ⚠️ **That error is loud about the wrong subject.** It reads as *your query is
-    too long* or *the model's context is full*; it actually means *this document
-    will never land*. A caller who takes it at face value goes looking in the wrong
-    place. [mind, 2026-08-06 — who also noted the useful framing: an undocumented
-    misdirecting error is worse than a documented constraint.]
+        {"source_files": ["src/foo/bar.py", "scripts/baz"],   # repo-relative
+         "repo": "memo",
+         "git_sha": "<full sha of HEAD when you observed it>",
+         "observed_at": "2026-08-11"}
+
+    ⛔ **Without this a code memo cannot be aged, only guessed at.** Ben's standing
+    rule is that **age alone must NEVER denote supersession** — which is correct, and
+    which leaves code memos with *no* staleness signal at all unless they carry one.
+    `source_files` + `git_sha` supply it: `git log <sha>..HEAD -- <files>` answers
+    *"has anything touched what this memo describes?"* — a fact about the CODE rather
+    than about the calendar. A memo from March whose files are untouched is current;
+    one from yesterday whose file was rewritten this morning is suspect.
+    [Ben, 2026-08-11: *"memos should likely be instructed to note source files and
+    git commit so we can trace when memos might be stale based on git"*]
+
+    ⚠️ Record the sha you actually **observed at**, not the sha at write time, if you
+    are writing up something you read earlier — they diverge exactly when it matters.
+
+    ⛔ **SIZE: documents that exceed the embedding model's input limit are rejected
+    with a 413** naming the size, the limit and what to do. Split and store the parts.
+
+    ⚠️ **CORRECTED 2026-08-11 — the previous text here said "over ~8,192 tokens …
+    raises a 500 carrying `maximum context length is 8192 tokens`".** Both halves are
+    now wrong: the limit was raised to **16,384** and the opaque 500 became a **413**
+    (`memo@cc718ab`). ⭐ The docstring outlived the behaviour it described by a day —
+    which is precisely the failure the `source_files`/`git_sha` guidance above exists
+    to make detectable. [orig. note: mind, 2026-08-06 — an undocumented misdirecting
+    error is worse than a documented constraint.]
 
     ⚠️ **This is a HARD SIZE limit, distinct from the OTHER failure mode**: a large
     store can also abort on timeout mid-embed (~300s observed), and *that* one is
