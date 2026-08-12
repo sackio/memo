@@ -1,0 +1,119 @@
+#!/usr/bin/env python3
+"""memo-code-staleness — flag code memos whose source files moved since they were written.
+
+Ben, 2026-08-11: *"memos should likely be instructed to note source files and git
+commit so we can trace when memos might be stale based on git"*.
+
+⭐ WHY THIS EXISTS AND WHY IT IS NOT AGE-BASED. Ben's standing rule is that **age
+alone must NEVER denote supersession** — older docs are frequently ground truth. That
+rule is right, and it leaves code memos with *no* staleness signal at all. This
+supplies one that is a fact about the CODE rather than the calendar:
+
+    git log <memo's git_sha>..HEAD -- <memo's source_files>
+
+A memo from March whose files are untouched is CURRENT. A memo from yesterday whose
+file was rewritten this morning is SUSPECT. Age never enters it.
+
+⛔ THIS FLAGS, IT DOES NOT DEMOTE. A touched file means "a human should re-read this",
+never "this is wrong" — a rename, a reformat or an unrelated edit in the same file all
+trip it. Nothing here writes to the corpus. That is deliberate: on 2026-08-11 an
+automated prober banner-ed six memos and DELETED a true one for failing a check that
+could not have confirmed the thing it tested (memo `e8c67197`). A staleness signal
+earns a read, not an edit.
+
+⚠️ AND METADATA NOBODY CHECKS IS A DECOY. If the `source_files`/`git_sha` convention
+ships without this reader, it becomes documentation of a control that does not exist —
+the same shape as `MEMO_RECONCILER_ENABLED`, a flag read by nothing that looked like
+the way to turn a hook off (memo `50839ad3`).
+
+Usage:
+    memo-code-staleness                  # report
+    memo-code-staleness --json
+    memo-code-staleness --repo memo      # only memos naming this repo
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import subprocess
+import sys
+import urllib.request
+
+MEMO_URL = "http://localhost:8000"
+CODE_ROOT = "/mnt/nas/data/code"
+
+
+def fetch_docs() -> list[dict]:
+    with urllib.request.urlopen(f"{MEMO_URL}/documents?limit=15000", timeout=90) as r:
+        return json.loads(r.read())
+
+
+def touched_since(repo: str, sha: str, files: list[str]) -> tuple[bool, str]:
+    """Return (touched, detail). Unknown states are reported, never guessed."""
+    repo_dir = f"{CODE_ROOT}/{repo}"
+    try:
+        # Does the sha exist in this repo at all? A rewritten history or a wrong
+        # repo name must not read as "nothing changed".
+        p = subprocess.run(["git", "-C", repo_dir, "cat-file", "-e", f"{sha}^{{commit}}"],
+                           capture_output=True, timeout=20)
+        if p.returncode != 0:
+            return False, f"UNKNOWN: sha {sha[:8]} not found in {repo}"
+        p = subprocess.run(["git", "-C", repo_dir, "log", "--oneline", f"{sha}..HEAD", "--"] + files,
+                           capture_output=True, text=True, timeout=30)
+        if p.returncode != 0:
+            return False, f"UNKNOWN: git log failed ({p.stderr.strip()[:80]})"
+        commits = [l for l in p.stdout.splitlines() if l.strip()]
+        if not commits:
+            return False, "unchanged"
+        return True, f"{len(commits)} commit(s) since: " + "; ".join(c[:60] for c in commits[:3])
+    except (subprocess.TimeoutExpired, OSError) as e:
+        return False, f"UNKNOWN: {e}"
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--json", action="store_true")
+    ap.add_argument("--repo", help="only memos whose metadata names this repo")
+    args = ap.parse_args()
+
+    docs = fetch_docs()
+    considered, results, unknown = 0, [], []
+    for d in docs:
+        md = d.get("metadata") or {}
+        files, sha, repo = md.get("source_files"), md.get("git_sha"), md.get("repo")
+        if not (files and sha and repo):
+            continue
+        if args.repo and repo != args.repo:
+            continue
+        considered += 1
+        touched, detail = touched_since(repo, sha, list(files))
+        row = {"id": d["id"], "title": (d.get("title") or "")[:70],
+               "repo": repo, "sha": sha[:8], "files": files, "detail": detail}
+        (results if touched else unknown if detail.startswith("UNKNOWN") else []).append(row)
+
+    if args.json:
+        print(json.dumps({"considered": considered, "stale_candidates": results,
+                          "unknown": unknown}, indent=1))
+        return
+
+    # ⛔ Report the DENOMINATOR. "0 stale" is meaningless if 0 memos carried the
+    # metadata — the two states look identical in a bare count, and the second is
+    # the one that means the convention is not being followed.
+    print(f"[memo-code-staleness] {considered} memo(s) carry source_files + git_sha + repo")
+    if considered == 0:
+        print("  ⚠️ NOTHING TO CHECK — no memo carries the metadata yet. This is NOT a")
+        print("     clean bill of health; it means the convention has not been adopted.")
+        return
+    print(f"  {len(results)} with touched files · {len(unknown)} unresolvable")
+    for r in results:
+        print(f"\n  🔎 {r['id'][:8]}  {r['title']}")
+        print(f"       {r['repo']} @ {r['sha']} · {', '.join(r['files'][:3])}")
+        print(f"       {r['detail']}")
+    for r in unknown:
+        print(f"\n  ❓ {r['id'][:8]}  {r['title']}\n       {r['detail']}")
+    if results:
+        print("\n  ⛔ 'Touched' means RE-READ, not wrong. A rename or reformat trips this too.")
+
+
+if __name__ == "__main__":
+    main()
