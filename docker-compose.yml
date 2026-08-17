@@ -38,11 +38,27 @@ services:
     environment:
       DEFAULT_DB_PATH: /data/memo.db
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
-      # ⛔ v1 STAYS ON 3-small/1536. Never qwen3, never 3-large — the corpus is
-      # 9,076 documents embedded at this width and a change here mis-ranks every
-      # one of them silently.
-      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-openai/text-embedding-3-small}
-      EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-1536}
+      # ⛔ v1 STAYS ON 3-small/1536. Never qwen3, never 3-large — the store is
+      # `document_embeddings ... FLOAT[1536]` holding 9,856 documents (verified in
+      # the live container 2026-08-17), and a change here mis-ranks every one of
+      # them silently.
+      #
+      # ⛔ HARD-CODED 2026-08-17, and the `${EMBEDDING_MODEL:-...}` form was
+      # REMOVED — same treatment memo-v2's block already had, for the same reason.
+      # THIS HOST EXPORTS BOTH VARS: a login shell here shows
+      #     EMBEDDING_MODEL=openai/text-embedding-3-small  EMBEDDING_DIMENSIONS=1536
+      # They happen to MATCH the defaults today, so the interpolation was harmless
+      # — which is exactly what made it dangerous. ⭐ An interpolation whose
+      # variable is currently correct is indistinguishable from a hard-coded value,
+      # right up until someone changes the export. Then `docker compose up` quietly
+      # re-embeds against a different model and nothing in this file has changed.
+      #
+      # ⚑ v0.4.3 has NO `embedding_base_url` SETTING AT ALL (verified: the attribute
+      # does not exist on its Settings object). v1 reaches OpenRouter via
+      # OPENROUTER_API_KEY above. ⇒ There is no LAN-endpoint fallback to worry about
+      # here, and v1 is NOT a client of :31536 or :31541. Do not "fix" it toward one.
+      EMBEDDING_MODEL: openai/text-embedding-3-small
+      EMBEDDING_DIMENSIONS: 1536
     healthcheck:
       # ⚠️ /health is LIVENESS ONLY and has been green through two fleet-wide
       # outages (2026-08-03, 2026-08-09) while /search timed out. v0.4.3 adds
