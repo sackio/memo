@@ -9,8 +9,46 @@ services:
     network_mode: host
     volumes:
       - memo_v2_data:/data
+      # ⛔ NO TRANSCRIPT BIND-MOUNTS. The container reads NOTHING from local disk;
+      # it ssh's to every host INCLUDING server4, via the restricted key below.
+      #
+      # Why: server4's project dirs are symlinks into /fast4, and snap-packaged
+      # Docker CANNOT bind-mount paths outside $HOME — /fast4 mounted as an EMPTY
+      # directory. Measured 2026-08-10: the local path saw 14 of 1,179 session
+      # files and reported it as a clean scan, because a directory existed and the
+      # hostname was right. ⭐ A mount that "succeeded" is not evidence the data
+      # arrived. Going over ssh uniformly removes the special case rather than
+      # patching it, and one code path cannot disagree with itself.
+      # The CLI itself, so the container runs THE SAME FILE rather than a second
+      # implementation of the instruction/tool_result classifier that would drift
+      # silently — both copies would keep returning plausible results.
+      - /mnt/nas/data/code/scripts/transcript-search:/usr/local/bin/transcript-search:ro
+      - /mnt/nas/data/code/scripts/transcript-search-forced:/usr/local/bin/transcript-search-forced:ro
+      # The RESTRICTED key. Its authorized_keys entry on all four hosts pins
+      # command="…/transcript-search-forced", so this key cannot open a shell or
+      # chain to another host — it can run one search and nothing else. Verified
+      # 2026-08-10: `ssh -i <key> host whoami` runs the SEARCH, not whoami.
+      - /home/ben/.ssh/memo-transcript-search:/run/secrets/ts-key:ro
+      # Host keys, so ssh can VERIFY the four hosts. Without this every remote
+      # returns "Host key verification failed" and coverage silently drops to
+      # zero — which happened 2026-08-10 when this line was deleted along with an
+      # unrelated block, while the env var still pointed at the missing file.
+      # ⛔ Never substitute StrictHostKeyChecking=no: turning verification off to
+      # make a search convenient is a real downgrade on a path that holds a key.
+      - /home/ben/.ssh/known_hosts:/run/secrets/known_hosts:ro
     environment:
       DEFAULT_DB_PATH: /data/memo.db
+      # ⛔⛔ THE FLEET REACHES memo ON :8000. THIS DEFAULT IS 8091 AND IS A TRAP.
+      # Until 2026-08-19 there was no `.env`, and the live container only ran on
+      # 8000 because whoever created it on 08-12 had MEMO_V2_PORT=8000 exported
+      # in their shell. A plain `docker compose up -d --build` here would have
+      # silently come up on 8091 — memo gone from :8000 for ~50 seats, container
+      # reporting healthy, and the watch loop's own remote probes failing in a
+      # way that looks like the IPv4-bind outage.
+      # ⇒ `.env` now pins MEMO_V2_PORT=8000 (gitignored; it also carries
+      # OPENROUTER_API_KEY, which config.py requires with no default).
+      # ⭐ A default that has never once been exercised in production is not a
+      # fallback — it is an untested code path with a plausible number in it.
       PORT: ${MEMO_V2_PORT:-8091}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
       # 2026-08-01: SELF-HOSTED qwen3-embedding-4b at native 2560, on the LAN
@@ -58,10 +96,68 @@ services:
       # surfaces only as a dimension error at write time — if you are lucky.
       # ⇒ **A code default that moved is not a fallback; it is a different
       # config wearing the word "default".**
-      EMBEDDING_MODEL: openai/text-embedding-3-large
-      EMBEDDING_DIMENSIONS: 3072
-      EMBEDDING_BASE_URL: https://openrouter.ai/api/v1
-      EMBEDDING_API_KEY: ${OPENROUTER_API_KEY}
+      # ⭐ 2026-08-10, Ben: "rebuild from main yes we definitely need to use our
+      # own free embeddings." Moved OFF paid OpenRouter 3-large/3072 and ONTO the
+      # self-hosted qwen3 service. All four lines changed TOGETHER — see the
+      # unrecoverable case described above: 3-large serves arbitrary widths by
+      # truncation, so changing DIMENSIONS to 2560 while MODEL still read
+      # 3-large would have written truncated 3-large vectors into a qwen3-shaped
+      # store with NO error on either side, and every neighbour returned would be
+      # confidently wrong. Two different models at the same width is the case
+      # nothing catches.
+      #
+      # ⚠️ THE STORE WAS REBUILT EMPTY FOR THIS. 3072 vectors cannot be converted
+      # to 2560 — cosine between two models is meaningless, not merely noisier —
+      # so all 9,200 documents were re-embedded through the LAN service rather
+      # than migrated.
+      #
+      # ⛔ VERIFYING THIS WORKED NEEDS THE MODEL NAME, NOT THE WIDTH. A store full
+      # of truncated 3-large vectors is also 2560 wide. Check
+      # `SELECT embedding_model, COUNT(*) FROM document_chunks GROUP BY 1`.
+      # ⭐ 2026-08-12: BASE URL ONLY moved to memo's OWN embedding pod. Model name
+      # and width are UNCHANGED, which per the warning above is the safe shape of
+      # this edit — but it is not sufficient on its own, and here is the gap.
+      #
+      # ⛔ THE MODEL-NAME CHECK ON LINE 103 NO LONGER SETTLES IT. Both pods serve
+      # `served-model-name=qwen3-embedding-4b` from the same HF id and image, and
+      # NEITHER MANIFEST PINS A REVISION — they downloaded weights ~10 days apart.
+      # So `SELECT embedding_model` returns the same string either way, and the
+      # unrecoverable case (two different models at the same width, no error on
+      # either side) can now arrive through a URL change alone.
+      # ⇒ **A name is not a version. Identical config is not identical weights.**
+      # `models` gated the cutover on MEASURING it: same texts embedded on :31536
+      # and :31541, compared elementwise (max abs delta + cosine).
+      #
+      # ✅ THAT COMPARISON WAS CONFIRMED — recorded here 2026-08-19 because this
+      # block previously ended "do not restart this container until that
+      # comparison is confirmed" and never said that it HAD been, which blocks
+      # every future reader on a condition already met. Full record: memo
+      # `7e80ccb4`. Two instruments, not one:
+      #   1. Weight revision read off both nodes — `refs/main` =
+      #      5cf2132abc99cad020ac570b19d031efec650f2b on gpu3, IDENTICAL to the
+      #      gpu2 pod that wrote the existing index.
+      #   2. Vectors compared against a CALIBRATED control, because GPU kernels
+      #      are not bit-deterministic and an a-priori threshold would have been
+      #      wrong in either direction:
+      #        noise floor   (gpu2 vs gpu2)  worst cos 0.999908  max|d| 1.492e-03
+      #        cross-endpoint(gpu2 vs gpu3)  worst cos 0.999860  max|d| 1.387e-03
+      #      Cross-endpoint came in SMALLER than the same-pod floor.
+      # ⇒ The passage index legitimately spans both endpoints (chunks date from
+      # 08-10, before the 08-12 move) and that is NOT a mixed-model corpus.
+      # ⚠️ Re-measure if either pod is redeployed: the finding is about the weights
+      # those two pods held, not about the URLs.
+      #
+      # WHY: the shared pool at :31536 runs a sustained 550-775 sequence backlog
+      # from another client's bulk batches, which put fleet /recall at 54-115s
+      # (incident memo `7e80ccb4`). :31541 is a separate deployment on gpu3's
+      # 3060, EXCLUSIVE to memo — it deliberately does not join the shared
+      # `embeddings`/`embeddings-lan` pool. Uncontended is the whole point; if
+      # anything else starts using it, tell `models`.
+      # Rollback is this line only, back to http://192.168.1.5:31536/v1.
+      EMBEDDING_MODEL: qwen3-embedding-4b
+      EMBEDDING_DIMENSIONS: 2560
+      EMBEDDING_BASE_URL: http://192.168.1.49:31541/v1
+      EMBEDDING_API_KEY: not-required-lan-service
       # ⭐ RANK BY PASSAGE, DELIVER THE DOCUMENT. [002/FR-117, research.md R-20]
       # Measured on the pinned sample, 256 questions with a unique-literal answer:
       #   path        ranks right doc   answer in SPAN   answer in FULL DOC
@@ -86,6 +182,11 @@ services:
       # the one that turns it off. The code stays because it is tested and
       # reversible, and because a future chunker may change the trade.
       MEMO_CONTEXT_SPAN_WINDOW: 0
+      # Fleet-wide transcript search: restricted key + host keys, no mounts.
+      TRANSCRIPT_SEARCH_SSH_KEY: /run/secrets/ts-key
+      TRANSCRIPT_SEARCH_KNOWN_HOSTS: /run/secrets/known_hosts
+      # Never trust this container's own local view — see the mount note above.
+      TRANSCRIPT_SEARCH_FORCE_REMOTE: "1"
       MEMO_CONDUCTOR_PROVIDER: ${MEMO_CONDUCTOR_PROVIDER:-atc}
       MEMO_AGENT_CONTROLLER_PROVIDER: ${MEMO_AGENT_CONTROLLER_PROVIDER:-agents_supervisor}
       MEMO_V2_VERSION: 2.0.0-alpha1

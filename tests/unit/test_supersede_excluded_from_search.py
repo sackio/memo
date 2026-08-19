@@ -54,19 +54,28 @@ async def test_passage_search_still_returns_results(temp_db):
     intervening default, and `to_thread` forwards positionally and cannot warn.**
     The supersede test above PASSED throughout; only an unrelated positive
     control caught it.
+
+    ⚠️ THE FIXTURE CHANGED 2026-08-19 AND THE GUARD DID NOT. This used to
+    hand-insert a `document_chunks` / `chunk_embeddings` row because `db.store()`
+    left the memo unindexed. `store()` now indexes inline, so the hand-insert
+    collides with the real row (`UNIQUE constraint failed: document_chunks.doc_id,
+    document_chunks.chunk_index`) — the test failed on its own scaffolding, not on
+    the behaviour it guards.
+
+    ⭐ Removing the scaffold makes it a STRONGER guard, not a weaker one: the
+    passage it searches is now produced by the real chunk-and-embed path rather
+    than by a row this test wrote to look like one. A fixture that fakes the thing
+    under test can only ever prove the query runs.
     """
     vec = [0.1] * db.settings.embedding_dimensions
     doc_id = await db.store(db_path=None, content="barn cluster node inventory",
                             title="barn", tags=[], metadata={}, embedding=vec)
-    conn = db._get_or_create_conn(db._resolve_path(None))
-    conn.execute("INSERT INTO document_chunks (doc_id, chunk_index, text, "
-                 "token_start, token_end, embedding_model, embedding_route, created_at) "
-                 "VALUES (?,?,?,?,?,?,?,?)",
-                 (doc_id, 0, "barn cluster node inventory", 0, 4,
-                  db.settings.embedding_model, "test", 1.0))
-    conn.execute("INSERT INTO chunk_embeddings (doc_id, chunk_index, embedding) VALUES (?,?,?)",
-                 (doc_id, 0, db._serialize_vector(vec)))
-    conn.commit()
+
+    # Precondition, stated rather than assumed: the silent-zero this guards
+    # against is indistinguishable from "there was nothing to find".
+    from memo import passages
+    assert await passages.get_passages(doc_id), \
+        "precondition: store() should have indexed the memo inline"
 
     hits = await db.search_passages(None, vec, 5)
     assert hits, "passage search returned NOTHING — the overfetch slot bug is back"

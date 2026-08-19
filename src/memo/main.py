@@ -374,11 +374,41 @@ async def memo_update(
     tags: list[str] | None = None,
     metadata: dict[str, Any] | None = None,
     append: str | None = None,
+    expect_content: str | None = None,
+    allow_shrink: bool = False,
     db_path: str | None = None,
 ) -> dict | None:
     """Update an existing memo by ID. Only provided fields are changed.
 
     If content is updated, the embedding and token_count are recomputed automatically.
+
+    ⛔⛔ `content=` IS A DESTRUCTIVE FULL REPLACE, AND THERE IS NO UNDO. The
+    `documents` table holds ONE row per id with ONE `content` column — no version
+    table, no history, no recovery path. What you overwrite is gone unless you
+    kept a copy yourself.
+
+    ⛔ `/documents/{id}/as-of?t=` IS NOT VERSION HISTORY AND WILL NOT RECOVER IT.
+    It walks the SUPERSEDE lineage — bitemporal *fact* validity, "what was true at
+    t" across superseded documents — so for a doc edited in place it returns the
+    CURRENT content for every t. The name reads like row history; it is not.
+    (Measured by `models`, 2026-08-15, one step from recording it as a recovery path.)
+
+    ⭐ THE ASYMMETRY THIS FIXES: every warning below used to sit on `append` — the
+    parameter that CANNOT lose data, because it carries a compare-and-set guard —
+    while `content`, the one that can, carried none. `models` passed a placeholder
+    string to a 13,336-char global multi-seat reference intending to substitute
+    real text in a follow-up call; it became 9 tokens and returned `updated: true`.
+    Recovered only because they happened to have a scratch file.
+
+    ⇒ TWO GUARDS ON THE REPLACE PATH, both refusing loudly rather than silently:
+    • `expect_content` — pass the content you read and the write becomes
+      compare-and-set: `{updated: false, reason: "conflict"}` if it changed
+      underneath. Optional, because a blind replace has nothing to pass.
+    • `allow_shrink` — a replace that drops a substantial doc to a small fraction
+      of its size is refused as `{updated: false, reason: "shrink_guard"}` unless
+      you set this. It catches the placeholder-overwrite shape specifically, and
+      names the escape hatch in the refusal so a deliberate summarise-in-place
+      costs one flag rather than a support round trip.
 
     ⭐ `append` adds text to the END of the existing content, re-embedding the
     result. [v0.4.0]
@@ -413,7 +443,6 @@ async def memo_update(
     """
     await _reject_leaked_tool_call(content, tags, "memo_update")
 
-    expect_content = None
     if append is not None:
         if content is not None:
             return {"updated": False, "reason": "ambiguous_content_and_append",
@@ -423,9 +452,57 @@ async def memo_update(
         current = await db.get(db_path, id)
         if current is None:
             return {"updated": False, "reason": "not_found", "requested_id": id}
-        expect_content = current.get("content") or ""
+        # An explicit caller-supplied expectation wins over the read-back one:
+        # the caller may be guarding against a change they already know about.
+        if expect_content is None:
+            expect_content = current.get("content") or ""
         # ⛔ Verbatim — no separator injected. See the docstring.
-        content = expect_content + append
+        content = (current.get("content") or "") + append
+
+    # ⛔ SHRINK GUARD ON THE REPLACE PATH — the destructive parameter gets a guard
+    # too, not just the safe one. Refuses the placeholder-overwrite shape (13,336
+    # chars -> 9 tokens, `updated: true`, no undo) while leaving ordinary edits and
+    # deliberate rewrites alone. Applies to the `content=` replace path only —
+    # an `append` cannot shrink, so it is excluded by the `elif`.
+    #
+    # ⚠️ `expect_content` DOES NOT EXEMPT A REPLACE, and this comment used to say
+    # it did — corrected 2026-08-19 before deploy. The two guards answer different
+    # questions: `expect_content` asks *did the row change under me*, the shrink
+    # guard asks *am I destroying most of it*. The placeholder-overwrite that
+    # motivated this would have passed a compare-and-set cleanly, because nobody
+    # else had touched the row — the caller was clobbering it themselves. So a
+    # deliberate summarise-in-place still costs `allow_shrink=true`, which the
+    # refusal names.
+    #
+    # ⭐ Recorded rather than quietly fixed because this file's own comments have
+    # now been wrong about this file three times, and a comment asserting an
+    # exemption the code does not implement is the exact failure mode: specific
+    # enough to read as verified.
+    elif content is not None and not allow_shrink:
+        current = await db.get(db_path, id)
+        if current is None:
+            return {"updated": False, "reason": "not_found", "requested_id": id}
+        prior = current.get("content") or ""
+        # Thresholds, not taste: only guard docs substantial enough that losing
+        # them matters, and only drops steep enough that they read as a mistake
+        # rather than an edit. A 4x reduction is well outside normal editing.
+        if len(prior) >= 500 and len(content) < len(prior) // 4:
+            return {
+                "updated": False,
+                "reason": "shrink_guard",
+                "detail": (
+                    f"Refusing to replace {len(prior)} chars with {len(content)} "
+                    f"(<25%). THERE IS NO UNDO — memo keeps one content row per id, "
+                    f"no version history, and /as-of returns supersede lineage, not "
+                    f"prior revisions. If this is deliberate, resend with "
+                    f"allow_shrink=true. If you meant to add text, use append=. "
+                    f"If you meant to substitute in a follow-up call, do the "
+                    f"substitution first and send the final text once."
+                ),
+                "requested_id": id,
+                "prior_chars": len(prior),
+                "new_chars": len(content),
+            }
 
     # embed_document, not embed_query: this is stored text. The two encode
     # differently on an asymmetric model and mixing them fails SILENTLY —
@@ -1082,10 +1159,29 @@ async def ready(timeout_s: float = 5.0):
         # Read an actual vector back — the index, not just the table beside it.
         row = conn.execute(
             "SELECT doc_id FROM document_embeddings LIMIT 1").fetchone()
-        return n, (row[0] if row else None)
+        # ⭐ PASSAGE-INDEX COVERAGE — the instrument that was missing on
+        # 2026-08-19, when 686 memos had been stored, embedded and UNFINDABLE
+        # for eight days with nothing anywhere reporting it. Nobody was ignoring
+        # a number; there was no number.
+        #
+        # ⚠️ This is deliberately the SAME query `memo-index-corpus` uses to
+        # build its work list, so the two can never disagree about what "needs
+        # indexing" means. A monitor and a repair tool that count differently
+        # produce an unfixable alert.
+        #
+        # ⛔ Reported, NOT fatal: a gap does not make the store un-ready, and a
+        # 503 here would take memo out of service over a condition whose remedy
+        # is a backfill. It surfaces; a human or a sweep acts.
+        gap = conn.execute(
+            "SELECT COUNT(*) FROM documents d "
+            "LEFT JOIN (SELECT DISTINCT doc_id FROM document_chunks) c "
+            "  ON c.doc_id = d.id "
+            "WHERE c.doc_id IS NULL AND d.valid_until IS NULL "
+            "  AND length(coalesce(d.content, '')) > 0").fetchone()[0]
+        return n, (row[0] if row else None), gap
 
     try:
-        n, probe_id = await asyncio.wait_for(
+        n, probe_id, passage_gap = await asyncio.wait_for(
             asyncio.to_thread(_probe), timeout=timeout_s)
     except asyncio.TimeoutError:
         # ⛔ 503, not 200-with-a-field. A monitor that has to parse the body to
@@ -1103,6 +1199,12 @@ async def ready(timeout_s: float = 5.0):
     elapsed = round((_now() - started) * 1000, 1)
     return {"status": "ready", "documents": n,
             "vector_index_readable": probe_id is not None,
+            # Live, non-empty memos with no passages. 0 is the healthy value.
+            # A nonzero here does NOT mean those memos are lost — they remain
+            # reachable by document embedding and FTS5 — it means they cannot
+            # rank by passage, which is the path `/search` uses when
+            # `memo_retrieval_path=passages`.
+            "passage_index_gap": passage_gap,
             "elapsed_ms": elapsed}
 
 

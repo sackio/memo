@@ -9,6 +9,7 @@ import pytest
 
 from memo import db, passages
 from memo.chunking import Passage
+from memo.config import settings
 
 
 def _vec(seed: int, dim: int | None = None) -> list[float]:
@@ -71,12 +72,21 @@ async def test_refuses_a_short_vector_list_rather_than_writing_a_partial_index()
     content = "# A\n\n" + " ".join(["alpha"] * 900)
     doc_id = await db.store(None, content, "t", [], {}, _vec(0))
 
+    # ⚠️ `store` now indexes inline (2026-08-19), so this document already has a
+    # COMPLETE passage set before the refusal under test. The assertion is
+    # therefore "unchanged", not "empty" — which is what the docstring always
+    # meant and what actually protects the tail passages. Asserting emptiness
+    # here would now pass only in a world where `store` had left a hole.
+    before = await passages.get_passages(doc_id)
+    assert before, "precondition: store should have left a full passage set"
+
     async def short_batch(texts):
         return [_vec(1)]        # one vector regardless of passage count
 
     with pytest.raises(ValueError, match="vectors"):
         await passages.index_document(doc_id, content, embed_batch=short_batch)
-    assert await passages.get_passages(doc_id) == [], "nothing may be written on refusal"
+    assert await passages.get_passages(doc_id) == before, \
+        "nothing may be written on refusal"
 
 
 def test_replace_is_atomic_on_failure():
@@ -122,14 +132,23 @@ async def test_passage_offsets_describe_own_span_not_overlap():
 
 
 @pytest.mark.asyncio
-async def test_find_unindexed_reports_memos_with_no_passages():
+async def test_find_unindexed_reports_memos_with_no_passages(monkeypatch):
     """The 'every memo is indexed' invariant must be CHECKABLE, not trusted.
 
     It cannot rest on ten write call sites all remembering to call
     index_document — someone adds an eleventh and the corpus develops holes that
     no listing reveals.
+
+    ⚠️ HOW A HOLE ARISES CHANGED, so this test had to change with it. `store` now
+    indexes inline, so it can no longer be used to manufacture an unindexed memo.
+    The remaining ways in are the escape hatch and a failed embed — the hatch is
+    used here because it is deterministic. The invariant under test is unchanged:
+    whatever produces a hole, `find_unindexed` must report it.
     """
+    monkeypatch.setattr(settings, "memo_inline_passage_index", False)
     doc_id = await db.store(None, "a memo nobody indexed", "t", [], {}, _vec(0))
+    monkeypatch.setattr(settings, "memo_inline_passage_index", True)
+
     unindexed = await passages.find_unindexed()
     assert any(r["id"] == doc_id for r in unindexed)
 
@@ -140,12 +159,24 @@ async def test_find_unindexed_reports_memos_with_no_passages():
 
 
 @pytest.mark.asyncio
-async def test_unindexed_is_ordered_biggest_first():
+async def test_unindexed_is_ordered_biggest_first(monkeypatch):
     """Largest memos first: they are the most expensive to lose and the exact
-    ones this feature exists to rescue."""
+    ones this feature exists to rescue.
+
+    ⛔ THE FLAG IS OFF HERE FOR A REASON, AND IT IS NOT CONVENIENCE. Once `store`
+    indexes inline (2026-08-19) `find_unindexed()` correctly returns `[]`, and
+    the ordering assertion below is TRUE OF THE EMPTY LIST — the test would go on
+    passing while checking nothing at all. That is the exact failure this suite
+    keeps finding elsewhere: a green result that asserts nothing. So the holes
+    are manufactured deliberately, and the non-empty check is what keeps the
+    ordering assertion honest.
+    """
+    monkeypatch.setattr(settings, "memo_inline_passage_index", False)
     await db.store(None, "small", "s", [], {}, _vec(0))
     big = " ".join(["alpha"] * 900)
     await db.store(None, big, "b", [], {}, _vec(1))
+
     rows = await passages.find_unindexed()
     counts = [r["token_count"] for r in rows]
+    assert len(counts) == 2, "the ordering assertion is vacuous on an empty list"
     assert counts == sorted(counts, reverse=True)

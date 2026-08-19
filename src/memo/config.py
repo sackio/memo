@@ -37,7 +37,13 @@ class Settings(BaseSettings):
     # Kept separate from `openrouter_api_key`, which the auto-store/classify LLM
     # calls still use — the two providers moved apart on 2026-08-01 and folding
     # them back into one setting would re-couple them.
-    embedding_base_url: str = "http://192.168.1.5:31536/v1"
+    # ⛔ KEEP THIS IN LOCKSTEP WITH docker-compose.yml. Omitting the env var does
+    # NOT fail — it silently selects whatever this default names. Leaving it on
+    # the shared pool while compose points at memo's own pod would mean any
+    # deployment that drops the env var quietly rejoins the contended queue and
+    # nothing anywhere would say so. Moved 2026-08-12 with compose; see the long
+    # note there for why a matching model NAME does not prove matching weights.
+    embedding_base_url: str = "http://192.168.1.49:31541/v1"
     embedding_api_key: str = "not-required-lan-service"
     default_db_path: str = "~/.memo/memo.db"
 
@@ -59,6 +65,28 @@ class Settings(BaseSettings):
     # Tokens kept either side of the matched passage when packing /context.
     # 0 disables windowing entirely (pack whole documents). [002/FR-120]
     memo_context_span_window: int = 0
+
+    # Index passages INLINE on every write, so a stored memo is findable by the
+    # time the write returns. [002/FR-110]
+    #
+    # ⚠️ WHY THIS EXISTS: `memo_retrieval_path = "passages"` makes `/search` rank
+    # by passage, but until 2026-08-19 nothing on the write path wrote passages —
+    # `db.store()` wrote `document_embeddings` only, and `passages.py` was reached
+    # from nothing but `GET /admin/passage-indexed-ids` and the backfill script.
+    # 686 memos were stored, embedded and UNFINDABLE before that was noticed.
+    #
+    # ⭐ The cost of the gap is not merely absence. A memo the corpus already held
+    # was invisible to a pre-write search, so a second memo was written that
+    # duplicated it AND reached a worse conclusion — by an author who searched
+    # first and got a clean miss. An edit is worse still: `memo-index-corpus`
+    # selects only documents with ZERO passages, so a PATCHed memo keeps its old
+    # chunks and goes on ranking confidently on pre-correction text.
+    #
+    # ⛔ Turning this OFF does not fail loudly. It returns the corpus to silently
+    # accumulating unfindable memos, and `/ready`'s `passage_index_gap` is the
+    # only thing that would show it. Off is for a rehearsal or an emergency, and
+    # it should be followed by a backfill.
+    memo_inline_passage_index: bool = True
 
     # Token count at or above which `size-routed` prefers the PASSAGE index for a
     # given result. [002/FR-113 T273]
@@ -110,14 +138,37 @@ class Settings(BaseSettings):
     # subscription — never a per-token API, and never `claude -p`, which bills
     # as API usage.
     #
-    # DEFAULT STAYS `null` even though the claude_session adapter now exists
-    # (T085a deviation, 2026-07-30). Flipping the default would make the v2
-    # container immediately try to reach a `memo-llm` session that HAS NOT BEEN
-    # CREATED on this fleet yet, and — working exactly as designed — DM the
-    # `agents` supervisor about the outage. Shipping a default that pages the
-    # supervisor about missing infrastructure is not a good default.
+    # ⚠️ CORRECTED 2026-08-10. This comment previously said "the claude_session
+    # adapter now exists" and told you to set `MEMO_LLM_PROVIDER=claude_session`.
+    # BOTH WERE FALSE: that adapter was REMOVED on 2026-07-30 (see the note in
+    # providers/llm/__init__.py, which was accurate the whole time), so following
+    # this comment set an unknown provider name — which falls back to `null` with
+    # a warning and looks exactly like leaving it alone. ⭐ A stale comment that
+    # names a specific symbol is worse than no comment: the specificity reads as
+    # evidence somebody checked. Third time this file's comments were trusted over
+    # the code in one week.
     #
-    # To turn it on, once `memo-llm` exists:  MEMO_LLM_PROVIDER=claude_session
+    # ⭐ AND THERE IS NO REPLACEMENT ADAPTER, BY DESIGN. Do not write one.
+    #
+    # RECALL SYNTHESIS IS THE CALLER'S JOB. Every caller of `/recall` is itself a
+    # Claude Code session with subagents on the Max subscription: it is already
+    # running, already holds the question, and can spawn a background subagent that
+    # reconciles the candidates and returns only the conclusion. A server-side LLM
+    # would add a network hop, a queue, and a dependency that can be down — to do
+    # worse what the caller does locally. The `/recall` skill implements this.
+    #
+    # ⚠️ 2026-08-10: an `atc_session` adapter (memo → `memo-llm` seat → subagent →
+    # ATC reply zone) was written and then REMOVED UNSHIPPED on the same day, once
+    # Ben pointed out the caller already is the LLM. ⭐ It was a re-implementation
+    # of exactly what had been deleted on 07-30 — written by someone who had read
+    # the note recording that deletion an hour earlier and filed it as stale trivia.
+    # **A comment saying "we deliberately removed X" is a design decision, not
+    # archaeology.** If a third adapter ever seems necessary, the question to answer
+    # first is why the caller cannot do it.
+    #
+    # ⇒ `null` is not a placeholder awaiting a real provider. It is the setting that
+    # makes the mediators degrade and report it, which is what lets the caller know
+    # to synthesise. The `degraded:` anomaly is the interface.
     memo_llm_provider: str = "null"
     memo_llm_timeout_seconds: float = 10.0
     # Fallback fires when more than this many candidates survive dedup +

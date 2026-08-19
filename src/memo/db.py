@@ -815,14 +815,69 @@ def _sync_list(db_path: str, tags: list[str], limit: int, after: float | None,
 
 # --- Async wrappers ---
 
+async def _index_passages_after_write(path: str, doc_id: str,
+                                      content: str | None) -> None:
+    """Keep the passage index in step with a write. [002/FR-110]
+
+    ⭐ HOOKED AT THE CHOKE POINT, NOT AT THE CALL SITES — and `find_unindexed`'s
+    own docstring is the argument for it: the guarantee "every memo is indexed"
+    cannot rest on eleven write call sites all remembering to call
+    `index_document`, because someone adds a twelfth and the corpus quietly
+    develops holes that no listing reveals. There are eleven callers of `store`
+    and `update`, and exactly one of each of them.
+
+    ⛔ NEVER FAILS THE WRITE. A memo stored-but-unindexed is recoverable by a
+    backfill; a memo whose store RAISED because the embedder was unreachable is
+    gone, and there is no retry queue in front of the ~50 seats writing here. So
+    this logs and returns. `find_unindexed()` and `/ready`'s `passage_index_gap`
+    are what keep the resulting hole visible rather than silent.
+
+    ⚠️ GLOBAL CORPUS ONLY. `passages` resolves `db.global_path()` unconditionally,
+    so indexing a project-DB write would file its passages under the wrong store —
+    a mis-attribution that reads as coverage.
+
+    ⛔ THAT GUARD IS A NO-OP TODAY AND IS KEPT ANYWAY — stated because a guard
+    that silently does nothing is worse than no guard, since a reader credits it
+    with protection it is not providing. Since the 2026-06-29 single-global
+    refactor `_resolve_path` IGNORES its argument and returns
+    `settings.resolved_default_db_path` for every caller, which is exactly what
+    `global_path()` returns, so `path != global_path()` cannot currently be true.
+    It stays because the day project DBs come back is the day passages start
+    landing in the wrong store, and that failure would present as a coverage
+    number that looks healthy.
+
+    ⚠️ `content is None` means an update that did not touch content (a tag or
+    metadata edit). The existing passages are still correct, and re-embedding
+    them would spend a provider round-trip to write identical rows.
+    """
+    if not settings.memo_inline_passage_index:
+        return
+    if path != global_path():
+        return
+    if content is None:
+        return
+    try:
+        from memo import passages  # local: passages imports db
+        await passages.index_document(doc_id, content)
+    except Exception:
+        logger.exception(
+            "inline passage index failed for %s — the memo IS stored and is still "
+            "reachable by document embedding and FTS5, but it will not rank by "
+            "passage until a backfill runs "
+            "(docker exec memo-v2 python3 /app/scripts/memo-index-corpus)", doc_id)
+
+
 async def store(db_path: str | None, content: str, title: str | None,
                 tags: list[str], metadata: dict, embedding: list[float],
                 doc_id: str | None = None,
                 created_at: float | None = None,
                 updated_at: float | None = None) -> str:
     path = _resolve_path(db_path)
-    return await asyncio.to_thread(_sync_store, path, content, title, tags, metadata,
-                                   embedding, doc_id, created_at, updated_at)
+    stored_id = await asyncio.to_thread(_sync_store, path, content, title, tags,
+                                        metadata, embedding, doc_id, created_at,
+                                        updated_at)
+    await _index_passages_after_write(path, stored_id, content)
+    return stored_id
 
 
 def _sync_search_passages(db_path: str, embedding: list[float], limit: int,
@@ -1038,8 +1093,17 @@ async def update(db_path: str | None, doc_id: str, content: str | None, title: s
     is the failure this whole change exists to remove.
     """
     path = _resolve_path(db_path)
-    return await asyncio.to_thread(_sync_update, path, doc_id, content, title,
-                                   tags, metadata, embedding, expect_content)
+    result = await asyncio.to_thread(_sync_update, path, doc_id, content, title,
+                                     tags, metadata, embedding, expect_content)
+    # ⛔ Only re-index a write that actually landed. `None` is "no such doc" and
+    # `{"conflict": True}` is an optimistic-concurrency REFUSAL — in both cases the
+    # stored content is unchanged, and re-chunking `content` would install passages
+    # for text the document does not contain. That is strictly worse than the stale
+    # chunks this hook exists to replace: it would rank a memo on words no version
+    # of it ever held.
+    if result is not None and not result.get("conflict"):
+        await _index_passages_after_write(path, doc_id, content)
+    return result
 
 
 async def delete(db_path: str | None, doc_id: str, *, actor: str = "unknown",

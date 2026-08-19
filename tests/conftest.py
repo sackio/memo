@@ -88,5 +88,21 @@ def _no_network_embeddings(monkeypatch):
     # ⚠️ Patch both or neither. Patching one leaves the other making real network
     # calls from a suite that runs with `network_mode: none`, which surfaces as a
     # connection error far from its cause.
+    async def fake_embed_batch(texts: list[str]) -> list[list[float]]:
+        return [await fake_embed(t) for t in texts]
+
     monkeypatch.setattr(embeddings, "embed_query", fake_embed)
     monkeypatch.setattr(embeddings, "embed_document", fake_embed)
+    # ⚠️ `embed_batch` MUST be stubbed here too, as of the 2026-08-19 inline
+    # passage index. `db.store()`/`db.update()` now chunk and embed on every
+    # write via `passages.index_document`, which calls `embed_batch` — so
+    # without this, every test that stores a memo reaches for the network from a
+    # suite running `network_mode: none`.
+    #
+    # ⛔ AND IT WOULD NOT HAVE FAILED THE SUITE, WHICH IS THE POINT OF STUBBING
+    # IT RATHER THAN LETTING IT BLOW UP: the inline hook swallows its own
+    # exceptions by design (a memo must never be lost because the embedder is
+    # down), so an unstubbed batch call surfaces as slow tests and silently
+    # unindexed fixtures — never as a red test. The stub keeps the suite honest
+    # about what a write actually produces.
+    monkeypatch.setattr(embeddings, "embed_batch", fake_embed_batch)

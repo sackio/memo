@@ -125,9 +125,27 @@ async def recall(req: RecallRequest, *, provider: LLMProvider | None = None) -> 
     # 1. Semantic retrieval.
     embedding = await embeddings.embed_query(req.query)
     limit = max(OVERFETCH_MIN, req.max_results * OVERFETCH_FACTOR)
+    # ⛔ AN `as_of` QUERY MUST RETRIEVE SUPERSEDED ROWS — otherwise the whole
+    # time-travel path is dead and looks merely empty.
+    #
+    # `db.search` defaults to `valid_until IS NULL` ("currently true", FR-002),
+    # which is right for every normal recall. But the bi-temporal filter below
+    # can only *narrow* what retrieval hands it: asking "what was true at t?"
+    # while retrieving only what is true NOW means the historical version was
+    # already dropped in SQL, and the filter then correctly reports keeping
+    # everything it received. ⭐ Both stages behaved exactly as designed and the
+    # feature was still broken — the bug lived in the seam, where each half's
+    # trace looks clean.
+    #
+    # Failure mode was silent and read as an honest gap: `as_of` returned
+    # "no memo covers this query" for memos that demonstrably existed at that
+    # instant, so the answer was indistinguishable from a genuine absence.
+    # (Fixed 2026-08-10; `test_as_of_surfaces_the_historical_version` asserted
+    # this and had been failing.)
     rows = await db.search(
         db_path=None, embedding=embedding, limit=limit, min_score=None,
         tags=[], after=None, before=None, min_tokens=None, max_tokens=None,
+        include_superseded=req.as_of is not None,
     )
     ctx.note(f"semantic_top_k: {len(rows)}")
 
