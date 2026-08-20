@@ -607,11 +607,43 @@ async def memo_search(
 
 @mcp.tool()
 async def memo_get(id: str, db_path: str | None = None) -> dict | None:
-    """Retrieve a document by ID.
+    """Retrieve a document by ID. Short ids work — a unique prefix resolves.
 
     db_path: ACCEPTED AND IGNORED — one global DB since 2026-06-29.
+
+    ⭐ An 8-char id is what actually circulates — pins, commit messages, agent
+    DMs — so a unique prefix resolves to the full uuid and the memo comes back,
+    carrying `resolved_from` so the caller can see an abbreviation was expanded.
+    An AMBIGUOUS prefix returns `{found: false, reason: "ambiguous", candidates:
+    [...]}` rather than one of the matches: two memos sharing a prefix is
+    precisely when silently picking one is worst.
+
+    ⛔ NEVER RETURNS A BARE NULL. A miss returns `{found: false, reason:
+    "not_found", requested_id: <id>}` — the same decision `memo_update` already
+    makes, for the same reason: a bare null cannot distinguish a mistyped id
+    from a memo that has genuinely vanished, and the alarming reading is the
+    plausible one. (`atc` was one step from reporting a canonical memo deleted,
+    2026-08-20.) Check `found`; a false means re-look-up the id, not that the
+    memo is gone.
     """
-    return await db.get(db_path=db_path, doc_id=id)
+    r = await db.resolve_id(db_path=db_path, doc_id=id)
+    if r["status"] == "ambiguous":
+        return {"found": False, "reason": "ambiguous", "requested_id": id,
+                "candidate_count": r["candidate_count"],
+                "candidates": r["candidates"],
+                "detail": "This prefix matches more than one memo. Pass a longer "
+                          "prefix or a full uuid — picking one for you would be a guess."}
+    if r["status"] == "not_found":
+        return {"found": False, "reason": "not_found", "requested_id": id}
+    doc = await db.get(db_path=db_path, doc_id=r["id"])
+    if doc is None:
+        # Resolved a moment ago and gone now — a real deletion, not a typo, and
+        # the only path on which "genuinely vanished" is the honest reading.
+        return {"found": False, "reason": "not_found", "requested_id": id,
+                "resolved_id": r["id"]}
+    if r["status"] == "prefix":
+        doc = {**doc, "resolved_from": id}
+    return doc
 
 
 @mcp.tool()
@@ -1920,8 +1952,25 @@ async def update_document(doc_id: str, req: UpdateRequest, request: Request):
 
 
 @app.delete("/documents/{doc_id}", response_model=DeleteResponse)
-async def delete_document(doc_id: str, db_path: str | None = Query(default=None)):
-    deleted = await db.delete(db_path=db_path, doc_id=doc_id)
+async def delete_document(
+    doc_id: str,
+    db_path: str | None = Query(default=None),
+    actor: str = Query(default="unknown"),
+    reason: str = Query(default="unspecified"),
+    replaced_by: str | None = Query(default=None),
+):
+    """⚠️ `actor`/`reason`/`replaced_by` were accepted by `db.delete()` since
+    FR-028a and DROPPED HERE — so every deletion in `deletion_log` recorded
+    `unknown`/`unspecified` no matter what the caller knew. The columns existed
+    and looked populated-by-design; the HTTP layer simply never passed them.
+
+    ⭐ The snapshot was never the weak part — content is stored in full and the
+    delete rolls back if the snapshot fails. What was missing is WHO and WHY,
+    which is precisely what an audit of an automated deletion needs. Fixed
+    2026-08-20, when the write-side subagent gained authority to delete.
+    """
+    deleted = await db.delete(db_path=db_path, doc_id=doc_id,
+                              actor=actor, reason=reason, replaced_by=replaced_by)
     return DeleteResponse(deleted=deleted)
 
 
@@ -2093,12 +2142,32 @@ async def _size_routed_search(req: SearchRequest) -> list[SearchResult]:
 async def index_documents(
     db_path: str | None = Query(default=None),
     limit: int = Query(default=200),
+    envelope: bool = Query(default=False),
 ):
+    """⚠️ Windowed. `limit` returning exactly `limit` rows is the ambiguous case.
+
+    A bare list of N rows cannot say whether it enumerated the corpus or hit the
+    cap — 2,000 of 9,815 reads as a complete enumeration, so a negative drawn
+    from it ("no memo mentions X") is false rather than merely bounded.
+    `envelope=1` returns `{documents, returned, limit, total, truncated}` so the
+    window is explicit and a negative becomes bounded. (`atc`, 2026-08-20.)
+
+    ⚠️ The bare array remains the DEFAULT deliberately: this is a live endpoint
+    on shared infrastructure and a shape change would break unknown callers
+    silently-at-a-distance. The envelope is the better contract and should
+    become the default — but that is an announced migration, not a side effect
+    of a bug fix.
+    """
     docs = await db.list_docs(db_path=db_path, tags=[], limit=limit, after=None, before=None,
                                min_tokens=None, max_tokens=None)
-    return [{"id": d["id"], "title": d["title"], "tags": d["tags"],
+    rows = [{"id": d["id"], "title": d["title"], "tags": d["tags"],
              "created_at": d["created_at"], "updated_at": d["updated_at"],
              "token_count": d["token_count"]} for d in docs]
+    if not envelope:
+        return rows
+    total = await db.count_docs(db_path=db_path)
+    return {"documents": rows, "returned": len(rows), "limit": limit,
+            "total": total, "truncated": len(rows) < total}
 
 
 @app.post("/admin/recount-tokens")

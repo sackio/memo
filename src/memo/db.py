@@ -1081,6 +1081,55 @@ async def get(db_path: str | None, doc_id: str) -> dict | None:
     return await asyncio.to_thread(_sync_get, path, doc_id)
 
 
+def _sync_resolve_id(db_path: str, doc_id: str) -> dict:
+    """Resolve a possibly-abbreviated id to exactly one full uuid.
+
+    Short ids are what actually circulate — pins, commit messages, agent DMs and
+    this codebase's own comments all use the 8-char form, while the store is
+    keyed on the full uuid. So the common call was the one that failed.
+
+    Returns `{"status": "exact"|"prefix"|"ambiguous"|"not_found", ...}`; the two
+    resolving statuses carry `id`, and `ambiguous` carries `candidates` so the
+    caller can pick rather than guess. ⛔ Ambiguity is reported, never resolved
+    by picking the first — two memos sharing a prefix is exactly when silently
+    returning one of them is worst.
+    """
+    conn = _get_or_create_conn(db_path)
+    if conn.execute("SELECT 1 FROM documents WHERE id = ?", (doc_id,)).fetchone():
+        return {"status": "exact", "id": doc_id}
+    # Only a plausible prefix is worth a scan: a uuid fragment, not arbitrary text.
+    frag = (doc_id or "").strip()
+    if len(frag) < 4 or not all(c in "0123456789abcdefABCDEF-" for c in frag):
+        return {"status": "not_found"}
+    rows = conn.execute(
+        "SELECT id, title FROM documents WHERE id LIKE ? || '%' LIMIT 11",
+        (frag.lower(),),
+    ).fetchall()
+    if not rows:
+        return {"status": "not_found"}
+    if len(rows) == 1:
+        return {"status": "prefix", "id": rows[0][0]}
+    return {"status": "ambiguous",
+            "candidates": [{"id": r[0], "title": r[1]} for r in rows[:10]],
+            "candidate_count": len(rows)}
+
+
+async def resolve_id(db_path: str | None, doc_id: str) -> dict:
+    path = _resolve_path(db_path)
+    return await asyncio.to_thread(_sync_resolve_id, path, doc_id)
+
+
+def _sync_count_docs(db_path: str) -> int:
+    conn = _get_or_create_conn(db_path)
+    return conn.execute("SELECT COUNT(*) FROM documents").fetchone()[0]
+
+
+async def count_docs(db_path: str | None) -> int:
+    """Corpus size, so a windowed listing can say whether it was truncated."""
+    path = _resolve_path(db_path)
+    return await asyncio.to_thread(_sync_count_docs, path)
+
+
 async def update(db_path: str | None, doc_id: str, content: str | None, title: str | None,
                  tags: list[str] | None, metadata: dict | None,
                  embedding: list[float] | None,
