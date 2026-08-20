@@ -1,0 +1,509 @@
+#!/usr/bin/env python3
+"""
+transcript_search.py — deterministic search over Claude Code session transcripts.
+
+The retrieval half of /recall-transcripts. It does NOT judge; it enumerates,
+filters, ranks and budgets, then hands passages to an agent that reads them.
+
+Why it is a local CLI and not an MCP tool on the memo server: transcripts live in
+$HOME/.claude/projects, which is HOST-LOCAL. The memo container cannot see them,
+and the same project slug holds different transcripts on office / server4 /
+server5 / server3. The search has to run where the transcripts are.
+
+Usage:
+  transcript_search.py "why did we disable memo-judge" --path /mnt/nas/data/code/memo --since 7d
+  transcript_search.py "the 8192 token ceiling" --since 2026-08-01 --until 2026-08-12 --json
+  transcript_search.py "vpn auth storm" --all-projects --since 3d
+"""
+
+import argparse, glob, json, math, os, re, sys, time
+from collections import Counter, defaultdict
+
+PROJECTS = os.path.expanduser("~/.claude/projects")
+
+# --------------------------------------------------------------------------
+# Filters. Every constant here was measured, not guessed — see SKILL.md §Traps.
+# --------------------------------------------------------------------------
+
+# A `claude -p` hook invocation writes its own session file into the cwd's
+# project dir. Measured 2026-08-11: 2,431 files in a 2-day window, 73 real.
+# Size does NOT separate them (a sampled hook transcript is 119 KB with 14
+# lines); line count does — the distribution is bimodal, median 14 vs max 34k.
+HOOK_MAX_LINES = 25
+
+NOISE_PREFIX = ("<channel", "<system-reminder", "<local-command-", "<command-name>",
+                "<command-message>", "<command-args>", "<persisted-output>",
+                "<task-notification>", "<teammate-message")
+NOISE_RE = re.compile(r"(Credit balance is too low|No response requested|"
+                      r"Waited \d+s|continue the prior task|"
+                      r"hit a transient API error. Please retry)")
+
+STOPWORDS = set("""a an the and or but if then than that this these those of in on at to for with
+from by as is are was were be been being it its it's we our us you your i me my do does did not no
+so such can will would should could have has had what when where why how which who whom about""".split())
+
+
+def is_noise(s: str) -> bool:
+    if not s or len(s) < 30:
+        return True
+    if s.lstrip().startswith(NOISE_PREFIX):
+        return True
+    return bool(NOISE_RE.search(s))
+
+
+def is_tool_dump(s: str) -> bool:
+    """Raw tool output pasted into an assistant turn — high line-break density."""
+    lines = s.split("\n")
+    if len(lines) < 6:
+        return False
+    short = sum(1 for ln in lines if 0 < len(ln) < 60)
+    return short / len(lines) > 0.75
+
+
+# --------------------------------------------------------------------------
+# Time
+# --------------------------------------------------------------------------
+
+def parse_when(v, default=None):
+    """Accept 7d / 36h / 90m / YYYY-MM-DD / YYYY-MM-DDTHH:MM. Returns epoch secs."""
+    if not v:
+        return default
+    v = v.strip()
+    m = re.fullmatch(r"(\d+)\s*([dhmw])", v, re.I)
+    if m:
+        n, unit = int(m.group(1)), m.group(2).lower()
+        secs = {"m": 60, "h": 3600, "d": 86400, "w": 604800}[unit]
+        return time.time() - n * secs
+    for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
+        try:
+            return time.mktime(time.strptime(v, fmt))
+        except ValueError:
+            pass
+    raise SystemExit(f"transcript_search: cannot parse time '{v}' "
+                     f"(want 7d / 36h / YYYY-MM-DD / YYYY-MM-DDTHH:MM)")
+
+
+def ts_epoch(iso: str):
+    if not iso:
+        return None
+    try:
+        return time.mktime(time.strptime(iso[:19], "%Y-%m-%dT%H:%M:%S"))
+    except ValueError:
+        return None
+
+
+# --------------------------------------------------------------------------
+# Discovery
+# --------------------------------------------------------------------------
+
+def slug_for(path: str) -> str:
+    return os.path.abspath(path).replace("/", "-")
+
+
+def find_transcripts(project_dirs, since, until):
+    """glob (NOT shell find) — server4's per-project dirs are symlinks into
+    /fast4 since the NVMe migration, and bare `find` does not follow them, so it
+    returns ZERO on the busiest host. glob descends symlinks; verified 158=158."""
+    out = []
+    for d in project_dirs:
+        for p in glob.glob(os.path.join(d, "*.jsonl")):
+            if "/subagents/" in p:
+                continue
+            try:
+                st = os.stat(p)
+            except OSError:
+                continue
+            # mtime is the LAST write; a session spanning the window still
+            # qualifies, so only reject files whose last write precedes `since`.
+            if since and st.st_mtime < since:
+                continue
+            out.append((p, st.st_mtime, st.st_size))
+    return sorted(out, key=lambda r: -r[1])
+
+
+def exceeds_lines(path: str, limit: int) -> bool:
+    """True if the file has more than `limit` lines.
+
+    Bounded on purpose: a hook transcript is byte-heavy and turn-poor (119 KB /
+    14 lines is typical), so counting to the end costs the whole file to learn
+    something the first 26 newlines already settle. Chunked + early-exit turns
+    the discovery pass from O(bytes on disk) into O(bytes actually needed)."""
+    n = 0
+    try:
+        with open(path, "rb") as fh:
+            while True:
+                chunk = fh.read(65536)
+                if not chunk:
+                    return False
+                n += chunk.count(b"\n")
+                if n > limit:
+                    return True
+    except OSError:
+        return False
+
+
+# --------------------------------------------------------------------------
+# Extraction
+# --------------------------------------------------------------------------
+
+def read_turns(path, since, until):
+    """Yield (epoch, role, text) for substantive main-thread turns in window."""
+    try:
+        fh = open(path, errors="replace")
+    except OSError:
+        return
+    for line in fh:
+        try:
+            e = json.loads(line)
+        except Exception:
+            continue
+        if e.get("isSidechain") or e.get("agentId"):
+            continue
+        msg = e.get("message") or {}
+        role = msg.get("role")
+        if role not in ("user", "assistant"):
+            continue
+        t = ts_epoch(e.get("timestamp") or "")
+        if t is not None:
+            if since and t < since:
+                continue
+            if until and t > until:
+                continue
+        c = msg.get("content")
+        if role == "user" and isinstance(c, str):
+            s = c.strip()
+            if not is_noise(s):
+                yield (t, "user", s)
+        elif role == "assistant" and isinstance(c, list):
+            for b in c:
+                if b.get("type") != "text":
+                    continue
+                s = (b.get("text") or "").strip()
+                if is_noise(s) or is_tool_dump(s):
+                    continue
+                yield (t, "assistant", s)
+    fh.close()
+
+
+# --------------------------------------------------------------------------
+# Ranking — lexical, deliberately. The agent supplies the judgment.
+# --------------------------------------------------------------------------
+
+def terms(q):
+    return [w for w in re.findall(r"[a-z0-9_.\-/]{2,}", q.lower()) if w not in STOPWORDS]
+
+
+def distinctive(qterms, df, ndocs):
+    """The query terms that actually carry the topic.
+
+    A query like "nord vpn gateway rejects credentials other gateways accept"
+    is mostly connective vocabulary. Scored on raw overlap, a long passage about
+    something else wins on `other`/`accept` alone — measured: garden chatter
+    outranked the real Nord finding 16.67 to nothing. Splitting on idf and
+    REQUIRING a topic word to appear is what separates them; tuning weights does
+    not, because the noise passage has no topic term at any weight."""
+    idf = {t: math.log(1 + ndocs / (1 + df.get(t, 0))) for t in set(qterms)}
+    if not idf:
+        return set(), idf
+    ranked = sorted(idf.values())
+    cut = ranked[len(ranked) // 2]
+    return {t for t, v in idf.items() if v >= cut}, idf
+
+
+def score_passage(text, qterms, phrases, df, ndocs, topic, idf):
+    low = text.lower()
+    if not qterms:
+        return 0.0
+    # ⛔ Gate first: no topic term present ⇒ not about this, whatever else matched.
+    if topic and not any(t in low for t in topic):
+        return 0.0
+    sc = 0.0
+    for t in set(qterms):
+        tf = low.count(t)
+        if not tf:
+            continue
+        w = idf.get(t, 1.0)
+        sc += (1 + math.log(tf)) * w * (2.0 if t in topic else 0.5)
+    hit = sum(1 for t in set(qterms) if t in low)
+    sc *= (hit / len(set(qterms))) ** 0.5          # reward covering the query
+    for ph in phrases:                              # exact phrase is worth a lot
+        if ph in low:
+            sc += 6.0
+    if 400 <= len(text) <= 4000:
+        sc *= 1.15
+    return sc
+
+
+def excerpt(text, qterms, width=900):
+    """Window the passage around the densest cluster of query terms."""
+    if len(text) <= width:
+        return text
+    low = text.lower()
+    hits = [m.start() for t in set(qterms) for m in re.finditer(re.escape(t), low)]
+    if not hits:
+        return text[:width] + " …"
+    hits.sort()
+    best_i, best_n = hits[0], 0
+    for h in hits:
+        n = sum(1 for x in hits if h <= x < h + width)
+        if n > best_n:
+            best_i, best_n = h, n
+    start = max(0, best_i - width // 4)
+    end = min(len(text), start + width)
+    return ("… " if start else "") + text[start:end] + (" …" if end < len(text) else "")
+
+
+ALL_HOSTS = ["office", "server4", "server5", "server3"]
+
+# Distinct from python3's own exit 2 (missing script) — see fan_out().
+NO_TRANSCRIPTS = 3
+
+
+def fan_out(a):
+    """Run this same script on each host and merge. ~/.claude is host-local, so a
+    single-host answer is only ever about one machine's memory."""
+    import subprocess
+    spec = a.hosts.strip()
+    # "local" never reaches here — main() short-circuits it to an in-process
+    # scan. An empty --hosts used to mean local-only, which made a one-machine
+    # answer the silent default; the narrow case now has to be named.
+    hosts = ALL_HOSTS if spec in ("all", "") else [h.strip() for h in spec.split(",") if h.strip()]
+    me = os.uname().nodename
+    self_path = os.path.abspath(__file__)
+    merged, stats_by_host, errors = [], {}, {}
+    for h in hosts:
+        cmd = ["python3", self_path] + a.query + [
+            "--since", a.since, "--budget", str(a.budget), "--json",
+            # ⛔ EXPLICIT, NEVER OMITTED: without it the child inherits the
+            # --hosts default and fans out again. See the note in main().
+            "--hosts", "local",
+            "--max-passages", str(a.max_passages), "--min-score", str(a.min_score)]
+        if a.until:
+            cmd += ["--until", a.until]
+        cmd += ["--all-projects"] if a.all_projects else ["--path", a.path]
+        if h != me:
+            # The script lives on each host at the same path (NAS-independent),
+            # so shell-quote and run it there.
+            import shlex
+            cmd = ["ssh", "-n", "-o", "ConnectTimeout=8", "-o", "BatchMode=yes", "-p", "4999",
+                   f"ben@{h}", " ".join(shlex.quote(c) for c in cmd)]
+        try:
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+            if r.returncode == NO_TRANSCRIPTS:
+                stats_by_host[h] = {"sessions_read": 0, "note": "no transcripts for that path on this host"}
+                continue
+            if r.returncode != 0:
+                # ⛔ Do NOT read a nonzero exit as "nothing here". python3 exits 2
+                # on a MISSING SCRIPT, which would render an undeployed host as a
+                # clean negative — the exact false-absence this tool exists to avoid.
+                errors[h] = (f"exit {r.returncode}: " + (r.stderr or r.stdout or "").strip()[:140]) or f"exit {r.returncode}"
+                continue
+            d = json.loads(r.stdout)
+        except Exception as e:
+            # ⛔ A host that could not be reached is NOT a host with no matches.
+            errors[h] = f"{e.__class__.__name__}: {str(e)[:120]}"
+            continue
+        stats_by_host[h] = d.get("stats", {})
+        for p in d.get("passages", []):
+            p["host"] = h
+            merged.append(p)
+    merged.sort(key=lambda p: -p.get("score", 0))
+    merged = merged[:a.max_passages]
+    merged.sort(key=lambda p: p.get("when", ""))
+    searched = sum(s.get("sessions_read", 0) for s in stats_by_host.values())
+
+    if a.json:
+        json.dump({"query": " ".join(a.query), "hosts": hosts, "errors": errors,
+                   "stats_by_host": stats_by_host, "sessions_read_total": searched,
+                   "passages": merged}, sys.stdout, indent=1)
+        print()
+        return 0
+
+    print(f"query: {' '.join(a.query)}   [fan-out: {', '.join(hosts)}]")
+    for h in hosts:
+        s = stats_by_host.get(h)
+        if h in errors:
+            print(f"  {h:8} ⛔ NOT SEARCHED — {errors[h]}")
+        elif s is None:
+            print(f"  {h:8} ⛔ NOT SEARCHED — no result")
+        else:
+            print(f"  {h:8} {s.get('sessions_read',0):>3} sessions read, "
+                  f"{s.get('hook_transcripts_dropped',0):>4} hook dropped, "
+                  f"{s.get('matched',0):>4} matched"
+                  + (f"  ({s['note']})" if s.get("note") else ""))
+    if errors:
+        print(f"\n⚠️ {len(errors)} host(s) NOT SEARCHED. Their silence is not evidence of absence.")
+    print(f"\n{len(merged)} passages returned, {searched} sessions searched across "
+          f"{len(hosts)-len(errors)} host(s)\n")
+    if not merged:
+        print("NO MATCHES ABOVE THE SCORE FLOOR."
+              + ("" if searched else "  ⚠️ And ZERO sessions were searched — this is 'unknown', not 'absent'."))
+    for p in merged:
+        print(f"--- [{p['role']} {p['when']}] {p.get('host','?')} : {p['project']} / "
+              f"{p['session8']} (score {p['score']}) ---")
+        print(p["text"])
+        print()
+    return 0
+
+
+def main():
+    ap = argparse.ArgumentParser(add_help=True)
+    ap.add_argument("query", nargs="+")
+    ap.add_argument("--path", default=os.getcwd(),
+                    help="project directory to scope to (default: cwd)")
+    ap.add_argument("--all-projects", action="store_true",
+                    help="search every project dir on this host")
+    ap.add_argument("--since", default="24h")
+    ap.add_argument("--until", default=None)
+    ap.add_argument("--budget", type=int, default=24000,
+                    help="max chars of passage text to emit (default 24000)")
+    ap.add_argument("--max-passages", type=int, default=40)
+    ap.add_argument("--include-hooks", action="store_true",
+                    help="do not drop hook transcripts (almost never what you want)")
+    ap.add_argument("--min-score", type=float, default=4.0,
+                    help="absolute floor; passages below it are not evidence (default 4.0)")
+    # Defaults set by Ben 2026-08-16: "default time window 24 hours, session
+    # specific by default. but this should work on all hosts."
+    #
+    # ⭐ The combination is the point, and the two halves pull in opposite
+    # directions on purpose: NARROW by project (this session's own work) and
+    # WIDE by host. Fanning out over four hosts is cheap precisely because
+    # --path already restricts it to one project dir; the expensive shape is
+    # --all-projects --hosts all, which stays opt-in.
+    #
+    # ⚠️ Host-wide is not a nicety, it is correctness: ~/.claude is HOST-LOCAL
+    # and seats migrate. `assistant` moved office -> server3 on 2026-08-07,
+    # which made its office transcript freeze; a local-only search of its own
+    # project would have reported a six-day silence that never happened.
+    # Use `--hosts local` to search only this machine.
+    ap.add_argument("--hosts", default="all",
+                    help="comma-separated hosts, 'all' (default: office,server4,server5,server3), "
+                         "or 'local' for this machine only. ~/.claude is host-local and seats "
+                         "migrate between hosts, so a local-only search can miss a seat's own history.")
+    ap.add_argument("--json", action="store_true")
+    a = ap.parse_args()
+
+    # ⛔ `local` MUST short-circuit BEFORE fan_out(), and this is load-bearing:
+    # fan_out() re-execs this script per host, and the child inherits whatever
+    # --hosts defaults to. When the default became "all" (2026-08-16), children
+    # re-entered the fan-out and recursed 4x4x4… until the timeout. Caught by a
+    # bare invocation hanging past 110s where a scoped one took 2s.
+    # ⭐ A default that is safe at the top level can be fatal one level down.
+    # The child is always launched with --hosts local; keep it that way.
+    if a.hosts.strip() != "local":
+        return fan_out(a)
+
+    query = " ".join(a.query)
+    qterms = terms(query)
+    phrases = [p.lower() for p in re.findall(r'"([^"]{4,})"', query)]
+    since = parse_when(a.since)
+    until = parse_when(a.until)
+
+    if a.all_projects:
+        dirs = [d for d in glob.glob(os.path.join(PROJECTS, "*")) if os.path.isdir(d)]
+    else:
+        d = os.path.join(PROJECTS, slug_for(a.path))
+        if not os.path.isdir(d):
+            print(json.dumps({"error": "no transcripts for that path on this host",
+                              "host": os.uname().nodename, "looked_for": d}) if a.json
+                  else f"No transcript dir for {a.path} on {os.uname().nodename}\n"
+                       f"  looked for: {d}\n"
+                       f"  ⚠️ ~/.claude is HOST-LOCAL — the session may have run elsewhere.",
+                  file=sys.stderr)
+            return NO_TRANSCRIPTS
+        dirs = [d]
+
+    files = find_transcripts(dirs, since, until)
+    stats = {"host": os.uname().nodename, "discovered": len(files),
+             "hook_transcripts_dropped": 0, "sessions_read": 0,
+             "turns_scanned": 0, "duplicate_turns_dropped": 0}
+
+    passages, seen_user = [], set()
+    df, docs_for_df = Counter(), 0
+    raw = []
+
+    for path, mtime, size in files:
+        if not a.include_hooks and not exceeds_lines(path, HOOK_MAX_LINES):
+            stats["hook_transcripts_dropped"] += 1
+            continue
+        sid = os.path.basename(path)[:-6]
+        proj = os.path.basename(os.path.dirname(path))
+        got = 0
+        for t, role, text in read_turns(path, since, until):
+            stats["turns_scanned"] += 1
+            if role == "user":
+                # Agent seats replay the same cron prompt hundreds of times.
+                k = (sid[:8], text[:200])
+                if k in seen_user:
+                    stats["duplicate_turns_dropped"] += 1
+                    continue
+                seen_user.add(k)
+            raw.append({"session": sid, "project": proj, "ts": t, "role": role, "text": text})
+            for w in set(terms(text)):
+                df[w] += 1
+            docs_for_df += 1
+            got += 1
+        if got:
+            stats["sessions_read"] += 1
+
+    topic, idf = distinctive(qterms, df, max(docs_for_df, 1))
+    for r in raw:
+        r["score"] = score_passage(r["text"], qterms, phrases, df,
+                                   max(docs_for_df, 1), topic, idf)
+    weak = len([r for r in raw if 0 < r["score"] <= a.min_score])
+    raw = [r for r in raw if r["score"] > a.min_score]
+    raw.sort(key=lambda r: -r["score"])
+
+    used = 0
+    for r in raw:
+        if len(passages) >= a.max_passages:
+            break
+        ex = excerpt(r["text"], qterms)
+        if used + len(ex) > a.budget:
+            # Never return zero passages purely because the budget is small —
+            # a budget-starved run and a genuine no-match look identical.
+            if passages:
+                continue
+            ex = ex[:max(a.budget - used, 300)] + " …[budget-truncated]"
+        used += len(ex)
+        passages.append({"session": r["session"], "session8": r["session"][:8],
+                         "project": r["project"], "role": r["role"],
+                         "when": time.strftime("%Y-%m-%d %H:%M", time.localtime(r["ts"]))
+                                 if r["ts"] else "?",
+                         "score": round(r["score"], 2), "text": ex})
+    passages.sort(key=lambda p: p["when"])
+    stats["matched"] = len(raw)
+    stats["below_floor"] = weak
+    stats["min_score"] = a.min_score
+    stats["returned"] = len(passages)
+    stats["chars"] = used
+
+    if a.json:
+        json.dump({"query": query, "since": a.since, "until": a.until,
+                   "stats": stats, "passages": passages}, sys.stdout, indent=1)
+        print()
+        return 0
+
+    print(f"query: {query}")
+    print(f"host: {stats['host']} | window: {a.since} → {a.until or 'now'} | "
+          f"{stats['discovered']} files, {stats['hook_transcripts_dropped']} hook-transcripts dropped, "
+          f"{stats['sessions_read']} sessions read, {stats['duplicate_turns_dropped']} duplicate turns dropped")
+    print(f"{stats['matched']} passages above the score floor ({a.min_score}), "
+          f"{weak} below it and discarded, {stats['returned']} returned ({used} chars)\n")
+    if not passages:
+        print("NO MATCHES ABOVE THE SCORE FLOOR.")
+        if not stats["sessions_read"]:
+            print("⚠️ And ZERO sessions were searched — the answer is 'unknown', not 'absent'.\n"
+                  "   ~/.claude is HOST-LOCAL; try --hosts all.")
+        elif weak:
+            print(f"   {weak} weak lexical matches were discarded rather than returned as evidence.\n"
+                  "   Lower --min-score only if you want to see them as leads, not as answers.")
+    for p in passages:
+        print(f"--- [{p['role']} {p['when']}] {p['project']} / {p['session8']} (score {p['score']}) ---")
+        print(p["text"])
+        print()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

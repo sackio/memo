@@ -1,0 +1,406 @@
+#!/usr/bin/env python3
+"""Search Claude Code session transcripts — structure-aware, fleet-wide.
+
+Why this exists rather than `grep -r ~/.claude/projects`:
+
+⭐ **A tool_result carries `type: "user"`, exactly like a human instruction.**
+So "what did Ben actually ask?" is not expressible as a text search: grep cannot
+tell an operator's words from 400KB of command output that arrived in a
+user-role envelope. That distinction is the whole point of this tool, and it is
+structural, not lexical.
+
+The other reasons are failures this fleet actually had, on 2026-08-10:
+
+  ⛔ SELECT BY SESSION ID, NEVER BY CONTENT MATCH. Several seats share a project
+     directory (`memo` and `memo-llm` both live in -mnt-nas-data-code-memo). A
+     search for a seat's *name* finds whoever MENTIONED it. `agents` did exactly
+     that and got a different seat's 92MB transcript back — 913 confident-looking
+     hits about the wrong session. ⭐ A too-broad search returns FALSE ABUNDANCE,
+     not a null, and a big number invites belief where a zero invites suspicion.
+
+  ⛔ FOLLOW SYMLINKS. server4's project dirs are symlinks into /fast4. Measured:
+     `find` returned 0 where `glob` returned 158 on the same tree. That is why
+     memo-minder scanned 17% of sessions and reported a clean run. ⭐ A coverage
+     bug looks exactly like a quiet day — so this tool ALWAYS prints its
+     denominator, and never lets you read "0 matches" without also seeing how
+     many sessions were actually opened.
+
+  ⛔ /home/ben IS HOST-LOCAL. The same project slug holds DIFFERENT content on
+     office / server4 / server5 / server3. Every result names its host, because a
+     result without one is unattributable.
+
+⚠️ Never invoke bare `grep`/`find` from a shell wrapper around this: the shell
+   snapshot shims them to a tree-walking ugrep that has OOM'd a host. This script
+   does its own IO in Python and shells out to nothing but ssh.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import shlex
+import subprocess
+import sys
+from datetime import datetime, timezone
+
+# Overridable so the same file can run inside memo's container, where the
+# transcripts are bind-mounted read-only and $HOME is not ben's. ⭐ The container
+# runs THIS script rather than a copy of its logic — a second implementation of
+# the tool_result/instruction distinction is exactly the thing that would drift,
+# and the drift would be invisible (both would return plausible results).
+PROJECTS_DIR = os.environ.get("TRANSCRIPTS_DIR") or os.path.expanduser("~/.claude/projects")
+ALL_HOSTS = ["office", "server4", "server5", "server3"]
+SSH = ["ssh", "-o", "ConnectTimeout=8", "-o", "BatchMode=yes", "-p", "4999"]
+# When set (memo's container sets it), use the dedicated forced-command key
+# instead of ben's ordinary identity. That key's `authorized_keys` entry pins
+# `command="…/transcript-search-forced"`, so it can run this search and nothing
+# else — no shell, no chaining, even if the key leaks. Required because memo's
+# :8000 is UNAUTHENTICATED, so an ordinary key there would turn an open HTTP
+# socket into fleet-wide shell.
+# `IdentitiesOnly=yes` matters: without it ssh offers the agent's other keys
+# first and may authenticate as an UNRESTRICTED identity — which would work
+# perfectly and silently defeat the entire restriction.
+_KEY = os.environ.get("TRANSCRIPT_SEARCH_SSH_KEY")
+if _KEY:
+    SSH += ["-i", _KEY, "-o", "IdentitiesOnly=yes"]
+# ⚠️ A container has no ~/.ssh/known_hosts, so EVERY remote fails with "Host key
+# verification failed" — which this tool reports honestly as a host error, but
+# which silently costs three quarters of the fleet until someone reads the field.
+# ⛔ The fix is to SUPPLY the known hosts, never `StrictHostKeyChecking=no`:
+# turning verification off to make a search convenient is a real downgrade, and
+# it would apply to every future use of this path.
+_KH = os.environ.get("TRANSCRIPT_SEARCH_KNOWN_HOSTS")
+if _KH:
+    SSH += ["-o", f"UserKnownHostsFile={_KH}"]
+SELF = "/mnt/nas/data/code/scripts/transcript-search"   # on the NAS ⇒ same path everywhere
+
+# Block kinds we can extract, mapped to the --role names a caller thinks in.
+ROLE_CHOICES = ["instruction", "response", "thinking", "tool_use", "tool_result", "system"]
+DEFAULT_ROLES = ["instruction", "response"]
+
+
+def parse_since(s: str) -> datetime:
+    """Accept a plain date OR a full ISO timestamp.
+
+    ⛔ This used to be a bare `strptime(s, "%Y-%m-%d")`, which raised
+    `ValueError: unconverted data remains: T02:00:00` on any timestamp. The MCP
+    wrapper passes a full ISO string, so `memo_transcript_search` exited 2 on every
+    call that used `since` — and the failure surfaced to the caller as
+    `sessions_scanned: 0`, which reads as "the corpus is empty" rather than "your
+    argument was rejected". A crash that renders as a clean zero is the worst
+    possible failure shape for a search tool. (Found by `agents`, 2026-08-11, on
+    the first call Ben asked them to make.)
+
+    ⚠️ `datetime.fromisoformat` alone is not enough: it only accepts a trailing
+    `Z` from Python 3.11, and this file runs on the 3.10 host as well as in the
+    3.12 container. Same file, two interpreters — so the Z is stripped by hand.
+    """
+    raw = s.strip()
+    if raw.endswith(("Z", "z")):
+        raw = raw[:-1] + "+00:00"
+    try:
+        dt = datetime.fromisoformat(raw)
+    except ValueError:
+        try:
+            dt = datetime.strptime(raw, "%Y-%m-%d")
+        except ValueError:
+            raise SystemExit(
+                f"transcript-search: --since {s!r} is not a date or ISO timestamp. "
+                f"Expected YYYY-MM-DD or 2026-08-11T02:00:00 (trailing Z ok)."
+            )
+    # Naive input is treated as UTC, matching the mtime comparison in scan().
+    return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
+
+
+def _ts(o: dict) -> str:
+    return (o.get("timestamp") or "")[:19].replace("T", " ")
+
+
+def classify(o: dict):
+    """Yield (role, text) for each meaningful block in one transcript record.
+
+    ⭐ THE LOAD-BEARING LINE IS THE `tool_result` CHECK. A record with
+    `type: "user"` is an operator instruction ONLY if its content is a plain
+    string, or a list containing no tool_result block. Otherwise it is machinery
+    wearing a user envelope — which is the single most common way a transcript
+    search lies to you.
+    """
+    t = o.get("type")
+    msg = o.get("message") or {}
+    content = msg.get("content")
+
+    if t == "user":
+        if isinstance(content, str):
+            if content.strip():
+                yield ("instruction", content)
+            return
+        if isinstance(content, list):
+            for b in content:
+                if not isinstance(b, dict):
+                    continue
+                if b.get("type") == "tool_result":
+                    c = b.get("content")
+                    if isinstance(c, list):
+                        c = " ".join(x.get("text", "") for x in c if isinstance(x, dict))
+                    yield ("tool_result", c if isinstance(c, str) else json.dumps(c)[:4000])
+                elif b.get("type") == "text":
+                    # A text block in a user record with no tool_result alongside
+                    # it is a real instruction (this is how attachments arrive).
+                    if not any(isinstance(x, dict) and x.get("type") == "tool_result"
+                               for x in content):
+                        yield ("instruction", b.get("text") or "")
+        return
+
+    if t == "assistant":
+        if isinstance(content, list):
+            for b in content:
+                if not isinstance(b, dict):
+                    continue
+                bt = b.get("type")
+                if bt == "text":
+                    yield ("response", b.get("text") or "")
+                elif bt == "thinking":
+                    yield ("thinking", b.get("thinking") or b.get("text") or "")
+                elif bt == "tool_use":
+                    yield ("tool_use", f"[{b.get('name')}] " + json.dumps(b.get("input"))[:4000])
+        elif isinstance(content, str):
+            yield ("response", content)
+        return
+
+    if t == "system":
+        c = o.get("content") or msg.get("content")
+        if isinstance(c, str) and c.strip():
+            yield ("system", c)
+
+
+def iter_sessions(projects=None):
+    """Every transcript file, following symlinks. Yields (project, session_id, path).
+
+    ⚠️ `followlinks=True` is the whole reason this uses os.walk rather than
+    find(1). Without it this returns nothing on server4 and looks like a quiet
+    fleet.
+    """
+    if not os.path.isdir(PROJECTS_DIR):
+        return
+    for root, dirs, files in os.walk(PROJECTS_DIR, followlinks=True):
+        rel = os.path.relpath(root, PROJECTS_DIR)
+        project = rel.split(os.sep)[0] if rel != "." else ""
+        if projects and not any(p in project for p in projects):
+            continue
+        for fn in files:
+            if fn.endswith(".jsonl"):
+                yield project, fn[:-6], os.path.join(root, fn)
+
+
+def search_local(args) -> dict:
+    host = args.host_label or os.uname().nodename
+    pat = None
+    if args.pattern:
+        flags = re.IGNORECASE if args.ignore_case else 0
+        pat = re.compile(re.escape(args.pattern) if args.fixed else args.pattern, flags)
+
+    roles = set(args.role)
+    scanned = unreadable = considered = 0
+    hits, sessions_seen = [], []
+    truncated = False
+
+    for project, sid, path in iter_sessions(args.project):
+        if args.session and not sid.startswith(args.session):
+            continue
+        if args.no_subagents and "/subagents/" in path:
+            continue
+        scanned += 1
+        try:
+            size = os.path.getsize(path)
+            mtime = datetime.fromtimestamp(os.path.getmtime(path), timezone.utc)
+        except OSError:
+            unreadable += 1
+            continue
+        if args.since and mtime < args.since:
+            continue
+        sessions_seen.append({"project": project, "session": sid,
+                              "bytes": size, "mtime": mtime.strftime("%Y-%m-%d %H:%M")})
+        if args.list_sessions:
+            continue
+        try:
+            with open(path, "r", errors="replace") as fh:
+                for line in fh:
+                    if not line.strip():
+                        continue
+                    try:
+                        o = json.loads(line)
+                    except Exception:
+                        continue
+                    for role, text in classify(o):
+                        if role not in roles or not text:
+                            continue
+                        considered += 1
+                        if pat and not pat.search(text):
+                            continue
+                        if len(hits) >= args.max_matches:
+                            truncated = True
+                            break
+                        snippet = text.strip().replace("\n", " ")
+                        if pat:
+                            m = pat.search(text)
+                            s = max(0, m.start() - args.context)
+                            snippet = text[s:m.end() + args.context].strip().replace("\n", " ")
+                        hits.append({"host": host, "project": project, "session": sid,
+                                     "ts": _ts(o), "role": role,
+                                     "text": snippet[:args.max_chars]})
+                    if truncated:
+                        break
+        except OSError:
+            unreadable += 1
+
+    return {"host": host, "scanned": scanned, "unreadable": unreadable,
+            "blocks_considered": considered, "hits": hits,
+            "sessions": sessions_seen, "truncated": truncated}
+
+
+def search_remote(host, argv) -> dict:
+    """Run this same script on another host. The script is on the NAS, so the
+    path is identical everywhere — no copying, no version skew."""
+    # ⛔ QUOTE EVERY TOKEN. ssh does NOT preserve argv across the wire — it joins
+    # everything after the host into ONE command string, so an unquoted
+    # `-F 'memo-worthiness judge'` arrives on the far side as TWO tokens and the
+    # forced command refuses it: "at most one search pattern is permitted".
+    # ⇒ Every MULTI-WORD pattern has been broken over ssh since this shipped, while
+    # single-word patterns worked — which is exactly why the original four-host
+    # verification passed. ⭐ A test whose inputs are all single-token cannot see a
+    # word-splitting bug; the fixture chose the one shape that hides it.
+    # The forced command was correct to refuse: it shlex.splits SSH_ORIGINAL_COMMAND,
+    # so quoting here is what makes the two halves agree.
+    remote = " ".join(shlex.quote(t) for t in
+                      ["python3", SELF] + argv + ["--json", "--host-label", host])
+    cmd = SSH + [f"ben@{host}", remote]
+    try:
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+    except subprocess.TimeoutExpired:
+        return {"host": host, "error": "ssh timeout", "scanned": 0, "unreadable": 0,
+                "hits": [], "sessions": [], "truncated": False}
+    if p.returncode != 0:
+        # ⭐ An ssh failure is a HOST problem, not an empty result. Reporting it as
+        # "no matches" is how a guard against noise becomes a guard against signal.
+        return {"host": host, "error": f"ssh rc={p.returncode}: {p.stderr.strip()[:200]}",
+                "scanned": 0, "unreadable": 0, "hits": [], "sessions": [], "truncated": False}
+    try:
+        return json.loads(p.stdout)
+    except Exception:
+        return {"host": host, "error": "unparseable output", "scanned": 0,
+                "unreadable": 0, "hits": [], "sessions": [], "truncated": False}
+
+
+def main():
+    ap = argparse.ArgumentParser(
+        description="Structure-aware search over Claude Code transcripts.",
+        epilog="Roles: " + " ".join(ROLE_CHOICES) + "   (default: instruction response)")
+    ap.add_argument("pattern", nargs="?", help="regex (or literal with -F). Omit to list.")
+    ap.add_argument("--role", action="append", choices=ROLE_CHOICES + ["any"], default=[])
+    ap.add_argument("--instructions-only", action="store_true", help="operator turns only")
+    ap.add_argument("--responses-only", action="store_true", help="assistant prose only")
+    ap.add_argument("--project", action="append", default=[], help="substring of project dir; repeatable")
+    ap.add_argument("--session", help="session id or prefix — THE SAFE SELECTOR")
+    ap.add_argument("--host", action="append", default=[], help="repeatable")
+    ap.add_argument("--all-hosts", action="store_true")
+    ap.add_argument("--since", help="YYYY-MM-DD or an ISO timestamp "
+                                    "(2026-08-11T02:00:00, trailing Z ok); by file mtime")
+    ap.add_argument("-i", "--ignore-case", action="store_true")
+    ap.add_argument("-F", "--fixed", action="store_true", help="literal, not regex")
+    ap.add_argument("-C", "--context", type=int, default=120, help="chars around match")
+    ap.add_argument("--max-matches", type=int, default=50)
+    ap.add_argument("--max-chars", type=int, default=400)
+    ap.add_argument("--no-subagents", action="store_true", help="skip subagent transcripts")
+    ap.add_argument("--list-sessions", action="store_true")
+    ap.add_argument("--json", action="store_true")
+    ap.add_argument("--host-label", help=argparse.SUPPRESS)
+    args = ap.parse_args()
+
+    if args.instructions_only:
+        args.role = ["instruction"]
+    elif args.responses_only:
+        args.role = ["response"]
+    if not args.role:
+        args.role = list(DEFAULT_ROLES)
+    if "any" in args.role:
+        args.role = list(ROLE_CHOICES)
+    if args.since:
+        args.since = parse_since(args.since)
+
+    hosts = ALL_HOSTS if args.all_hosts else (args.host or [])
+    me = os.uname().nodename
+    # ⛔ IN A CONTAINER, "LOCAL" IS A LIE — go over ssh even to our own host.
+    #
+    # memo's container runs with `network_mode: host`, so `uname -n` reports
+    # `server4` and the local path looks correct. It is not: server4's project
+    # dirs are symlinks into /fast4, and **snap-packaged Docker cannot bind-mount
+    # paths outside $HOME**, so /fast4 mounts as an EMPTY directory. Measured
+    # 2026-08-10: the local path saw 14 session files where ssh to the same host
+    # saw 1,179 — and reported the 14 as a clean scan.
+    # ⭐ Two things had to be true for that to be invisible: the container knew the
+    # right hostname, and the mount succeeded in the sense that a directory
+    # existed. Neither is evidence the data is there.
+    if os.environ.get("TRANSCRIPT_SEARCH_FORCE_REMOTE"):
+        me = None
+
+    if not hosts:
+        results = [search_local(args)]
+    else:
+        # ⚠️ Strip the flags that are OURS to interpret, AND their values. Dropping
+        # `--host` while leaving `office` behind turns the hostname into a stray
+        # positional and the remote exits 2 on a usage error — which this tool
+        # reports as a host problem (correctly), so the bug reads as "office is
+        # unreachable" rather than "I built the command wrong." Found on first run.
+        cleaned, skip = [], False
+        for a in sys.argv[1:]:
+            if skip:
+                skip = False
+                continue
+            if a in ("--host", "--host-label"):
+                skip = True
+                continue
+            if a.startswith("--host=") or a.startswith("--host-label="):
+                continue
+            if a in ("--all-hosts", "--json"):
+                continue
+            cleaned.append(a)
+        results = []
+        for h in hosts:
+            results.append(search_local(args) if h == me else search_remote(h, cleaned))
+
+    if args.json:
+        print(json.dumps(results[0] if len(results) == 1 else results))
+        return
+
+    total_hits = sum(len(r.get("hits") or []) for r in results)
+    total_scanned = sum(r.get("scanned", 0) for r in results)
+    total_unread = sum(r.get("unreadable", 0) for r in results)
+
+    for r in results:
+        if r.get("error"):
+            print(f"⚠️  {r['host']}: {r['error']}  (host problem — NOT an empty result)")
+
+    if args.list_sessions:
+        for r in results:
+            for s in sorted(r.get("sessions") or [], key=lambda x: x["mtime"], reverse=True):
+                print(f"{r['host']:8} {s['mtime']}  {s['bytes']/1e6:7.1f}MB  "
+                      f"{s['session']}  {s['project']}")
+    else:
+        for r in results:
+            for h in r.get("hits") or []:
+                print(f"\n{h['host']:8} {h['ts']}  [{h['role']}]  {h['session'][:8]}  {h['project']}")
+                print(f"   {h['text']}")
+
+    # ⭐ THE DENOMINATOR IS NOT OPTIONAL. "0 matches" means nothing without it —
+    # a coverage bug and a genuinely quiet corpus produce identical hit counts.
+    print(f"\n── {total_hits} match(es) across {total_scanned} session(s)"
+          f"{f', {total_unread} unreadable' if total_unread else ''}"
+          f"{', OUTPUT TRUNCATED (raise --max-matches)' if any(r.get('truncated') for r in results) else ''}"
+          f" · roles={'+'.join(args.role)}")
+    if total_scanned == 0:
+        print("⚠️  ZERO sessions scanned — that is a coverage failure, not a quiet corpus.")
+
+
+if __name__ == "__main__":
+    main()
