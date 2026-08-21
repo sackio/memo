@@ -50,8 +50,24 @@ def no_such_memo(monkeypatch):
 
 @pytest.fixture
 def existing_memo(monkeypatch):
-    async def _doc(**_kwargs):
+    # ⚠️ `*_a` is load-bearing: `memo_update` calls `db.get(db_path, id)`
+    # POSITIONALLY while `db.update(...)` is called by keyword. A kwargs-only
+    # double raises TypeError from one and not the other.
+    async def _doc(*_a, **_kwargs):
         return {"id": "abc", "content": "hello", "title": "t", "tags": []}
+
+    # ⛔ THE MOCK WENT STALE UNDER THE CODE, and the test then failed for a
+    # reason that had nothing to do with what it tests. The shrink guard
+    # (2026-08-19) made the `content=` replace path read the memo first, via
+    # `db.get`. This fixture mocked only `db.update`, so that read hit the real
+    # empty test store, returned None, and `memo_update` answered
+    # `{updated: False, reason: "not_found"}` — failing an assertion about the
+    # SUCCESS branch's discriminator, which was never broken.
+    # ⭐ A fixture that mocks a SUBSET of a function's collaborators silently
+    # starts testing something else the moment a new collaborator appears, and
+    # the failure it eventually produces points at the wrong thing. Found
+    # 2026-08-21; red since 08-19, so `ebb62e8` shipped over it.
+    monkeypatch.setattr(main.db, "get", _doc)
 
     async def _no_embed(_text):
         return [0.0] * 8

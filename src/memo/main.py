@@ -507,7 +507,21 @@ async def memo_update(
     # embed_document, not embed_query: this is stored text. The two encode
     # differently on an asymmetric model and mixing them fails SILENTLY —
     # plausible, slightly-wrong neighbours forever, with no error to notice.
-    embedding = await embeddings.embed_document(content) if content is not None else None
+    # ⛔ 413's MCP twin. An HTTPException here would escape the tool as an opaque
+    # transport error, so the refusal takes the same distinguishable-failure shape
+    # as shrink_guard above and as memo_get's not_found/ambiguous — the caller can
+    # branch on `reason` instead of parsing prose. See `_too_large_detail`.
+    try:
+        embedding = await embeddings.embed_document(content) if content is not None else None
+    except embeddings.EmbeddingInputTooLarge as e:
+        return {
+            "updated": False,
+            "reason": "too_large",
+            "detail": _too_large_detail(e),
+            "requested_id": id,
+            "chars": e.chars,
+            "max_input_tokens": embeddings.MAX_INPUT_TOKENS,
+        }
     result = await db.update(
         db_path=db_path,
         doc_id=id,
@@ -1240,6 +1254,35 @@ async def ready(timeout_s: float = 5.0):
             "elapsed_ms": elapsed}
 
 
+def _too_large_detail(e: "embeddings.EmbeddingInputTooLarge") -> str:
+    """The one place the over-length refusal is worded.
+
+    ⛔ EXISTS BECAUSE THE KNOWLEDGE LIVED AT ONE CALL SITE. `POST /documents` grew
+    a 413 in `cc718ab`; the other SIX `embed_document` callers were written
+    without it and went on returning a bare 500 — MCP `memo_update`,
+    `PATCH /documents/{id}`, `/supersede`, `/auto-store` (create AND merge), and
+    the operator-directive handler. Found 2026-08-21 by watching a seat
+    retry-loop PATCHes that could never succeed and were never told why.
+    ⭐ A fix applied at a call site does not generalise; a fix applied at the
+    shared seam does. Add new embed_document callers through the wrappers below.
+    """
+    return (
+        f"Document too large to embed ({e.chars:,} characters). The embedding "
+        f"model's context limit is {embeddings.MAX_INPUT_TOKENS:,} tokens and this "
+        f"content exceeds it. Split it into separate memos — memo does not "
+        f"truncate, because a partial embedding is indistinguishable from a "
+        f"correct one. Provider said: {e.provider_message[:300]}"
+    )
+
+
+async def _embed_document_or_413(text: str) -> list[float]:
+    """embed_document for HTTP surfaces: over-length becomes 413, never 500."""
+    try:
+        return await embeddings.embed_document(text)
+    except embeddings.EmbeddingInputTooLarge as e:
+        raise HTTPException(status_code=413, detail=_too_large_detail(e)) from e
+
+
 @app.post("/documents", response_model=StoreResponse)
 async def store_document(req: StoreRequest, request: Request):
     _log_phantom_fields(req, "POST /documents",
@@ -1263,16 +1306,7 @@ async def store_document(req: StoreRequest, request: Request):
         # ⛔ We do NOT truncate to make it fit (see embeddings.MAX_INPUT_TOKENS):
         # a 20k-token memo embedded as its first 16k is a plausible vector, not a
         # correct one, and nothing downstream would ever reveal the difference.
-        raise HTTPException(
-            status_code=413,
-            detail=(
-                f"Document too large to embed ({e.chars:,} characters). The embedding "
-                f"model's context limit is {embeddings.MAX_INPUT_TOKENS:,} tokens and this "
-                f"content exceeds it. Split it into separate memos — memo does not "
-                f"truncate, because a partial embedding is indistinguishable from a "
-                f"correct one. Provider said: {e.provider_message[:300]}"
-            ),
-        )
+        raise HTTPException(status_code=413, detail=_too_large_detail(e)) from e
     try:
         doc_id = await db.store(
             db_path=req.db_path,
@@ -1486,7 +1520,12 @@ async def _ev_operator_directive(payload: dict[str, Any]) -> dict[str, Any]:
 
     from memo import db, embeddings
     from memo.auditor import actions as _actions
-    embedding = await embeddings.embed_document(content)
+    try:
+        embedding = await embeddings.embed_document(content)
+    except embeddings.EmbeddingInputTooLarge as e:
+        # This handler answers with dicts, not HTTP. Same refusal, its own shape.
+        return {"recorded": False, "reason": "too_large",
+                "detail": _too_large_detail(e), "chars": e.chars, "ref": ref}
     memo_id = await db.store(db_path=None, content=content,
                              title="[operator directive] " + content[:60],
                              tags=["operator-directive", "auditor-calibration"],
@@ -1819,7 +1858,7 @@ async def supersede_document(req: SupersedeRequest, request: Request):
         by_alias=True,
         exclude={"old_id", "actor", "reason", "operator_directive_ref"},
     )
-    embedding = await embeddings.embed_document(req.content)
+    embedding = await _embed_document_or_413(req.content)
     result = await documents_repo.supersede(
         req.old_id, new_memo, embedding, req.actor,
         reason=req.reason,
@@ -1840,13 +1879,91 @@ async def supersede_document(req: SupersedeRequest, request: Request):
     return SupersedeResponse(**result)
 
 
+def _looks_zero_padded(doc_id: str) -> bool:
+    """A short id padded out to uuid shape — e.g. `42e85a8c-0000-...-000000000000`.
+
+    Seen live before this route could resolve prefixes: callers made the id the
+    right SHAPE to get past a validator, which is not the same as making it
+    resolve. Detected only to say so in the 404.
+    """
+    parts = (doc_id or "").split("-")
+    return (len(parts) == 5
+            and all(c in "0" for c in "".join(parts[1:]))
+            and len("".join(parts[1:])) > 0
+            and parts[0] != "")
+
+
+async def _resolve_doc_id_or_404(doc_id: str, db_path: str | None,
+                                 response: Response | None = None) -> str:
+    """Expand a short id on the REST routes, or refuse legibly. Returns the full uuid.
+
+    ⛔ EXISTS BECAUSE THE SAME FIX WAS APPLIED TO MCP AND NOT HERE. `memo_get`
+    grew prefix resolution on 2026-08-20 (`8b5255dd`); the REST routes went on
+    404ing the identical id. Measured 2026-08-21, one 32-minute window: **13
+    404s, 12 of them short-id lookups, 10 from a single seat against 9 distinct
+    memos.** An 8-char id is what actually circulates — pins, commit messages,
+    agent DMs — so this was the common call, and it failed in the reading as
+    well as the lookup: a 404 says "memo deleted", not "you abbreviated it".
+    That misreading nearly had `atc` report a canonical memo gone.
+
+    ⛔ AMBIGUITY IS REFUSED, NEVER GUESSED — 409 with the candidates. Two memos
+    sharing a prefix is exactly when silently picking one is worst, and that
+    holds harder here than on MCP because these routes include PATCH and DELETE.
+    ⭐ A unique prefix is not riskier than a full uuid: it names exactly one
+    document or it does not resolve at all.
+
+    ⚠️ The expansion is reported as the `X-Resolved-From` HEADER, not a body
+    field. `Document` is a strict model, so an extra key would be SILENTLY
+    STRIPPED by `response_model` — the caller would be told nothing and no error
+    would fire. A header cannot be quietly dropped that way.
+    """
+    r = await db.resolve_id(db_path=db_path, doc_id=doc_id)
+    if r["status"] == "ambiguous":
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "reason": "ambiguous",
+                "requested_id": doc_id,
+                "candidate_count": r["candidate_count"],
+                "candidates": r["candidates"],
+                "message": ("This prefix matches more than one memo. Pass a longer "
+                            "prefix or a full uuid — picking one for you would be a guess."),
+            },
+        )
+    if r["status"] == "not_found":
+        msg = ("No memo has this id or prefix. If you abbreviated, the abbreviation "
+               "matched nothing — this is not evidence the memo was deleted.")
+        # ⚑ OBSERVED IN PRODUCTION 2026-08-21, from a seat that had already worked
+        # around the missing short-id support: `42e85a8c-0000-0000-0000-000000000000`.
+        # Padding an 8-char id out to uuid SHAPE makes it syntactically valid and
+        # semantically nothing — it is not a prefix of anything, so it can never
+        # resolve, and the caller reads the 404 as a deleted memo.
+        # ⛔ THIS IS THE WORKAROUND OUTLIVING THE BUG: prefix resolution does not
+        # rescue a padded id, so a caller who adapted is left broken by a fix that
+        # looks complete. Naming it is the only way they find out.
+        if _looks_zero_padded(doc_id):
+            msg = ("This looks like a short id PADDED OUT to uuid shape "
+                   "(zeroed tail). A padded id is not a prefix of anything and can "
+                   f"never resolve. Send the bare prefix instead — `{doc_id.split('-')[0]}` "
+                   "— which now resolves on its own. The memo is very likely fine.")
+        raise HTTPException(
+            status_code=404,
+            detail={"reason": "not_found", "requested_id": doc_id, "message": msg},
+        )
+    if r["status"] == "prefix" and response is not None:
+        response.headers["X-Resolved-From"] = doc_id
+    return r["id"]
+
+
 @app.get("/documents/{doc_id}/current", response_model=Document)
-async def get_document_current(doc_id: str, db_path: str | None = Query(default=None)):
+async def get_document_current(doc_id: str, response: Response,
+                               db_path: str | None = Query(default=None)):
     """Currently-valid version of this memo's lineage. [001/FR-002]
 
     Accepts a superseded id and follows the supersede chain forward, so a
     caller holding a stale id still gets the current truth.
     """
+    doc_id = await _resolve_doc_id_or_404(doc_id, db_path, response)
     doc = await documents_repo.get_current(doc_id, db_path=db_path)
     if doc is None:
         raise HTTPException(status_code=404, detail=f"no current version for {doc_id}")
@@ -1856,10 +1973,12 @@ async def get_document_current(doc_id: str, db_path: str | None = Query(default=
 @app.get("/documents/{doc_id}/as-of", response_model=Document)
 async def get_document_as_of(
     doc_id: str,
+    response: Response,
     t: float = Query(description="Epoch seconds — the instant to read as of"),
     db_path: str | None = Query(default=None),
 ):
     """Version of this memo's lineage that was true at ``t``. [001/FR-002]"""
+    doc_id = await _resolve_doc_id_or_404(doc_id, db_path, response)
     doc = await documents_repo.get_as_of(doc_id, t, db_path=db_path)
     if doc is None:
         raise HTTPException(
@@ -1895,15 +2014,20 @@ async def list_documents(
 
 
 @app.get("/documents/{doc_id}", response_model=Document)
-async def get_document(doc_id: str, db_path: str | None = Query(default=None)):
+async def get_document(doc_id: str, response: Response,
+                       db_path: str | None = Query(default=None)):
+    doc_id = await _resolve_doc_id_or_404(doc_id, db_path, response)
     doc = await db.get(db_path=db_path, doc_id=doc_id)
     if doc is None:
+        # Resolved a moment ago and gone now — a real deletion, not a typo.
         raise HTTPException(status_code=404, detail="Document not found")
     return Document(**doc)
 
 
 @app.patch("/documents/{doc_id}", response_model=Document)
-async def update_document(doc_id: str, req: UpdateRequest, request: Request):
+async def update_document(doc_id: str, req: UpdateRequest, request: Request,
+                          response: Response):
+    doc_id = await _resolve_doc_id_or_404(doc_id, req.db_path, response)
     _log_phantom_fields(req, "PATCH /documents/{id}", doc_id,
                         user_agent=request.headers.get("user-agent"))
     try:
@@ -1929,7 +2053,7 @@ async def update_document(doc_id: str, req: UpdateRequest, request: Request):
         expect_content = current.get("content") or ""
         new_content = expect_content + req.append
 
-    embedding = await embeddings.embed_document(new_content) if new_content is not None else None
+    embedding = await _embed_document_or_413(new_content) if new_content is not None else None
     result = await db.update(
         db_path=req.db_path,
         doc_id=doc_id,
@@ -1954,6 +2078,7 @@ async def update_document(doc_id: str, req: UpdateRequest, request: Request):
 @app.delete("/documents/{doc_id}", response_model=DeleteResponse)
 async def delete_document(
     doc_id: str,
+    response: Response,
     db_path: str | None = Query(default=None),
     actor: str = Query(default="unknown"),
     reason: str = Query(default="unspecified"),
@@ -1969,6 +2094,9 @@ async def delete_document(
     which is precisely what an audit of an automated deletion needs. Fixed
     2026-08-20, when the write-side subagent gained authority to delete.
     """
+    # ⛔ Resolve BEFORE deleting, and an ambiguous prefix is a 409 rather than a
+    # guess — on this route a guess destroys the wrong memo and there is no undo.
+    doc_id = await _resolve_doc_id_or_404(doc_id, db_path, response)
     deleted = await db.delete(db_path=db_path, doc_id=doc_id,
                               actor=actor, reason=reason, replaced_by=replaced_by)
     return DeleteResponse(deleted=deleted)
@@ -2263,7 +2391,7 @@ async def auto_store(req: AutoStoreRequest):
     #
     # "It is passed to db.search" is the wrong test. The test is what the vector is
     # being compared WITH. [002/FR-111]
-    embedding = await embeddings.embed_document(extracted)
+    embedding = await _embed_document_or_413(extracted)
     similar = await db.search(
         db_path=req.db_path,
         embedding=embedding,
@@ -2300,7 +2428,7 @@ async def auto_store(req: AutoStoreRequest):
             merged_title = merge.get("title") or title or best.get("title")
             merged_tags = merge.get("tags") or list(dict.fromkeys(tags + best.get("tags", [])))
             await _reject_leaked_tool_call(merged_content, merged_tags, "auto_store:merge")
-            merged_embedding = await embeddings.embed_document(merged_content)
+            merged_embedding = await _embed_document_or_413(merged_content)
             await db.update(
                 db_path=req.db_path,
                 doc_id=best["id"],
