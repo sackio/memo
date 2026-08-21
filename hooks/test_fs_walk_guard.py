@@ -43,6 +43,17 @@ POSITIVE = [
   ("Glob tool at /", {"tool_name":"Glob","tool_input":{"pattern":"**/*agentkit*","path":"/"}}),
   ("Grep tool at /mnt/nas", {"tool_name":"Grep","tool_input":{"pattern":"x","path":"/mnt/nas"}}),
   ("Glob abs pattern", {"tool_name":"Glob","tool_input":{"pattern":"/mnt/nas/**/*.jsonl"}}),
+  # ⭐ REAL#4 (agents, 2026-08-21 22:08). Cross-host work on this fleet is nearly
+  #    always `ssh <host> 'bash -s' <<REMOTE`, so heredoc-stripping -- right for a
+  #    commit message -- made the payload invisible exactly when it IS the command.
+  #    Their orphaned zticker walk went through this path.
+  ("REAL#4 ssh + bash -s heredoc",
+   bash("ssh ben@server5 'bash -s' <<'REMOTE'\n"
+        "find /mnt/nas/data/quantum/zticker -type f -newermt -20 minutes\nREMOTE")),
+  ("ssh + quoted command", bash('ssh ben@server5 "find /mnt/nas -name x"')),
+  ("ssh -p with opts", bash("ssh -o ConnectTimeout=6 -p 4999 ben@office 'rg pat /mnt/nas/data/code'")),
+  ("bash -c wrapping a walk", bash('bash -c "find /mnt/nas -name y"')),
+
   # ⭐ REAL #3, 2026-08-21 evening (agents). The guard MISSED this one live: the
   #    root is "." and relative walks were exempt, on the assumption that a cwd is
   #    local. It ran 15 min over NFS on a host at 95% io pressure.
@@ -84,10 +95,23 @@ NEGATIVE = [
   ("heredoc quoting a walk",
    bash("cat > /tmp/msg.txt <<'EOF'\nfix: ugrep -rn pat . ran 15 min over NFS\n"
         "also find /mnt/nas -name x\nEOF\ngit commit -F /tmp/msg.txt")),
+
   ("heredoc then a REAL walk after it",
    bash("cat > /tmp/a <<'EOF'\nharmless prose\nEOF\necho done")),
+]
+NEGATIVE += [
+  ("heredoc prose only", bash("cat > /tmp/a <<'EOF'\nharmless prose\nEOF\necho done")),
   ("unknown tool", {"tool_name":"Write","tool_input":{"file_path":"/mnt/nas/x"}}),
   ("malformed input", {"tool_name":"Bash","tool_input":"not-a-dict"}),
+]
+
+# ⚠️ The far side's cwd is UNKNOWN, so a RELATIVE root inside an ssh payload must
+#    keep failing open -- guessing it against the local cwd would deny remote work
+#    on evidence we do not have.
+NEGATIVE += [
+  ("ssh + RELATIVE root (cwd unknown)", bash("ssh ben@server5 'find . -name x'")),
+  ("ssh + bounded remote walk", bash('ssh ben@server5 "find /mnt/nas -maxdepth 3 -name x"')),
+  ("ssh probe, no walk", bash("ssh -p 4999 ben@office \"curl -sS -o /dev/null -w 'code=%{http_code}' http://server4:8000/health\"")),
 ]
 
 fails = 0

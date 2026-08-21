@@ -181,8 +181,13 @@ def strip_heredocs(command):
     Anyone writing a script, a commit message or documentation that MENTIONS a
     command would hit this -- and the failure lands on the people most likely to
     be documenting the rule.
+
+    ⚠️ The bodies are RETURNED, not discarded. For `ssh host 'bash -s' <<REMOTE`
+    the body IS the command, and this fleet runs nearly all cross-host work that
+    way -- so a rule that is right for a commit message is wrong for the shape a
+    supervisor uses most. The caller decides which it is.
     """
-    out, lines, i = [], command.split("\n"), 0
+    out, bodies, lines, i = [], [], command.split("\n"), 0
     while i < len(lines):
         line = lines[i]
         out.append(line)
@@ -190,12 +195,14 @@ def strip_heredocs(command):
         i += 1
         if not m:
             continue
-        delim = m.group(2)
+        delim, body = m.group(2), []
         while i < len(lines) and lines[i].strip() != delim:
+            body.append(lines[i])
             i += 1
         if i < len(lines):
             i += 1  # drop the terminator too
-    return "\n".join(out)
+        bodies.append("\n".join(body))
+    return "\n".join(out), bodies
 
 
 def _after_pipe(toks, i):
@@ -213,11 +220,29 @@ def _after_pipe(toks, i):
     return False
 
 
-def check_bash(command, cwd=None):
+def check_bash(command, cwd=None, depth=0):
+    if depth > 3:
+        return
+    stripped, bodies = strip_heredocs(command)
     try:
-        toks = shlex.split(strip_heredocs(command), comments=True)
+        toks = shlex.split(stripped, comments=True)
     except ValueError:
         return  # unbalanced quotes / heredoc -> fail open
+    # ⛔ A COMMAND SENT OVER ssh COSTS THE SAME AS A LOCAL ONE. `/mnt/nas` is the
+    #    same filer from every host, so `ssh server5 "find /mnt/nas -name x"` and
+    #    `ssh host 'bash -s' <<REMOTE ... REMOTE` are the local walk wearing a
+    #    hostname. Judge the payload as a command, with cwd UNKNOWN -- relative
+    #    roots on the far side must keep failing open, absolute ones must not.
+    nested = []
+    for i, tok in enumerate(toks):
+        base = posixpath.basename(tok)
+        if base == "ssh":
+            nested += [t for t in toks[i + 1:] if " " in t.strip()]
+            nested += bodies
+        elif base in ("bash", "sh", "zsh", "dash") and "-c" in toks[i + 1:i + 3]:
+            nested += [t for t in toks[i + 1:i + 4] if " " in t.strip()]
+    for payload in nested:
+        check_bash(payload, None, depth + 1)
     # ⚠️ A leading `cd` changes what a later `.` means. Track it, or
     # `cd /tmp && find . ...` is judged against the session cwd instead.
     for i, tok in enumerate(toks):
