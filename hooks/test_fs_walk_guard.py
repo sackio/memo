@@ -25,7 +25,8 @@ def run(payload):
     dec = d.get("hookSpecificOutput", {}).get("permissionDecision", "?")
     return dec.upper(), d.get("reason", "").splitlines()[2] if d.get("reason") else ""
 
-def bash(c): return {"tool_name": "Bash", "tool_input": {"command": c}}
+def bash(c, cwd="/mnt/nas/data/code/memo"):
+    return {"tool_name": "Bash", "tool_input": {"command": c}, "cwd": cwd}
 
 # ── THE TWO REAL ONES. These are the incident. If either ALLOWs, the guard is
 #    not a guard — it is a decoration.
@@ -42,6 +43,18 @@ POSITIVE = [
   ("Glob tool at /", {"tool_name":"Glob","tool_input":{"pattern":"**/*agentkit*","path":"/"}}),
   ("Grep tool at /mnt/nas", {"tool_name":"Grep","tool_input":{"pattern":"x","path":"/mnt/nas"}}),
   ("Glob abs pattern", {"tool_name":"Glob","tool_input":{"pattern":"/mnt/nas/**/*.jsonl"}}),
+  # ⭐ REAL #3, 2026-08-21 evening (agents). The guard MISSED this one live: the
+  #    root is "." and relative walks were exempt, on the assumption that a cwd is
+  #    local. It ran 15 min over NFS on a host at 95% io pressure.
+  ("REAL#3 ugrep -rn . on NAS cwd",
+   bash("ugrep -G --ignore-files --hidden -I --exclude-dir=.git -rn embport-prompt --include=* .",
+        cwd="/mnt/nas/data/code/quantum-feed")),
+  ("rg . from NAS cwd", bash("rg embport .", cwd="/mnt/nas/data/code/quantum-feed")),
+  ("rg with no root from NAS cwd", bash("rg embport", cwd="/mnt/nas/data/code/quantum-feed")),
+  ("find . from NAS cwd", bash("find . -name '*.py'", cwd="/mnt/nas/data/code/quantum-feed")),
+  ("relative subdir on NAS", bash("grep -rn foo hooks/", cwd="/mnt/nas/data/code/memo")),
+  ("abs repo subtree on NAS", bash("find /mnt/nas/data/code/memo/src -type f")),
+  ("cd onto NAS then walk", bash("cd /mnt/nas/data/code/ha && find . -name '*.yaml'", cwd="/tmp")),
 ]
 
 # ── NEGATIVE CONTROLS: real commands from today's work. A guard that blocks
@@ -50,15 +63,29 @@ NEGATIVE = [
   ("bounded find, agents' 12:20", bash("find /mnt/nas/data/code -maxdepth 6 -name x")),
   ("memo-minder A.1", bash("/usr/bin/find -L /home/ben/.claude/projects -maxdepth 2 -name '*.jsonl' -newer /tmp/bf_cutoff -printf '%T@ %s %p\\n'")),
   ("my own scan today", bash("cd /home/ben/.claude/projects && timeout 60 /usr/bin/find -L . -maxdepth 3 -name '*.jsonl'")),
-  ("project-rooted walk", bash("find /mnt/nas/data/code/memo/src -type f -name '*.py'")),
-  ("relative find", bash("find . -name '*.md'")),
+  ("relative find from /tmp", bash("find . -name '*.md'", cwd="/tmp/scratch")),
+  ("rg from a LOCAL checkout", bash("rg TODO .", cwd="/home/ben/local/proj")),
   ("tmp walk", bash("find /tmp/claude-1000 -name '*.ics'")),
   ("grep non-recursive on /", bash("grep foo /etc/hosts")),
-  ("rg inside repo", bash("rg 'def embed' /mnt/nas/data/code/memo-v2/src")),
+  ("bounded rg on NAS", bash("rg --max-depth 2 'def embed' /mnt/nas/data/code/memo-v2/src")),
+  ("cd to /tmp then walk", bash("cd /tmp && find . -name '*.log'", cwd="/mnt/nas/data/code/memo")),
+  ("git ls-files, the fix", bash("git ls-files | grep embport", cwd="/mnt/nas/data/code/quantum-feed")),
+  ("git grep, the fix", bash("git grep -n embport", cwd="/mnt/nas/data/code/quantum-feed")),
+  ("no cwd in payload", {"tool_name":"Bash","tool_input":{"command":"rg foo ."}}),
   ("git log", bash("git -C /mnt/nas/data/code/memo log --oneline")),
-  ("Glob in project", {"tool_name":"Glob","tool_input":{"pattern":"**/*.py","path":"/mnt/nas/data/code/memo"}}),
+  # ⭐ The harness's own Glob/Grep keep the NARROW rule -- see is_dangerous().
+  ("Glob in a NAS project", {"tool_name":"Glob","tool_input":{"pattern":"**/*.py","path":"/mnt/nas/data/code/memo"}}),
+  ("Grep in a NAS project", {"tool_name":"Grep","tool_input":{"pattern":"x","path":"/mnt/nas/data/code/atc/server"}}),
   ("Glob no path", {"tool_name":"Glob","tool_input":{"pattern":"**/*.py"}}),
   ("unparseable quotes", bash("find /mnt/nas -name \"unbalanced")),
+  # ⭐ CAUGHT BY THE GUARD BLOCKING ITS OWN COMMIT, 2026-08-21. A heredoc body is
+  #    DATA. The quotes balance, so shlex parses the prose as commands and anyone
+  #    documenting a walk gets denied for describing one.
+  ("heredoc quoting a walk",
+   bash("cat > /tmp/msg.txt <<'EOF'\nfix: ugrep -rn pat . ran 15 min over NFS\n"
+        "also find /mnt/nas -name x\nEOF\ngit commit -F /tmp/msg.txt")),
+  ("heredoc then a REAL walk after it",
+   bash("cat > /tmp/a <<'EOF'\nharmless prose\nEOF\necho done")),
   ("unknown tool", {"tool_name":"Write","tool_input":{"file_path":"/mnt/nas/x"}}),
   ("malformed input", {"tool_name":"Bash","tool_input":"not-a-dict"}),
 ]
