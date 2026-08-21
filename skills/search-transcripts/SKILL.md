@@ -112,6 +112,18 @@ If the path you expected is absent, `ls ~/.claude/projects/` — one bounded lis
 that shows every slug that exists. **`~/.claude` is HOST-LOCAL**: the honest next
 step is another host, never a wider walk on this one.
 
+
+⛔⛔ **`ls ~/.claude/projects/` WITH NO GLOB. NEVER `ls -d *slug*`.** Every project
+slug begins with `-`, so a bare glob is handed to `ls` as an **option bundle**:
+
+    ls -d *agentkit*     ->  ls: invalid option -- '-'   (stderr; stdout EMPTY)
+    ls -d ./*agentkit*   ->  5 entries                    ✅
+    find -L . -maxdepth 1 -name '*agentkit*'  ->  5 entries  ✅
+
+Piped through `head`/`wc -l`, or with `2>/dev/null`, the failure is **byte-identical
+to "no such directory"** — a false negative about the exact thing you are checking.
+Measured 2026-08-21: it produced a wrong "ABSENT" that reached a durable memo.
+
 ⭐ **MEASURED 2026-08-21.** Two `bfs` processes ran 38–43 min on server4 doing
 exactly this — `bfs / -type d -iname '*-mnt-nas-data-code-agentkit*'` and
 `bfs /mnt/nas -iname '*agent-a97*'`. Server4's NFS **LOOKUP latency was 478 ms**
