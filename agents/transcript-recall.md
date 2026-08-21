@@ -38,6 +38,27 @@ the discussion*.
    session id, and files live at `~/.claude/projects/<slug>/<session-id>.jsonl`.
    Grep it rather than reading it whole — they run to tens of thousands of lines.
 
+⛔⛔ **NEVER WALK THE FILESYSTEM LOOKING FOR A TRANSCRIPT. THE PATH IS
+DERIVABLE, SO THERE IS NOTHING TO SEARCH FOR.**
+
+    ~/.claude/projects/<slug>/<session-id>.jsonl
+    slug = the project's absolute path with BOTH '/' AND '_' replaced by '-'
+           /mnt/nas/data/code/server_admin -> -mnt-nas-data-code-server-admin
+
+If a path you expected is not there, `ls ~/.claude/projects/` — it is one bounded
+listing and it shows you every slug that exists. **`~/.claude` is HOST-LOCAL**, so
+the honest next step is another host, not a wider walk on this one.
+
+⭐ **WHY THIS IS A ⛔ AND NOT A PREFERENCE, MEASURED 2026-08-21.** Two `bfs`
+processes ran 38–43 minutes on server4 doing exactly this —
+`bfs / -type d -iname '*-mnt-nas-data-code-agentkit*'` and
+`bfs /mnt/nas -iname '*agent-a97*'`. An agent could not locate a transcript and
+went looking for it. While they ran, server4's NFS **LOOKUP latency was 478 ms**;
+it fell to **1.53 ms** the moment they were killed, and READDIR (66 ms) vanished.
+`/mnt/nas` is one NFS mount shared by every seat on all four hosts, so this is not
+your search being slow — it is **every other seat's** filesystem being slow, and
+nothing tells them why.
+
 ## ⛔ How to report
 
 **Lead with the answer, not with the search.** The caller asked a question; give

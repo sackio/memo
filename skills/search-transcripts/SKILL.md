@@ -99,3 +99,29 @@ has its history split across two of them.
 ⛔ **Do not mine hook transcripts.** A `claude -p` hook transcript's first user turn
 is the hook's own prompt — the instrument describing itself. Dropped by default;
 leave them dropped.
+
+## ⛔ Never walk the filesystem to find a transcript
+
+**The path is derivable, so there is nothing to search for:**
+
+    ~/.claude/projects/<slug>/<session-id>.jsonl
+    slug = the project's absolute path with BOTH '/' AND '_' replaced by '-'
+           /mnt/nas/data/code/server_admin -> -mnt-nas-data-code-server-admin
+
+If the path you expected is absent, `ls ~/.claude/projects/` — one bounded listing
+that shows every slug that exists. **`~/.claude` is HOST-LOCAL**: the honest next
+step is another host, never a wider walk on this one.
+
+⭐ **MEASURED 2026-08-21.** Two `bfs` processes ran 38–43 min on server4 doing
+exactly this — `bfs / -type d -iname '*-mnt-nas-data-code-agentkit*'` and
+`bfs /mnt/nas -iname '*agent-a97*'`. Server4's NFS **LOOKUP latency was 478 ms**
+while they ran and **1.53 ms** once killed; READDIR (66 ms) vanished. `/mnt/nas`
+is one mount shared by every seat on all four hosts — the cost lands on everyone
+else, and nothing tells them why.
+
+⛔ **A PreToolUse hook now REFUSES this on all four hosts** —
+`/mnt/nas/data/code/memo/hooks/fs-walk-guard.py`, wired into each host's
+`~/.claude/settings.json`. It denies `find`/`bfs`/`fd` with no `-maxdepth`, and
+`rg`/`grep -r`/`Glob`/`Grep`, rooted at `/`, `/mnt`, `/mnt/nas`, `/mnt/nas/data`,
+`/mnt/nas/data/code`, `/mnt/backup`, `/home` or `$HOME`. It fails OPEN on any
+parse error. Controls: `python3 hooks/test_fs_walk_guard.py`.

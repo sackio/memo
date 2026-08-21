@@ -1,0 +1,80 @@
+#!/usr/bin/env python3
+"""Controls for hooks/fs-walk-guard.py.
+
+⭐ THE FIRST TWO CASES ARE THE REAL INCIDENT ARGV, recovered from ps output on
+2026-08-21. They are load-bearing: the first version of the guard passed every
+synthetic case in this file and ALLOWED BOTH OF THEM, because it read `dfs` out
+of `bfs -S dfs / ...` as the search root. A detector never run against a known
+positive is not a detector.
+
+Run: python3 hooks/test_fs_walk_guard.py
+"""
+import json, subprocess, sys
+H = "/mnt/nas/data/code/memo/hooks/fs-walk-guard.py"
+
+def run(payload):
+    p = subprocess.run(["python3", H], input=json.dumps(payload),
+                       capture_output=True, text=True, timeout=20)
+    out = p.stdout.strip()
+    if not out:
+        return "ALLOW", ""
+    try:
+        d = json.loads(out)
+    except Exception:
+        return "ALLOW(unparsed)", out[:80]
+    dec = d.get("hookSpecificOutput", {}).get("permissionDecision", "?")
+    return dec.upper(), d.get("reason", "").splitlines()[2] if d.get("reason") else ""
+
+def bash(c): return {"tool_name": "Bash", "tool_input": {"command": c}}
+
+# ── THE TWO REAL ONES. These are the incident. If either ALLOWs, the guard is
+#    not a guard — it is a decoration.
+POSITIVE = [
+  ("REAL#1 bfs /", bash("bfs -S dfs -regextype findutils-default / -path /proc -prune -o -type d -iname '*-mnt-nas-data-code-agentkit*' -print")),
+  ("REAL#2 bfs /mnt/nas", bash("bfs -S dfs -regextype findutils-default /mnt/nas -iname '*agent-a97*'")),
+  ("find / unbounded", bash("find / -name '*.jsonl' 2>/dev/null")),
+  ("find -L /mnt/nas", bash("/usr/bin/find -L /mnt/nas -type f -name x")),
+  ("find $HOME unbounded", bash("find ~ -name '*.log'")),
+  ("find /mnt/nas/data/code", bash("find /mnt/nas/data/code -name '*.py'")),
+  ("rg at /mnt/nas", bash("rg 'secret' /mnt/nas")),
+  ("grep -rn /home/ben", bash("grep -rn foo /home/ben")),
+  ("piped after a safe cmd", bash("echo hi; find /mnt/nas -name z")),
+  ("Glob tool at /", {"tool_name":"Glob","tool_input":{"pattern":"**/*agentkit*","path":"/"}}),
+  ("Grep tool at /mnt/nas", {"tool_name":"Grep","tool_input":{"pattern":"x","path":"/mnt/nas"}}),
+  ("Glob abs pattern", {"tool_name":"Glob","tool_input":{"pattern":"/mnt/nas/**/*.jsonl"}}),
+]
+
+# ── NEGATIVE CONTROLS: real commands from today's work. A guard that blocks
+#    these is a guard nobody will keep.
+NEGATIVE = [
+  ("bounded find, agents' 12:20", bash("find /mnt/nas/data/code -maxdepth 6 -name x")),
+  ("memo-minder A.1", bash("/usr/bin/find -L /home/ben/.claude/projects -maxdepth 2 -name '*.jsonl' -newer /tmp/bf_cutoff -printf '%T@ %s %p\\n'")),
+  ("my own scan today", bash("cd /home/ben/.claude/projects && timeout 60 /usr/bin/find -L . -maxdepth 3 -name '*.jsonl'")),
+  ("project-rooted walk", bash("find /mnt/nas/data/code/memo/src -type f -name '*.py'")),
+  ("relative find", bash("find . -name '*.md'")),
+  ("tmp walk", bash("find /tmp/claude-1000 -name '*.ics'")),
+  ("grep non-recursive on /", bash("grep foo /etc/hosts")),
+  ("rg inside repo", bash("rg 'def embed' /mnt/nas/data/code/memo-v2/src")),
+  ("git log", bash("git -C /mnt/nas/data/code/memo log --oneline")),
+  ("Glob in project", {"tool_name":"Glob","tool_input":{"pattern":"**/*.py","path":"/mnt/nas/data/code/memo"}}),
+  ("Glob no path", {"tool_name":"Glob","tool_input":{"pattern":"**/*.py"}}),
+  ("unparseable quotes", bash("find /mnt/nas -name \"unbalanced")),
+  ("unknown tool", {"tool_name":"Write","tool_input":{"file_path":"/mnt/nas/x"}}),
+  ("malformed input", {"tool_name":"Bash","tool_input":"not-a-dict"}),
+]
+
+fails = 0
+print("=== POSITIVE CONTROLS (must DENY) ===")
+for name, p in POSITIVE:
+    d, why = run(p)
+    ok = d == "DENY"
+    fails += 0 if ok else 1
+    print(f"  {'PASS' if ok else '** FAIL **':10} {name:32} -> {d}  {why[:70]}")
+print("=== NEGATIVE CONTROLS (must ALLOW) ===")
+for name, p in NEGATIVE:
+    d, why = run(p)
+    ok = d.startswith("ALLOW")
+    fails += 0 if ok else 1
+    print(f"  {'PASS' if ok else '** FAIL **':10} {name:32} -> {d}  {why[:70]}")
+print(f"\n{'ALL PASS' if not fails else str(fails)+' FAILURES'}")
+sys.exit(1 if fails else 0)
