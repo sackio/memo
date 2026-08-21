@@ -57,9 +57,19 @@ slug begins with `-`, so a bare glob is handed to `ls` as an **option bundle**:
     ls -d ./*agentkit*   ->  5 entries                    ✅
     find -L . -maxdepth 1 -name '*agentkit*'  ->  5 entries  ✅
 
-Piped through `head`/`wc -l`, or with `2>/dev/null`, the failure is **byte-identical
-to "no such directory"** — a false negative about the exact thing you are checking.
-Measured 2026-08-21: it produced a wrong "ABSENT" that reached a durable memo.
+⚠️ **This is not a `2>/dev/null` problem — a bare pipe does it too.** stderr goes to
+the terminal while the pipe consumes an empty stdout, so `ls -d *glob* | wc -l`
+returns **0** with `${PIPESTATUS[0]}=2` and the error scrolls past in a log nobody
+re-reads. That is the shape a cron or a captured run produces, **and it fails
+without anyone having chosen to suppress anything.** Either way the failure is
+byte-identical to "no such directory" — a false negative about the exact thing you
+are checking. Measured 2026-08-21: it produced a wrong "ABSENT" that reached a
+durable memo.
+
+⭐ **The general rule, and it is not about globs: an empty result is not a null
+until you have checked the exit status.** Memo `5a325ba8` — four instruments
+failed this way on one day. `if out=$(cmd 2>&1); then ...` distinguishes *"nothing
+found"* from *"I could not look."*
 
 ⭐ **WHY THIS IS A ⛔ AND NOT A PREFERENCE, MEASURED 2026-08-21.** Two `bfs`
 processes ran 38–43 minutes on server4 doing exactly this —
