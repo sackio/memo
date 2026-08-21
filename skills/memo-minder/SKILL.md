@@ -186,10 +186,25 @@ derived from one host is not a liveness claim.** Cheap disproofs: `tmux ls` on e
 
 ```bash
 for p in ~/code/*/; do [ -d "$p/.git" ] || continue
-  n=$(timeout 8 git -C "$p" log --since="$SINCE" --oneline | wc -l); [ "$n" -gt 5 ] || continue
-  echo "===== $(basename $p) ($n) ====="; timeout 8 git -C "$p" log --since="$SINCE" --format='%s'
+  out=$(timeout 120 git -C "$p" log --since="$SINCE" --oneline 2>/dev/null); rc=$?
+  if [ $rc -eq 124 ]; then echo "⛔ TIMEOUT $(basename $p) — INCONCLUSIVE, not zero"; continue; fi
+  n=$(printf '%s' "$out" | grep -c .); [ "$n" -gt 5 ] || continue
+  echo "===== $(basename $p) ($n) ====="; timeout 120 git -C "$p" log --since="$SINCE" --format='%s'
 done
 ```
+
+⛔⛔ **READ `rc`. A TIMEOUT IS NOT A ZERO.** This phase silently reported "no repos qualified" on
+2026-08-21 13:07 while `agentkit` alone had **≥20 commits** — every repo's `git log` was killed at
+the old `timeout 8` before emitting anything, `wc -l` counted 0, and `-gt 5` skipped them all. The
+output file was empty and read exactly like a quiet day.
+⭐ **This is the same defect this cycle banked hours earlier** (`ce93df29`, and `scripts`' identical
+`timeout N grep` finding): the timeout case exits **124**, the genuinely-clean case exits **0 with
+no lines**, and a caller that only looks at the output cannot tell them apart. Piping straight into
+`wc -l` throws away the one bit that distinguishes them.
+⚠️ **NFS latency here is not stable.** Measured 2026-08-21 13:08: `git log` on `agentkit` did not
+finish in **60 s**, while `ha` returned instantly. `agentkit` reported the same day that server5 is
+driving sustained ~90% IO pressure on the NAS. ⇒ Any timeout tuned on a quiet moment starves under
+load; report the starvation rather than absorbing it.
 
 ⛔ **PER-COMMIT MEMOS ARE OFF — Ben, 2026-08-11: *"leave in git for now."*** Write ONE index memo
 per window (repo, count, verbatim subjects) and stop. Model: `8ffd0a3b`. **Do not re-raise this**;
