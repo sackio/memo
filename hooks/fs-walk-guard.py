@@ -127,13 +127,26 @@ def norm(p, cwd=None):
 def is_dangerous(p, cwd=None, nfs_prefix=True):
     """`nfs_prefix=False` checks only the exact roots.
 
-    ⭐ THE HARNESS'S OWN Glob/Grep TOOLS GET THE NARROW RULE. They carry their
-    own ignore-file handling and result limits, and a repo-scoped Glob is what
-    every agent does all day in a cwd that is nearly always on /mnt/nas --
-    denying that would replace a 15-minute walk with a blocked fleet. The strict
-    prefix rule applies to ad-hoc shell walkers, which is where both measured
-    incidents came from and where `-maxdepth` and `git ls-files` are easy to name
-    as the alternative.
+    ⭐ THE HARNESS'S OWN Glob/Grep TOOLS GET THE NARROW RULE. A repo-scoped Glob
+    is what every agent does all day in a cwd that is nearly always on /mnt/nas,
+    so denying it would replace a 15-minute walk with a blocked fleet.
+
+    ⚠️ DEFENSIBLE, NOT FREE. Measured by `agents` on server4, 2026-08-21, at the
+    filesystem level (`find <repo> -name '<pat>' -not -path '*/.git/*'`, which is
+    what a repo-scoped Glob costs):
+
+        agentkit      695 .md files     4.85s
+        atc           876 .md files     7.22s
+        quantum-feed  783 .toml files  65.95s
+
+    So a repo-scoped Glob on the NAS is a MINUTE on a large repo, not a blink --
+    two orders of magnitude better than the unbounded walk it replaces, which is
+    why the exemption stands, but not something to reach for casually. The figure
+    is the filesystem cost; the harness Glob may add ignore-handling on top.
+
+    The strict prefix rule applies to ad-hoc shell walkers, which is where every
+    measured incident came from and where `-maxdepth` and `git ls-files` are easy
+    to name as the alternative.
     """
     n = norm(p, cwd)
     if not n:
