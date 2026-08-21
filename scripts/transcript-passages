@@ -97,7 +97,36 @@ def ts_epoch(iso: str):
 # --------------------------------------------------------------------------
 
 def slug_for(path: str) -> str:
-    return os.path.abspath(path).replace("/", "-")
+    """Claude Code's project-dir slug: '/' AND '_' both become '-'.
+
+    ⛔ THE UNDERSCORE WAS MISSING UNTIL 2026-08-21, and it failed as a SILENT
+    NULL. `--path /mnt/nas/data/code/server_admin` produced
+    `-mnt-nas-data-code-server_admin`, which does not exist, while the real dir
+    is `-mnt-nas-data-code-server-admin`. The caller got "no transcripts for
+    that path on this host" — indistinguishable from a genuinely quiet project,
+    on every host at once. Found when a `/recall-transcripts` scoped to
+    server_admin returned nothing and the subagent noticed the slug, not the
+    absence.
+    ⚠️ At least six real project paths carry underscores (`server_admin`,
+    `exome_analysis`, `autoimmune_exome`, `claude_configs`, `mom_exit_strategy`,
+    `_d1_artifacts`), so this silently blinded every scoped search on all of them.
+    """
+    return os.path.abspath(path).replace("/", "-").replace("_", "-")
+
+
+def slug_candidates(path: str) -> list[str]:
+    """Every slug a caller might legitimately mean, best first.
+
+    Kept separate from `slug_for` so the resolver can report what it TRIED —
+    a miss that names its candidates is debuggable; a bare "not found" is not.
+    """
+    ap = os.path.abspath(path)
+    out = [ap.replace("/", "-").replace("_", "-"), ap.replace("/", "-")]
+    seen, uniq = set(), []
+    for s in out:
+        if s not in seen:
+            seen.add(s); uniq.append(s)
+    return uniq
 
 
 def find_transcripts(project_dirs, since, until):
@@ -402,16 +431,19 @@ def main():
     if a.all_projects:
         dirs = [d for d in glob.glob(os.path.join(PROJECTS, "*")) if os.path.isdir(d)]
     else:
-        d = os.path.join(PROJECTS, slug_for(a.path))
-        if not os.path.isdir(d):
+        cands = [os.path.join(PROJECTS, s) for s in slug_candidates(a.path)]
+        found = [c for c in cands if os.path.isdir(c)]
+        if not found:
+            # ⛔ Report every candidate tried. This miss used to name ONE slug,
+            # which made a slugify bug look identical to an idle project.
             print(json.dumps({"error": "no transcripts for that path on this host",
-                              "host": os.uname().nodename, "looked_for": d}) if a.json
+                              "host": os.uname().nodename, "tried": cands}) if a.json
                   else f"No transcript dir for {a.path} on {os.uname().nodename}\n"
-                       f"  looked for: {d}\n"
-                       f"  ⚠️ ~/.claude is HOST-LOCAL — the session may have run elsewhere.",
+                       + "".join(f"  tried: {c}\n" for c in cands)
+                       + f"  ⚠️ ~/.claude is HOST-LOCAL — the session may have run elsewhere.",
                   file=sys.stderr)
             return NO_TRANSCRIPTS
-        dirs = [d]
+        dirs = found
 
     files = find_transcripts(dirs, since, until)
     stats = {"host": os.uname().nodename, "discovered": len(files),
