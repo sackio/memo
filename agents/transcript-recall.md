@@ -33,10 +33,47 @@ the discussion*.
 2. **Two or three cheap queries beat one broad one.** The skill explains why —
    ranking is lexical, so re-query with the error string, the flag name, the
    filename, the person's own phrasing.
-3. **Read the whole session when a passage is clearly the right thread but the
-   detail is cut.** You have `Read` and `Grep`; the passage header gives you the
-   session id, and files live at `~/.claude/projects/<slug>/<session-id>.jsonl`.
-   Grep it rather than reading it whole — they run to tens of thousands of lines.
+3. **Go to the session file when a passage is clearly the right thread but the
+   detail is cut.** The passage header gives you the session id, and files live at
+   `~/.claude/projects/<slug>/<session-id>.jsonl`.
+
+⛔⛔ **NEVER `Read` A TRANSCRIPT FILE. GREP IT.** "Tens of thousands of lines"
+understates this by orders of magnitude: measured 2026-08-22 on server5's
+`-mnt-nas-data-code-quantum-feed`, **275 files, six over 26 MB, the largest 149 MB
+and 126 MB.** Reading one whole consumes the context you were spawned to protect.
+⇒ Size-check before touching a file: `ls -laS ~/.claude/projects/<slug>/*.jsonl | head`.
+⚠️ **This rule stands on the file sizes alone.** An earlier version of this
+paragraph claimed a `Read`-hang had caused a real 70-minute non-return; **that was
+RETRACTED 2026-08-22 by the seat that reported it** — the agent had in fact finished
+in ~5.5 minutes and its report was delayed in delivery by ~40. Do not cite a hang
+here as an observed event; none has been observed.
+
+⛔⛔ **AND THE RETRACTION IS THE MORE USEFUL FINDING: A SUBAGENT THAT HAS FINISHED
+AND A SUBAGENT THAT IS WEDGED LOOK IDENTICAL TO THE PARENT UNTIL THE MESSAGE LANDS.**
+No final text, no completion notification, and two nudges unanswered are produced by
+**delivery latency** exactly as faithfully as by a hang. ⇒ **Absence of a completion
+notification is not evidence of non-completion.** Before concluding an agent died,
+establish that the channel could have delivered at all — a positive control, not an
+inference from silence. Its own idle timestamp settles it where a nudge cannot.
+
+⛔⛔ **JSONL ESCAPES QUOTES — A RAW-LINE PATTERN CONTAINING `attr="value"` MATCHES
+ZERO, ALWAYS, AND ITS NULL IS INDISTINGUISHABLE FROM "NOT DISCUSSED".** The text
+you are searching for is a JSON *string value*, so every `"` inside it is stored
+as `\"`. Measured on one 126 MB transcript:
+
+    grep -c 'slack:U0NGEHS2J'            ->  4509    bare substring, fine
+    grep -c 'from=\"slack:U0NGEHS2J\"'   ->  1965    the escaped form, as stored
+    grep -c 'from="slack:U0NGEHS2J"'     ->     0    plain quotes, structurally impossible
+
+✅ **The form that works:** `json.loads` each line, filter on the BARE substring,
+then match plain quotes against the **decoded** string — 302 real hits on the same
+file where the raw pattern found 0.
+⚠️ **And do not "verify" by re-dumping.** Checking the decoded object with
+`json.dumps(e) `re-introduces the escaping and returns 0 again — the same trap one
+level down, wearing the costume of a confirmation. Match against the decoded TEXT.
+⭐ `scripts/transcript-passages` is NOT affected: it `json.loads` every line
+(line 186). This trap belongs to hand-rolled `grep`/`rg` probes over raw JSONL,
+which is what this section tells you to reach for.
 
 ⛔⛔ **NEVER WALK THE FILESYSTEM LOOKING FOR A TRANSCRIPT. THE PATH IS
 DERIVABLE, SO THERE IS NOTHING TO SEARCH FOR.**

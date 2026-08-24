@@ -120,6 +120,33 @@ inflated count reads as *coverage*, which nobody questions. Compare against yest
 Dedup against the last checkpoint on `<uuid>@<line_count>`. **NEW** = unseen; **GROWN** = seen with
 a lower count — mine only the delta.
 
+⛔⛔ **DO NOT FIND THE LAST CHECKPOINT BY SEARCHING FOR IT.** Vector search ranks by RELEVANCE,
+never by recency: on 2026-08-22 `POST /search "Backfill checkpoint..."` returned the **06:47**
+checkpoint above the **13:02** one, and deduping against the older produced **93 NEW / 0 GROWN** —
+a claim that every session on the fleet was brand new. There is no error and no empty result;
+both hits are real checkpoints with the right title. ⇒ **"Latest X" is an ORDERING, not a query.**
+
+```bash
+curl -sS 'http://server4:8000/documents?limit=20000' | python3 -c "
+import json,sys
+docs=json.load(sys.stdin)
+cps=[x for x in docs if (x.get('title') or '').startswith('Backfill checkpoint — ')]
+cps.sort(key=lambda x: x.get('created_at') or 0, reverse=True)
+print(cps[0]['id'])"
+```
+Safer still, and what this cycle used: **union the dedup keys of every checkpoint from the last
+48 h**, so a second same-day run cannot be missed.
+
+⛔ **AND ANCHOR THE UUID WHEN YOU EXTRACT THE KEYS.** `([0-9a-f]{8})@(\d+)` against
+`cb04bbc5-4390-45f4-9525-173f3b1a012e@17464` captures **`3b1a012e`** — the last 8 hex characters
+before the `@`, not the uuid's first 8 — so every key silently fails to match and you get the same
+**93 NEW / 0 GROWN** reading from a second, independent cause. Use the full form:
+`([0-9a-f]{8})-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}@(\d+)`.
+⭐ Two different bugs, one identical and *plausible* symptom. Neither is visible to the standing
+"an empty result is not a null" guard — the result was neither empty nor null. **What caught it
+was a plausibility check against the prior day's number.** Always compare NEW/GROWN to the last
+checkpoint's own figures before believing them.
+
 ### A.2 · Mine — `transcript-recall`, not your own extractor
 
 Select by growth delta, cap ~16 sessions/cycle. Group by project and delegate:
@@ -155,10 +182,28 @@ writing; one seat's own bug usually is not, because they already recorded it.
 ⚠️ **USE THE WORKING IMPLEMENTATION**, `bin/capture_miss_scan.py`, per host:
 `CAPMISS_CUTOFF=YYYY-MM-DD python3 - < bin/capture_miss_scan.py` over ssh; emits JSON.
 
-⛔ **STANDING POSITIVE CONTROL, EVERY CYCLE:** `CAPMISS_CUTOFF=2026-07-22` on **office** MUST return
+⛔ **STANDING POSITIVE CONTROL, EVERY CYCLE:** `CAPMISS_CUTOFF=2026-07-22` on **server3** MUST return
 a hit whose context contains *"this is where I parked at logan"*. **A detector that has never been
 run against a known positive is not a detector** — that is exactly how this phase sat marked TODO
 while silently matching nothing for weeks.
+
+⛔⛔ **CORRECTED 2026-08-23 — THIS SAID `office` AND THE DATUM IS ON `server3`.** The `assistant`
+seat migrated office→server3 on 2026-08-10, taking the Logan turn with it. Measured 2026-08-23:
+server3 holds it at `2026-07-22T11:19:46.600Z`, **role=user, str content** — exactly what the
+scanner's `if role == "user" and isinstance(c, str)` gate accepts, so it matches. office holds only
+5 occurrences of the phrase, **all role=assistant with list content**, structurally unreachable by
+that gate — so running the control there returns real-but-unrelated hits and no control match,
+which reads as a broken detector.
+⭐ **SAME HOST MOVE BROKE A.4 BELOW** (its script globs the local host only). One migration, two
+phases silently pointing at the old host, both failing in the reassuring direction. Fix them
+together; fixing one leaves the pair half-migrated.
+⚠️ **AND MIND THE NULL.** I first "established" that the phrase did not exist anywhere by sweeping
+four hosts in a serial loop that a 2-minute timeout killed while server3 — the last host — was
+still running. Its line printed empty, I read that as *no match* rather than *not searched*, and
+wrote a confident three-reason retraction of a report that had been right all along. **A truncated
+loop and a genuine null are byte-identical.** If you fan this control across hosts, it must report
+*searched-no-match* and *not-searched* as different outcomes, per host, and never let a timeout
+render as a zero.
 
 Classify each hit: **DEDICATED_HIT** (a memo was written within 5 turns) · **BURIED** (the datum
 lives only in a calendar-event description) · **MISS** (nothing) · **RECOVERED** (a memo appeared

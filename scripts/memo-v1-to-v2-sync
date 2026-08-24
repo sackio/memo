@@ -205,6 +205,13 @@ def main() -> int:
                          "another port.")
     ap.add_argument("--src-url", default=None, help="Override source base URL.")
     ap.add_argument("--dst-url", default=None, help="Override destination base URL.")
+    # 8192 is the v1 write ceiling, MEASURED (max token_count 8192 across 9,488 docs,
+    # zero above), not read off a config. v2 has no equivalent limit. Set 0 to disable
+    # the pre-flight — the writes then still fail, just opaquely, which is the state
+    # this flag exists to get out of.
+    ap.add_argument("--dst-token-ceiling", type=int, default=8192,
+                    help="Warn (before writing) about docs exceeding the destination's "
+                         "per-document token ceiling. 0 disables the check.")
     args = ap.parse_args()
 
     if args.direction == "v1-to-v2":
@@ -320,11 +327,62 @@ def main() -> int:
     log(f"    ADD {len(adds)} | UPDATE {len(updates)} | ORPHANED {len(orphans)}"
         f"{' (will delete)' if args.mirror_deletes else ' (left alone)'}")
 
+    # ⛔ PREDICT THE WRITE-CEILING FAILURE INSTEAD OF DISCOVERING IT AS AN OPAQUE 500.
+    #
+    # The DESTINATION has a hard per-document write ceiling (v1: 8192 tokens, measured
+    # — max 8192 across 9,488 docs, zero above; v2 has no equivalent limit and accepted
+    # 9,144). Exceed it and the write returns `HTTP Error 500: Internal Server Error`,
+    # which says nothing about the cause, names no owner, and reads like a transient
+    # server fault worth retrying. It is neither transient nor the server's fault.
+    #
+    # ⭐ AND THE FAILURE IS ASYMMETRIC, WHICH IS THE WHOLE REASON THIS CHECK EXISTS.
+    # A failed ADD leaves the destination with NO copy — absent, and detectable as a 404.
+    # A failed UPDATE leaves the destination holding the PREVIOUS version — stale, and
+    # entirely plausible to anyone reading it. So a document that GROWS past the ceiling
+    # converts itself from the detectable case into the undetectable one, and a rollback
+    # then serves old content with nothing anywhere marking it as old. (memo `5f21946e`.)
+    #
+    # Twice on 2026-08-13, two different seats, ~1h apart: quantum-data's 8868+8447 at
+    # 20:47, quantum-navigator's 9144 at 21:47. It recurs because docs grow, so the fix
+    # is to make the failure LEGIBLE AND ROUTABLE at the moment it is predictable —
+    # naming the doc, its size, and the stale destination id — rather than leaving a
+    # future reader to work backwards from a 500.
+    #
+    # ⚠️ This does NOT prevent the failure; the write is still attempted and still fails.
+    # It converts a silent staleness into a named one. The actual fix is the owning seat
+    # splitting the doc at a semantic seam, which only they can do.
+    ceiling = args.dst_token_ceiling
+    if ceiling > 0:
+        def _tok(d):
+            try: return int(d.get("token_count") or 0)
+            except (TypeError, ValueError): return 0
+        over_add = [i for i in adds if _tok(v1[i]) > ceiling]
+        over_upd = [(s, t) for (s, t) in updates if s in v1 and _tok(v1[s]) > ceiling]
+        if over_add or over_upd:
+            log(f"    ⛔ {len(over_add)+len(over_upd)} doc(s) EXCEED the destination's "
+                f"{ceiling}-token write ceiling and WILL FAIL with HTTP 500:")
+            for i in over_add:
+                log(f"      ADD-WILL-FAIL  {i[:8]}  {_tok(v1[i])} tok  "
+                    f"-> destination will have NO copy (absent, 404-detectable)  "
+                    f"| {str(v1[i].get('title'))[:60]}")
+            for s, t in over_upd:
+                log(f"      UPD-WILL-FAIL  {s[:8]}->{t[:8]}  {_tok(v1[s])} tok  "
+                    f"-> destination KEEPS ITS STALE COPY (plausible, undetectable)  "
+                    f"| {str(v1[s].get('title'))[:60]}")
+            log(f"    ⇒ route each to its owning seat to SPLIT at a semantic seam "
+                f"(do not trim); verify by recomputing token_count, not char length.")
+
     if args.dry_run:
         for i in adds[:10]:
             log(f"      + {i[:8]} {str(v1[i].get('title'))[:70]}")
-        for i in updates[:10]:
-            log(f"      ~ {i[:8]} {str(v1[i].get('title'))[:70]}")
+        # `updates` holds (src_id, dst_id) TUPLES, not bare ids — both branches above
+        # append pairs, because a mirrored doc's destination id differs from its source
+        # id. Indexing v1[] with the tuple raised KeyError and killed the whole dry run.
+        # It survived unnoticed because `i[:8]` on a tuple is a legal slice rather than
+        # an error, so the bug only lands one line later and only when an update is
+        # actually pending — a dry run with nothing to update exits 0 looking fine.
+        for src_id, dst_id in updates[:10]:
+            log(f"      ~ {src_id[:8]}->{dst_id[:8]} {str(v1[src_id].get('title'))[:70]}")
         log(f"=== DRY RUN — nothing written ({time.time()-t0:.1f}s)")
         return 0
 
