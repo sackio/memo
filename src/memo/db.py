@@ -1683,11 +1683,41 @@ async def supersede(db_path: str | None, old_id: str, new_memo: dict,
                     embedding: list[float], actor: str,
                     reason: str | None = None,
                     operator_directive_ref: dict | None = None) -> dict | None:
+    """Close out ``old_id`` and write its replacement, INDEXING THE REPLACEMENT.
+
+    ⛔⛔ THE THIRD WRITE PATH. `_index_passages_after_write` calls itself hooked
+    "at the choke point, not at the call sites" — but the choke point was `store`
+    and `update`, and supersede CREATES A DOCUMENT without going through either.
+    From 2026-08-19 (when inline indexing landed) to 2026-08-23 every memo born
+    here had ZERO passages: measured 2 of the corpus's 4 supersede-created docs
+    still unindexed, and the other 2 saved only by a later edit that happened to
+    run `update`. `8358fc6a` (2026-08-20) was written up as an *unexplained*
+    indexing miss and sat open for three days; it was this.
+
+    ⭐ THE HOOK'S OWN DOCSTRING PREDICTED THIS AND MISCOUNTED. It says the
+    guarantee "cannot rest on eleven write call sites all remembering" and then
+    names "eleven callers of `store` and `update`, and exactly one of each of
+    them" — true, and it does not cover a writer that calls NEITHER. **A choke
+    point is only a choke point for the paths that flow through it**; hooking two
+    functions and calling it centralised is the same bet as hooking eleven, just
+    with a shorter list. The check that finds this is enumerating the writers of
+    `documents`, not counting the callers of the hook.
+
+    ⚠️ Deliberately AFTER the transaction, not inside it, and non-fatal for the
+    same reason as `store`'s: a supersession that RAISED because the embedder was
+    unreachable would leave the caller's correction unrecorded, and there is no
+    retry queue. Stored-but-unindexed is recoverable; lost is not. `/ready`'s
+    `passage_index_gap` is what keeps the hole visible.
+    """
     path = _resolve_path(db_path)
-    return await asyncio.to_thread(
+    result = await asyncio.to_thread(
         _sync_supersede, path, old_id, new_memo, embedding, actor, reason,
         operator_directive_ref,
     )
+    if result is not None:
+        await _index_passages_after_write(
+            path, result["new_id"], new_memo.get("content"))
+    return result
 
 
 async def reap_expired(db_path: str | None = None, now: float | None = None) -> list[str]:

@@ -154,3 +154,68 @@ async def test_disabling_the_flag_stops_indexing_but_not_storing(embedding, monk
     assert doc_id
     assert await passages.get_passages(doc_id) == []
     assert [d["id"] for d in await passages.find_unindexed()] == [doc_id]
+
+
+@pytest.mark.asyncio
+async def test_supersede_indexes_the_replacement(embedding):
+    """A memo born from `supersede` is passage-findable, like one born from `store`.
+
+    ⛔⛔ REGRESSION TEST FOR THE THIRD WRITE PATH. From 2026-08-19 to 2026-08-23
+    `_index_passages_after_write` was hooked into `store` and `update` and
+    described as living "at the choke point, not at the call sites" — but
+    `supersede` CREATES A DOCUMENT and calls neither, so every replacement memo
+    had zero passages. Measured on the live corpus: 2 of 4 supersede-created docs
+    still unindexed, the other 2 rescued only by a later edit that happened to run
+    `update`. One of them, `8358fc6a`, was written up as an *unexplained* indexing
+    miss and stayed open three days.
+
+    ⭐ The bug the file's other tests could not catch: they exercise the two paths
+    that were hooked. **A test suite organised around the hook tests the hook, not
+    the invariant** — this one asserts the invariant (`find_unindexed()` is empty)
+    against a writer the hook never saw.
+    """
+    old_id = await _store("The barn AP fault was fixed by the 2026-08-21 reboot.",
+                          embedding)
+
+    result = await db.supersede(
+        db_path=None, old_id=old_id,
+        new_memo={"content": "The reboot was NOT a fix — the fault resumed 51.6h later.",
+                  "title": "t", "tags": [], "metadata": {}},
+        embedding=embedding, actor="test")
+
+    assert result is not None
+    new_id = result["new_id"]
+
+    rows = await passages.get_passages(new_id)
+    assert rows, "supersede() left the replacement with no passages"
+    assert all(r["doc_id"] == new_id for r in rows)
+    assert "NOT a fix" in " ".join(r["text"] for r in rows)
+    assert not await passages.find_unindexed(), "supersede left a coverage gap"
+
+
+@pytest.mark.asyncio
+async def test_supersede_survives_an_unreachable_embedder(embedding, monkeypatch):
+    """A refused embedder must not lose the correction the caller was recording.
+
+    Same ordering argument as `store`: stored-but-unindexed is recoverable, and a
+    supersede that RAISED would leave the old memo standing as current with the
+    correction discarded — the failure mode this endpoint exists to prevent.
+    """
+    old_id = await _store("A claim that is about to be corrected.", embedding)
+
+    async def exploding_batch(texts):
+        raise ConnectionError("embedding endpoint unreachable")
+
+    from memo import embeddings
+    monkeypatch.setattr(embeddings, "embed_batch", exploding_batch)
+
+    result = await db.supersede(
+        db_path=None, old_id=old_id,
+        new_memo={"content": "The correction, written while the embedder was down.",
+                  "title": "t", "tags": [], "metadata": {}},
+        embedding=embedding, actor="test")
+
+    assert result is not None, "an embedder outage destroyed the supersession"
+    assert await db.get(None, result["new_id"]) is not None
+    assert any(d["id"] == result["new_id"] for d in await passages.find_unindexed()), \
+        "the coverage gap must be VISIBLE, not silent"
