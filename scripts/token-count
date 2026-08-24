@@ -1,0 +1,286 @@
+#!/usr/bin/env python3
+"""Real token counts (tiktoken, cl100k_base) for files, directories and text.
+
+⚠️ WHY A SCRIPT AND NOT ONLY THE MCP TOOL: `mcp__context-helpers__count_tokens_*`
+does the same job, but it is a deferred MCP tool — an agent has to ToolSearch it in
+first, and its presence depends on per-host MCP config. This script depends only on
+`python3 -c "import tiktoken"`, which is importable from the host interpreter on all
+four hosts (verified 2026-08-24: office 0.12.0, server4 0.11.0, server5 0.11.0,
+server3 0.13.0). Both paths give the same number; use whichever is cheaper to reach.
+
+⛔ cl100k_base is GPT's tokenizer, NOT Claude's. It is a REAL tokenizer — stable,
+deterministic, and the fleet's standard proxy — but a Claude budget derived from it
+is an approximation. Leave headroom; do not treat "fits in cl100k" as a guarantee.
+The one place an exact number matters is memo's v1 sync ceiling (8,192), and memo's
+own API reports that count itself — use `token_count` from the write response there,
+not this script.
+
+⛔ AN UNREADABLE FILE IS NOT AN EMPTY FILE. Every non-countable path is reported in
+`skipped` with its reason and is EXCLUDED from `total_tokens` — never counted as 0.
+A caller that sums `total_tokens` without reading `skipped` is measuring a subset and
+does not know it.
+"""
+import argparse, json, os, sys, glob as globmod
+
+ENCODING = "cl100k_base"
+
+
+def _enc():
+    import tiktoken
+    return tiktoken.get_encoding(ENCODING)
+
+
+def count_text(text, enc=None):
+    return len((enc or _enc()).encode(text, disallowed_special=()))
+
+
+def _read(path):
+    """Return (text, None) or (None, reason). Binary and unreadable are distinct."""
+    try:
+        raw = open(path, "rb").read()
+    except OSError as e:
+        return None, f"unreadable: {e.__class__.__name__}: {e}"
+    if b"\x00" in raw[:8192]:
+        return None, "binary (NUL byte in first 8KB)"
+    try:
+        return raw.decode("utf-8"), None
+    except UnicodeDecodeError:
+        try:
+            return raw.decode("latin-1"), None
+        except Exception as e:
+            return None, f"undecodable: {e}"
+
+
+def count_file(path, enc=None):
+    text, reason = _read(path)
+    if reason:
+        return {"path": path, "error": reason}
+    enc = enc or _enc()
+    return {"path": path, "tokens": count_text(text, enc),
+            "bytes": os.path.getsize(path), "chars": len(text)}
+
+
+def walk(directory, pattern="*", recursive=True, exclude=()):
+    pat = os.path.join(directory, "**", pattern) if recursive else os.path.join(directory, pattern)
+    out = []
+    for p in globmod.glob(pat, recursive=recursive):
+        if not os.path.isfile(p):
+            continue
+        if any(x in p for x in exclude):
+            continue
+        out.append(p)
+    return sorted(out)
+
+
+def split_file(path, chunk_tokens, overlap_tokens, enc=None):
+    """Deterministic chunk boundaries on LINE edges, with overlap.
+
+    ⛔ WHY THIS IS A SCRIPT AND NOT A MODEL'S JOB: a chunk boundary is arithmetic
+    the caller can do exactly, and an agent asked to "split this file into 8 parts"
+    will produce approximate, unreproducible, sometimes overlapping-by-accident
+    ranges. Two runs must chunk the same file identically or the consolidation
+    downstream cannot be compared. Same error class `fine` hit 2026-08-23: a model
+    was asked to recite what a script already knew deterministically.
+
+    Boundaries land on LINE edges so a chunk is extractable byte-exactly with
+    `sed -n 'A,Bp'` — no token-offset slicing, nothing to get off by one.
+
+    ⚑ THE PER-CHUNK COUNTS ARE A SLIGHT OVERESTIMATE, ALWAYS IN THE SAFE DIRECTION.
+    Chunk sizes are computed by summing PER-LINE token counts, and BPE merges across
+    line boundaries, so the sum exceeds the count of the same text tokenized whole.
+    Measured on memo-v2/src/memo/db.py, 2026-08-24: claimed 3983/3980/3984/3997/3706
+    against measured 3942/3945/3934/3947/3663 — every chunk 35-50 tokens (~1.1%) HIGH,
+    and `total_tokens` 18,858 against a whole-file 18,646, +1.14%. ⇒ a chunk always
+    fits in less than advertised, never more, so the error cannot overrun a budget.
+    ⛔ But do NOT report the split's `total_tokens` as the file's size — for that,
+    count the file without `--split`. Two numbers that differ by 1% for a real reason
+    look like a bug to whoever finds them next, which is why this is written down.
+
+    ⚠️ OVERLAP IS NOT FREE AND IS NOT OPTIONAL. Without it a definition split across
+    a boundary is seen whole by neither chunk, and both summaries are confidently
+    incomplete. With it the same lines are read twice and the consolidation must
+    dedupe. Overlap is charged to the budget like anything else.
+    """
+    enc = enc or _enc()
+    text, reason = _read(path)
+    if reason:
+        return {"path": path, "error": reason}
+    lines = text.splitlines(keepends=True)
+    per_line = [count_text(l, enc) for l in lines]
+    total = sum(per_line)
+
+    chunks, start = [], 0
+    n = len(lines)
+    while start < n:
+        acc, end = 0, start
+        while end < n and acc + per_line[end] <= chunk_tokens:
+            acc += per_line[end]
+            end += 1
+        if end == start:          # one line alone exceeds chunk_tokens
+            end, acc = start + 1, per_line[start]
+        chunks.append({"index": len(chunks),
+                       "start_line": start + 1,      # 1-based, inclusive
+                       "end_line": end,              # 1-based, inclusive
+                       "tokens": acc,
+                       "sed": f"sed -n '{start + 1},{end}p' {path}"})
+        if end >= n:
+            break
+        # step back by the overlap, measured in tokens, on a line edge
+        back, ov = end, 0
+        while back > start + 1 and ov + per_line[back - 1] <= overlap_tokens:
+            back -= 1
+            ov += per_line[back]
+        chunks[-1]["overlap_next_tokens"] = ov
+        start = back
+    return {"path": path, "lines": n, "total_tokens": total,
+            "chunk_tokens": chunk_tokens, "overlap_tokens": overlap_tokens,
+            "chunk_count": len(chunks), "chunks": chunks}
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("target", nargs="?", help="file or directory; omit with --text")
+    ap.add_argument("--text", help="count this literal string instead")
+    ap.add_argument("--pattern", default="*", help="glob applied to filenames (default *)")
+    ap.add_argument("--no-recursive", action="store_true")
+    ap.add_argument("--exclude", action="append", default=[],
+                    help="substring to exclude from paths; repeatable")
+    ap.add_argument("--budget", type=int,
+                    help="total token budget; adds a proportional per-file allocation")
+    ap.add_argument("--split", type=int, metavar="CHUNK_TOKENS",
+                    help="split a FILE into chunks of about this many tokens, on line "
+                         "edges, and print the ranges instead of a single count")
+    ap.add_argument("--overlap", type=int, default=200,
+                    help="tokens of overlap between adjacent chunks (default 200)")
+    ap.add_argument("--min-alloc", type=int, default=50,
+                    help="floor for a per-file allocation under --budget (default 50)")
+    args = ap.parse_args()
+
+    try:
+        enc = _enc()
+        import tiktoken
+        ver = tiktoken.__version__
+    except Exception as e:
+        print(json.dumps({"error": f"tiktoken unavailable: {e}",
+                          "hint": "python3 -c 'import tiktoken' must work; "
+                                  "do NOT install without operator authorization"}), file=sys.stderr)
+        return 2
+
+    meta = {"encoding": ENCODING, "tiktoken_version": ver, "host": os.uname().nodename}
+
+    if args.text is not None:
+        print(json.dumps({**meta, "tokens": count_text(args.text, enc)}, indent=2))
+        return 0
+
+    if not args.target:
+        print(json.dumps({"error": "give a file/directory or --text"}), file=sys.stderr)
+        return 2
+
+    if os.path.isfile(args.target) and args.split:
+        r = split_file(args.target, args.split, args.overlap, enc)
+        print(json.dumps({**meta, **r}, indent=2))
+        return 0 if "error" not in r else 1
+
+    if os.path.isfile(args.target):
+        r = count_file(args.target, enc)
+        print(json.dumps({**meta, **r}, indent=2))
+        return 0 if "error" not in r else 1
+
+    if not os.path.isdir(args.target):
+        print(json.dumps({"error": f"no such file or directory: {args.target}"}), file=sys.stderr)
+        return 2
+
+    paths = walk(args.target, args.pattern, not args.no_recursive, args.exclude)
+    files, skipped = [], []
+    for p in paths:
+        r = count_file(p, enc)
+        (skipped if "error" in r else files).append(r)
+
+    files.sort(key=lambda x: -x["tokens"])
+    total = sum(f["tokens"] for f in files)
+    out = {**meta, "directory": os.path.abspath(args.target), "pattern": args.pattern,
+           "recursive": not args.no_recursive,
+           "files_counted": len(files), "files_skipped": len(skipped),
+           "total_tokens": total, "files": files, "skipped": skipped}
+
+    if args.budget:
+        # Proportional allocation with a floor, and a HARD CAP at the budget.
+        #
+        # ⛔ THE FIRST VERSION OF THIS OVERSHOT, AND IT OVERSHOT QUIETLY. Measured
+        # 2026-08-24 on memo-v2/src/memo (51 files, 114,114 tokens): budget 8,000 ->
+        # `allocated_total` 8,389. The floor was handed to every leftover file after
+        # the pool was already empty, so the sum exceeded the number the caller
+        # asked for and nothing said so. An allocator that returns MORE than the
+        # budget is the same false-reassurance shape as a monitor that returns
+        # green: the output is well-formed, plausible, and wrong in the direction
+        # nobody checks.
+        #
+        # ⇒ Two invariants now, both asserted before returning:
+        #   1. sum(allocated) <= budget, always.
+        #   2. a file that could not be given at least --min-alloc gets ZERO and is
+        #      named in `unallocated`. A starvation slice is worse than no slice:
+        #      50 tokens of a 9,000-token module is a sentence that reads like a
+        #      summary and is not one.
+        budget, alloc = args.budget, {}
+        pool = budget
+        remaining = list(files)
+        # Phase 1: files already cheaper than their proportional share are kept whole,
+        # and their surplus is redistributed. Repeat until the set stops growing.
+        while remaining and pool > 0:
+            tot = sum(f["tokens"] for f in remaining) or 1
+            whole = [f for f in remaining
+                     if f["tokens"] <= max(args.min_alloc, pool * f["tokens"] / tot)
+                     and f["tokens"] <= pool]
+            if not whole:
+                break
+            for f in whole:
+                alloc[f["path"]] = {"allocated": f["tokens"], "keep_whole": True}
+                pool -= f["tokens"]
+            remaining = [f for f in remaining if f["path"] not in alloc]
+        # Phase 2: split what is left proportionally, largest first, honouring the
+        # floor only while the pool can actually pay for it.
+        unallocated = []
+        tot = sum(f["tokens"] for f in remaining) or 1
+        for f in remaining:
+            want = max(args.min_alloc, int(pool * f["tokens"] / tot))
+            if pool < args.min_alloc:
+                unallocated.append(f["path"])
+                continue
+            give = min(want, pool)
+            alloc[f["path"]] = {"allocated": give, "keep_whole": False}
+            pool -= give
+        # Phase 3: spend the remainder. Integer truncation in phase 2 plus the
+        # phase-1 handoff leaves the pool short of empty — measured 6,197 of an
+        # 8,000 budget on the first fixed version, i.e. 23% of what the caller
+        # authorised simply not used. Under-spending is not "safe": it buys a worse
+        # answer than the caller paid for. Top up the reducible files, largest
+        # first, and never past their own full size or past the pool.
+        reducible = [f for f in files
+                     if f["path"] in alloc and not alloc[f["path"]]["keep_whole"]]
+        for f in reducible:
+            if pool <= 0:
+                break
+            headroom = f["tokens"] - alloc[f["path"]]["allocated"]
+            if headroom <= 0:
+                continue
+            give = min(headroom, pool)
+            alloc[f["path"]]["allocated"] += give
+            pool -= give
+
+        out["budget"] = budget
+        out["allocation"] = alloc
+        out["allocated_total"] = sum(a["allocated"] for a in alloc.values())
+        out["unallocated"] = unallocated
+        out["unallocated_count"] = len(unallocated)
+        out["fits_without_reduction"] = total <= budget
+        # ⛔ Assert rather than trust. A wrong number here is invisible downstream.
+        assert out["allocated_total"] <= budget, (
+            f"allocator overshot: {out['allocated_total']} > {budget}")
+
+    print(json.dumps(out, indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
