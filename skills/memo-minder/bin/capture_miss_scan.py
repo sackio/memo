@@ -25,8 +25,18 @@ PARK_WEAK = re.compile(r"(parked|valet)", re.I)
 # same defect the comment on line 5 fixes for `row ?[A-Z]`; the code list was
 # simply never given the same treatment. A detector whose output is ~90% noise
 # is one nobody reads, which is how the next real datum gets missed.
+# `terminal` USED to sit here bare and does not belong bare: it is an airport word
+# only when a designator follows it. Measured 2026-08-27 — bare `terminal` licensed
+# BOTH of that cycle's false positives, each an agent-sense "parked" within 120 chars
+# of an unrelated terminal: "the work is parked on the armed timer" (electric seat,
+# an EV-charger terminal) and "the zoning question is parked" (ha seat, likewise).
+# This is the same defect as the unanchored ORD/EWR codes fixed on 2026-07-31 and the
+# case-sensitivity fix on line 5: a token that is a domain word in one sense and
+# ordinary English in another must carry the thing that disambiguates it.
+# ⇒ Airport terminals are written "Terminal B" / "Terminal 4"; shell and charger
+# terminals are not. Requiring the designator keeps every real hit and drops both.
 PARK_DOMAIN_WORD = re.compile(
-    r"(\bcar\b|garage|parking|\block\b|\blot\b(?! of\b)|terminal"
+    r"(\bcar\b|garage|parking|\block\b|\blot\b(?! of\b)|terminal ?[A-E0-9]\b"
     r"|airport|shuttle|\bdeck\b|logan)", re.I)
 PARK_DOMAIN_CODE = re.compile(r"\b(BOS|JFK|LGA|MHT|EWR|SFO|LAX|ORD|DCA|IAD|DFW)\b")
 

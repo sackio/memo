@@ -183,9 +183,24 @@ writing; one seat's own bug usually is not, because they already recorded it.
 `CAPMISS_CUTOFF=YYYY-MM-DD python3 - < bin/capture_miss_scan.py` over ssh; emits JSON.
 
 ⛔ **STANDING POSITIVE CONTROL, EVERY CYCLE:** `CAPMISS_CUTOFF=2026-07-22` on **server3** MUST return
-a hit whose context contains *"this is where I parked at logan"*. **A detector that has never been
-run against a known positive is not a detector** — that is exactly how this phase sat marked TODO
-while silently matching nothing for weeks.
+a hit from session `aa9d2ec0` at `2026-07-26T02:13:52` whose context contains **"Level 6"** and
+**"Logan/Central/Level 6/Row R"**. **A detector that has never been run against a known positive is
+not a detector** — that is exactly how this phase sat marked TODO while silently matching nothing
+for weeks.
+
+⛔⛔ **CORRECTED 2026-08-27 — THE CONTROL USED TO ASSERT THE PHRASE *"this is where I parked at
+logan"* AND THAT DATUM IS UNREACHABLE ON EVERY HOST.** Measured 2026-08-27 across all four:
+the phrase survives only in `assistant/23a9ee1d` and `assistant/aa9d2ec0` (server3) and
+`aa9d2ec0` (office), and **every** occurrence is `role=assistant` with list content, or
+`role=user` with LIST content (a tool_result) — all structurally unreachable by the scanner's
+`if role == "user" and isinstance(c, str)` gate. Ben's original turn was never captured at all;
+the session record says it *"hit a dead inbox, no live session to process it"*.
+⇒ The replacement above is a **different turn in the same file**, `role=user` with STRING content,
+matching on the `Level 6` designator — it passes the gate and names the same Logan parking datum.
+⚠️ A cycle on 2026-08-21 reported *"positive control on office PASSES, 22 hits"*. That claim does
+not survive measurement and is **retracted** — office's copies are all list-content.
+⭐ The lesson that outlives both: **a control asserting a literal string is only as durable as that
+string.** Assert the datum the detector must find, not the sentence someone happened to write.
 
 ⛔⛔ **CORRECTED 2026-08-23 — THIS SAID `office` AND THE DATUM IS ON `server3`.** The `assistant`
 seat migrated office→server3 on 2026-08-10, taking the Logan turn with it. Measured 2026-08-23:
