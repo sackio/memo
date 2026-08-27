@@ -374,6 +374,7 @@ async def memo_update(
     tags: list[str] | None = None,
     metadata: dict[str, Any] | None = None,
     append: str | None = None,
+    prepend: str | None = None,
     expect_content: str | None = None,
     allow_shrink: bool = False,
     db_path: str | None = None,
@@ -434,6 +435,25 @@ async def memo_update(
     changed underneath, this returns `{updated: false, reason: "conflict"}`
     rather than overwriting. Re-read and re-apply.
 
+    ⭐ `prepend` adds text to the FRONT of the existing content, re-embedding the
+    result. Same contract as `append` — verbatim, no separator, compare-and-set,
+    cannot shrink — at the opposite end. [v0.5.0]
+
+    ⛔ WHY IT EXISTS. `append` lands at the END, so it cannot carry a correction
+    that has to be read BEFORE the text it corrects — and a top-of-document
+    banner is how this corpus retires a claim while keeping the record that
+    explains it. Callers were therefore hand-rolling GET → concat → PATCH, which
+    puts the "nothing was lost" guarantee in the caller's discipline instead of
+    the API: the memo seat applied 17 such banners in one cycle on 2026-08-27,
+    each needing its own `new.endswith(old)` assertion, and a single omitted
+    assertion silently overwrites a memo with no undo.
+    ⇒ The fix is the same shape as the one that produced `append`: make the
+    operation people were already performing by hand into one the server does
+    correctly every time.
+
+    ⛔ `prepend` with `content` or with `append` is REFUSED, not merged — same
+    reason the `content`/`append` pair is. Send one.
+
     Returns the updated memo with `updated: true`. If the ID matched nothing,
     returns `{updated: false, reason: "not_found", requested_id: <id>}` —
     NOT null. A bare null could not distinguish a mistyped id from a memo that
@@ -443,10 +463,50 @@ async def memo_update(
     """
     await _reject_leaked_tool_call(content, tags, "memo_update")
 
-    if append is not None:
+    # ⭐ RESOLVE A SHORT ID, exactly as `memo_get` does. The 8-char id is what
+    # actually circulates — seat guides, pins, commit messages, agent DMs — and
+    # until 2026-08-25 the READ path expanded it while THIS path did not:
+    # `memo_get("63059df0")` returned the document, `memo_update("63059df0")`
+    # returned `not_found` in the same minute against the same corpus. The HTTP
+    # `PATCH /documents/{id}` route already resolved via `_resolve_doc_id_or_404`;
+    # this tool was simply missed when that was added, so the two front doors to
+    # one operation disagreed.
+    #
+    # ⛔ WHY THIS WAS WORTH FIXING RATHER THAN DOCUMENTING: `not_found` is ALSO
+    # the answer for a deleted memo. A seat appends to a memo it cites by prefix,
+    # is told `not_found`, and concludes the corpus lost a document — the same
+    # alarming-reading-is-the-plausible-one failure that made `memo_get` return
+    # `{found: false, reason}` instead of a bare null. `memo_update` still had the
+    # version of it we had already fixed once next door. (Reported by `network`,
+    # 2026-08-25.)
+    #
+    # ⚑ The `ambiguous` branch is not optional politeness: two memos sharing a
+    # prefix is PRECISELY when silently picking one is worst, and on a write path
+    # picking wrong is unrecoverable rather than merely misleading.
+    r = await db.resolve_id(db_path=db_path, doc_id=id)
+    if r["status"] == "ambiguous":
+        return {"updated": False, "reason": "ambiguous", "requested_id": id,
+                "candidate_count": r["candidate_count"],
+                "candidates": r["candidates"],
+                "detail": "This prefix matches more than one memo. Pass a longer "
+                          "prefix or a full uuid — picking one for you would be a "
+                          "guess, and this is a write."}
+    resolved_from = id if r["status"] == "prefix" else None
+    if r["status"] in ("exact", "prefix"):
+        id = r["id"]
+
+    if append is not None and prepend is not None:
+        return {"updated": False, "reason": "ambiguous_append_and_prepend",
+                "detail": "`append` extends the end and `prepend` extends the front. "
+                          "Send one, or send the finished text as `content`. Applying "
+                          "both in an order you did not specify is a guess about a write.",
+                "requested_id": id}
+
+    if append is not None or prepend is not None:
+        which = "append" if append is not None else "prepend"
         if content is not None:
-            return {"updated": False, "reason": "ambiguous_content_and_append",
-                    "detail": "`content` replaces and `append` extends. Send one. "
+            return {"updated": False, "reason": f"ambiguous_content_and_{which}",
+                    "detail": f"`content` replaces and `{which}` extends. Send one. "
                               "Guessing which you meant is how a write API loses data.",
                     "requested_id": id}
         current = await db.get(db_path, id)
@@ -457,13 +517,15 @@ async def memo_update(
         if expect_content is None:
             expect_content = current.get("content") or ""
         # ⛔ Verbatim — no separator injected. See the docstring.
-        content = (current.get("content") or "") + append
+        prior = current.get("content") or ""
+        content = (prior + append) if append is not None else (prepend + prior)
 
     # ⛔ SHRINK GUARD ON THE REPLACE PATH — the destructive parameter gets a guard
     # too, not just the safe one. Refuses the placeholder-overwrite shape (13,336
     # chars -> 9 tokens, `updated: true`, no undo) while leaving ordinary edits and
     # deliberate rewrites alone. Applies to the `content=` replace path only —
-    # an `append` cannot shrink, so it is excluded by the `elif`.
+    # neither an `append` nor a `prepend` can shrink, so both are excluded by
+    # the `elif`.
     #
     # ⚠️ `expect_content` DOES NOT EXEMPT A REPLACE, and this comment used to say
     # it did — corrected 2026-08-19 before deploy. The two guards answer different
@@ -549,7 +611,13 @@ async def memo_update(
         # answer. Session-ids and memo-ids are both 36-char UUIDs, so passing
         # the wrong KIND of id lands here too and looked identical.
         return {"updated": False, "reason": "not_found", "requested_id": id}
-    return {**result, "updated": True}
+    out = {**result, "updated": True}
+    # ⚑ Echo the expansion so a caller can SEE that an abbreviation was expanded
+    # — same contract as `memo_get`'s `resolved_from`. A write that silently
+    # retargets is worse than a read that does.
+    if resolved_from is not None:
+        out["resolved_from"] = resolved_from
+    return out
 
 
 @mcp.tool()
@@ -2038,20 +2106,35 @@ async def update_document(doc_id: str, req: UpdateRequest, request: Request,
         )
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
-    # ⭐ append: same semantics as the MCP tool — verbatim, mutually exclusive
-    # with content, and compare-and-set so a concurrent append is REFUSED rather
-    # than silently overwritten. [v0.4.0]
+    # ⭐ append / prepend: same semantics as the MCP tool — verbatim, mutually
+    # exclusive with content and with each other, and compare-and-set so a
+    # concurrent write is REFUSED rather than silently overwritten.
+    # [append v0.4.0, prepend v0.5.0]
+    #
+    # ⛔ BOTH FRONT DOORS, DELIBERATELY, IN THE SAME COMMIT. `memo_update` and
+    # `PATCH /documents/{id}` are two entrances to one operation, and the last
+    # time they diverged — the MCP tool missed when short-id resolution was added
+    # here — a seat was told `not_found` for a memo that existed, which reads as
+    # "the corpus lost a document". Adding a parameter to one door and not the
+    # other reproduces that exactly.
     new_content, expect_content = req.content, None
-    if req.append is not None:
+    if req.append is not None and req.prepend is not None:
+        raise HTTPException(
+            status_code=422,
+            detail="`append` extends the end and `prepend` extends the front — "
+                   "send one, or send the finished text as `content`")
+    if req.append is not None or req.prepend is not None:
+        which = "append" if req.append is not None else "prepend"
         if req.content is not None:
             raise HTTPException(
                 status_code=422,
-                detail="`content` replaces and `append` extends — send one, not both")
+                detail=f"`content` replaces and `{which}` extends — send one, not both")
         current = await db.get(req.db_path, doc_id)
         if current is None:
             raise HTTPException(status_code=404, detail="Memo not found")
         expect_content = current.get("content") or ""
-        new_content = expect_content + req.append
+        new_content = (expect_content + req.append) if req.append is not None \
+            else (req.prepend + expect_content)
 
     embedding = await _embed_document_or_413(new_content) if new_content is not None else None
     result = await db.update(
