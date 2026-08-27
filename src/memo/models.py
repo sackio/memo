@@ -129,6 +129,21 @@ class UpdateRequest(PermissiveRequest):
     # Appends VERBATIM to existing content — no separator injected. Mutually
     # exclusive with `content`; sending both is refused, not merged. [v0.4.0]
     append: str | None = None
+    # PREPENDS VERBATIM to the FRONT of existing content — same contract as
+    # `append`, opposite end. Mutually exclusive with both `content` and
+    # `append`. [v0.5.0]
+    #
+    # ⛔ WHY IT EXISTS, and it is not symmetry for its own sake. `append` lands at
+    # the END, so it structurally CANNOT carry a correction that must be read
+    # first — and a top-of-document banner is how this corpus retires a claim
+    # without deleting the record that explains it. Every such banner was
+    # therefore a hand-rolled GET → concat → PATCH, with the guarantee that
+    # nothing was lost living in the caller's discipline rather than in the API.
+    # The memo seat applied 17 in a single cycle on 2026-08-27, each needing its
+    # own `new.endswith(old)` assertion. One omitted assertion overwrites a memo
+    # and there is no undo.
+    # ⇒ This moves that guarantee into the server, where it cannot be forgotten.
+    prepend: str | None = None
     db_path: str | None = None
 
 
