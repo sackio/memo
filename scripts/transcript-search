@@ -272,7 +272,13 @@ def search_remote(host, argv) -> dict:
     # word-splitting bug; the fixture chose the one shape that hides it.
     # The forced command was correct to refuse: it shlex.splits SSH_ORIGINAL_COMMAND,
     # so quoting here is what makes the two halves agree.
-    remote = " ".join(shlex.quote(t) for t in
+    # ⛔ THE REMOTE MUST NEVER FAN OUT. Guarded by ENV, not by stripping the flag:
+    #   `--all` is an argparse PREFIX ABBREVIATION of `--all-hosts`, so it sets
+    #   all_hosts=True while the exact-match strip loop below leaves it in argv. Every
+    #   remote then re-fanned to all four hosts: branching factor 4 per ssh round-trip.
+    #   2026-08-28, ~5,000 procs in 15min, server4 load 575, office ssh saturated.
+    # ⭐ The spelling is unbounded (--a, --al, --all, --all-h…); the INVARIANT is one line.
+    remote = "TRANSCRIPT_SEARCH_NO_FANOUT=1 " + " ".join(shlex.quote(t) for t in
                       ["python3", SELF] + argv + ["--json", "--host-label", host])
     cmd = SSH + [f"ben@{host}", remote]
     try:
@@ -292,7 +298,33 @@ def search_remote(host, argv) -> dict:
                 "unreadable": 0, "hits": [], "sessions": [], "truncated": False}
 
 
+def _recursion_guard():
+    """⛔ Leaf backstop: a remote leaf must never fan out.
+
+    search_remote() sets TRANSCRIPT_SEARCH_NO_FANOUT=1 on every outbound ssh and
+    main() honours it — that is the primary, spelling-independent invariant. This
+    guard catches the case that invariant cannot see: a leaf reached WITHOUT that
+    env var (an older caller, a hand-built ssh command) that still carries an
+    --all* abbreviation. It fires only then, so it cannot mask the env path.
+
+    2026-08-28: `--all` is an argparse prefix abbreviation of `--all-hosts`; the
+    exact-match strip loop left it in the remote argv, so every host re-fanned to
+    all four including itself. ~5,000 procs in ~15 min; server4 load1 651,
+    server5 709, office 459; ssh unreachable on three hosts.
+    """
+    if os.environ.get("TRANSCRIPT_SEARCH_NO_FANOUT"):
+        return
+    argv = sys.argv[1:]
+    if "--host-label" in argv or any(a.startswith("--host-label=") for a in argv):
+        for a in argv:
+            if a.startswith("--all"):
+                sys.stderr.write("transcript-search: recursion guard — a remote leaf "
+                                 "may not fan out (got %s)\n" % a)
+                sys.exit(3)
+
+
 def main():
+    _recursion_guard()
     ap = argparse.ArgumentParser(
         description="Structure-aware search over Claude Code transcripts.",
         epilog="Roles: " + " ".join(ROLE_CHOICES) + "   (default: instruction response)")
@@ -316,6 +348,10 @@ def main():
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--host-label", help=argparse.SUPPRESS)
     args = ap.parse_args()
+
+    # ⛔ Set by search_remote on every outbound ssh — see its comment.
+    if os.environ.get("TRANSCRIPT_SEARCH_NO_FANOUT"):
+        args.all_hosts = False
 
     if args.instructions_only:
         args.role = ["instruction"]
@@ -362,7 +398,9 @@ def main():
                 continue
             if a.startswith("--host=") or a.startswith("--host-label="):
                 continue
-            if a in ("--all-hosts", "--json"):
+            if a in ("--all-hosts", "--json") or (
+                    a.startswith("--") and len(a) >= 3
+                    and ("--all-hosts".startswith(a) or "--json".startswith(a))):
                 continue
             cleaned.append(a)
         results = []
