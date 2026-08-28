@@ -272,13 +272,25 @@ def search_remote(host, argv) -> dict:
     # word-splitting bug; the fixture chose the one shape that hides it.
     # The forced command was correct to refuse: it shlex.splits SSH_ORIGINAL_COMMAND,
     # so quoting here is what makes the two halves agree.
-    # ⛔ THE REMOTE MUST NEVER FAN OUT. Guarded by ENV, not by stripping the flag:
+    # ⛔ THE REMOTE MUST NEVER FAN OUT — and the guard must NOT ride on this wire.
     #   `--all` is an argparse PREFIX ABBREVIATION of `--all-hosts`, so it sets
-    #   all_hosts=True while the exact-match strip loop below leaves it in argv. Every
-    #   remote then re-fanned to all four hosts: branching factor 4 per ssh round-trip.
-    #   2026-08-28, ~5,000 procs in 15min, server4 load 575, office ssh saturated.
-    # ⭐ The spelling is unbounded (--a, --al, --all, --all-h…); the INVARIANT is one line.
-    remote = "TRANSCRIPT_SEARCH_NO_FANOUT=1 " + " ".join(shlex.quote(t) for t in
+    #   all_hosts=True while an EXACT-match strip loop leaves it in argv. Every remote
+    #   then re-fanned to all four hosts: branching factor 4 per ssh round-trip.
+    #   2026-08-28, ~5,000 procs in 15min, server4 load1 651, office ssh saturated.
+    # ⛔⛔ DO NOT PREFIX THIS STRING WITH `TRANSCRIPT_SEARCH_NO_FANOUT=1 `. That was
+    #   tried the same morning and broke the forced-command path 100% for ~2 minutes.
+    #   SSH_ORIGINAL_COMMAND NEVER REACHES A SHELL: transcript-search-forced shlex.splits
+    #   it and exec's it as argv, so the assignment is not an assignment — it is a TOKEN.
+    #   Its interpreter-drop loop pops only tokens ending in python3/python/
+    #   transcript-search; `…NO_FANOUT=1` ends in `1`, so the loop stops at index 0,
+    #   and `python3` plus the script path fall through to the positional branch:
+    #   "refused: at most one search pattern is permitted", for EVERY invocation.
+    #   Reproduced both shapes (a pattern, and --list-sessions). Fixed 2026-08-28 06:58.
+    # ⭐ The spelling is unbounded (--a, --al, --all, --all-h…), so the real defences are
+    #   the two that need no wire coupling: the ABBREVIATION-AWARE strip loop in main()
+    #   ("--all-hosts".startswith(a)), which stops --all* ever reaching a leaf, and
+    #   _recursion_guard(), which catches a leaf built by hand or by an older caller.
+    remote = " ".join(shlex.quote(t) for t in
                       ["python3", SELF] + argv + ["--json", "--host-label", host])
     cmd = SSH + [f"ben@{host}", remote]
     try:
@@ -301,19 +313,28 @@ def search_remote(host, argv) -> dict:
 def _recursion_guard():
     """⛔ Leaf backstop: a remote leaf must never fan out.
 
-    search_remote() sets TRANSCRIPT_SEARCH_NO_FANOUT=1 on every outbound ssh and
-    main() honours it — that is the primary, spelling-independent invariant. This
-    guard catches the case that invariant cannot see: a leaf reached WITHOUT that
-    env var (an older caller, a hand-built ssh command) that still carries an
-    --all* abbreviation. It fires only then, so it cannot mask the env path.
+    ⛔ NOTHING SETS TRANSCRIPT_SEARCH_NO_FANOUT ON THE WIRE, and nothing may — see
+    the DO-NOT-PREFIX block in search_remote(). This docstring previously called that
+    env var "the primary, spelling-independent invariant"; the line that set it was
+    removed at 06:57 the same morning and this text outlived it by minutes. ⭐ A
+    comment describing a mechanism is not evidence the mechanism exists, and a
+    deleted setter leaves its documentation behind looking authoritative.
+
+    THE PRIMARY GUARD IS THE STRIP LOOP in main(), which matches --all* by prefix.
+    This function is the BACKSTOP for a leaf reached by an older caller or a
+    hand-built ssh command that still carries an --all* abbreviation.
 
     2026-08-28: `--all` is an argparse prefix abbreviation of `--all-hosts`; the
     exact-match strip loop left it in the remote argv, so every host re-fanned to
     all four including itself. ~5,000 procs in ~15 min; server4 load1 651,
     server5 709, office 459; ssh unreachable on three hosts.
     """
-    if os.environ.get("TRANSCRIPT_SEARCH_NO_FANOUT"):
-        return
+    # ⛔ NO ENV ESCAPE HATCH HERE. This used to early-return when
+    #   TRANSCRIPT_SEARCH_NO_FANOUT was set. Once its setter was removed, that left a
+    #   variable whose only remaining effect was to DISABLE the backstop — exported by
+    #   anyone debugging, and the guard goes quiet with nothing to say so.
+    #   The reader in main() is kept because it only ever REDUCES fanout; this one only
+    #   ever increased it.
     argv = sys.argv[1:]
     if "--host-label" in argv or any(a.startswith("--host-label=") for a in argv):
         for a in argv:
@@ -349,7 +370,10 @@ def main():
     ap.add_argument("--host-label", help=argparse.SUPPRESS)
     args = ap.parse_args()
 
-    # ⛔ Set by search_remote on every outbound ssh — see its comment.
+    # ⚠️ NOTHING SETS THIS ON THE WIRE any more — search_remote's prefix broke the
+    # forced-command path and was reverted (see its ⛔ comment). Kept because it can
+    # only ever REDUCE fan-out, so an external caller may still use it as a belt.
+    # ⛔ Do not add a reader of it anywhere that could WEAKEN a guard.
     if os.environ.get("TRANSCRIPT_SEARCH_NO_FANOUT"):
         args.all_hosts = False
 
