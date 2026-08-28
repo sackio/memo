@@ -310,6 +310,26 @@ def search_remote(host, argv) -> dict:
                 "unreadable": 0, "hits": [], "sessions": [], "truncated": False}
 
 
+def _is_all_hosts_flag(a: str) -> bool:
+    """True for EVERY spelling argparse accepts for --all-hosts.
+
+    ⛔ ONE PREDICATE, TWO CALL SITES — the strip loop in main() and
+    _recursion_guard() below. They had two separate tests on 2026-08-28 and the
+    guard's was weaker: it read `a.startswith("--all")`, which misses `--a` and
+    `--al`. Both are unambiguous prefix abbreviations, so argparse sets
+    all_hosts=True for them, and a hand-built leaf carrying `--a --host-label X`
+    fanned out to all four hosts with the guard silently allowing it. MEASURED
+    2026-08-28 07:00: `--a` on a leaf returned results from all four hosts.
+    ⭐ That is the same defect this file was just fixed for, one abbreviation
+    shorter — and it survived precisely because the two halves of one job were
+    written twice. Keep them sharing this function.
+    """
+    if not a.startswith("--"):
+        return False
+    head = a.split("=", 1)[0]
+    return len(head) >= 3 and "--all-hosts".startswith(head)
+
+
 def _recursion_guard():
     """⛔ Leaf backstop: a remote leaf must never fan out.
 
@@ -338,7 +358,7 @@ def _recursion_guard():
     argv = sys.argv[1:]
     if "--host-label" in argv or any(a.startswith("--host-label=") for a in argv):
         for a in argv:
-            if a.startswith("--all"):
+            if _is_all_hosts_flag(a):
                 sys.stderr.write("transcript-search: recursion guard — a remote leaf "
                                  "may not fan out (got %s)\n" % a)
                 sys.exit(3)
@@ -422,9 +442,9 @@ def main():
                 continue
             if a.startswith("--host=") or a.startswith("--host-label="):
                 continue
-            if a in ("--all-hosts", "--json") or (
+            if _is_all_hosts_flag(a) or a == "--json" or (
                     a.startswith("--") and len(a) >= 3
-                    and ("--all-hosts".startswith(a) or "--json".startswith(a))):
+                    and "--json".startswith(a)):
                 continue
             cleaned.append(a)
         results = []
