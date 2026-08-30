@@ -97,7 +97,7 @@ def ts_epoch(iso: str):
 # --------------------------------------------------------------------------
 
 def slug_for(path: str) -> str:
-    """Claude Code's project-dir slug: '/' AND '_' both become '-'.
+    """Claude Code's project-dir slug: EVERY non-alphanumeric becomes '-'.
 
     ⛔ THE UNDERSCORE WAS MISSING UNTIL 2026-08-21, and it failed as a SILENT
     NULL. `--path /mnt/nas/data/code/server_admin` produced
@@ -110,8 +110,24 @@ def slug_for(path: str) -> str:
     ⚠️ At least six real project paths carry underscores (`server_admin`,
     `exome_analysis`, `autoimmune_exome`, `claude_configs`, `mom_exit_strategy`,
     `_d1_artifacts`), so this silently blinded every scoped search on all of them.
+
+    ⛔⛔ AND THE DOT WAS STILL MISSING UNTIL 2026-08-30, failing the same silent
+    way one character over. `--path <repo>/.claude-worktrees/quantum-engine`
+    produced `...-quantum-feed-.claude-worktrees-quantum-engine` (a literal dot)
+    while the real dir is `...-quantum-feed--claude-worktrees-quantum-engine`.
+    Measured by the memo-minder cycle of 2026-08-30: a miner scoped to
+    quantum-feed's two worktrees got "0 sessions searched" from this function and
+    had to fall back to `transcript-search --session <id>` to see them at all.
+    ⭐ THE LESSON IS THE CLASS, NOT THE CHARACTER. The 08-21 fix hard-coded a
+    second `.replace()` and left the enumeration open, so the next unhandled
+    character reproduced the identical silent null. The rule was never "these two
+    characters": measured across all four hosts on 2026-08-30, all 109 real
+    project slugs match `^[A-Za-z0-9-]+$` — i.e. Claude Code replaces EVERY
+    character outside [A-Za-z0-9]. Encoding that rule directly is what closes the
+    class; another `.replace()` would only have bought until the next path with a
+    space, a dot, or a plus in it.
     """
-    return os.path.abspath(path).replace("/", "-").replace("_", "-")
+    return re.sub(r"[^A-Za-z0-9]", "-", os.path.abspath(path))
 
 
 def slug_candidates(path: str) -> list[str]:
@@ -121,7 +137,9 @@ def slug_candidates(path: str) -> list[str]:
     a miss that names its candidates is debuggable; a bare "not found" is not.
     """
     ap = os.path.abspath(path)
-    out = [ap.replace("/", "-").replace("_", "-"), ap.replace("/", "-")]
+    out = [re.sub(r"[^A-Za-z0-9]", "-", ap),
+           ap.replace("/", "-").replace("_", "-"),
+           ap.replace("/", "-")]
     seen, uniq = set(), []
     for s in out:
         if s not in seen:
