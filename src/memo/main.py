@@ -2117,7 +2117,14 @@ async def update_document(doc_id: str, req: UpdateRequest, request: Request,
     # here — a seat was told `not_found` for a memo that existed, which reads as
     # "the corpus lost a document". Adding a parameter to one door and not the
     # other reproduces that exactly.
-    new_content, expect_content = req.content, None
+    # ⭐ A CALLER-SUPPLIED `expect_content` WINS over the value derived below for
+    # append/prepend, and that is deliberate rather than incidental. The derived
+    # value is whatever we just read, so it can never fail; the caller's value is
+    # an assertion about what they read EARLIER, which is the only one that can
+    # catch a concurrent write. Honoured here since 2026-09-06 — before that this
+    # path accepted the field and discarded it, returning 200 on a guard it never
+    # applied. See UpdateRequest.expect_content for the full account.
+    new_content, expect_content = req.content, req.expect_content
     if req.append is not None and req.prepend is not None:
         raise HTTPException(
             status_code=422,
@@ -2132,9 +2139,14 @@ async def update_document(doc_id: str, req: UpdateRequest, request: Request,
         current = await db.get(req.db_path, doc_id)
         if current is None:
             raise HTTPException(status_code=404, detail="Memo not found")
-        expect_content = current.get("content") or ""
-        new_content = (expect_content + req.append) if req.append is not None \
-            else (req.prepend + expect_content)
+        base = current.get("content") or ""
+        # ⛔ Build the new text from what we actually read, but keep the CALLER's
+        # assertion if they made one — see the note above. Falling back to `base`
+        # preserves the append/prepend guard for callers who pass neither.
+        if expect_content is None:
+            expect_content = base
+        new_content = (base + req.append) if req.append is not None \
+            else (req.prepend + base)
 
     embedding = await _embed_document_or_413(new_content) if new_content is not None else None
     result = await db.update(

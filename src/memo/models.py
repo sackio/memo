@@ -144,6 +144,26 @@ class UpdateRequest(PermissiveRequest):
     # and there is no undo.
     # ⇒ This moves that guarantee into the server, where it cannot be forgotten.
     prepend: str | None = None
+    # COMPARE-AND-SET GUARD, honoured on this path since 2026-09-06. [v0.5.1]
+    #
+    # ⛔ IT USED TO BE A PHANTOM FIELD HERE AND REAL ON THE MCP TOOL, WHICH IS
+    # THE WORST OF THE THREE AVAILABLE BEHAVIOURS. `memo_update`'s documentation
+    # tells callers that `expect_content` is the guard for a destructive
+    # `content=` replace — the operation with no undo and no version table. A
+    # caller who read that and then wrote over HTTP had the field ACCEPTED (this
+    # model tolerates unknown fields by design, see PermissiveRequest), silently
+    # DISCARDED, and got back 200 with a fresh `updated_at`: byte-identical to a
+    # successful guarded write. Measured 2026-09-06 by `quantum-library` with a
+    # deliberately wrong value and a no-op body; reported by Ben, "tell memo to
+    # fix". ⭐ Silently accepting a guard you do not apply converts an explicit
+    # safety request into a false one — worse than never offering it, because the
+    # caller stops writing their own check.
+    #
+    # ⚠️ It guards ANY update, not only a content write: passing it with a
+    # title-only PATCH asserts the body did not move while you retitled. The
+    # comparison lives in `_sync_update` (db.py) and is unconditional there.
+    # ⇒ Mismatch is 409, never a silent overwrite. Same contract as `memo_update`.
+    expect_content: str | None = None
     db_path: str | None = None
 
 
