@@ -182,11 +182,32 @@ writing; one seat's own bug usually is not, because they already recorded it.
 ⚠️ **USE THE WORKING IMPLEMENTATION**, `bin/capture_miss_scan.py`, per host:
 `CAPMISS_CUTOFF=YYYY-MM-DD python3 - < bin/capture_miss_scan.py` over ssh; emits JSON.
 
-⛔ **STANDING POSITIVE CONTROL, EVERY CYCLE:** `CAPMISS_CUTOFF=2026-07-22` on **server3** MUST return
-a hit from session `aa9d2ec0` at `2026-07-26T02:13:52` whose context contains **"Level 6"** and
-**"Logan/Central/Level 6/Row R"**. **A detector that has never been run against a known positive is
-not a detector** — that is exactly how this phase sat marked TODO while silently matching nothing
-for weeks.
+⛔ **STANDING POSITIVE CONTROL, EVERY CYCLE — RUN IT AGAINST THE NAS ARCHIVE, NOT A LIVE HOST.**
+Point the scanner's glob at `/mnt/backup/claude-logs/server3/projects/*/*.jsonl` with
+`CAPMISS_CUTOFF=2026-07-22`; it MUST return a hit from session `aa9d2ec0` at `2026-07-26T02:13:52`
+whose context contains **"Level 6"** and **"Logan/Central/Level 6/Row R"**. **A detector that has
+never been run against a known positive is not a detector** — that is exactly how this phase sat
+marked TODO while silently matching nothing for weeks.
+
+⛔⛔ **CORRECTED 2026-09-09 — THE CONTROL USED TO NAME A LIVE HOST AND IT EXPIRED THERE.** Measured
+this cycle: running it against server3's LIVE `~/.claude/projects` completes cleanly (rc=0, 8 hits)
+and matches the control ZERO times, because `find -L ... -name 'aa9d2ec0*'` finds nothing there any
+more — `claude-cleanup.sh` deletes `projects/*.jsonl` older than 30 days, and server3's oldest
+surviving live transcript is now 2026-08-09.
+✅ **THE DATUM IS NOT LOST — IT IS ARCHIVED.** `archive-claude-logs` (hourly, `:43`) rsyncs each
+host's own `~/.claude/projects` to `/mnt/backup/claude-logs/<host>/` with `--append-verify` and
+**no `--delete`**, precisely so the 30-day cleanup cannot destroy history. The anchor is there on
+BOTH server3 and office at
+`/mnt/backup/claude-logs/server3/projects/-mnt-nas-data-code-assistant/aa9d2ec0-d808-4dbf-b897-87bca3c1a983.jsonl`
+(34,139,655 bytes). Verified 2026-09-09 by running the scanner against that path: **CONTROL PASSES**,
+matching `2026-07-26T02:13:52.833Z`, trigger `parking`, match `Level 6` — the exact anchor named above.
+⭐ **A CONTROL ANCHORED ON LIVE PRODUCTION DATA INHERITS THAT DATA'S RETENTION POLICY**, so it carries
+an expiry nobody wrote down, and when it expires it fails in the reassuring direction —
+indistinguishable from the detector genuinely finding nothing. Anchor it on the ARCHIVE, which is
+append-only and exists for exactly this reason.
+⚠️ Do NOT replace this with a synthetic fixture. One was built in `/tmp` on 2026-09-02 as a
+workaround and it is the weaker answer: it lives outside git, dies with `/tmp`, and asserts a datum
+someone wrote rather than the real one. The archive needs no maintenance and is the actual turn.
 
 ⛔⛔ **CORRECTED 2026-08-27 — THE CONTROL USED TO ASSERT THE PHRASE *"this is where I parked at
 logan"* AND THAT DATUM IS UNREACHABLE ON EVERY HOST.** Measured 2026-08-27 across all four:

@@ -1,0 +1,2721 @@
+{
+  "schema": 2,
+  "run_id": "2026-08-09T233855Z",
+  "label": "POST-PRUNE: 151 byte-identical duplicate copies hidden via valid_until (51 groups, sampled copy preserved). Same suite/sample/device as the 17:21 baseline; both stores on fast4 NVMe, both pre-warmed.",
+  "git": {
+    "sha": "93ba7c1",
+    "dirty": true
+  },
+  "seed": 7,
+  "per_band": 60,
+  "sample": {
+    "id": "s-2026-08-03T184827Z",
+    "path": "/mnt/nas/data/code/memo/bench/samples/default.json",
+    "minted_from": {
+      "url": "http://server4:8000",
+      "corpus_n": 7937
+    }
+  },
+  "targets": [
+    {
+      "name": "v1",
+      "url": "http://server4:8000",
+      "container": "memo",
+      "reachable": true,
+      "resolved": {
+        "model": "openai/text-embedding-3-small",
+        "dims": 1536,
+        "url": null,
+        "retrieval_path": null
+      },
+      "search_paths": {
+        "document": "http 404",
+        "passages": "http 404",
+        "v1-search": "present"
+      },
+      "display_name": "v1",
+      "corpus": {
+        "n": 9161,
+        "ge_1000": 2530,
+        "ge_2000": 654
+      }
+    },
+    {
+      "name": "v2",
+      "url": "http://localhost:8091",
+      "container": "memo-v2",
+      "reachable": true,
+      "resolved": {
+        "model": "openai/text-embedding-3-large",
+        "dims": 3072,
+        "url": "https://openrouter.ai/api/v1",
+        "retrieval_path": "passages"
+      },
+      "search_paths": {
+        "document": "present",
+        "passages": "present",
+        "v1-search": "present"
+      },
+      "display_name": "v2",
+      "corpus": {
+        "n": 9165,
+        "ge_1000": 2546,
+        "ge_2000": 697
+      }
+    }
+  ],
+  "results": {
+    "v1": {
+      "primary_path": "v1-search",
+      "paths_present": [
+        "v1-search"
+      ],
+      "own_title": {
+        "v1-search": {
+          "task": "own_title",
+          "path": "v1-search",
+          "seed": 7,
+          "per_band": 60,
+          "pinned_sample": "s-2026-08-03T184827Z",
+          "bands": [
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 45,
+              "top5": 59,
+              "absent": 0,
+              "failures": 0,
+              "p50_ms": 429.3,
+              "p90_ms": 518.0,
+              "band": "0-200",
+              "pool": 1294
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 41,
+              "top5": 55,
+              "absent": 3,
+              "failures": 0,
+              "p50_ms": 441.8,
+              "p90_ms": 582.0,
+              "band": "200-500",
+              "pool": 2541
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 38,
+              "top5": 45,
+              "absent": 10,
+              "failures": 0,
+              "p50_ms": 436.6,
+              "p90_ms": 570.3,
+              "band": "500-1000",
+              "pool": 2140
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 23,
+              "top5": 34,
+              "absent": 22,
+              "failures": 0,
+              "p50_ms": 427.6,
+              "p90_ms": 512.0,
+              "band": "1000-2000",
+              "pool": 1455
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 9,
+              "top5": 24,
+              "absent": 32,
+              "failures": 0,
+              "p50_ms": 431.2,
+              "p90_ms": 557.3,
+              "band": "2000-",
+              "pool": 392
+            }
+          ],
+          "total_n": 300,
+          "total_pinned": 300,
+          "total_missing": 0,
+          "total_rank1": 156,
+          "unweighted_rank1_pct": 52.0,
+          "total_failures": 0,
+          "control_ok": true,
+          "status": "ok"
+        },
+        "elapsed_s": 274.2,
+        "host_env": {
+          "load1": 6.46,
+          "load5": 7.15,
+          "load15": 7.39,
+          "io_some_avg60": 8.77,
+          "io_full_avg60": 7.79,
+          "error": null
+        },
+        "replicates": 2,
+        "observed_spread": {
+          "v1-search": {
+            "unweighted_rank1_pct": {
+              "min": 52.0,
+              "max": 52.0,
+              "range_pt": 0.0
+            }
+          }
+        }
+      },
+      "content_query": {
+        "v1-search": {
+          "task": "content_query",
+          "path": "v1-search",
+          "seed": 7,
+          "per_band": 60,
+          "pinned_sample": "s-2026-08-03T184827Z",
+          "bands": [
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 53,
+              "top5": 57,
+              "absent": 3,
+              "failures": 0,
+              "band": "0-200",
+              "pool": 494
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 40,
+              "top5": 49,
+              "absent": 10,
+              "failures": 0,
+              "band": "200-500",
+              "pool": 1602
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 29,
+              "top5": 39,
+              "absent": 15,
+              "failures": 0,
+              "band": "500-1000",
+              "pool": 1885
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 6,
+              "top5": 18,
+              "absent": 38,
+              "failures": 0,
+              "band": "1000-2000",
+              "pool": 1437
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 3,
+              "top5": 15,
+              "absent": 36,
+              "failures": 0,
+              "band": "2000-",
+              "pool": 369
+            }
+          ],
+          "total_n": 300,
+          "total_pinned": 300,
+          "total_missing": 0,
+          "total_rank1": 131,
+          "unweighted_rank1_pct": 43.67,
+          "total_failures": 0,
+          "control_ok": true,
+          "status": "ok"
+        },
+        "elapsed_s": 269.2,
+        "host_env": {
+          "load1": 10.01,
+          "load5": 8.01,
+          "load15": 7.63,
+          "io_some_avg60": 17.95,
+          "io_full_avg60": 15.3,
+          "error": null
+        },
+        "replicates": 2,
+        "observed_spread": {
+          "v1-search": {
+            "unweighted_rank1_pct": {
+              "min": 43.67,
+              "max": 43.67,
+              "range_pt": 0.0
+            }
+          }
+        }
+      },
+      "answer_recall": {
+        "v1-search": {
+          "task": "answer_recall",
+          "path": "v1-search",
+          "seed": 7,
+          "per_band": 60,
+          "pinned_sample": "s-2026-08-03T184827Z",
+          "bands": [
+            {
+              "n": 16,
+              "pinned": 17,
+              "missing": 0,
+              "ambiguous": 1,
+              "failures": 0,
+              "off_common": 0,
+              "right_doc_top1": 14,
+              "answer_in_top1": 15,
+              "answer_in_topk": 16,
+              "answer_in_topk_fulldoc": 16,
+              "band": "0-200",
+              "pool": 17
+            },
+            {
+              "n": 54,
+              "pinned": 59,
+              "missing": 0,
+              "ambiguous": 5,
+              "failures": 0,
+              "off_common": 0,
+              "right_doc_top1": 47,
+              "answer_in_top1": 47,
+              "answer_in_topk": 53,
+              "answer_in_topk_fulldoc": 53,
+              "band": "200-500",
+              "pool": 68
+            },
+            {
+              "n": 55,
+              "pinned": 60,
+              "missing": 0,
+              "ambiguous": 5,
+              "failures": 0,
+              "off_common": 0,
+              "right_doc_top1": 44,
+              "answer_in_top1": 44,
+              "answer_in_topk": 55,
+              "answer_in_topk_fulldoc": 55,
+              "band": "500-1000",
+              "pool": 101
+            },
+            {
+              "n": 52,
+              "pinned": 60,
+              "missing": 0,
+              "ambiguous": 8,
+              "failures": 0,
+              "off_common": 0,
+              "right_doc_top1": 32,
+              "answer_in_top1": 32,
+              "answer_in_topk": 51,
+              "answer_in_topk_fulldoc": 51,
+              "band": "1000-2000",
+              "pool": 109
+            },
+            {
+              "n": 50,
+              "pinned": 60,
+              "missing": 0,
+              "ambiguous": 8,
+              "failures": 0,
+              "off_common": 2,
+              "right_doc_top1": 19,
+              "answer_in_top1": 20,
+              "answer_in_topk": 45,
+              "answer_in_topk_fulldoc": 45,
+              "band": "2000-",
+              "pool": 67
+            }
+          ],
+          "total_n": 227,
+          "total_pinned": 256,
+          "total_missing": 0,
+          "total_ambiguous": 27,
+          "total_off_common": 2,
+          "common_denominator": true,
+          "total_failures": 0,
+          "right_doc_top1_pct": 70.82,
+          "answer_in_top1_pct": 72.47,
+          "answer_in_topk_pct": 97.25,
+          "answer_in_topk_fulldoc_pct": 97.25,
+          "span_cost_pt": 0.0,
+          "control_ok": true,
+          "status": "ok"
+        },
+        "elapsed_s": 204.2,
+        "host_env": {
+          "load1": 9.23,
+          "load5": 8.71,
+          "load15": 8.0,
+          "io_some_avg60": 9.52,
+          "io_full_avg60": 8.1,
+          "error": null
+        },
+        "replicates": 2,
+        "observed_spread": {
+          "v1-search": {
+            "answer_in_top1_pct": {
+              "min": 72.47,
+              "max": 72.47,
+              "range_pt": 0.0
+            },
+            "answer_in_topk_fulldoc_pct": {
+              "min": 97.25,
+              "max": 97.25,
+              "range_pt": 0.0
+            },
+            "answer_in_topk_pct": {
+              "min": 97.25,
+              "max": 97.25,
+              "range_pt": 0.0
+            },
+            "right_doc_top1_pct": {
+              "min": 70.82,
+              "max": 70.82,
+              "range_pt": 0.0
+            }
+          }
+        }
+      },
+      "context_fit": {
+        "task": "context_fit",
+        "token_budget": 4000,
+        "pinned_sample": "s-2026-08-03T184827Z",
+        "total_n": 229,
+        "total_missing": 0,
+        "total_ambiguous": 27,
+        "total_failures": 0,
+        "answer_in_context_pct": 83.84,
+        "tokens_per_answer_delivered": 4367.9,
+        "context_tokens_mean": 3662.19,
+        "context_docs_mean": 5.9,
+        "matched_count_mean": 9.96,
+        "truncated_pct": 90.83,
+        "server_duplicates_dropped_mean": null,
+        "budget_used_pct": 91.6,
+        "control_ok": true,
+        "status": "ok",
+        "elapsed_s": 114.2,
+        "host_env": {
+          "load1": 12.77,
+          "load5": 9.95,
+          "load15": 8.52,
+          "io_some_avg60": 18.37,
+          "io_full_avg60": 15.19,
+          "error": null
+        }
+      },
+      "supersession": {
+        "v1-search": {
+          "task": "supersession",
+          "path": "v1-search",
+          "edges": 29,
+          "n_ran": 29,
+          "failures": 0,
+          "replacement_at_1_pct": 24.14,
+          "replacement_in_top5_pct": 55.17,
+          "neither_returned_pct": 24.14,
+          "superseded_still_returned": 21,
+          "control_ok": false,
+          "status": "ok",
+          "why": "superseded memos are STILL being returned \u2014 FR-115 is not filtering, so the rest of this row is meaningless"
+        },
+        "elapsed_s": 26.2,
+        "host_env": {
+          "load1": 12.44,
+          "load5": 10.14,
+          "load15": 8.63,
+          "io_some_avg60": 22.71,
+          "io_full_avg60": 19.13,
+          "error": null
+        },
+        "replicates": 2,
+        "observed_spread": {
+          "v1-search": {
+            "neither_returned_pct": {
+              "min": 24.14,
+              "max": 24.14,
+              "range_pt": 0.0
+            },
+            "replacement_at_1_pct": {
+              "min": 24.14,
+              "max": 24.14,
+              "range_pt": 0.0
+            },
+            "replacement_in_top5_pct": {
+              "min": 55.17,
+              "max": 55.17,
+              "range_pt": 0.0
+            }
+          }
+        }
+      },
+      "hard_negatives": {
+        "v1-search": {
+          "task": "hard_negatives",
+          "path": "v1-search",
+          "n": 227,
+          "failures": 0,
+          "target_rank1_pct": 69.16,
+          "target_absent_from_topk": 7,
+          "confusable_above_target_pct": 24.67,
+          "confusable_present_pct": 95.59,
+          "examples": [
+            {
+              "query": "Invoice: Anthropic Claude Max plan x2 \u2014 $425.00 total (2026-06-07) d on 2026-06-07 (billing Jun 7\u2013Jul 7, 2026)",
+              "right": "$212.50",
+              "wrong_ranked_higher": "$425"
+            },
+            {
+              "query": "Airbnb Trip: Nashua NH -- Jun 22-24 2026 *: HMREDJ4MZA  **Check-in**: Monday Jun 22 after 2:00 PM **Check-out*",
+              "right": "$495",
+              "wrong_ranked_higher": "$200.00"
+            },
+            {
+              "query": "Garden Squirrel Exclusion \u2014 Twinwall Polycarbonate Barrier Project urement status (as of 6/25/2026): - Amazon ",
+              "right": "$210.41",
+              "wrong_ranked_higher": "$108.45"
+            },
+            {
+              "query": "Ben vehicle fleet \u2014 current and historical nder - Registration: renewed Dec 2025 ($60 fee); next renewal ~late",
+              "right": "$2,629,",
+              "wrong_ranked_higher": "$1,000"
+            },
+            {
+              "query": "worker4 \u2014 OS_NO_SERVICES, manual iLO needed (2026-05-09+) 4 entered OS_NO_SERVICES after SSH failures - Smart ",
+              "right": "192.168.1.199:8123",
+              "wrong_ranked_higher": "192.168.0.13"
+            },
+            {
+              "query": "Fiverr competitor intelligence \u2014 14 gig deep-dives 2. basitdotali / ThinkBuilt Solutions LLC \u2014 explicitly regi",
+              "right": "$2,500,",
+              "wrong_ranked_higher": "$150"
+            },
+            {
+              "query": "Laura BWH 403(b) excess contribution \u2014 decided to let it ride to let it ride rather than pursue the ROE. Reaso",
+              "right": "$630",
+              "wrong_ranked_higher": "$2,334"
+            },
+            {
+              "query": "Home Depot Orders \u2014 120 Reedy Meadow Exterior Project separate later order; see sliding-door memo) - Shutters ",
+              "right": "$952.44",
+              "wrong_ranked_higher": "$2,049.70"
+            },
+            {
+              "query": "Assistant Inbox Sweep \u2014 2026-07-31 \u2014 AM ten: 0 (this checkpoint only)  Flagged working set (open): 40  THE TWO",
+              "right": "$2,000.00",
+              "wrong_ranked_higher": "$8,946.30"
+            },
+            {
+              "query": "worker4 K8s node \u2014 K8S_NOT_READY, smart plug offline (2026-05-21) 23 bound to **localhost only**. So `curl htt",
+              "right": "0.0.0.0:8123",
+              "wrong_ranked_higher": "192.168.1.13"
+            },
+            {
+              "query": "SENT \u2014 Paradisus complaint email (billing/bedding/departure), awaiting reply (2026-07-25) on:** they followed ",
+              "right": "$2,258",
+              "wrong_ranked_higher": "$562"
+            },
+            {
+              "query": "WLED exterior LED lighting \u2014 120 Reedy Meadow (2026) ut stage (hybrid-wired workaround) \u2014 RMA'd. **Replacement",
+              "right": "70:4b:ca:42:c6:2c",
+              "wrong_ranked_higher": "70:4b:ca:42:99:ac"
+            }
+          ],
+          "control_ok": true,
+          "status": "ok",
+          "why": null
+        },
+        "elapsed_s": 211.8,
+        "host_env": {
+          "load1": 11.08,
+          "load5": 10.63,
+          "load15": 9.14,
+          "io_some_avg60": 15.3,
+          "io_full_avg60": 13.17,
+          "error": null
+        },
+        "replicates": 2,
+        "observed_spread": {
+          "v1-search": {
+            "confusable_above_target_pct": {
+              "min": 24.67,
+              "max": 25.11,
+              "range_pt": 0.44
+            },
+            "confusable_present_pct": {
+              "min": 95.59,
+              "max": 95.59,
+              "range_pt": 0.0
+            },
+            "target_rank1_pct": {
+              "min": 68.72,
+              "max": 69.16,
+              "range_pt": 0.44
+            }
+          }
+        }
+      },
+      "query_replay": {
+        "v1-search": {
+          "task": "query_replay",
+          "path": "v1-search",
+          "n": 120,
+          "requested": 120,
+          "failures": 0,
+          "returned_nothing": 0,
+          "returned_nothing_pct": 0.0,
+          "latency_p50_s": 0.413,
+          "latency_p95_s": 0.558,
+          "latency_max_s": 15.537,
+          "top1_by_query": {
+            "quantum-data: orphaned DRIVER daily-duty stamps under --mode=full \u2014 CORRECTED pairing (2026-08-08)": "72be1a5b-9083-4815-aeec-1f683782d7b4",
+            "Sivan Sack phone number group text Mary Ann Dan family MMS": "0fa06310-1566-4af2-ac75-91dac5ca3b5a",
+            "Book 2 \"Thematic Sector Rotation\" \u2014 \u2705 EXECUTED 2026-07-23 09:41 EDT, $4,235 net debit (both spreads filled, under $4,350 cap). (Was APPROVED; now FILLED.) Paper, Sep-18-2026 expiry, \u00d75, proposed by `f": "931c9d43-e2fd-4d33-b1dd-bf2c6624c5ea",
+            "HVAC reconciliation 2026-06-25 \u2014 post-blackout fold-in (Sol-Ark + 3 new quotes + GELD correction) 85) | | Nashoba 2026 (Lennox) [NEW] | $39,123 | 3T+2T / 19.0 / 10.0 | mixed 97%+80% | 2yr / 10yr | no": "ea5611a7-ab13-4b51-a6d8-30caaec4fdb0",
+            "Locality-ladder Phase 1 (2026-07-16): redis-payload mechanism, data-gravity 1.6\u00d7, ~3.5GB/seat, VIP pod-IP rule pod consumers only.** Instances: (1) redis-solo VIP 10.152.183.175 unreachable from s5 ho": "c710fc3c-b959-4ba5-a543-344c20a7134e",
+            "An absent value defaulting favourably in the TEMPORAL layer looks like alpha \u2014 published_at_precision, and three more of the same shape (2026-08-08)": "5bc87032-92a6-4e27-9db9-57d4c6809777",
+            "SPAN install scheduled + panels sourced + Sol-Ark peak-shaving lesson (2026-06-11) \u2014 120 Reedy Meadow -06-11 via deep comparison sweep (shopping agent):** beats every online vendor on both SKUs. Cheap": "754f2b78-b7d8-4edc-ae3a-0a09bcc341c1",
+            "Assistant Inbox Sweep \u2014 2026-08-03 \u2014 PM": "6b6bb993-8500-44e3-aaf8-e6ccc398b389",
+            "Insurance \u2014 Pet (Trupanion, Brooke)": "da463773-106a-4901-8f5b-890e496e058f",
+            "LED walkway outdoor install \u2014 12V PSU + WLED controller picks (2026-05-09) 2026-07-21. - **Channels**: HAS plenty \u2014 3\u00d7 hunhun 10-packs = 30\u00d7 6.6ft (2m) = 60m, incl milky covers + end caps + clips (ord": "07fcdc2b-69c2-4e02-bdcd-4599c3e69c6e",
+            "quantum-feed: #002 DATA COMPLETE \u2014 2,849-ticker universe backfilled to ~2009 (e10f283b) rror \u2192 Unclassified); (2) sane-cap-vs-continuity ordering \u2014 eps path now sane-checked AFTER basis resolution \u2192 G": "2c8da055-74ba-4c93-8091-87291901f949",
+            "b48a51cf-ca47-4ca9-9ea2-a709babe5955": "1d7be242-493e-4d7c-9dee-550e549bf482",
+            "basil peppers bed chlorothalonil not labeled don't relitigate garden low stakes": "8d6a59ce-bfab-4b6d-8895-ca0646c24dda",
+            "GELD utility profile + 2026 HVAC incentives reality (Sacks @ 120 Reedy Meadow) n IOU **Heating fuel:** **LPG (propane)** \u2014 not natural gas **Existing solar/battery:** Sol-Ark hybrid inverter installed": "4ece8c71-041b-415d-b78d-cc355f83fe5d",
+            "grant refused recent sign-in recency": "490b4f83-a351-43af-a666-ee06d2ac2ea2",
+            "HA/Jinja landmine: a template variable rendering to the string \"False\" is TRUTHY \u2014 {% if var %} takes the wrong branch and looks correct": "c0b75a7c-642f-4f09-9c18-7f23db686386",
+            "/mnt/nas/data/code/assistant project": "01bd987b-c111-4ca9-a3a0-3e5cddcec75b",
+            "8ab89ca9-6c8b-41b3-a2fc-5af2395e888f": "b5e164c7-8525-42a4-9b9b-9045a47d9cb6",
+            "Smartwatch shortlist for Ben - Android + HA + comprehensive health metrics (2026-07-08) real-world - HA: via Samsung Health -> Health Connect (Android 14+) -> HA community integration (NOT first-party": "137269d4-f566-45d7-b2e6-07c684f793ed",
+            "Ben health records labs medical history": "8b99112a-df3a-499c-ae82-42d619007f3e",
+            "0db146fc-c54f-49f4-9749-f85804e8ba78": "b5e164c7-8525-42a4-9b9b-9045a47d9cb6",
+            "Garden sensor architecture \u2014 garden-check reads the GATEWAY directly, not HA; ecowitt=push vs rest=poll (2026-08-07 outage)": "676834f8-d588-46ae-b366-b619201ee058",
+            "mind: gpt-oss:20b vs qwen2.5-coder:7b claim extraction \u2014 nominally better on both, statistically indistinguishable (n=11)": "8ea32db7-3215-4e3a-8da8-193b600e2160",
+            "75bc2523-d833-4e29-89a2-93dc75e89eeb": "b5e164c7-8525-42a4-9b9b-9045a47d9cb6",
+            "Instrument validation: coverage vs semantics, correlated blindness as bias, and transition- vs state-emitted logs (server4 I/O night, 2026-08-03)": "b71615d4-21ac-48c2-934d-f63e00b3b0ee",
+            "mind 2026-08-09 root cause: a weekly ZFS backup did a FULL 13.2TB send, pinned ARC at 50GB from 02:00 \u2014 and I optimised around the anomaly instead of treating it as the finding": "fcee6f6e-5998-48bd-a36a-3a0050e143ff",
+            "ATC broadcasts: wave delivery decouples send order from arrival order \u2014 a correction races its own original": "bcf0a06f-624b-4873-8efc-67c194f6758e",
+            "shopping agent groceries agent cars agent finance agent hvac agent house agent taxes agent travel agent scope role what it owns": "f4ff1d11-2cec-494a-93b2-6b695cae63e6",
+            "Frigate NVR Setup on Server4 t usable. Must use the USB version.  **Recommended purchase**: Google Coral USB Accelerator (Google model G950-01456-01) - **B07R53D12W** \u2014": "df08714a-f7d9-49d8-ac94-8534f5720ce5",
+            "house projects open walkway LED barn stain": "9268dde5-72a9-4168-899f-3683b6a55ca0",
+            "models seat (server4) \u2014 2026-08-08/09 method corpus + the cutover gate. Pointers, not paragraphs.": "bedfe017-dbec-4001-9432-5ddfcafd43cf",
+            "Margaret Dave Magill phone number contact": "317014b7-1c36-4f29-958b-41d33a473d1e",
+            "ca2125c5-660e-4fcf-bd95-6b791651fdc3": "b5e164c7-8525-42a4-9b9b-9045a47d9cb6",
+            "Camera outages 2026-08-02: three distinct causes, partitioned by DHCP reservation status rying the fix)** - `camera.gardenback_fluent` (192.168.0.196) \u2014 flapping: `unavailable` 13:49 while `idle` at 1": "88686057-bca9-46ee-859d-dd31a9cbfd23",
+            "HA media integrations \u2014 Kodi, Samsung TV, Fire Stick setup and dashboard ## Kodi instances - Bedroom:": "f5f79ef4-338e-4ac6-a9c8-cb2ea4b4fac0",
+            "b4170d4a-940c-4057-8e92-7c79bdf250aa": "b5e164c7-8525-42a4-9b9b-9045a47d9cb6",
+            "qwen3 regen COMPLETE (46/46 feature days) + body-chunk lane 0% ported \u2014 with nav's two corrections applied (2026-08-08)": "fe5e904c-7e13-4e38-bbcb-e2e112729950",
+            "Power Outage 2026-05-27 \u2014 ATS Burned, Current Grid Status he Breen & Sullivan tech is on site. - **Generac Power Plan extended warranty** is unfilled / not enrolled (offer doc on file, 5/7/10 yr at": "19f8f066-d843-4f50-8c1f-084ebd767f33",
+            "Household Liquor & Wine Preferences \u2014 NH Liquor Outlet Nashua (May 2026) ## Source NH Liquor & Wine Outlet, Store 50, Nashua NH. Receipt dated 5/26/2026 4:24 PM (cashier James). 14 bottles, ~": "eec36ffb-8aea-429e-b00c-3d0ac79975e3",
+            "mind: earnings_report / earnings_surprise / company_guidance \u2014 three views built from headlines instead of buying $297/mo of Benzinga feeds": "8935f72e-8a3d-4099-b113-827725da6c55",
+            "finance session parked-state \u2014 2026-08-03 (index + live schedule + what's owed)": "949a94be-7b0a-492f-b5a2-1101bc91d957",
+            "super-agent design constraint: never route time-critical phone alerts through the ATC broker (global 1/sec drain queue, priority does not jump it)": "3ca122ed-1b1d-46f4-8eed-58db18c9d49e",
+            "f7679e3e-2b9d-49bd-8ece-437711527f4c": "b5e164c7-8525-42a4-9b9b-9045a47d9cb6",
+            "Claude Code memory/ corpus sharing \u2014 VERIFIED topology, the stat -Lc rule, and the delete-propagates hazard (2026-08-03)": "997fd05b-c2a8-4a72-bc90-6048714e331c",
+            "compact-self skill: Door A (CronCreate + /compact) is measured shut \u2014 rewrite it": "5349c831-8a03-4b2f-85e1-088f614fd510",
+            "groton: \u26d4 WIDE ATC BROADCASTS REACH BEN AND LAURA'S SLACK DMs \u2014 near-miss 2026-08-03, plus Slack fold discipline": "ca333f38-0f90-4127-8f98-d442677e8adb",
+            "43b9a160-f085-4d10-95c7-9b9c25269098": "b5e164c7-8525-42a4-9b9b-9045a47d9cb6",
+            "7268d248-ec1d-4dc2-9453-e9bb7ea9f498": "b5e164c7-8525-42a4-9b9b-9045a47d9cb6",
+            "Insurance seat \u2014 SCOPE BOUNDARY: do not raise infrastructure/NAS/permissions topics with Ben (2026-08-03)": "c3f3cbe8-458c-4488-9b44-f1dcccb56026",
+            "speckit-review: /api/state cold costs ~22s on a large repo \u2014 the stall is the trace, not the transport (2026-08-03)": "7adfd5b6-cbb4-4b60-9c5d-a23254c3ba87",
+            "shopping session parked-state + delivery ledger \u2014 OPEN: Laura chairs + blanket, Ben x2 numbered asks (v10, 2026-08-03, pre-cwd-migration)": "7a8309b6-1bb0-49a8-a308-04a99a8b23d0",
+            "Host-level DNS fault presents as \"that agent's service is down\" \u2014 libuv threadpool saturation (2026-08-03 server4 incident) r4 (2-min: load/procs/conntrack/mem + probes @1.1.1.1 direct, @127.0.0.53 ho": "bd58256c-9e36-459c-9e3f-2361b3eb9fb7",
+            "book-137-regime-v1 frozen sleeve weights \u2014 and why GLD arrives 1.32x larger than each equity name quity name.**  Assuming GLD comes in at the same 0.31728 as the others is WRONG and understates it by": "b2de1364-3b68-4ab3-a15d-bd7f201088ef",
+            "Alpha Vantage EARNINGS \u2014 three measured traps (fabricated surprise='0', 'None' string, shared 25/day key)": "3b457bb7-817a-4a85-aec0-16aa5e4ff027",
+            "speckit: my fan-out contributed to the 2026-08-03 fleet quota halt \u2014 being right is not a licence to broadcast": "6bedf481-7559-42b3-b4ce-294ddf76ee05",
+            "Batching removes the moment where the check lives \u2014 plus 5 more from the 2026-08-09 refdata session": "21f64693-665b-4166-9572-9e274d98d600",
+            "slapp: SPAN UI automation via adb + Android 14 MITM CA gotchas x new-session -d -s slapp_mitm \"mitmdump -p 8082 -w /tmp/slapp_flows.mitm\"` - Set emulator proxy: `adb shell settings put global http_pro": "ac4e9f4b-6728-43e8-8619-821d7db7a362",
+            "fleet-crash-heal emits FALSE 'EXITED' under I/O stall \u2014 n=2, reproducible, and it satisfies a Ben-escalation criterion (2026-08-09)": "6fc05638-5d77-4d5a-a8d1-237a35a03894",
+            "\u26d4 HA ha_get_history is UNUSABLE as proof of absence \u2014 confirmed independently by two seats, both directions (2026-08-09)": "4b2846fd-9517-4164-bc0c-101f41b8067b",
+            "Vacuity is not binary \u2014 a gate can be non-degenerate and still demand too little to matter (the min-floor / enforceable=True case)": "88e3ba47-97af-4fa6-a988-06cd87572a5d",
+            "HWM docket re-dated to a TRIGGER; and the mechanism: a correct attestation about the wrong question": "f3758a48-e494-4e2f-93aa-a2d549b48f1f",
+            "mind: the prefilter skips 37% of the real corpus but 0% of the eval set \u2014 the labelled set is unrepresentative on exactly that axis (2026-08-09)": "a26d9136-a22d-47a9-aaf6-7c31ac6564ff",
+            "Walkway LED bench test \u2014 DONE 2026-05-09 (Elite has dead V+ output, hybrid wiring workaround in place) nch until RMA.  ## Hardware on the bench  - **Controller**: GLEDOPTO Elite 4-Channel ESP32 WLED,": "4856d195-0811-4673-aa1f-f604251adea8",
+            "BJ's-via-DoorDash trip 2026-07-30 $78.87 \u2014 DOUBLE-ORDER DAY (both in-store + delivery) carrots, cabbage, buffalo chicken, Wilde chips \u2014 all doubled  **Day total across both channels**: **$61.72 (in-st": "e9215dba-9a23-4631-a207-2953a80b3611",
+            "ATC delivery latency: the received_at occupancy trap, the global 1/sec delivery queue, and how a 15-seat investigation became its own load (2026-08-03)": "bef24888-9090-4b2f-a9c3-d1b08dfd74e5",
+            "Laura BWH 403(b) excess contribution \u2014 decided to let it ride to let it ride rather than pursue the ROE. Reasoning: - $2,334 grows tax-deferred to ~$9,000 over 20 years at 7% - \"Double tax\" penalty =": "ef9ad9f7-d8f8-49fc-baa2-2c16d164e413",
+            "Invoice: Anthropic Claude Max plan x2 \u2014 $425.00 total (2026-06-07) d on 2026-06-07 (billing Jun 7\u2013Jul 7, 2026).  ## Receipt 1 \u2014 bsack@pushbuild.com receipt_number=2548-0829-9122 invoice=TBQRY5SZ-0002": "6a6b16bb-b9d2-4872-b969-06180794da3d",
+            "Travel: LAURA \u2014 Southwest MHT\u2194BWI (ATV8FS) \u2014 Bethesda, Jul 29\u201331 2026 ogan. ~45\u201355 min drive from 120 Reedy Meadow. - Rapid Rewards #: 20643181941 \u00b7 Ticket #: 5262174742255 - Fare: Choice \u00b7 Booked 06/": "50cfae75-148d-4f79-8b43-b75b1f5e5fe8",
+            "Amazon refund \u2014 SABRENT 4-Drive NVMe to PCIe 3.0 (order #114-0238200-7440244) ENT 4-Drive NVMe M.2 SSD to PCIe 3.0 adapter.  Order #: 114-0238200-7440244 Item: SABRENT 4-Drive NVMe M.2 SSD to PCIe 3.0": "48d419a3-ed9f-4e02-85c8-f933983f7c51",
+            "quantum-data 2026-08-08: the TAUTOLOGY ARC \u2014 5 measurements, 4 inferences, 2 escalations on a field neither seat defined. Plus AUDIT-vs-COMPLETE and the joint failure mode": "466d8a1c-1333-40db-8344-515b070f56f4",
+            "mind: bulk YouTube fetching must go through the VPN exits \u2014 a namespace, not a proxy, and why resync.sh structurally could not use it": "989909a9-e0d4-4925-a90c-036e34754b10",
+            "Garden Blueberry Rehab Plan [\u26a0\ufe0f RELOCATE DECISION ON HOLD 2026-08-04 \u2014 bushes stay in place another year]": "f3c87216-74cf-4ac7-96fb-3dc7c8f0d519",
+            "Coinbase account locked identity verification case funds BTC": "06ce8918-128f-4369-8ea6-bbdae02b5224",
+            "mind news_realtime store query surface intraday signal traps sentiment Benzinga": "27c52651-833a-457e-9f07-4e4a15855785",
+            "A plausible mechanism at the right magnitude TERMINATES THE SEARCH, and at small residuals magnitude agreement is nearly free \u2014 so the fit that persuades you is the one carrying least information": "466d8a1c-1333-40db-8344-515b070f56f4",
+            "Home Depot Orders \u2014 120 Reedy Meadow Exterior Project separate later order; see sliding-door memo) - Shutters (11 pairs): arriving April 13, 2026  ## Order #WK23951555 (May 4, 2026) **Total:**": "47fd6887-d5ae-4948-9c9f-aa5c9256fe4d",
+            "2025 Personal Tax Return \u2014 Ben & Laura Sack (Full Detail) xx-xx-9235  ---  ## AS-FILED FIGURES (TurboTax, April 14, 2026)  | Item | Amount | |---|---| | AGI | **$476,735** | | Total federal tax | **": "bd183a48-3666-45d1-a625-69c8d02a6985",
+            "Sunday step 2 LEAD ITEM: three orphaned DRIVER duties, and Principle IV held vacuously for seven days (quantum-feed, 2026-08-08)": "734ac395-34ec-4f5d-a4dd-3a6bc4cf9e4f",
+            "retraction: float() failing loudly was the right instrument \u2014 RETRACTED. guard on estimatedEPS never surprise. earnings build inherits this": "3b457bb7-817a-4a85-aec0-16aa5e4ff027",
+            "mind+finance portfolio round \u2014 paper-tracked trade list (2026-07-21) (1,054 sh) \u2014 de-concentration anchor, tax-free 2. \u00a7475 IVV\u2192RSP ~$62k (290 sh) 3. SPY put-spread hedge \u2014 Sep-18 695/650 (~$1,425, 59": "fb51a115-9ed2-482b-a7bf-f3bd91623308",
+            "`pgrep -x tmux` can never fire \u2014 tmux's comm is \"tmux: server\", and the false null was load-bearing on a fleet theory": "136f8b7f-6656-49e6-a1ba-7068f873ea01",
+            "9630 house \u2014 Junior (Flawless Construction) meeting 2026-06-05 \u2014 punch list & decisions painting completion (~7/12) - Final walkthrough (10%, $8,646) triggers after final punch-list - Total remaining": "a874c059-e568-4034-a78b-98a0395bfb01",
+            "Frigate footage loss 2026-08-09: I/O stall \u2192 TIMED-OUT WATCHDOG PROBE \u2192 restart loop. 155 missing minute-files + an uncounted 10th. FIX SHIPPED (f4d5811, on origin), owned by `ha`. UNKNOWN\u21d2DENY validated x27; the probe fix itself only x3; authoriser UNTESTED. Frigate now DISABLED, cameras down for DAYS.": "bd0a5bce-ad7d-4e55-a48f-6641239ff4dc",
+            "QUEUED (design DONE, build NOT): unwired-tool scan \u2014 29 candidates classified, and the RESULT= heuristic is REFUTED (2026-08-08)": "31413b0a-285e-490f-ae6b-a9a67957e02b",
+            "alpaca trading \u2014 ROLLING ledger (successor to 181224d8, which is frozen) \u2014 day 1 outcomes 2026-08-06": "da56ae8b-d716-40c1-af02-c321631bd62d",
+            "daily-health.sh false-FAILs for 4h nightly: UTC window vs ET trading day \u2014 and the fix is already written one instrument over (\u00a72d2)": "ea57c4fb-c5cd-4ec5-9f66-163656989822",
+            "server4 operational baseline 2026-08-09 evening \u2014 what is DOWN BY INTENT (seqr \u00d75) and must not be healed or treated as a signal": "683cf0b9-5ec1-461f-a55e-14dc9aca7b6d",
+            "genomics session topology open items bridge ownership Laura": "b3ad138d-72a2-4a43-9347-1e9891a3a123",
+            "Pin hygiene: a pin is an instruction to a self who cannot check it (2026-08-04 findings)": "b64daa28-1024-41a7-9d3e-3d0d0c1a22f0",
+            "laurasack.com \u2014 private staging/preview environment (setup + promote/teardown) icly indexed/discoverable. - **Production (LIVE, unchanged):** https://laurasack.com \u2192 host nginx proxies to `laurasite-w": "8b10aa59-2409-4795-b195-279ded6afdc4",
+            "mind: the six-lane corpus, the KB UI, and EDGAR from 6,446 to 6.1M filings \u2014 2026-08-08 build log": "36e26a06-1be2-4dd1-8247-6becc54597af",
+            "RETRACTED DIAGNOSIS: historical-inventory.json's generator does NOT walk the pivot tree \u2014 the \"proven fix\" was already in the code since 2026-07-09, and its agreement with the incumbent is what I misread as validation. Real cause: a transient NFS stall.": "f5b41b09-01b0-4b4f-98f5-c3e7641ec4df",
+            "Silent-defect costumes from the quantum seats (2026-08-07) \u2014 partial cleanup, workaround-as-unfiled-bug, and the safety with no failure mode": "4136893f-f506-46c5-9da9-4a9146adae4b",
+            "SMS \u2014 Murilo Vieira: stone veneer up, \"enough for the whole foundation\" (2026-08-06)": "31374b56-2b1e-4563-aeea-4da5e088498e",
+            "Instrument method: what a derivation guards, and observation-timestamps measuring the observer (2026-08-03 fleet incident)": "5c2bf3ac-7135-4f95-8e8f-bdfe0bf8619e",
+            "feedback-applovin-brief-cc-ben styled HTML CC ben weekly brief": "e0dc7587-46d9-4f75-a8da-84f86fd443e0",
+            "Assistant Comms Sweep \u2014 2026-08-04 15:53 ET (zero cycle) + Google MCP outage flagged": "6ff63dca-3806-4057-b4d9-627dbe6a5ffe",
+            "d2901063-6de4-4ba8-ae94-9b55356cf43c": "74cc6402-6dc7-4d2c-9931-0be36045138f",
+            "\u26a0\ufe0f Chat cards need TWO halves \u2014 the rail AND the instruction to use it (Ben, 2026-08-07)": "017ec9c0-82c2-4252-80f7-88c07e01237c",
+            "alpaca \u2190 mind: intraday news surface (news_realtime) \u2014 queries, health invariants, and the sentiment trap": "27c52651-833a-457e-9f07-4e4a15855785",
+            "laura-work \u2014 ON-SPAWN checklist &amp; current session state": "8c17a4ce-cb54-44ef-8ec6-cb64578da061",
+            "Anti-pattern: the premise carries the load, the conclusion takes the scrutiny": "165ea82f-81e6-4a2d-aeac-0cde7ce9d36d",
+            "laura-work \u2014 ON-SPAWN checklist and current session state": "8c17a4ce-cb54-44ef-8ec6-cb64578da061",
+            "insurance master index all policies overview navigation": "17ba07fb-b003-48e3-b1d5-51cc4aedbafe",
+            "server4 nightly/weekly maintenance windows \u2014 the Sunday 00:00-04:00 I/O collision (2026-08-09 load-141 incident)": "fcee6f6e-5998-48bd-a36a-3a0050e143ff",
+            "pool chemistry": "7d39dc3c-48b6-49b2-8dfb-584c7a7129ea",
+            "NAS IP assignment: VyOS DHCP reservation swap for X520 to get 192.168.1.207 nas: 192.168.1.207 \u2192 1c:86:0b:39:6e:5b (X520 eth4) \u2190 NEW - nas-eth0-1g: 192.168.0.183 \u2192 00:11:32:bd:cf:9f (eth0 onboard) \u2190 N": "40d8da0b-58bb-4269-b90f-eec0bf41fc61",
+            "22e067f3-ae52-4204-bed5-cadedefdc709": "74cc6402-6dc7-4d2c-9931-0be36045138f",
+            "Generac Mobile Link telemetry dead since 2026-05-11 \u2014 RESOLVED 08-03: generator fine, Wi-Fi module only. Plus: the Sol-Ark GEN input CANNOT verify a weekly exercise": "ff6a4b75-595b-4dbd-9b49-5d6e8acd44df",
+            "SHARED corpus index (agents + scripts) \u2014 MEMORY.md at -mnt-nas-data-code-scripts, migrated 2026-08-03": "f2879406-0da9-4dbe-b00a-e850ecceac48",
+            "cutover gate output provenance census field rename models seat method corpus": "16d74f91-cb9e-4a6d-a6c5-a22e200baa46",
+            "Email \u2014 Chris Hartson (Lamco): needs site visit before finalizing Carrier alt pricing (2026-07-02) ence: - 6/17: Chris's initial Bosch IDS Premium DF quote at $52,910 net. - 6/17: Ben's substantive co": "e4210ed1-e686-4ea7-8779-514e308fdb39",
+            "tmux-crash-watchdog needs BOTH flock and a throttle \u2014 instances pile up and drain as alert bursts (2026-08-09)": "f49affc1-5434-4c6d-8493-8eb07ef6c24f",
+            "healthcare providers doctors Ben Laura contacts": "87587e24-3a23-4ed7-9c2f-07660361952b",
+            "2027 CORN PLAN \u2014 three staggered sets, 10-day gaps (agreed with Ben 2026-08-08)": "5491494c-eea8-4326-904b-6101f22a5fa9",
+            "agent seat roster domains: shopping groceries brooke electric health mom travel finance cars laura-health hvac insurance house taxes \u2014 what each agent owns": "7a1662e0-b888-442c-a7a2-63b14fb40403",
+            "host-account-swap 2026-08-07: v3 macro no longer fits in one call (88\u2192105\u2192125s callback, monotonic); both legs succeeded HAND-DRIVEN": "8c67d885-626c-47cf-af16-720c9c6d1617",
+            "Incident response consumes the resource it investigates \u2014 and a runway measured while idle is a fact about the idleness": "6d8986a5-9ea2-44e4-9458-a6375222d6bc",
+            "Business & professional liability \u2014 Sack (Hartford CANCELLED Oct 2025, D&O undocumented) Ready\" \u2014 final premium audit on 46SBAZH0361 | | **2025-11-26** | Hartford Electronic Refund Notification (bill": "ce1abf0f-318a-461c-87e5-7c15cb225854",
+            "server4 IO bottleneck: `/` is ext4 on a ROTATIONAL PERC H310 volume and Docker's data root lives there \u2014 saturates at ~1-4 MB/s while the NVMe ZFS pools idle at 2-4%": "9610818c-e428-4a5d-9fc0-ace5d31cebed"
+          },
+          "control_ok": true,
+          "status": "ok"
+        },
+        "elapsed_s": 66.9,
+        "host_env": {
+          "load1": 9.6,
+          "load5": 10.34,
+          "load15": 9.14,
+          "io_some_avg60": 15.46,
+          "io_full_avg60": 13.18,
+          "error": null
+        }
+      },
+      "set_stability": {
+        "task": "set_stability",
+        "path": "v1-search",
+        "n_requested": 25,
+        "n_ran": 25,
+        "replicates": 3,
+        "rank1_varied": 0,
+        "id_list_varied": 1,
+        "control_ok": true,
+        "status": "ok",
+        "elapsed_s": 34.2,
+        "host_env": {
+          "load1": 8.76,
+          "load5": 10.06,
+          "load15": 9.09,
+          "io_some_avg60": 14.47,
+          "io_full_avg60": 12.54,
+          "error": null
+        }
+      },
+      "api_surface": {
+        "task": "api_surface",
+        "routes": [
+          "/admin/access-stats",
+          "/admin/leak-incidents",
+          "/admin/recount-tokens",
+          "/auto-store",
+          "/context",
+          "/documents",
+          "/documents/{doc_id}",
+          "/documents/{doc_id}/copy",
+          "/documents/{doc_id}/move",
+          "/health",
+          "/index",
+          "/ready",
+          "/search"
+        ],
+        "search_shape": {
+          "document": {
+            "error": "HTTPError"
+          },
+          "passages": {
+            "error": "HTTPError"
+          },
+          "v1-search": {
+            "container": "list",
+            "row_keys": [
+              "document",
+              "score"
+            ],
+            "doc_keys": [
+              "content",
+              "created_at",
+              "id",
+              "metadata",
+              "tags",
+              "title",
+              "token_count",
+              "updated_at"
+            ]
+          }
+        },
+        "control_ok": true,
+        "status": "ok",
+        "elapsed_s": 0.4,
+        "host_env": {
+          "load1": 8.76,
+          "load5": 10.06,
+          "load15": 9.09,
+          "io_some_avg60": 14.47,
+          "io_full_avg60": 12.54,
+          "error": null
+        }
+      }
+    },
+    "v2": {
+      "primary_path": "document",
+      "paths_present": [
+        "document",
+        "passages",
+        "v1-search"
+      ],
+      "own_title": {
+        "document": {
+          "task": "own_title",
+          "path": "document",
+          "seed": 7,
+          "per_band": 60,
+          "pinned_sample": "s-2026-08-03T184827Z",
+          "bands": [
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 48,
+              "top5": 59,
+              "absent": 1,
+              "failures": 0,
+              "p50_ms": 375.7,
+              "p90_ms": 533.2,
+              "band": "0-200",
+              "pool": 1294
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 46,
+              "top5": 56,
+              "absent": 2,
+              "failures": 0,
+              "p50_ms": 390.1,
+              "p90_ms": 560.4,
+              "band": "200-500",
+              "pool": 2541
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 41,
+              "top5": 53,
+              "absent": 7,
+              "failures": 0,
+              "p50_ms": 375.6,
+              "p90_ms": 478.2,
+              "band": "500-1000",
+              "pool": 2140
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 29,
+              "top5": 43,
+              "absent": 12,
+              "failures": 0,
+              "p50_ms": 390.0,
+              "p90_ms": 730.8,
+              "band": "1000-2000",
+              "pool": 1455
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 9,
+              "top5": 27,
+              "absent": 28,
+              "failures": 0,
+              "p50_ms": 379.1,
+              "p90_ms": 514.1,
+              "band": "2000-",
+              "pool": 392
+            }
+          ],
+          "total_n": 300,
+          "total_pinned": 300,
+          "total_missing": 0,
+          "total_rank1": 173,
+          "unweighted_rank1_pct": 57.67,
+          "total_failures": 0,
+          "control_ok": true,
+          "status": "ok"
+        },
+        "passages": {
+          "task": "own_title",
+          "path": "passages",
+          "seed": 7,
+          "per_band": 60,
+          "pinned_sample": "s-2026-08-03T184827Z",
+          "bands": [
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 48,
+              "top5": 58,
+              "absent": 1,
+              "failures": 0,
+              "p50_ms": 729.7,
+              "p90_ms": 1072.8,
+              "band": "0-200",
+              "pool": 1294
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 42,
+              "top5": 55,
+              "absent": 4,
+              "failures": 0,
+              "p50_ms": 730.4,
+              "p90_ms": 1204.3,
+              "band": "200-500",
+              "pool": 2541
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 41,
+              "top5": 52,
+              "absent": 7,
+              "failures": 0,
+              "p50_ms": 731.7,
+              "p90_ms": 1106.6,
+              "band": "500-1000",
+              "pool": 2140
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 40,
+              "top5": 50,
+              "absent": 8,
+              "failures": 0,
+              "p50_ms": 744.7,
+              "p90_ms": 1128.0,
+              "band": "1000-2000",
+              "pool": 1455
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 40,
+              "top5": 55,
+              "absent": 4,
+              "failures": 0,
+              "p50_ms": 764.9,
+              "p90_ms": 1224.9,
+              "band": "2000-",
+              "pool": 392
+            }
+          ],
+          "total_n": 300,
+          "total_pinned": 300,
+          "total_missing": 0,
+          "total_rank1": 211,
+          "unweighted_rank1_pct": 70.33,
+          "total_failures": 0,
+          "control_ok": true,
+          "status": "ok"
+        },
+        "v1-search": {
+          "task": "own_title",
+          "path": "v1-search",
+          "seed": 7,
+          "per_band": 60,
+          "pinned_sample": "s-2026-08-03T184827Z",
+          "bands": [
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 48,
+              "top5": 58,
+              "absent": 1,
+              "failures": 0,
+              "p50_ms": 788.6,
+              "p90_ms": 1140.8,
+              "band": "0-200",
+              "pool": 1294
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 42,
+              "top5": 55,
+              "absent": 4,
+              "failures": 0,
+              "p50_ms": 756.2,
+              "p90_ms": 1145.9,
+              "band": "200-500",
+              "pool": 2541
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 41,
+              "top5": 52,
+              "absent": 7,
+              "failures": 0,
+              "p50_ms": 745.6,
+              "p90_ms": 1124.1,
+              "band": "500-1000",
+              "pool": 2140
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 40,
+              "top5": 50,
+              "absent": 8,
+              "failures": 0,
+              "p50_ms": 720.2,
+              "p90_ms": 1110.2,
+              "band": "1000-2000",
+              "pool": 1455
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 40,
+              "top5": 55,
+              "absent": 4,
+              "failures": 0,
+              "p50_ms": 734.6,
+              "p90_ms": 1132.1,
+              "band": "2000-",
+              "pool": 392
+            }
+          ],
+          "total_n": 300,
+          "total_pinned": 300,
+          "total_missing": 0,
+          "total_rank1": 211,
+          "unweighted_rank1_pct": 70.33,
+          "total_failures": 0,
+          "control_ok": true,
+          "status": "ok"
+        },
+        "elapsed_s": 1236.3,
+        "host_env": {
+          "load1": 8.93,
+          "load5": 11.17,
+          "load15": 10.43,
+          "io_some_avg60": 12.67,
+          "io_full_avg60": 11.12,
+          "error": null
+        },
+        "replicates": 2,
+        "observed_spread": {
+          "document": {
+            "unweighted_rank1_pct": {
+              "min": 57.67,
+              "max": 57.67,
+              "range_pt": 0.0
+            }
+          },
+          "passages": {
+            "unweighted_rank1_pct": {
+              "min": 70.33,
+              "max": 70.33,
+              "range_pt": 0.0
+            }
+          },
+          "v1-search": {
+            "unweighted_rank1_pct": {
+              "min": 70.33,
+              "max": 70.33,
+              "range_pt": 0.0
+            }
+          }
+        }
+      },
+      "content_query": {
+        "document": {
+          "task": "content_query",
+          "path": "document",
+          "seed": 7,
+          "per_band": 60,
+          "pinned_sample": "s-2026-08-03T184827Z",
+          "bands": [
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 50,
+              "top5": 58,
+              "absent": 2,
+              "failures": 0,
+              "band": "0-200",
+              "pool": 494
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 41,
+              "top5": 53,
+              "absent": 6,
+              "failures": 0,
+              "band": "200-500",
+              "pool": 1602
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 25,
+              "top5": 38,
+              "absent": 16,
+              "failures": 0,
+              "band": "500-1000",
+              "pool": 1885
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 5,
+              "top5": 22,
+              "absent": 30,
+              "failures": 0,
+              "band": "1000-2000",
+              "pool": 1437
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 6,
+              "top5": 12,
+              "absent": 41,
+              "failures": 0,
+              "band": "2000-",
+              "pool": 369
+            }
+          ],
+          "total_n": 300,
+          "total_pinned": 300,
+          "total_missing": 0,
+          "total_rank1": 127,
+          "unweighted_rank1_pct": 42.33,
+          "total_failures": 0,
+          "control_ok": true,
+          "status": "ok"
+        },
+        "passages": {
+          "task": "content_query",
+          "path": "passages",
+          "seed": 7,
+          "per_band": 60,
+          "pinned_sample": "s-2026-08-03T184827Z",
+          "bands": [
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 49,
+              "top5": 55,
+              "absent": 3,
+              "failures": 0,
+              "band": "0-200",
+              "pool": 494
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 33,
+              "top5": 51,
+              "absent": 9,
+              "failures": 0,
+              "band": "200-500",
+              "pool": 1602
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 37,
+              "top5": 49,
+              "absent": 6,
+              "failures": 0,
+              "band": "500-1000",
+              "pool": 1885
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 33,
+              "top5": 47,
+              "absent": 10,
+              "failures": 0,
+              "band": "1000-2000",
+              "pool": 1437
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 34,
+              "top5": 51,
+              "absent": 7,
+              "failures": 0,
+              "band": "2000-",
+              "pool": 369
+            }
+          ],
+          "total_n": 300,
+          "total_pinned": 300,
+          "total_missing": 0,
+          "total_rank1": 186,
+          "unweighted_rank1_pct": 62.0,
+          "total_failures": 0,
+          "control_ok": true,
+          "status": "ok"
+        },
+        "v1-search": {
+          "task": "content_query",
+          "path": "v1-search",
+          "seed": 7,
+          "per_band": 60,
+          "pinned_sample": "s-2026-08-03T184827Z",
+          "bands": [
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 49,
+              "top5": 55,
+              "absent": 3,
+              "failures": 0,
+              "band": "0-200",
+              "pool": 494
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 33,
+              "top5": 51,
+              "absent": 9,
+              "failures": 0,
+              "band": "200-500",
+              "pool": 1602
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 37,
+              "top5": 49,
+              "absent": 6,
+              "failures": 0,
+              "band": "500-1000",
+              "pool": 1885
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 33,
+              "top5": 47,
+              "absent": 10,
+              "failures": 0,
+              "band": "1000-2000",
+              "pool": 1437
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 34,
+              "top5": 51,
+              "absent": 7,
+              "failures": 0,
+              "band": "2000-",
+              "pool": 369
+            }
+          ],
+          "total_n": 300,
+          "total_pinned": 300,
+          "total_missing": 0,
+          "total_rank1": 186,
+          "unweighted_rank1_pct": 62.0,
+          "total_failures": 0,
+          "control_ok": true,
+          "status": "ok"
+        },
+        "elapsed_s": 1174.9,
+        "host_env": {
+          "load1": 8.88,
+          "load5": 8.01,
+          "load15": 8.8,
+          "io_some_avg60": 14.02,
+          "io_full_avg60": 11.95,
+          "error": null
+        },
+        "replicates": 2,
+        "observed_spread": {
+          "document": {
+            "unweighted_rank1_pct": {
+              "min": 42.33,
+              "max": 42.33,
+              "range_pt": 0.0
+            }
+          },
+          "passages": {
+            "unweighted_rank1_pct": {
+              "min": 62.0,
+              "max": 62.0,
+              "range_pt": 0.0
+            }
+          },
+          "v1-search": {
+            "unweighted_rank1_pct": {
+              "min": 62.0,
+              "max": 62.0,
+              "range_pt": 0.0
+            }
+          }
+        }
+      },
+      "answer_recall": {
+        "document": {
+          "task": "answer_recall",
+          "path": "document",
+          "seed": 7,
+          "per_band": 60,
+          "pinned_sample": "s-2026-08-03T184827Z",
+          "bands": [
+            {
+              "n": 16,
+              "pinned": 17,
+              "missing": 0,
+              "ambiguous": 1,
+              "failures": 0,
+              "off_common": 0,
+              "right_doc_top1": 15,
+              "answer_in_top1": 15,
+              "answer_in_topk": 16,
+              "answer_in_topk_fulldoc": 16,
+              "band": "0-200",
+              "pool": 17
+            },
+            {
+              "n": 54,
+              "pinned": 59,
+              "missing": 0,
+              "ambiguous": 5,
+              "failures": 0,
+              "off_common": 0,
+              "right_doc_top1": 48,
+              "answer_in_top1": 48,
+              "answer_in_topk": 53,
+              "answer_in_topk_fulldoc": 53,
+              "band": "200-500",
+              "pool": 68
+            },
+            {
+              "n": 55,
+              "pinned": 60,
+              "missing": 0,
+              "ambiguous": 5,
+              "failures": 0,
+              "off_common": 0,
+              "right_doc_top1": 43,
+              "answer_in_top1": 43,
+              "answer_in_topk": 55,
+              "answer_in_topk_fulldoc": 55,
+              "band": "500-1000",
+              "pool": 101
+            },
+            {
+              "n": 52,
+              "pinned": 60,
+              "missing": 0,
+              "ambiguous": 8,
+              "failures": 0,
+              "off_common": 0,
+              "right_doc_top1": 38,
+              "answer_in_top1": 38,
+              "answer_in_topk": 50,
+              "answer_in_topk_fulldoc": 50,
+              "band": "1000-2000",
+              "pool": 109
+            },
+            {
+              "n": 50,
+              "pinned": 60,
+              "missing": 0,
+              "ambiguous": 9,
+              "failures": 0,
+              "off_common": 1,
+              "right_doc_top1": 15,
+              "answer_in_top1": 16,
+              "answer_in_topk": 42,
+              "answer_in_topk_fulldoc": 42,
+              "band": "2000-",
+              "pool": 67
+            }
+          ],
+          "total_n": 227,
+          "total_pinned": 256,
+          "total_missing": 0,
+          "total_ambiguous": 28,
+          "total_off_common": 1,
+          "common_denominator": true,
+          "total_failures": 0,
+          "right_doc_top1_pct": 72.78,
+          "answer_in_top1_pct": 73.18,
+          "answer_in_topk_pct": 95.66,
+          "answer_in_topk_fulldoc_pct": 95.66,
+          "span_cost_pt": 0.0,
+          "control_ok": true,
+          "status": "ok"
+        },
+        "passages": {
+          "task": "answer_recall",
+          "path": "passages",
+          "seed": 7,
+          "per_band": 60,
+          "pinned_sample": "s-2026-08-03T184827Z",
+          "bands": [
+            {
+              "n": 16,
+              "pinned": 17,
+              "missing": 0,
+              "ambiguous": 1,
+              "failures": 0,
+              "off_common": 0,
+              "right_doc_top1": 15,
+              "answer_in_top1": 15,
+              "answer_in_topk": 16,
+              "answer_in_topk_fulldoc": 16,
+              "band": "0-200",
+              "pool": 17
+            },
+            {
+              "n": 54,
+              "pinned": 59,
+              "missing": 0,
+              "ambiguous": 5,
+              "failures": 0,
+              "off_common": 0,
+              "right_doc_top1": 48,
+              "answer_in_top1": 46,
+              "answer_in_topk": 51,
+              "answer_in_topk_fulldoc": 53,
+              "band": "200-500",
+              "pool": 68
+            },
+            {
+              "n": 55,
+              "pinned": 60,
+              "missing": 0,
+              "ambiguous": 5,
+              "failures": 0,
+              "off_common": 0,
+              "right_doc_top1": 45,
+              "answer_in_top1": 32,
+              "answer_in_topk": 38,
+              "answer_in_topk_fulldoc": 54,
+              "band": "500-1000",
+              "pool": 101
+            },
+            {
+              "n": 52,
+              "pinned": 60,
+              "missing": 0,
+              "ambiguous": 8,
+              "failures": 0,
+              "off_common": 0,
+              "right_doc_top1": 42,
+              "answer_in_top1": 27,
+              "answer_in_topk": 32,
+              "answer_in_topk_fulldoc": 52,
+              "band": "1000-2000",
+              "pool": 109
+            },
+            {
+              "n": 50,
+              "pinned": 60,
+              "missing": 0,
+              "ambiguous": 9,
+              "failures": 0,
+              "off_common": 1,
+              "right_doc_top1": 34,
+              "answer_in_top1": 23,
+              "answer_in_topk": 29,
+              "answer_in_topk_fulldoc": 49,
+              "band": "2000-",
+              "pool": 67
+            }
+          ],
+          "total_n": 227,
+          "total_pinned": 256,
+          "total_missing": 0,
+          "total_ambiguous": 28,
+          "total_off_common": 1,
+          "common_denominator": true,
+          "total_failures": 0,
+          "right_doc_top1_pct": 82.65,
+          "answer_in_top1_pct": 67.01,
+          "answer_in_topk_pct": 76.61,
+          "answer_in_topk_fulldoc_pct": 98.87,
+          "span_cost_pt": 22.26,
+          "control_ok": true,
+          "status": "ok"
+        },
+        "v1-search": {
+          "task": "answer_recall",
+          "path": "v1-search",
+          "seed": 7,
+          "per_band": 60,
+          "pinned_sample": "s-2026-08-03T184827Z",
+          "bands": [
+            {
+              "n": 16,
+              "pinned": 17,
+              "missing": 0,
+              "ambiguous": 1,
+              "failures": 0,
+              "off_common": 0,
+              "right_doc_top1": 15,
+              "answer_in_top1": 15,
+              "answer_in_topk": 16,
+              "answer_in_topk_fulldoc": 16,
+              "band": "0-200",
+              "pool": 17
+            },
+            {
+              "n": 54,
+              "pinned": 59,
+              "missing": 0,
+              "ambiguous": 5,
+              "failures": 0,
+              "off_common": 0,
+              "right_doc_top1": 48,
+              "answer_in_top1": 48,
+              "answer_in_topk": 53,
+              "answer_in_topk_fulldoc": 53,
+              "band": "200-500",
+              "pool": 68
+            },
+            {
+              "n": 55,
+              "pinned": 60,
+              "missing": 0,
+              "ambiguous": 5,
+              "failures": 0,
+              "off_common": 0,
+              "right_doc_top1": 45,
+              "answer_in_top1": 45,
+              "answer_in_topk": 54,
+              "answer_in_topk_fulldoc": 54,
+              "band": "500-1000",
+              "pool": 101
+            },
+            {
+              "n": 52,
+              "pinned": 60,
+              "missing": 0,
+              "ambiguous": 8,
+              "failures": 0,
+              "off_common": 0,
+              "right_doc_top1": 42,
+              "answer_in_top1": 42,
+              "answer_in_topk": 52,
+              "answer_in_topk_fulldoc": 52,
+              "band": "1000-2000",
+              "pool": 109
+            },
+            {
+              "n": 50,
+              "pinned": 60,
+              "missing": 0,
+              "ambiguous": 9,
+              "failures": 0,
+              "off_common": 1,
+              "right_doc_top1": 34,
+              "answer_in_top1": 34,
+              "answer_in_topk": 49,
+              "answer_in_topk_fulldoc": 49,
+              "band": "2000-",
+              "pool": 67
+            }
+          ],
+          "total_n": 227,
+          "total_pinned": 256,
+          "total_missing": 0,
+          "total_ambiguous": 28,
+          "total_off_common": 1,
+          "common_denominator": true,
+          "total_failures": 0,
+          "right_doc_top1_pct": 82.65,
+          "answer_in_top1_pct": 82.65,
+          "answer_in_topk_pct": 98.87,
+          "answer_in_topk_fulldoc_pct": 98.87,
+          "span_cost_pt": 0.0,
+          "control_ok": true,
+          "status": "ok"
+        },
+        "elapsed_s": 923.4,
+        "host_env": {
+          "load1": 7.37,
+          "load5": 7.62,
+          "load15": 7.89,
+          "io_some_avg60": 8.89,
+          "io_full_avg60": 7.78,
+          "error": null
+        },
+        "replicates": 2,
+        "observed_spread": {
+          "document": {
+            "answer_in_top1_pct": {
+              "min": 73.18,
+              "max": 73.18,
+              "range_pt": 0.0
+            },
+            "answer_in_topk_fulldoc_pct": {
+              "min": 95.66,
+              "max": 95.66,
+              "range_pt": 0.0
+            },
+            "answer_in_topk_pct": {
+              "min": 95.66,
+              "max": 95.66,
+              "range_pt": 0.0
+            },
+            "right_doc_top1_pct": {
+              "min": 72.78,
+              "max": 72.78,
+              "range_pt": 0.0
+            }
+          },
+          "passages": {
+            "answer_in_top1_pct": {
+              "min": 67.01,
+              "max": 67.01,
+              "range_pt": 0.0
+            },
+            "answer_in_topk_fulldoc_pct": {
+              "min": 98.87,
+              "max": 98.87,
+              "range_pt": 0.0
+            },
+            "answer_in_topk_pct": {
+              "min": 76.61,
+              "max": 76.61,
+              "range_pt": 0.0
+            },
+            "right_doc_top1_pct": {
+              "min": 82.65,
+              "max": 82.65,
+              "range_pt": 0.0
+            }
+          },
+          "v1-search": {
+            "answer_in_top1_pct": {
+              "min": 82.65,
+              "max": 82.65,
+              "range_pt": 0.0
+            },
+            "answer_in_topk_fulldoc_pct": {
+              "min": 98.87,
+              "max": 98.87,
+              "range_pt": 0.0
+            },
+            "answer_in_topk_pct": {
+              "min": 98.87,
+              "max": 98.87,
+              "range_pt": 0.0
+            },
+            "right_doc_top1_pct": {
+              "min": 82.65,
+              "max": 82.65,
+              "range_pt": 0.0
+            }
+          }
+        }
+      },
+      "context_fit": {
+        "task": "context_fit",
+        "token_budget": 4000,
+        "pinned_sample": "s-2026-08-03T184827Z",
+        "total_n": 228,
+        "total_missing": 0,
+        "total_ambiguous": 28,
+        "total_failures": 0,
+        "answer_in_context_pct": 91.23,
+        "tokens_per_answer_delivered": 4014.3,
+        "context_tokens_mean": 3662.14,
+        "context_docs_mean": 5.15,
+        "matched_count_mean": 10.0,
+        "truncated_pct": 94.74,
+        "server_duplicates_dropped_mean": 0.0,
+        "budget_used_pct": 91.6,
+        "control_ok": true,
+        "status": "ok",
+        "elapsed_s": 180.7,
+        "host_env": {
+          "load1": 7.98,
+          "load5": 7.68,
+          "load15": 7.87,
+          "io_some_avg60": 11.58,
+          "io_full_avg60": 10.09,
+          "error": null
+        }
+      },
+      "supersession": {
+        "document": {
+          "task": "supersession",
+          "path": "document",
+          "edges": 29,
+          "n_ran": 29,
+          "failures": 0,
+          "replacement_at_1_pct": 31.03,
+          "replacement_in_top5_pct": 65.52,
+          "neither_returned_pct": 27.59,
+          "superseded_still_returned": 0,
+          "control_ok": true,
+          "status": "ok",
+          "why": null
+        },
+        "passages": {
+          "task": "supersession",
+          "path": "passages",
+          "edges": 29,
+          "n_ran": 29,
+          "failures": 0,
+          "replacement_at_1_pct": 48.28,
+          "replacement_in_top5_pct": 72.41,
+          "neither_returned_pct": 20.69,
+          "superseded_still_returned": 0,
+          "control_ok": true,
+          "status": "ok",
+          "why": null
+        },
+        "v1-search": {
+          "task": "supersession",
+          "path": "v1-search",
+          "edges": 29,
+          "n_ran": 29,
+          "failures": 0,
+          "replacement_at_1_pct": 48.28,
+          "replacement_in_top5_pct": 72.41,
+          "neither_returned_pct": 20.69,
+          "superseded_still_returned": 0,
+          "control_ok": true,
+          "status": "ok",
+          "why": null
+        },
+        "elapsed_s": 115.5,
+        "host_env": {
+          "load1": 6.77,
+          "load5": 7.36,
+          "load15": 7.73,
+          "io_some_avg60": 11.04,
+          "io_full_avg60": 10.02,
+          "error": null
+        },
+        "replicates": 2,
+        "observed_spread": {
+          "document": {
+            "neither_returned_pct": {
+              "min": 27.59,
+              "max": 27.59,
+              "range_pt": 0.0
+            },
+            "replacement_at_1_pct": {
+              "min": 31.03,
+              "max": 31.03,
+              "range_pt": 0.0
+            },
+            "replacement_in_top5_pct": {
+              "min": 65.52,
+              "max": 65.52,
+              "range_pt": 0.0
+            }
+          },
+          "passages": {
+            "neither_returned_pct": {
+              "min": 20.69,
+              "max": 20.69,
+              "range_pt": 0.0
+            },
+            "replacement_at_1_pct": {
+              "min": 48.28,
+              "max": 48.28,
+              "range_pt": 0.0
+            },
+            "replacement_in_top5_pct": {
+              "min": 72.41,
+              "max": 72.41,
+              "range_pt": 0.0
+            }
+          },
+          "v1-search": {
+            "neither_returned_pct": {
+              "min": 20.69,
+              "max": 20.69,
+              "range_pt": 0.0
+            },
+            "replacement_at_1_pct": {
+              "min": 48.28,
+              "max": 48.28,
+              "range_pt": 0.0
+            },
+            "replacement_in_top5_pct": {
+              "min": 72.41,
+              "max": 72.41,
+              "range_pt": 0.0
+            }
+          }
+        }
+      },
+      "hard_negatives": {
+        "document": {
+          "task": "hard_negatives",
+          "path": "document",
+          "n": 227,
+          "failures": 0,
+          "target_rank1_pct": 70.04,
+          "target_absent_from_topk": 11,
+          "confusable_above_target_pct": 22.47,
+          "confusable_present_pct": 94.71,
+          "examples": [
+            {
+              "query": "Ben vehicle fleet \u2014 current and historical nder - Registration: renewed Dec 2025 ($60 fee); next renewal ~late",
+              "right": "$2,629,",
+              "wrong_ranked_higher": "$49,200"
+            },
+            {
+              "query": "worker4 \u2014 OS_NO_SERVICES, manual iLO needed (2026-05-09+) 4 entered OS_NO_SERVICES after SSH failures - Smart ",
+              "right": "192.168.1.199:8123",
+              "wrong_ranked_higher": "192.168.0.13"
+            },
+            {
+              "query": "Fiverr competitor intelligence \u2014 14 gig deep-dives 2. basitdotali / ThinkBuilt Solutions LLC \u2014 explicitly regi",
+              "right": "$2,500,",
+              "wrong_ranked_higher": "$150"
+            },
+            {
+              "query": "Laura BWH 403(b) excess contribution \u2014 decided to let it ride to let it ride rather than pursue the ROE. Reaso",
+              "right": "$630",
+              "wrong_ranked_higher": "$2,334"
+            },
+            {
+              "query": "Home Depot Orders \u2014 120 Reedy Meadow Exterior Project separate later order; see sliding-door memo) - Shutters ",
+              "right": "$952.44",
+              "wrong_ranked_higher": "$2,049.70"
+            },
+            {
+              "query": "Assistant Inbox Sweep \u2014 2026-07-31 \u2014 AM ten: 0 (this checkpoint only)  Flagged working set (open): 40  THE TWO",
+              "right": "$2,000.00",
+              "wrong_ranked_higher": "$8,946.30"
+            },
+            {
+              "query": "Flawless Construction \u2014 Final Payment ($8,946.30) 2026-07-21 8 (see Gmail msg `19f76f25d26bea0a` \u2014 \"Payment fo",
+              "right": "$17,293",
+              "wrong_ranked_higher": "$8,946.30"
+            },
+            {
+              "query": "WLED exterior LED lighting \u2014 120 Reedy Meadow (2026) ut stage (hybrid-wired workaround) \u2014 RMA'd. **Replacement",
+              "right": "70:4b:ca:42:c6:2c",
+              "wrong_ranked_higher": "70:4b:ca:42:99:ac"
+            },
+            {
+              "query": "Costco Nashua trip 2026-07-01 \u2014 chickpeas + paper goods + cadence restock Costco Wholesale #307 Nashua NH (311",
+              "right": "$342.92",
+              "wrong_ranked_higher": "$288.63"
+            },
+            {
+              "query": "[\u26a0\ufe0f DASHBOARD PORTS CORRECTED 2026-06-19 \u2192 unified :3000; library backend :8742 NOT :8732] quantum-data DASHBO",
+              "right": "192.168.1.42:8731",
+              "wrong_ranked_higher": "192.168.1.42:3000"
+            },
+            {
+              "query": "\u2b50\u2b50 NAV #49\u2192#50 RESPAWN HANDOFF \u2014 AROON campaign next; 4 attests banked; .20 tender pending en shape = \"only sw",
+              "right": "12.8.10.21",
+              "wrong_ranked_higher": "12.8.10.13"
+            },
+            {
+              "query": "Matley Pool Service \u2014 Relationship & History d) | | 2021-09-01, 10-19, 10-23 | Closing + follow-up | | | | 202",
+              "right": "$1,460",
+              "wrong_ranked_higher": "$400"
+            }
+          ],
+          "control_ok": true,
+          "status": "ok",
+          "why": null
+        },
+        "passages": {
+          "task": "hard_negatives",
+          "path": "passages",
+          "n": 227,
+          "failures": 0,
+          "target_rank1_pct": 81.06,
+          "target_absent_from_topk": 3,
+          "confusable_above_target_pct": 13.22,
+          "confusable_present_pct": 96.04,
+          "examples": [
+            {
+              "query": "Ben vehicle fleet \u2014 current and historical nder - Registration: renewed Dec 2025 ($60 fee); next renewal ~late",
+              "right": "$2,629,",
+              "wrong_ranked_higher": "$49,200"
+            },
+            {
+              "query": "worker4 \u2014 OS_NO_SERVICES, manual iLO needed (2026-05-09+) 4 entered OS_NO_SERVICES after SSH failures - Smart ",
+              "right": "192.168.1.199:8123",
+              "wrong_ranked_higher": "192.168.0.13"
+            },
+            {
+              "query": "domains MCP: Cloudflare token missing Zone.DNS:Read \u2014 list_dns_records fails egistrars (Namecheap, GoDaddy, Ro",
+              "right": "0.0.0.0:8831",
+              "wrong_ranked_higher": "192.168.1.168"
+            },
+            {
+              "query": "CloudX investment \u2014 Series A+ due diligence, deadline Jun 15 2026 ut APP $650\u2192$500\" citation in deck is ACCURA",
+              "right": "$515",
+              "wrong_ranked_higher": "$100"
+            },
+            {
+              "query": "Laura BWH 403(b) excess contribution \u2014 decided to let it ride to let it ride rather than pursue the ROE. Reaso",
+              "right": "$630",
+              "wrong_ranked_higher": "$2,334"
+            },
+            {
+              "query": "OctoPrint Pi Zero 2 W \u2014 Setup & Access toward HDMI side on Pi Zero - **cam2 (side view)**: ustreamer port 8081",
+              "right": "127.0.0.1:8081",
+              "wrong_ranked_higher": "192.168.1.232"
+            },
+            {
+              "query": "quantum-feed: tools added 2026-07-09 (sweep, selfheal, completeness, universes) tem mounts per host (nfs/noise",
+              "right": "192.168.1.57:30379",
+              "wrong_ranked_higher": "192.168.0.113"
+            },
+            {
+              "query": "Inkling ad-profitability model (2026-07-23) upsell (biggest), (2) conversion (landing+creative beat 2.5%), (3)",
+              "right": "$24,",
+              "wrong_ranked_higher": "$500"
+            },
+            {
+              "query": "Coinbase lock \u2014 authoritative figures: 0.4658 BTC stuck (NOT 0.5428); finance holds NO wallet/on-chain data **",
+              "right": "$113,327.04",
+              "wrong_ranked_higher": "$29,692"
+            },
+            {
+              "query": "\u26a0\ufe0f 2026-07-29: forward test SUSPENDED (emitter deleted, not just unscheduled). Ben ruled LEAVE the position. o",
+              "right": "$188,532.34",
+              "wrong_ranked_higher": "$190,840.86"
+            },
+            {
+              "query": "HA outdoor lights \u2014 sunset schedule + dog-door vibration boost + iota integration d5cb18 | eWeLink | | outside",
+              "right": "192.168.1.105",
+              "wrong_ranked_higher": "192.168.1.177"
+            },
+            {
+              "query": "PushBuild \u00a7475(f) deduction-utilization strategy \u2014 RESOLVED to Scenario 1 (2026-07-10) amendment) vs \u00a7195 (def",
+              "right": "$610",
+              "wrong_ranked_higher": "$105,675"
+            }
+          ],
+          "control_ok": true,
+          "status": "ok",
+          "why": null
+        },
+        "v1-search": {
+          "task": "hard_negatives",
+          "path": "v1-search",
+          "n": 227,
+          "failures": 0,
+          "target_rank1_pct": 81.06,
+          "target_absent_from_topk": 3,
+          "confusable_above_target_pct": 13.22,
+          "confusable_present_pct": 96.04,
+          "examples": [
+            {
+              "query": "Ben vehicle fleet \u2014 current and historical nder - Registration: renewed Dec 2025 ($60 fee); next renewal ~late",
+              "right": "$2,629,",
+              "wrong_ranked_higher": "$49,200"
+            },
+            {
+              "query": "worker4 \u2014 OS_NO_SERVICES, manual iLO needed (2026-05-09+) 4 entered OS_NO_SERVICES after SSH failures - Smart ",
+              "right": "192.168.1.199:8123",
+              "wrong_ranked_higher": "192.168.0.13"
+            },
+            {
+              "query": "domains MCP: Cloudflare token missing Zone.DNS:Read \u2014 list_dns_records fails egistrars (Namecheap, GoDaddy, Ro",
+              "right": "0.0.0.0:8831",
+              "wrong_ranked_higher": "192.168.1.168"
+            },
+            {
+              "query": "CloudX investment \u2014 Series A+ due diligence, deadline Jun 15 2026 ut APP $650\u2192$500\" citation in deck is ACCURA",
+              "right": "$515",
+              "wrong_ranked_higher": "$100"
+            },
+            {
+              "query": "Laura BWH 403(b) excess contribution \u2014 decided to let it ride to let it ride rather than pursue the ROE. Reaso",
+              "right": "$630",
+              "wrong_ranked_higher": "$2,334"
+            },
+            {
+              "query": "OctoPrint Pi Zero 2 W \u2014 Setup & Access toward HDMI side on Pi Zero - **cam2 (side view)**: ustreamer port 8081",
+              "right": "127.0.0.1:8081",
+              "wrong_ranked_higher": "192.168.1.232"
+            },
+            {
+              "query": "quantum-feed: tools added 2026-07-09 (sweep, selfheal, completeness, universes) tem mounts per host (nfs/noise",
+              "right": "192.168.1.57:30379",
+              "wrong_ranked_higher": "192.168.0.113"
+            },
+            {
+              "query": "Inkling ad-profitability model (2026-07-23) upsell (biggest), (2) conversion (landing+creative beat 2.5%), (3)",
+              "right": "$24,",
+              "wrong_ranked_higher": "$500"
+            },
+            {
+              "query": "Coinbase lock \u2014 authoritative figures: 0.4658 BTC stuck (NOT 0.5428); finance holds NO wallet/on-chain data **",
+              "right": "$113,327.04",
+              "wrong_ranked_higher": "$29,692"
+            },
+            {
+              "query": "\u26a0\ufe0f 2026-07-29: forward test SUSPENDED (emitter deleted, not just unscheduled). Ben ruled LEAVE the position. o",
+              "right": "$188,532.34",
+              "wrong_ranked_higher": "$190,840.86"
+            },
+            {
+              "query": "HA outdoor lights \u2014 sunset schedule + dog-door vibration boost + iota integration d5cb18 | eWeLink | | outside",
+              "right": "192.168.1.105",
+              "wrong_ranked_higher": "192.168.1.177"
+            },
+            {
+              "query": "PushBuild \u00a7475(f) deduction-utilization strategy \u2014 RESOLVED to Scenario 1 (2026-07-10) amendment) vs \u00a7195 (def",
+              "right": "$610",
+              "wrong_ranked_higher": "$105,675"
+            }
+          ],
+          "control_ok": true,
+          "status": "ok",
+          "why": null
+        },
+        "elapsed_s": 933.3,
+        "host_env": {
+          "load1": 8.93,
+          "load5": 8.85,
+          "load15": 8.54,
+          "io_some_avg60": 7.08,
+          "io_full_avg60": 5.81,
+          "error": null
+        },
+        "replicates": 2,
+        "observed_spread": {
+          "document": {
+            "confusable_above_target_pct": {
+              "min": 22.47,
+              "max": 22.47,
+              "range_pt": 0.0
+            },
+            "confusable_present_pct": {
+              "min": 94.71,
+              "max": 94.71,
+              "range_pt": 0.0
+            },
+            "target_rank1_pct": {
+              "min": 70.04,
+              "max": 70.04,
+              "range_pt": 0.0
+            }
+          },
+          "passages": {
+            "confusable_above_target_pct": {
+              "min": 13.22,
+              "max": 13.22,
+              "range_pt": 0.0
+            },
+            "confusable_present_pct": {
+              "min": 96.04,
+              "max": 96.04,
+              "range_pt": 0.0
+            },
+            "target_rank1_pct": {
+              "min": 81.06,
+              "max": 81.06,
+              "range_pt": 0.0
+            }
+          },
+          "v1-search": {
+            "confusable_above_target_pct": {
+              "min": 13.22,
+              "max": 13.22,
+              "range_pt": 0.0
+            },
+            "confusable_present_pct": {
+              "min": 96.04,
+              "max": 96.04,
+              "range_pt": 0.0
+            },
+            "target_rank1_pct": {
+              "min": 81.06,
+              "max": 81.06,
+              "range_pt": 0.0
+            }
+          }
+        }
+      },
+      "query_replay": {
+        "document": {
+          "task": "query_replay",
+          "path": "document",
+          "n": 120,
+          "requested": 120,
+          "failures": 0,
+          "returned_nothing": 0,
+          "returned_nothing_pct": 0.0,
+          "latency_p50_s": 0.378,
+          "latency_p95_s": 0.536,
+          "latency_max_s": 1.58,
+          "top1_by_query": {
+            "quantum-data: orphaned DRIVER daily-duty stamps under --mode=full \u2014 CORRECTED pairing (2026-08-08)": "14dbb66f-9d94-4bca-b34a-b42b092617c3",
+            "Sivan Sack phone number group text Mary Ann Dan family MMS": "c9e543fb-6a47-46e7-9863-597255085d0e",
+            "Book 2 \"Thematic Sector Rotation\" \u2014 \u2705 EXECUTED 2026-07-23 09:41 EDT, $4,235 net debit (both spreads filled, under $4,350 cap). (Was APPROVED; now FILLED.) Paper, Sep-18-2026 expiry, \u00d75, proposed by `f": "07e2a641-5b98-473c-9ca0-ec36c45bb9ee",
+            "HVAC reconciliation 2026-06-25 \u2014 post-blackout fold-in (Sol-Ark + 3 new quotes + GELD correction) 85) | | Nashoba 2026 (Lennox) [NEW] | $39,123 | 3T+2T / 19.0 / 10.0 | mixed 97%+80% | 2yr / 10yr | no": "ea5611a7-ab13-4b51-a6d8-30caaec4fdb0",
+            "Locality-ladder Phase 1 (2026-07-16): redis-payload mechanism, data-gravity 1.6\u00d7, ~3.5GB/seat, VIP pod-IP rule pod consumers only.** Instances: (1) redis-solo VIP 10.152.183.175 unreachable from s5 ho": "bb762ec1-7a0b-418f-9c58-f136dfb2597d",
+            "An absent value defaulting favourably in the TEMPORAL layer looks like alpha \u2014 published_at_precision, and three more of the same shape (2026-08-08)": "5bc87032-92a6-4e27-9db9-57d4c6809777",
+            "SPAN install scheduled + panels sourced + Sol-Ark peak-shaving lesson (2026-06-11) \u2014 120 Reedy Meadow -06-11 via deep comparison sweep (shopping agent):** beats every online vendor on both SKUs. Cheap": "754f2b78-b7d8-4edc-ae3a-0a09bcc341c1",
+            "Assistant Inbox Sweep \u2014 2026-08-03 \u2014 PM": "12f6a2bb-1bb7-43ac-87b1-c1cc22b2d04a",
+            "Insurance \u2014 Pet (Trupanion, Brooke)": "da463773-106a-4901-8f5b-890e496e058f",
+            "LED walkway outdoor install \u2014 12V PSU + WLED controller picks (2026-05-09) 2026-07-21. - **Channels**: HAS plenty \u2014 3\u00d7 hunhun 10-packs = 30\u00d7 6.6ft (2m) = 60m, incl milky covers + end caps + clips (ord": "07fcdc2b-69c2-4e02-bdcd-4599c3e69c6e",
+            "quantum-feed: #002 DATA COMPLETE \u2014 2,849-ticker universe backfilled to ~2009 (e10f283b) rror \u2192 Unclassified); (2) sane-cap-vs-continuity ordering \u2014 eps path now sane-checked AFTER basis resolution \u2192 G": "f5948cc1-4624-4da5-a661-6f61836d4315",
+            "b48a51cf-ca47-4ca9-9ea2-a709babe5955": "3f0a7b8b-2c2a-4790-8d22-e2485e02317a",
+            "basil peppers bed chlorothalonil not labeled don't relitigate garden low stakes": "8d6a59ce-bfab-4b6d-8895-ca0646c24dda",
+            "GELD utility profile + 2026 HVAC incentives reality (Sacks @ 120 Reedy Meadow) n IOU **Heating fuel:** **LPG (propane)** \u2014 not natural gas **Existing solar/battery:** Sol-Ark hybrid inverter installed": "f7d01002-ca64-458c-bac3-f3a0887d3a50",
+            "grant refused recent sign-in recency": "91c9b13a-0ce1-4040-acf6-f503aa407844",
+            "HA/Jinja landmine: a template variable rendering to the string \"False\" is TRUTHY \u2014 {% if var %} takes the wrong branch and looks correct": "c0b75a7c-642f-4f09-9c18-7f23db686386",
+            "/mnt/nas/data/code/assistant project": "fe14411f-6e32-41a4-964d-5b7e276bc451",
+            "8ab89ca9-6c8b-41b3-a2fc-5af2395e888f": "3ac832fa-e9c6-43c9-b65f-94533d05f9c4",
+            "Smartwatch shortlist for Ben - Android + HA + comprehensive health metrics (2026-07-08) real-world - HA: via Samsung Health -> Health Connect (Android 14+) -> HA community integration (NOT first-party": "137269d4-f566-45d7-b2e6-07c684f793ed",
+            "Ben health records labs medical history": "8b99112a-df3a-499c-ae82-42d619007f3e",
+            "0db146fc-c54f-49f4-9749-f85804e8ba78": "3ac832fa-e9c6-43c9-b65f-94533d05f9c4",
+            "Garden sensor architecture \u2014 garden-check reads the GATEWAY directly, not HA; ecowitt=push vs rest=poll (2026-08-07 outage)": "676834f8-d588-46ae-b366-b619201ee058",
+            "mind: gpt-oss:20b vs qwen2.5-coder:7b claim extraction \u2014 nominally better on both, statistically indistinguishable (n=11)": "5dc20d1c-5143-4fc6-bb07-f8359b7a77da",
+            "75bc2523-d833-4e29-89a2-93dc75e89eeb": "3ac832fa-e9c6-43c9-b65f-94533d05f9c4",
+            "Instrument validation: coverage vs semantics, correlated blindness as bias, and transition- vs state-emitted logs (server4 I/O night, 2026-08-03)": "41067d1f-75d1-43a8-9677-6a1d0349ddde",
+            "mind 2026-08-09 root cause: a weekly ZFS backup did a FULL 13.2TB send, pinned ARC at 50GB from 02:00 \u2014 and I optimised around the anomaly instead of treating it as the finding": "b76c8763-b652-4f0d-bdb2-cb0fa38b1a02",
+            "ATC broadcasts: wave delivery decouples send order from arrival order \u2014 a correction races its own original": "d2b835ed-ef1e-4db1-9ca7-27b45eed368a",
+            "shopping agent groceries agent cars agent finance agent hvac agent house agent taxes agent travel agent scope role what it owns": "f4ff1d11-2cec-494a-93b2-6b695cae63e6",
+            "Frigate NVR Setup on Server4 t usable. Must use the USB version.  **Recommended purchase**: Google Coral USB Accelerator (Google model G950-01456-01) - **B07R53D12W** \u2014": "df08714a-f7d9-49d8-ac94-8534f5720ce5",
+            "house projects open walkway LED barn stain": "9268dde5-72a9-4168-899f-3683b6a55ca0",
+            "models seat (server4) \u2014 2026-08-08/09 method corpus + the cutover gate. Pointers, not paragraphs.": "3960edfb-fc68-4ab8-ba9c-c7abd0b7a46c",
+            "Margaret Dave Magill phone number contact": "8ff80273-7b57-4743-8fb6-5af2ff88c166",
+            "ca2125c5-660e-4fcf-bd95-6b791651fdc3": "3ac832fa-e9c6-43c9-b65f-94533d05f9c4",
+            "Camera outages 2026-08-02: three distinct causes, partitioned by DHCP reservation status rying the fix)** - `camera.gardenback_fluent` (192.168.0.196) \u2014 flapping: `unavailable` 13:49 while `idle` at 1": "88686057-bca9-46ee-859d-dd31a9cbfd23",
+            "HA media integrations \u2014 Kodi, Samsung TV, Fire Stick setup and dashboard ## Kodi instances - Bedroom:": "4459971d-7a83-4fe0-b65c-2e026ad6885c",
+            "b4170d4a-940c-4057-8e92-7c79bdf250aa": "3ac832fa-e9c6-43c9-b65f-94533d05f9c4",
+            "qwen3 regen COMPLETE (46/46 feature days) + body-chunk lane 0% ported \u2014 with nav's two corrections applied (2026-08-08)": "81e1ddec-2025-4a09-8450-8f5f0239917e",
+            "Power Outage 2026-05-27 \u2014 ATS Burned, Current Grid Status he Breen & Sullivan tech is on site. - **Generac Power Plan extended warranty** is unfilled / not enrolled (offer doc on file, 5/7/10 yr at": "19f8f066-d843-4f50-8c1f-084ebd767f33",
+            "Household Liquor & Wine Preferences \u2014 NH Liquor Outlet Nashua (May 2026) ## Source NH Liquor & Wine Outlet, Store 50, Nashua NH. Receipt dated 5/26/2026 4:24 PM (cashier James). 14 bottles, ~": "adf1353c-74cb-4110-98c3-9f93df26c9dc",
+            "mind: earnings_report / earnings_surprise / company_guidance \u2014 three views built from headlines instead of buying $297/mo of Benzinga feeds": "8935f72e-8a3d-4099-b113-827725da6c55",
+            "finance session parked-state \u2014 2026-08-03 (index + live schedule + what's owed)": "2bf95005-6654-483b-8e52-113e91134d8b",
+            "super-agent design constraint: never route time-critical phone alerts through the ATC broker (global 1/sec drain queue, priority does not jump it)": "3ca122ed-1b1d-46f4-8eed-58db18c9d49e",
+            "f7679e3e-2b9d-49bd-8ece-437711527f4c": "71f5bf89-838c-4630-b39a-8c83b58655f1",
+            "Claude Code memory/ corpus sharing \u2014 VERIFIED topology, the stat -Lc rule, and the delete-propagates hazard (2026-08-03)": "997fd05b-c2a8-4a72-bc90-6048714e331c",
+            "compact-self skill: Door A (CronCreate + /compact) is measured shut \u2014 rewrite it": "4631708c-4c70-4ecc-a63a-e9303fe4c625",
+            "groton: \u26d4 WIDE ATC BROADCASTS REACH BEN AND LAURA'S SLACK DMs \u2014 near-miss 2026-08-03, plus Slack fold discipline": "b76f152f-8046-412c-afb5-b00d19fb73ba",
+            "43b9a160-f085-4d10-95c7-9b9c25269098": "03d0cfda-5848-40d3-80cb-90d6be506073",
+            "7268d248-ec1d-4dc2-9453-e9bb7ea9f498": "3ac832fa-e9c6-43c9-b65f-94533d05f9c4",
+            "Insurance seat \u2014 SCOPE BOUNDARY: do not raise infrastructure/NAS/permissions topics with Ben (2026-08-03)": "74d53171-b940-4ba6-9bbc-a88cf36aa83c",
+            "speckit-review: /api/state cold costs ~22s on a large repo \u2014 the stall is the trace, not the transport (2026-08-03)": "7adfd5b6-cbb4-4b60-9c5d-a23254c3ba87",
+            "shopping session parked-state + delivery ledger \u2014 OPEN: Laura chairs + blanket, Ben x2 numbered asks (v10, 2026-08-03, pre-cwd-migration)": "619a6c7c-9784-492c-a9b5-2475cd9c5efa",
+            "Host-level DNS fault presents as \"that agent's service is down\" \u2014 libuv threadpool saturation (2026-08-03 server4 incident) r4 (2-min: load/procs/conntrack/mem + probes @1.1.1.1 direct, @127.0.0.53 ho": "bd58256c-9e36-459c-9e3f-2361b3eb9fb7",
+            "book-137-regime-v1 frozen sleeve weights \u2014 and why GLD arrives 1.32x larger than each equity name quity name.**  Assuming GLD comes in at the same 0.31728 as the others is WRONG and understates it by": "b2de1364-3b68-4ab3-a15d-bd7f201088ef",
+            "Alpha Vantage EARNINGS \u2014 three measured traps (fabricated surprise='0', 'None' string, shared 25/day key)": "74f5a3cf-1fef-4978-a703-15f20d72f328",
+            "speckit: my fan-out contributed to the 2026-08-03 fleet quota halt \u2014 being right is not a licence to broadcast": "6bedf481-7559-42b3-b4ce-294ddf76ee05",
+            "Batching removes the moment where the check lives \u2014 plus 5 more from the 2026-08-09 refdata session": "1fd160a1-d84c-4fad-a6fd-2d8cb4917604",
+            "slapp: SPAN UI automation via adb + Android 14 MITM CA gotchas x new-session -d -s slapp_mitm \"mitmdump -p 8082 -w /tmp/slapp_flows.mitm\"` - Set emulator proxy: `adb shell settings put global http_pro": "ac4e9f4b-6728-43e8-8619-821d7db7a362",
+            "fleet-crash-heal emits FALSE 'EXITED' under I/O stall \u2014 n=2, reproducible, and it satisfies a Ben-escalation criterion (2026-08-09)": "c81b2d33-11b4-4fc7-b377-019667a76fcc",
+            "\u26d4 HA ha_get_history is UNUSABLE as proof of absence \u2014 confirmed independently by two seats, both directions (2026-08-09)": "4d875002-bb54-4f76-8b5f-52cb2a1dfd52",
+            "Vacuity is not binary \u2014 a gate can be non-degenerate and still demand too little to matter (the min-floor / enforceable=True case)": "88e3ba47-97af-4fa6-a988-06cd87572a5d",
+            "HWM docket re-dated to a TRIGGER; and the mechanism: a correct attestation about the wrong question": "a9ab0f9d-bb3a-4413-9bb9-b7578a233cff",
+            "mind: the prefilter skips 37% of the real corpus but 0% of the eval set \u2014 the labelled set is unrepresentative on exactly that axis (2026-08-09)": "88597642-80c5-469e-a62c-47fc6b9672f7",
+            "Walkway LED bench test \u2014 DONE 2026-05-09 (Elite has dead V+ output, hybrid wiring workaround in place) nch until RMA.  ## Hardware on the bench  - **Controller**: GLEDOPTO Elite 4-Channel ESP32 WLED,": "4856d195-0811-4673-aa1f-f604251adea8",
+            "BJ's-via-DoorDash trip 2026-07-30 $78.87 \u2014 DOUBLE-ORDER DAY (both in-store + delivery) carrots, cabbage, buffalo chicken, Wilde chips \u2014 all doubled  **Day total across both channels**: **$61.72 (in-st": "e9215dba-9a23-4631-a207-2953a80b3611",
+            "ATC delivery latency: the received_at occupancy trap, the global 1/sec delivery queue, and how a 15-seat investigation became its own load (2026-08-03)": "d2b835ed-ef1e-4db1-9ca7-27b45eed368a",
+            "Laura BWH 403(b) excess contribution \u2014 decided to let it ride to let it ride rather than pursue the ROE. Reasoning: - $2,334 grows tax-deferred to ~$9,000 over 20 years at 7% - \"Double tax\" penalty =": "ef9ad9f7-d8f8-49fc-baa2-2c16d164e413",
+            "Invoice: Anthropic Claude Max plan x2 \u2014 $425.00 total (2026-06-07) d on 2026-06-07 (billing Jun 7\u2013Jul 7, 2026).  ## Receipt 1 \u2014 bsack@pushbuild.com receipt_number=2548-0829-9122 invoice=TBQRY5SZ-0002": "20bac0fd-c182-4044-8e56-de0e917e77f8",
+            "Travel: LAURA \u2014 Southwest MHT\u2194BWI (ATV8FS) \u2014 Bethesda, Jul 29\u201331 2026 ogan. ~45\u201355 min drive from 120 Reedy Meadow. - Rapid Rewards #: 20643181941 \u00b7 Ticket #: 5262174742255 - Fare: Choice \u00b7 Booked 06/": "0e9328d5-bc0b-4787-b142-1ac628d85bd0",
+            "Amazon refund \u2014 SABRENT 4-Drive NVMe to PCIe 3.0 (order #114-0238200-7440244) ENT 4-Drive NVMe M.2 SSD to PCIe 3.0 adapter.  Order #: 114-0238200-7440244 Item: SABRENT 4-Drive NVMe M.2 SSD to PCIe 3.0": "48d419a3-ed9f-4e02-85c8-f933983f7c51",
+            "quantum-data 2026-08-08: the TAUTOLOGY ARC \u2014 5 measurements, 4 inferences, 2 escalations on a field neither seat defined. Plus AUDIT-vs-COMPLETE and the joint failure mode": "466d8a1c-1333-40db-8344-515b070f56f4",
+            "mind: bulk YouTube fetching must go through the VPN exits \u2014 a namespace, not a proxy, and why resync.sh structurally could not use it": "989909a9-e0d4-4925-a90c-036e34754b10",
+            "Garden Blueberry Rehab Plan [\u26a0\ufe0f RELOCATE DECISION ON HOLD 2026-08-04 \u2014 bushes stay in place another year]": "f3c87216-74cf-4ac7-96fb-3dc7c8f0d519",
+            "Coinbase account locked identity verification case funds BTC": "06ce8918-128f-4369-8ea6-bbdae02b5224",
+            "mind news_realtime store query surface intraday signal traps sentiment Benzinga": "27c52651-833a-457e-9f07-4e4a15855785",
+            "A plausible mechanism at the right magnitude TERMINATES THE SEARCH, and at small residuals magnitude agreement is nearly free \u2014 so the fit that persuades you is the one carrying least information": "8eda4c76-17c5-446c-8fc8-2c095d328150",
+            "Home Depot Orders \u2014 120 Reedy Meadow Exterior Project separate later order; see sliding-door memo) - Shutters (11 pairs): arriving April 13, 2026  ## Order #WK23951555 (May 4, 2026) **Total:**": "47fd6887-d5ae-4948-9c9f-aa5c9256fe4d",
+            "2025 Personal Tax Return \u2014 Ben & Laura Sack (Full Detail) xx-xx-9235  ---  ## AS-FILED FIGURES (TurboTax, April 14, 2026)  | Item | Amount | |---|---| | AGI | **$476,735** | | Total federal tax | **": "bd183a48-3666-45d1-a625-69c8d02a6985",
+            "Sunday step 2 LEAD ITEM: three orphaned DRIVER duties, and Principle IV held vacuously for seven days (quantum-feed, 2026-08-08)": "9966599b-ca8a-4813-86ae-bf1f603d9c65",
+            "retraction: float() failing loudly was the right instrument \u2014 RETRACTED. guard on estimatedEPS never surprise. earnings build inherits this": "f27160fb-07bd-4a1c-bc7a-bc70e55cfc62",
+            "mind+finance portfolio round \u2014 paper-tracked trade list (2026-07-21) (1,054 sh) \u2014 de-concentration anchor, tax-free 2. \u00a7475 IVV\u2192RSP ~$62k (290 sh) 3. SPY put-spread hedge \u2014 Sep-18 695/650 (~$1,425, 59": "fb51a115-9ed2-482b-a7bf-f3bd91623308",
+            "`pgrep -x tmux` can never fire \u2014 tmux's comm is \"tmux: server\", and the false null was load-bearing on a fleet theory": "3f320335-f1cc-4de3-990b-d879d5fc5033",
+            "9630 house \u2014 Junior (Flawless Construction) meeting 2026-06-05 \u2014 punch list & decisions painting completion (~7/12) - Final walkthrough (10%, $8,646) triggers after final punch-list - Total remaining": "a874c059-e568-4034-a78b-98a0395bfb01",
+            "Frigate footage loss 2026-08-09: I/O stall \u2192 TIMED-OUT WATCHDOG PROBE \u2192 restart loop. 155 missing minute-files + an uncounted 10th. FIX SHIPPED (f4d5811, on origin), owned by `ha`. UNKNOWN\u21d2DENY validated x27; the probe fix itself only x3; authoriser UNTESTED. Frigate now DISABLED, cameras down for DAYS.": "d6997d31-6ee3-4509-a5da-75860bf37769",
+            "QUEUED (design DONE, build NOT): unwired-tool scan \u2014 29 candidates classified, and the RESULT= heuristic is REFUTED (2026-08-08)": "31413b0a-285e-490f-ae6b-a9a67957e02b",
+            "alpaca trading \u2014 ROLLING ledger (successor to 181224d8, which is frozen) \u2014 day 1 outcomes 2026-08-06": "9cea33f3-9d55-4547-8d27-e3399df73473",
+            "daily-health.sh false-FAILs for 4h nightly: UTC window vs ET trading day \u2014 and the fix is already written one instrument over (\u00a72d2)": "ea57c4fb-c5cd-4ec5-9f66-163656989822",
+            "server4 operational baseline 2026-08-09 evening \u2014 what is DOWN BY INTENT (seqr \u00d75) and must not be healed or treated as a signal": "24012c0e-8d18-448c-8a35-443c5233c4df",
+            "genomics session topology open items bridge ownership Laura": "125e6954-5162-4126-8d29-88ce1baed322",
+            "Pin hygiene: a pin is an instruction to a self who cannot check it (2026-08-04 findings)": "8961378d-04c7-4b44-8879-f1764d415703",
+            "laurasack.com \u2014 private staging/preview environment (setup + promote/teardown) icly indexed/discoverable. - **Production (LIVE, unchanged):** https://laurasack.com \u2192 host nginx proxies to `laurasite-w": "8b10aa59-2409-4795-b195-279ded6afdc4",
+            "mind: the six-lane corpus, the KB UI, and EDGAR from 6,446 to 6.1M filings \u2014 2026-08-08 build log": "36e26a06-1be2-4dd1-8247-6becc54597af",
+            "RETRACTED DIAGNOSIS: historical-inventory.json's generator does NOT walk the pivot tree \u2014 the \"proven fix\" was already in the code since 2026-07-09, and its agreement with the incumbent is what I misread as validation. Real cause: a transient NFS stall.": "4c41fadc-06e7-4e59-ad08-614811d343c9",
+            "Silent-defect costumes from the quantum seats (2026-08-07) \u2014 partial cleanup, workaround-as-unfiled-bug, and the safety with no failure mode": "45422a68-fd79-4c0a-9e34-85872c6921c8",
+            "SMS \u2014 Murilo Vieira: stone veneer up, \"enough for the whole foundation\" (2026-08-06)": "31374b56-2b1e-4563-aeea-4da5e088498e",
+            "Instrument method: what a derivation guards, and observation-timestamps measuring the observer (2026-08-03 fleet incident)": "5c2bf3ac-7135-4f95-8e8f-bdfe0bf8619e",
+            "feedback-applovin-brief-cc-ben styled HTML CC ben weekly brief": "e4f8d4ad-97b2-468f-8bc6-22e21b68d892",
+            "Assistant Comms Sweep \u2014 2026-08-04 15:53 ET (zero cycle) + Google MCP outage flagged": "6ff63dca-3806-4057-b4d9-627dbe6a5ffe",
+            "d2901063-6de4-4ba8-ae94-9b55356cf43c": "eb061f5d-bb71-4fbd-9bf7-c26ca5b8a18f",
+            "\u26a0\ufe0f Chat cards need TWO halves \u2014 the rail AND the instruction to use it (Ben, 2026-08-07)": "017ec9c0-82c2-4252-80f7-88c07e01237c",
+            "alpaca \u2190 mind: intraday news surface (news_realtime) \u2014 queries, health invariants, and the sentiment trap": "27c52651-833a-457e-9f07-4e4a15855785",
+            "laura-work \u2014 ON-SPAWN checklist &amp; current session state": "c98f4783-08f9-429b-b38a-1fdf7b2f36da",
+            "Anti-pattern: the premise carries the load, the conclusion takes the scrutiny": "d2eda80f-6ef3-4d7b-a91b-6d24e30f416e",
+            "laura-work \u2014 ON-SPAWN checklist and current session state": "c98f4783-08f9-429b-b38a-1fdf7b2f36da",
+            "insurance master index all policies overview navigation": "b88db1bd-5e0a-4214-b210-e062cb94187b",
+            "server4 nightly/weekly maintenance windows \u2014 the Sunday 00:00-04:00 I/O collision (2026-08-09 load-141 incident)": "44c0d852-40ca-41a6-b878-183fa8dc22f1",
+            "pool chemistry": "7d39dc3c-48b6-49b2-8dfb-584c7a7129ea",
+            "NAS IP assignment: VyOS DHCP reservation swap for X520 to get 192.168.1.207 nas: 192.168.1.207 \u2192 1c:86:0b:39:6e:5b (X520 eth4) \u2190 NEW - nas-eth0-1g: 192.168.0.183 \u2192 00:11:32:bd:cf:9f (eth0 onboard) \u2190 N": "40d8da0b-58bb-4269-b90f-eec0bf41fc61",
+            "22e067f3-ae52-4204-bed5-cadedefdc709": "3ac832fa-e9c6-43c9-b65f-94533d05f9c4",
+            "Generac Mobile Link telemetry dead since 2026-05-11 \u2014 RESOLVED 08-03: generator fine, Wi-Fi module only. Plus: the Sol-Ark GEN input CANNOT verify a weekly exercise": "6a220caf-1bdb-4c52-a398-195dd5e2ecbf",
+            "SHARED corpus index (agents + scripts) \u2014 MEMORY.md at -mnt-nas-data-code-scripts, migrated 2026-08-03": "27a160a1-a9ba-40d5-b9e6-b1e5705cdc50",
+            "cutover gate output provenance census field rename models seat method corpus": "16d74f91-cb9e-4a6d-a6c5-a22e200baa46",
+            "Email \u2014 Chris Hartson (Lamco): needs site visit before finalizing Carrier alt pricing (2026-07-02) ence: - 6/17: Chris's initial Bosch IDS Premium DF quote at $52,910 net. - 6/17: Ben's substantive co": "e4210ed1-e686-4ea7-8779-514e308fdb39",
+            "tmux-crash-watchdog needs BOTH flock and a throttle \u2014 instances pile up and drain as alert bursts (2026-08-09)": "2de1b121-11ee-4749-ae17-d50e971f2f49",
+            "healthcare providers doctors Ben Laura contacts": "9b80ed4f-83cb-4992-adbe-9fa74932b86f",
+            "2027 CORN PLAN \u2014 three staggered sets, 10-day gaps (agreed with Ben 2026-08-08)": "5491494c-eea8-4326-904b-6101f22a5fa9",
+            "agent seat roster domains: shopping groceries brooke electric health mom travel finance cars laura-health hvac insurance house taxes \u2014 what each agent owns": "f4ff1d11-2cec-494a-93b2-6b695cae63e6",
+            "host-account-swap 2026-08-07: v3 macro no longer fits in one call (88\u2192105\u2192125s callback, monotonic); both legs succeeded HAND-DRIVEN": "8c67d885-626c-47cf-af16-720c9c6d1617",
+            "Incident response consumes the resource it investigates \u2014 and a runway measured while idle is a fact about the idleness": "6d8986a5-9ea2-44e4-9458-a6375222d6bc",
+            "Business & professional liability \u2014 Sack (Hartford CANCELLED Oct 2025, D&O undocumented) Ready\" \u2014 final premium audit on 46SBAZH0361 | | **2025-11-26** | Hartford Electronic Refund Notification (bill": "ce1abf0f-318a-461c-87e5-7c15cb225854",
+            "server4 IO bottleneck: `/` is ext4 on a ROTATIONAL PERC H310 volume and Docker's data root lives there \u2014 saturates at ~1-4 MB/s while the NVMe ZFS pools idle at 2-4%": "60e024c4-35b0-45f0-a3a1-c913e8f2efe8"
+          },
+          "control_ok": true,
+          "status": "ok"
+        },
+        "passages": {
+          "task": "query_replay",
+          "path": "passages",
+          "n": 120,
+          "requested": 120,
+          "failures": 0,
+          "returned_nothing": 0,
+          "returned_nothing_pct": 0.0,
+          "latency_p50_s": 0.74,
+          "latency_p95_s": 0.911,
+          "latency_max_s": 1.06,
+          "top1_by_query": {
+            "quantum-data: orphaned DRIVER daily-duty stamps under --mode=full \u2014 CORRECTED pairing (2026-08-08)": "2501c1af-4849-4a8a-8840-299fd50b8965",
+            "Sivan Sack phone number group text Mary Ann Dan family MMS": "64bd8b5d-b509-424d-bf2f-ca61862b48f9",
+            "Book 2 \"Thematic Sector Rotation\" \u2014 \u2705 EXECUTED 2026-07-23 09:41 EDT, $4,235 net debit (both spreads filled, under $4,350 cap). (Was APPROVED; now FILLED.) Paper, Sep-18-2026 expiry, \u00d75, proposed by `f": "b632b164-0435-44bd-b81f-388a49b8308c",
+            "HVAC reconciliation 2026-06-25 \u2014 post-blackout fold-in (Sol-Ark + 3 new quotes + GELD correction) 85) | | Nashoba 2026 (Lennox) [NEW] | $39,123 | 3T+2T / 19.0 / 10.0 | mixed 97%+80% | 2yr / 10yr | no": "ea5611a7-ab13-4b51-a6d8-30caaec4fdb0",
+            "Locality-ladder Phase 1 (2026-07-16): redis-payload mechanism, data-gravity 1.6\u00d7, ~3.5GB/seat, VIP pod-IP rule pod consumers only.** Instances: (1) redis-solo VIP 10.152.183.175 unreachable from s5 ho": "bb762ec1-7a0b-418f-9c58-f136dfb2597d",
+            "An absent value defaulting favourably in the TEMPORAL layer looks like alpha \u2014 published_at_precision, and three more of the same shape (2026-08-08)": "a4349ac3-bdf8-4670-9915-316cadebe290",
+            "SPAN install scheduled + panels sourced + Sol-Ark peak-shaving lesson (2026-06-11) \u2014 120 Reedy Meadow -06-11 via deep comparison sweep (shopping agent):** beats every online vendor on both SKUs. Cheap": "754f2b78-b7d8-4edc-ae3a-0a09bcc341c1",
+            "Assistant Inbox Sweep \u2014 2026-08-03 \u2014 PM": "6dab2671-11e9-41a2-8382-734390f2d89e",
+            "Insurance \u2014 Pet (Trupanion, Brooke)": "da463773-106a-4901-8f5b-890e496e058f",
+            "LED walkway outdoor install \u2014 12V PSU + WLED controller picks (2026-05-09) 2026-07-21. - **Channels**: HAS plenty \u2014 3\u00d7 hunhun 10-packs = 30\u00d7 6.6ft (2m) = 60m, incl milky covers + end caps + clips (ord": "07fcdc2b-69c2-4e02-bdcd-4599c3e69c6e",
+            "quantum-feed: #002 DATA COMPLETE \u2014 2,849-ticker universe backfilled to ~2009 (e10f283b) rror \u2192 Unclassified); (2) sane-cap-vs-continuity ordering \u2014 eps path now sane-checked AFTER basis resolution \u2192 G": "f5948cc1-4624-4da5-a661-6f61836d4315",
+            "b48a51cf-ca47-4ca9-9ea2-a709babe5955": "9201c834-aec4-452b-835e-ddb49e19f69a",
+            "basil peppers bed chlorothalonil not labeled don't relitigate garden low stakes": "8d6a59ce-bfab-4b6d-8895-ca0646c24dda",
+            "GELD utility profile + 2026 HVAC incentives reality (Sacks @ 120 Reedy Meadow) n IOU **Heating fuel:** **LPG (propane)** \u2014 not natural gas **Existing solar/battery:** Sol-Ark hybrid inverter installed": "4ece8c71-041b-415d-b78d-cc355f83fe5d",
+            "grant refused recent sign-in recency": "490b4f83-a351-43af-a666-ee06d2ac2ea2",
+            "HA/Jinja landmine: a template variable rendering to the string \"False\" is TRUTHY \u2014 {% if var %} takes the wrong branch and looks correct": "c0b75a7c-642f-4f09-9c18-7f23db686386",
+            "/mnt/nas/data/code/assistant project": "fe14411f-6e32-41a4-964d-5b7e276bc451",
+            "8ab89ca9-6c8b-41b3-a2fc-5af2395e888f": "1d7be242-493e-4d7c-9dee-550e549bf482",
+            "Smartwatch shortlist for Ben - Android + HA + comprehensive health metrics (2026-07-08) real-world - HA: via Samsung Health -> Health Connect (Android 14+) -> HA community integration (NOT first-party": "137269d4-f566-45d7-b2e6-07c684f793ed",
+            "Ben health records labs medical history": "10ee2111-e906-484d-8f2e-b80c84a02abf",
+            "0db146fc-c54f-49f4-9749-f85804e8ba78": "24ecbe4b-9df5-4bdf-b414-6923784ea2db",
+            "Garden sensor architecture \u2014 garden-check reads the GATEWAY directly, not HA; ecowitt=push vs rest=poll (2026-08-07 outage)": "68ac1a67-1a33-431c-9897-e8fe86c8b715",
+            "mind: gpt-oss:20b vs qwen2.5-coder:7b claim extraction \u2014 nominally better on both, statistically indistinguishable (n=11)": "5dc20d1c-5143-4fc6-bb07-f8359b7a77da",
+            "75bc2523-d833-4e29-89a2-93dc75e89eeb": "d6bd36f6-18a4-45ec-b571-b4c4c85ee495",
+            "Instrument validation: coverage vs semantics, correlated blindness as bias, and transition- vs state-emitted logs (server4 I/O night, 2026-08-03)": "e2bf6e9a-c7b4-4c07-934a-ca7033981613",
+            "mind 2026-08-09 root cause: a weekly ZFS backup did a FULL 13.2TB send, pinned ARC at 50GB from 02:00 \u2014 and I optimised around the anomaly instead of treating it as the finding": "d9aa7b51-41d4-432d-8ed1-ffafa986e62a",
+            "ATC broadcasts: wave delivery decouples send order from arrival order \u2014 a correction races its own original": "908c0a64-0a3b-4b3c-bfd1-0d6d8f7c1b4b",
+            "shopping agent groceries agent cars agent finance agent hvac agent house agent taxes agent travel agent scope role what it owns": "f4ff1d11-2cec-494a-93b2-6b695cae63e6",
+            "Frigate NVR Setup on Server4 t usable. Must use the USB version.  **Recommended purchase**: Google Coral USB Accelerator (Google model G950-01456-01) - **B07R53D12W** \u2014": "df08714a-f7d9-49d8-ac94-8534f5720ce5",
+            "house projects open walkway LED barn stain": "9268dde5-72a9-4168-899f-3683b6a55ca0",
+            "models seat (server4) \u2014 2026-08-08/09 method corpus + the cutover gate. Pointers, not paragraphs.": "e43f9ac1-fa4e-406d-af63-cd32a8fab04b",
+            "Margaret Dave Magill phone number contact": "c9f35d44-c626-4301-9d3d-b016e659e364",
+            "ca2125c5-660e-4fcf-bd95-6b791651fdc3": "1d7be242-493e-4d7c-9dee-550e549bf482",
+            "Camera outages 2026-08-02: three distinct causes, partitioned by DHCP reservation status rying the fix)** - `camera.gardenback_fluent` (192.168.0.196) \u2014 flapping: `unavailable` 13:49 while `idle` at 1": "88686057-bca9-46ee-859d-dd31a9cbfd23",
+            "HA media integrations \u2014 Kodi, Samsung TV, Fire Stick setup and dashboard ## Kodi instances - Bedroom:": "f5f79ef4-338e-4ac6-a9c8-cb2ea4b4fac0",
+            "b4170d4a-940c-4057-8e92-7c79bdf250aa": "9201c834-aec4-452b-835e-ddb49e19f69a",
+            "qwen3 regen COMPLETE (46/46 feature days) + body-chunk lane 0% ported \u2014 with nav's two corrections applied (2026-08-08)": "81e1ddec-2025-4a09-8450-8f5f0239917e",
+            "Power Outage 2026-05-27 \u2014 ATS Burned, Current Grid Status he Breen & Sullivan tech is on site. - **Generac Power Plan extended warranty** is unfilled / not enrolled (offer doc on file, 5/7/10 yr at": "e6f87363-553b-4a28-ab9f-eb400b93e405",
+            "Household Liquor & Wine Preferences \u2014 NH Liquor Outlet Nashua (May 2026) ## Source NH Liquor & Wine Outlet, Store 50, Nashua NH. Receipt dated 5/26/2026 4:24 PM (cashier James). 14 bottles, ~": "adf1353c-74cb-4110-98c3-9f93df26c9dc",
+            "mind: earnings_report / earnings_surprise / company_guidance \u2014 three views built from headlines instead of buying $297/mo of Benzinga feeds": "92de9b9e-13a1-45a4-9f6e-5f84b400320c",
+            "finance session parked-state \u2014 2026-08-03 (index + live schedule + what's owed)": "a932bc0f-7198-4a6f-a4dd-6da6531ad21b",
+            "super-agent design constraint: never route time-critical phone alerts through the ATC broker (global 1/sec drain queue, priority does not jump it)": "3ca122ed-1b1d-46f4-8eed-58db18c9d49e",
+            "f7679e3e-2b9d-49bd-8ece-437711527f4c": "48ef05bd-aa5d-45df-afc7-c0d31cac130f",
+            "Claude Code memory/ corpus sharing \u2014 VERIFIED topology, the stat -Lc rule, and the delete-propagates hazard (2026-08-03)": "74aaa083-08e6-4a2e-8de1-8da442d0fcf7",
+            "compact-self skill: Door A (CronCreate + /compact) is measured shut \u2014 rewrite it": "af805fb5-efc1-46af-964e-46ba5c827baf",
+            "groton: \u26d4 WIDE ATC BROADCASTS REACH BEN AND LAURA'S SLACK DMs \u2014 near-miss 2026-08-03, plus Slack fold discipline": "87107396-e345-4790-a4e7-9da3fc69a3d5",
+            "43b9a160-f085-4d10-95c7-9b9c25269098": "9201c834-aec4-452b-835e-ddb49e19f69a",
+            "7268d248-ec1d-4dc2-9453-e9bb7ea9f498": "9201c834-aec4-452b-835e-ddb49e19f69a",
+            "Insurance seat \u2014 SCOPE BOUNDARY: do not raise infrastructure/NAS/permissions topics with Ben (2026-08-03)": "74d53171-b940-4ba6-9bbc-a88cf36aa83c",
+            "speckit-review: /api/state cold costs ~22s on a large repo \u2014 the stall is the trace, not the transport (2026-08-03)": "7adfd5b6-cbb4-4b60-9c5d-a23254c3ba87",
+            "shopping session parked-state + delivery ledger \u2014 OPEN: Laura chairs + blanket, Ben x2 numbered asks (v10, 2026-08-03, pre-cwd-migration)": "3fc09054-c527-4091-ac2b-1c01ff913ca2",
+            "Host-level DNS fault presents as \"that agent's service is down\" \u2014 libuv threadpool saturation (2026-08-03 server4 incident) r4 (2-min: load/procs/conntrack/mem + probes @1.1.1.1 direct, @127.0.0.53 ho": "bd58256c-9e36-459c-9e3f-2361b3eb9fb7",
+            "book-137-regime-v1 frozen sleeve weights \u2014 and why GLD arrives 1.32x larger than each equity name quity name.**  Assuming GLD comes in at the same 0.31728 as the others is WRONG and understates it by": "b2de1364-3b68-4ab3-a15d-bd7f201088ef",
+            "Alpha Vantage EARNINGS \u2014 three measured traps (fabricated surprise='0', 'None' string, shared 25/day key)": "915303e2-b7d0-456e-8fda-d2c2efe35d43",
+            "speckit: my fan-out contributed to the 2026-08-03 fleet quota halt \u2014 being right is not a licence to broadcast": "6bedf481-7559-42b3-b4ce-294ddf76ee05",
+            "Batching removes the moment where the check lives \u2014 plus 5 more from the 2026-08-09 refdata session": "1fd160a1-d84c-4fad-a6fd-2d8cb4917604",
+            "slapp: SPAN UI automation via adb + Android 14 MITM CA gotchas x new-session -d -s slapp_mitm \"mitmdump -p 8082 -w /tmp/slapp_flows.mitm\"` - Set emulator proxy: `adb shell settings put global http_pro": "2c97cd15-49be-4ef5-acf2-9adfadd799ec",
+            "fleet-crash-heal emits FALSE 'EXITED' under I/O stall \u2014 n=2, reproducible, and it satisfies a Ben-escalation criterion (2026-08-09)": "c81b2d33-11b4-4fc7-b377-019667a76fcc",
+            "\u26d4 HA ha_get_history is UNUSABLE as proof of absence \u2014 confirmed independently by two seats, both directions (2026-08-09)": "30284aaa-f589-41a3-bd3e-2f44f9b7be8d",
+            "Vacuity is not binary \u2014 a gate can be non-degenerate and still demand too little to matter (the min-floor / enforceable=True case)": "88e3ba47-97af-4fa6-a988-06cd87572a5d",
+            "HWM docket re-dated to a TRIGGER; and the mechanism: a correct attestation about the wrong question": "a9ab0f9d-bb3a-4413-9bb9-b7578a233cff",
+            "mind: the prefilter skips 37% of the real corpus but 0% of the eval set \u2014 the labelled set is unrepresentative on exactly that axis (2026-08-09)": "00cf9e56-9689-43b2-a604-9f7bc77da861",
+            "Walkway LED bench test \u2014 DONE 2026-05-09 (Elite has dead V+ output, hybrid wiring workaround in place) nch until RMA.  ## Hardware on the bench  - **Controller**: GLEDOPTO Elite 4-Channel ESP32 WLED,": "4856d195-0811-4673-aa1f-f604251adea8",
+            "BJ's-via-DoorDash trip 2026-07-30 $78.87 \u2014 DOUBLE-ORDER DAY (both in-store + delivery) carrots, cabbage, buffalo chicken, Wilde chips \u2014 all doubled  **Day total across both channels**: **$61.72 (in-st": "e9215dba-9a23-4631-a207-2953a80b3611",
+            "ATC delivery latency: the received_at occupancy trap, the global 1/sec delivery queue, and how a 15-seat investigation became its own load (2026-08-03)": "ee4f423a-c341-4d93-97f2-adb45f1ef8be",
+            "Laura BWH 403(b) excess contribution \u2014 decided to let it ride to let it ride rather than pursue the ROE. Reasoning: - $2,334 grows tax-deferred to ~$9,000 over 20 years at 7% - \"Double tax\" penalty =": "ef9ad9f7-d8f8-49fc-baa2-2c16d164e413",
+            "Invoice: Anthropic Claude Max plan x2 \u2014 $425.00 total (2026-06-07) d on 2026-06-07 (billing Jun 7\u2013Jul 7, 2026).  ## Receipt 1 \u2014 bsack@pushbuild.com receipt_number=2548-0829-9122 invoice=TBQRY5SZ-0002": "20bac0fd-c182-4044-8e56-de0e917e77f8",
+            "Travel: LAURA \u2014 Southwest MHT\u2194BWI (ATV8FS) \u2014 Bethesda, Jul 29\u201331 2026 ogan. ~45\u201355 min drive from 120 Reedy Meadow. - Rapid Rewards #: 20643181941 \u00b7 Ticket #: 5262174742255 - Fare: Choice \u00b7 Booked 06/": "50cfae75-148d-4f79-8b43-b75b1f5e5fe8",
+            "Amazon refund \u2014 SABRENT 4-Drive NVMe to PCIe 3.0 (order #114-0238200-7440244) ENT 4-Drive NVMe M.2 SSD to PCIe 3.0 adapter.  Order #: 114-0238200-7440244 Item: SABRENT 4-Drive NVMe M.2 SSD to PCIe 3.0": "48d419a3-ed9f-4e02-85c8-f933983f7c51",
+            "quantum-data 2026-08-08: the TAUTOLOGY ARC \u2014 5 measurements, 4 inferences, 2 escalations on a field neither seat defined. Plus AUDIT-vs-COMPLETE and the joint failure mode": "466d8a1c-1333-40db-8344-515b070f56f4",
+            "mind: bulk YouTube fetching must go through the VPN exits \u2014 a namespace, not a proxy, and why resync.sh structurally could not use it": "989909a9-e0d4-4925-a90c-036e34754b10",
+            "Garden Blueberry Rehab Plan [\u26a0\ufe0f RELOCATE DECISION ON HOLD 2026-08-04 \u2014 bushes stay in place another year]": "f3c87216-74cf-4ac7-96fb-3dc7c8f0d519",
+            "Coinbase account locked identity verification case funds BTC": "06ce8918-128f-4369-8ea6-bbdae02b5224",
+            "mind news_realtime store query surface intraday signal traps sentiment Benzinga": "27c52651-833a-457e-9f07-4e4a15855785",
+            "A plausible mechanism at the right magnitude TERMINATES THE SEARCH, and at small residuals magnitude agreement is nearly free \u2014 so the fit that persuades you is the one carrying least information": "a4f6d659-1ef6-4b3c-ac66-b38df60c8a51",
+            "Home Depot Orders \u2014 120 Reedy Meadow Exterior Project separate later order; see sliding-door memo) - Shutters (11 pairs): arriving April 13, 2026  ## Order #WK23951555 (May 4, 2026) **Total:**": "2f8be8ae-5f49-4cff-9b6d-7d680057d6cc",
+            "2025 Personal Tax Return \u2014 Ben & Laura Sack (Full Detail) xx-xx-9235  ---  ## AS-FILED FIGURES (TurboTax, April 14, 2026)  | Item | Amount | |---|---| | AGI | **$476,735** | | Total federal tax | **": "244b8e1b-8eae-4dfb-9251-f3e999624e13",
+            "Sunday step 2 LEAD ITEM: three orphaned DRIVER duties, and Principle IV held vacuously for seven days (quantum-feed, 2026-08-08)": "aa25ceb4-b901-4f7d-b905-4fa101015c9c",
+            "retraction: float() failing loudly was the right instrument \u2014 RETRACTED. guard on estimatedEPS never surprise. earnings build inherits this": "181224d8-d40b-4c1a-a2ff-b52f15395472",
+            "mind+finance portfolio round \u2014 paper-tracked trade list (2026-07-21) (1,054 sh) \u2014 de-concentration anchor, tax-free 2. \u00a7475 IVV\u2192RSP ~$62k (290 sh) 3. SPY put-spread hedge \u2014 Sep-18 695/650 (~$1,425, 59": "fb51a115-9ed2-482b-a7bf-f3bd91623308",
+            "`pgrep -x tmux` can never fire \u2014 tmux's comm is \"tmux: server\", and the false null was load-bearing on a fleet theory": "4c09329f-dbf5-4054-899b-f28f7c9b767d",
+            "9630 house \u2014 Junior (Flawless Construction) meeting 2026-06-05 \u2014 punch list & decisions painting completion (~7/12) - Final walkthrough (10%, $8,646) triggers after final punch-list - Total remaining": "a874c059-e568-4034-a78b-98a0395bfb01",
+            "Frigate footage loss 2026-08-09: I/O stall \u2192 TIMED-OUT WATCHDOG PROBE \u2192 restart loop. 155 missing minute-files + an uncounted 10th. FIX SHIPPED (f4d5811, on origin), owned by `ha`. UNKNOWN\u21d2DENY validated x27; the probe fix itself only x3; authoriser UNTESTED. Frigate now DISABLED, cameras down for DAYS.": "baee7fea-b0c8-4399-8583-aac48c764b26",
+            "QUEUED (design DONE, build NOT): unwired-tool scan \u2014 29 candidates classified, and the RESULT= heuristic is REFUTED (2026-08-08)": "31413b0a-285e-490f-ae6b-a9a67957e02b",
+            "alpaca trading \u2014 ROLLING ledger (successor to 181224d8, which is frozen) \u2014 day 1 outcomes 2026-08-06": "8bb7a071-dabe-4013-a648-f387735ce2f3",
+            "daily-health.sh false-FAILs for 4h nightly: UTC window vs ET trading day \u2014 and the fix is already written one instrument over (\u00a72d2)": "ea57c4fb-c5cd-4ec5-9f66-163656989822",
+            "server4 operational baseline 2026-08-09 evening \u2014 what is DOWN BY INTENT (seqr \u00d75) and must not be healed or treated as a signal": "9ddf801d-e70b-4712-a800-b3e2063ca4ee",
+            "genomics session topology open items bridge ownership Laura": "ef94185d-36d0-4789-babb-0fd4f4bbf0af",
+            "Pin hygiene: a pin is an instruction to a self who cannot check it (2026-08-04 findings)": "0f901f0c-b687-435c-b8f2-93c0fdcaa0c9",
+            "laurasack.com \u2014 private staging/preview environment (setup + promote/teardown) icly indexed/discoverable. - **Production (LIVE, unchanged):** https://laurasack.com \u2192 host nginx proxies to `laurasite-w": "8b10aa59-2409-4795-b195-279ded6afdc4",
+            "mind: the six-lane corpus, the KB UI, and EDGAR from 6,446 to 6.1M filings \u2014 2026-08-08 build log": "36e26a06-1be2-4dd1-8247-6becc54597af",
+            "RETRACTED DIAGNOSIS: historical-inventory.json's generator does NOT walk the pivot tree \u2014 the \"proven fix\" was already in the code since 2026-07-09, and its agreement with the incumbent is what I misread as validation. Real cause: a transient NFS stall.": "f5b41b09-01b0-4b4f-98f5-c3e7641ec4df",
+            "Silent-defect costumes from the quantum seats (2026-08-07) \u2014 partial cleanup, workaround-as-unfiled-bug, and the safety with no failure mode": "13af6f49-6e3b-4325-95a8-991bbbbcfcc3",
+            "SMS \u2014 Murilo Vieira: stone veneer up, \"enough for the whole foundation\" (2026-08-06)": "31374b56-2b1e-4563-aeea-4da5e088498e",
+            "Instrument method: what a derivation guards, and observation-timestamps measuring the observer (2026-08-03 fleet incident)": "4d875002-bb54-4f76-8b5f-52cb2a1dfd52",
+            "feedback-applovin-brief-cc-ben styled HTML CC ben weekly brief": "e0dc7587-46d9-4f75-a8da-84f86fd443e0",
+            "Assistant Comms Sweep \u2014 2026-08-04 15:53 ET (zero cycle) + Google MCP outage flagged": "6ff63dca-3806-4057-b4d9-627dbe6a5ffe",
+            "d2901063-6de4-4ba8-ae94-9b55356cf43c": "1d7be242-493e-4d7c-9dee-550e549bf482",
+            "\u26a0\ufe0f Chat cards need TWO halves \u2014 the rail AND the instruction to use it (Ben, 2026-08-07)": "017ec9c0-82c2-4252-80f7-88c07e01237c",
+            "alpaca \u2190 mind: intraday news surface (news_realtime) \u2014 queries, health invariants, and the sentiment trap": "27c52651-833a-457e-9f07-4e4a15855785",
+            "laura-work \u2014 ON-SPAWN checklist &amp; current session state": "c98f4783-08f9-429b-b38a-1fdf7b2f36da",
+            "Anti-pattern: the premise carries the load, the conclusion takes the scrutiny": "d929b8e2-c296-4de9-83c0-d9708b20ddb2",
+            "laura-work \u2014 ON-SPAWN checklist and current session state": "c98f4783-08f9-429b-b38a-1fdf7b2f36da",
+            "insurance master index all policies overview navigation": "b88db1bd-5e0a-4214-b210-e062cb94187b",
+            "server4 nightly/weekly maintenance windows \u2014 the Sunday 00:00-04:00 I/O collision (2026-08-09 load-141 incident)": "a67cd345-e0f5-4232-8827-003d47bf2e02",
+            "pool chemistry": "7d39dc3c-48b6-49b2-8dfb-584c7a7129ea",
+            "NAS IP assignment: VyOS DHCP reservation swap for X520 to get 192.168.1.207 nas: 192.168.1.207 \u2192 1c:86:0b:39:6e:5b (X520 eth4) \u2190 NEW - nas-eth0-1g: 192.168.0.183 \u2192 00:11:32:bd:cf:9f (eth0 onboard) \u2190 N": "40d8da0b-58bb-4269-b90f-eec0bf41fc61",
+            "22e067f3-ae52-4204-bed5-cadedefdc709": "ca1a3d2b-c07e-4bdf-9ad9-0947e4c6bd8d",
+            "Generac Mobile Link telemetry dead since 2026-05-11 \u2014 RESOLVED 08-03: generator fine, Wi-Fi module only. Plus: the Sol-Ark GEN input CANNOT verify a weekly exercise": "6a220caf-1bdb-4c52-a398-195dd5e2ecbf",
+            "SHARED corpus index (agents + scripts) \u2014 MEMORY.md at -mnt-nas-data-code-scripts, migrated 2026-08-03": "26958142-686e-4240-827a-d14e7925526f",
+            "cutover gate output provenance census field rename models seat method corpus": "e43f9ac1-fa4e-406d-af63-cd32a8fab04b",
+            "Email \u2014 Chris Hartson (Lamco): needs site visit before finalizing Carrier alt pricing (2026-07-02) ence: - 6/17: Chris's initial Bosch IDS Premium DF quote at $52,910 net. - 6/17: Ben's substantive co": "e4210ed1-e686-4ea7-8779-514e308fdb39",
+            "tmux-crash-watchdog needs BOTH flock and a throttle \u2014 instances pile up and drain as alert bursts (2026-08-09)": "2de1b121-11ee-4749-ae17-d50e971f2f49",
+            "healthcare providers doctors Ben Laura contacts": "9b80ed4f-83cb-4992-adbe-9fa74932b86f",
+            "2027 CORN PLAN \u2014 three staggered sets, 10-day gaps (agreed with Ben 2026-08-08)": "5491494c-eea8-4326-904b-6101f22a5fa9",
+            "agent seat roster domains: shopping groceries brooke electric health mom travel finance cars laura-health hvac insurance house taxes \u2014 what each agent owns": "b88db1bd-5e0a-4214-b210-e062cb94187b",
+            "host-account-swap 2026-08-07: v3 macro no longer fits in one call (88\u2192105\u2192125s callback, monotonic); both legs succeeded HAND-DRIVEN": "a15b0458-9717-4c4b-8986-63eeddc41ceb",
+            "Incident response consumes the resource it investigates \u2014 and a runway measured while idle is a fact about the idleness": "4a7bbd58-1bed-4d12-9eb6-e8b02afde2ec",
+            "Business & professional liability \u2014 Sack (Hartford CANCELLED Oct 2025, D&O undocumented) Ready\" \u2014 final premium audit on 46SBAZH0361 | | **2025-11-26** | Hartford Electronic Refund Notification (bill": "ce1abf0f-318a-461c-87e5-7c15cb225854",
+            "server4 IO bottleneck: `/` is ext4 on a ROTATIONAL PERC H310 volume and Docker's data root lives there \u2014 saturates at ~1-4 MB/s while the NVMe ZFS pools idle at 2-4%": "b46ab7ee-07a2-40d6-9d78-243478d14f03"
+          },
+          "control_ok": true,
+          "status": "ok"
+        },
+        "v1-search": {
+          "task": "query_replay",
+          "path": "v1-search",
+          "n": 120,
+          "requested": 120,
+          "failures": 0,
+          "returned_nothing": 0,
+          "returned_nothing_pct": 0.0,
+          "latency_p50_s": 0.724,
+          "latency_p95_s": 0.864,
+          "latency_max_s": 1.123,
+          "top1_by_query": {
+            "quantum-data: orphaned DRIVER daily-duty stamps under --mode=full \u2014 CORRECTED pairing (2026-08-08)": "2501c1af-4849-4a8a-8840-299fd50b8965",
+            "Sivan Sack phone number group text Mary Ann Dan family MMS": "64bd8b5d-b509-424d-bf2f-ca61862b48f9",
+            "Book 2 \"Thematic Sector Rotation\" \u2014 \u2705 EXECUTED 2026-07-23 09:41 EDT, $4,235 net debit (both spreads filled, under $4,350 cap). (Was APPROVED; now FILLED.) Paper, Sep-18-2026 expiry, \u00d75, proposed by `f": "b632b164-0435-44bd-b81f-388a49b8308c",
+            "HVAC reconciliation 2026-06-25 \u2014 post-blackout fold-in (Sol-Ark + 3 new quotes + GELD correction) 85) | | Nashoba 2026 (Lennox) [NEW] | $39,123 | 3T+2T / 19.0 / 10.0 | mixed 97%+80% | 2yr / 10yr | no": "ea5611a7-ab13-4b51-a6d8-30caaec4fdb0",
+            "Locality-ladder Phase 1 (2026-07-16): redis-payload mechanism, data-gravity 1.6\u00d7, ~3.5GB/seat, VIP pod-IP rule pod consumers only.** Instances: (1) redis-solo VIP 10.152.183.175 unreachable from s5 ho": "bb762ec1-7a0b-418f-9c58-f136dfb2597d",
+            "An absent value defaulting favourably in the TEMPORAL layer looks like alpha \u2014 published_at_precision, and three more of the same shape (2026-08-08)": "a4349ac3-bdf8-4670-9915-316cadebe290",
+            "SPAN install scheduled + panels sourced + Sol-Ark peak-shaving lesson (2026-06-11) \u2014 120 Reedy Meadow -06-11 via deep comparison sweep (shopping agent):** beats every online vendor on both SKUs. Cheap": "754f2b78-b7d8-4edc-ae3a-0a09bcc341c1",
+            "Assistant Inbox Sweep \u2014 2026-08-03 \u2014 PM": "6dab2671-11e9-41a2-8382-734390f2d89e",
+            "Insurance \u2014 Pet (Trupanion, Brooke)": "da463773-106a-4901-8f5b-890e496e058f",
+            "LED walkway outdoor install \u2014 12V PSU + WLED controller picks (2026-05-09) 2026-07-21. - **Channels**: HAS plenty \u2014 3\u00d7 hunhun 10-packs = 30\u00d7 6.6ft (2m) = 60m, incl milky covers + end caps + clips (ord": "07fcdc2b-69c2-4e02-bdcd-4599c3e69c6e",
+            "quantum-feed: #002 DATA COMPLETE \u2014 2,849-ticker universe backfilled to ~2009 (e10f283b) rror \u2192 Unclassified); (2) sane-cap-vs-continuity ordering \u2014 eps path now sane-checked AFTER basis resolution \u2192 G": "f5948cc1-4624-4da5-a661-6f61836d4315",
+            "b48a51cf-ca47-4ca9-9ea2-a709babe5955": "9201c834-aec4-452b-835e-ddb49e19f69a",
+            "basil peppers bed chlorothalonil not labeled don't relitigate garden low stakes": "8d6a59ce-bfab-4b6d-8895-ca0646c24dda",
+            "GELD utility profile + 2026 HVAC incentives reality (Sacks @ 120 Reedy Meadow) n IOU **Heating fuel:** **LPG (propane)** \u2014 not natural gas **Existing solar/battery:** Sol-Ark hybrid inverter installed": "4ece8c71-041b-415d-b78d-cc355f83fe5d",
+            "grant refused recent sign-in recency": "490b4f83-a351-43af-a666-ee06d2ac2ea2",
+            "HA/Jinja landmine: a template variable rendering to the string \"False\" is TRUTHY \u2014 {% if var %} takes the wrong branch and looks correct": "c0b75a7c-642f-4f09-9c18-7f23db686386",
+            "/mnt/nas/data/code/assistant project": "fe14411f-6e32-41a4-964d-5b7e276bc451",
+            "8ab89ca9-6c8b-41b3-a2fc-5af2395e888f": "1d7be242-493e-4d7c-9dee-550e549bf482",
+            "Smartwatch shortlist for Ben - Android + HA + comprehensive health metrics (2026-07-08) real-world - HA: via Samsung Health -> Health Connect (Android 14+) -> HA community integration (NOT first-party": "137269d4-f566-45d7-b2e6-07c684f793ed",
+            "Ben health records labs medical history": "10ee2111-e906-484d-8f2e-b80c84a02abf",
+            "0db146fc-c54f-49f4-9749-f85804e8ba78": "24ecbe4b-9df5-4bdf-b414-6923784ea2db",
+            "Garden sensor architecture \u2014 garden-check reads the GATEWAY directly, not HA; ecowitt=push vs rest=poll (2026-08-07 outage)": "68ac1a67-1a33-431c-9897-e8fe86c8b715",
+            "mind: gpt-oss:20b vs qwen2.5-coder:7b claim extraction \u2014 nominally better on both, statistically indistinguishable (n=11)": "5dc20d1c-5143-4fc6-bb07-f8359b7a77da",
+            "75bc2523-d833-4e29-89a2-93dc75e89eeb": "d6bd36f6-18a4-45ec-b571-b4c4c85ee495",
+            "Instrument validation: coverage vs semantics, correlated blindness as bias, and transition- vs state-emitted logs (server4 I/O night, 2026-08-03)": "e2bf6e9a-c7b4-4c07-934a-ca7033981613",
+            "mind 2026-08-09 root cause: a weekly ZFS backup did a FULL 13.2TB send, pinned ARC at 50GB from 02:00 \u2014 and I optimised around the anomaly instead of treating it as the finding": "d9aa7b51-41d4-432d-8ed1-ffafa986e62a",
+            "ATC broadcasts: wave delivery decouples send order from arrival order \u2014 a correction races its own original": "908c0a64-0a3b-4b3c-bfd1-0d6d8f7c1b4b",
+            "shopping agent groceries agent cars agent finance agent hvac agent house agent taxes agent travel agent scope role what it owns": "f4ff1d11-2cec-494a-93b2-6b695cae63e6",
+            "Frigate NVR Setup on Server4 t usable. Must use the USB version.  **Recommended purchase**: Google Coral USB Accelerator (Google model G950-01456-01) - **B07R53D12W** \u2014": "df08714a-f7d9-49d8-ac94-8534f5720ce5",
+            "house projects open walkway LED barn stain": "9268dde5-72a9-4168-899f-3683b6a55ca0",
+            "models seat (server4) \u2014 2026-08-08/09 method corpus + the cutover gate. Pointers, not paragraphs.": "e43f9ac1-fa4e-406d-af63-cd32a8fab04b",
+            "Margaret Dave Magill phone number contact": "c9f35d44-c626-4301-9d3d-b016e659e364",
+            "ca2125c5-660e-4fcf-bd95-6b791651fdc3": "1d7be242-493e-4d7c-9dee-550e549bf482",
+            "Camera outages 2026-08-02: three distinct causes, partitioned by DHCP reservation status rying the fix)** - `camera.gardenback_fluent` (192.168.0.196) \u2014 flapping: `unavailable` 13:49 while `idle` at 1": "88686057-bca9-46ee-859d-dd31a9cbfd23",
+            "HA media integrations \u2014 Kodi, Samsung TV, Fire Stick setup and dashboard ## Kodi instances - Bedroom:": "f5f79ef4-338e-4ac6-a9c8-cb2ea4b4fac0",
+            "b4170d4a-940c-4057-8e92-7c79bdf250aa": "9201c834-aec4-452b-835e-ddb49e19f69a",
+            "qwen3 regen COMPLETE (46/46 feature days) + body-chunk lane 0% ported \u2014 with nav's two corrections applied (2026-08-08)": "81e1ddec-2025-4a09-8450-8f5f0239917e",
+            "Power Outage 2026-05-27 \u2014 ATS Burned, Current Grid Status he Breen & Sullivan tech is on site. - **Generac Power Plan extended warranty** is unfilled / not enrolled (offer doc on file, 5/7/10 yr at": "e6f87363-553b-4a28-ab9f-eb400b93e405",
+            "Household Liquor & Wine Preferences \u2014 NH Liquor Outlet Nashua (May 2026) ## Source NH Liquor & Wine Outlet, Store 50, Nashua NH. Receipt dated 5/26/2026 4:24 PM (cashier James). 14 bottles, ~": "adf1353c-74cb-4110-98c3-9f93df26c9dc",
+            "mind: earnings_report / earnings_surprise / company_guidance \u2014 three views built from headlines instead of buying $297/mo of Benzinga feeds": "92de9b9e-13a1-45a4-9f6e-5f84b400320c",
+            "finance session parked-state \u2014 2026-08-03 (index + live schedule + what's owed)": "a932bc0f-7198-4a6f-a4dd-6da6531ad21b",
+            "super-agent design constraint: never route time-critical phone alerts through the ATC broker (global 1/sec drain queue, priority does not jump it)": "3ca122ed-1b1d-46f4-8eed-58db18c9d49e",
+            "f7679e3e-2b9d-49bd-8ece-437711527f4c": "48ef05bd-aa5d-45df-afc7-c0d31cac130f",
+            "Claude Code memory/ corpus sharing \u2014 VERIFIED topology, the stat -Lc rule, and the delete-propagates hazard (2026-08-03)": "74aaa083-08e6-4a2e-8de1-8da442d0fcf7",
+            "compact-self skill: Door A (CronCreate + /compact) is measured shut \u2014 rewrite it": "af805fb5-efc1-46af-964e-46ba5c827baf",
+            "groton: \u26d4 WIDE ATC BROADCASTS REACH BEN AND LAURA'S SLACK DMs \u2014 near-miss 2026-08-03, plus Slack fold discipline": "87107396-e345-4790-a4e7-9da3fc69a3d5",
+            "43b9a160-f085-4d10-95c7-9b9c25269098": "9201c834-aec4-452b-835e-ddb49e19f69a",
+            "7268d248-ec1d-4dc2-9453-e9bb7ea9f498": "9201c834-aec4-452b-835e-ddb49e19f69a",
+            "Insurance seat \u2014 SCOPE BOUNDARY: do not raise infrastructure/NAS/permissions topics with Ben (2026-08-03)": "74d53171-b940-4ba6-9bbc-a88cf36aa83c",
+            "speckit-review: /api/state cold costs ~22s on a large repo \u2014 the stall is the trace, not the transport (2026-08-03)": "7adfd5b6-cbb4-4b60-9c5d-a23254c3ba87",
+            "shopping session parked-state + delivery ledger \u2014 OPEN: Laura chairs + blanket, Ben x2 numbered asks (v10, 2026-08-03, pre-cwd-migration)": "3fc09054-c527-4091-ac2b-1c01ff913ca2",
+            "Host-level DNS fault presents as \"that agent's service is down\" \u2014 libuv threadpool saturation (2026-08-03 server4 incident) r4 (2-min: load/procs/conntrack/mem + probes @1.1.1.1 direct, @127.0.0.53 ho": "bd58256c-9e36-459c-9e3f-2361b3eb9fb7",
+            "book-137-regime-v1 frozen sleeve weights \u2014 and why GLD arrives 1.32x larger than each equity name quity name.**  Assuming GLD comes in at the same 0.31728 as the others is WRONG and understates it by": "b2de1364-3b68-4ab3-a15d-bd7f201088ef",
+            "Alpha Vantage EARNINGS \u2014 three measured traps (fabricated surprise='0', 'None' string, shared 25/day key)": "915303e2-b7d0-456e-8fda-d2c2efe35d43",
+            "speckit: my fan-out contributed to the 2026-08-03 fleet quota halt \u2014 being right is not a licence to broadcast": "6bedf481-7559-42b3-b4ce-294ddf76ee05",
+            "Batching removes the moment where the check lives \u2014 plus 5 more from the 2026-08-09 refdata session": "1fd160a1-d84c-4fad-a6fd-2d8cb4917604",
+            "slapp: SPAN UI automation via adb + Android 14 MITM CA gotchas x new-session -d -s slapp_mitm \"mitmdump -p 8082 -w /tmp/slapp_flows.mitm\"` - Set emulator proxy: `adb shell settings put global http_pro": "2c97cd15-49be-4ef5-acf2-9adfadd799ec",
+            "fleet-crash-heal emits FALSE 'EXITED' under I/O stall \u2014 n=2, reproducible, and it satisfies a Ben-escalation criterion (2026-08-09)": "c81b2d33-11b4-4fc7-b377-019667a76fcc",
+            "\u26d4 HA ha_get_history is UNUSABLE as proof of absence \u2014 confirmed independently by two seats, both directions (2026-08-09)": "30284aaa-f589-41a3-bd3e-2f44f9b7be8d",
+            "Vacuity is not binary \u2014 a gate can be non-degenerate and still demand too little to matter (the min-floor / enforceable=True case)": "88e3ba47-97af-4fa6-a988-06cd87572a5d",
+            "HWM docket re-dated to a TRIGGER; and the mechanism: a correct attestation about the wrong question": "a9ab0f9d-bb3a-4413-9bb9-b7578a233cff",
+            "mind: the prefilter skips 37% of the real corpus but 0% of the eval set \u2014 the labelled set is unrepresentative on exactly that axis (2026-08-09)": "00cf9e56-9689-43b2-a604-9f7bc77da861",
+            "Walkway LED bench test \u2014 DONE 2026-05-09 (Elite has dead V+ output, hybrid wiring workaround in place) nch until RMA.  ## Hardware on the bench  - **Controller**: GLEDOPTO Elite 4-Channel ESP32 WLED,": "4856d195-0811-4673-aa1f-f604251adea8",
+            "BJ's-via-DoorDash trip 2026-07-30 $78.87 \u2014 DOUBLE-ORDER DAY (both in-store + delivery) carrots, cabbage, buffalo chicken, Wilde chips \u2014 all doubled  **Day total across both channels**: **$61.72 (in-st": "e9215dba-9a23-4631-a207-2953a80b3611",
+            "ATC delivery latency: the received_at occupancy trap, the global 1/sec delivery queue, and how a 15-seat investigation became its own load (2026-08-03)": "ee4f423a-c341-4d93-97f2-adb45f1ef8be",
+            "Laura BWH 403(b) excess contribution \u2014 decided to let it ride to let it ride rather than pursue the ROE. Reasoning: - $2,334 grows tax-deferred to ~$9,000 over 20 years at 7% - \"Double tax\" penalty =": "ef9ad9f7-d8f8-49fc-baa2-2c16d164e413",
+            "Invoice: Anthropic Claude Max plan x2 \u2014 $425.00 total (2026-06-07) d on 2026-06-07 (billing Jun 7\u2013Jul 7, 2026).  ## Receipt 1 \u2014 bsack@pushbuild.com receipt_number=2548-0829-9122 invoice=TBQRY5SZ-0002": "20bac0fd-c182-4044-8e56-de0e917e77f8",
+            "Travel: LAURA \u2014 Southwest MHT\u2194BWI (ATV8FS) \u2014 Bethesda, Jul 29\u201331 2026 ogan. ~45\u201355 min drive from 120 Reedy Meadow. - Rapid Rewards #: 20643181941 \u00b7 Ticket #: 5262174742255 - Fare: Choice \u00b7 Booked 06/": "50cfae75-148d-4f79-8b43-b75b1f5e5fe8",
+            "Amazon refund \u2014 SABRENT 4-Drive NVMe to PCIe 3.0 (order #114-0238200-7440244) ENT 4-Drive NVMe M.2 SSD to PCIe 3.0 adapter.  Order #: 114-0238200-7440244 Item: SABRENT 4-Drive NVMe M.2 SSD to PCIe 3.0": "48d419a3-ed9f-4e02-85c8-f933983f7c51",
+            "quantum-data 2026-08-08: the TAUTOLOGY ARC \u2014 5 measurements, 4 inferences, 2 escalations on a field neither seat defined. Plus AUDIT-vs-COMPLETE and the joint failure mode": "466d8a1c-1333-40db-8344-515b070f56f4",
+            "mind: bulk YouTube fetching must go through the VPN exits \u2014 a namespace, not a proxy, and why resync.sh structurally could not use it": "989909a9-e0d4-4925-a90c-036e34754b10",
+            "Garden Blueberry Rehab Plan [\u26a0\ufe0f RELOCATE DECISION ON HOLD 2026-08-04 \u2014 bushes stay in place another year]": "f3c87216-74cf-4ac7-96fb-3dc7c8f0d519",
+            "Coinbase account locked identity verification case funds BTC": "06ce8918-128f-4369-8ea6-bbdae02b5224",
+            "mind news_realtime store query surface intraday signal traps sentiment Benzinga": "27c52651-833a-457e-9f07-4e4a15855785",
+            "A plausible mechanism at the right magnitude TERMINATES THE SEARCH, and at small residuals magnitude agreement is nearly free \u2014 so the fit that persuades you is the one carrying least information": "a4f6d659-1ef6-4b3c-ac66-b38df60c8a51",
+            "Home Depot Orders \u2014 120 Reedy Meadow Exterior Project separate later order; see sliding-door memo) - Shutters (11 pairs): arriving April 13, 2026  ## Order #WK23951555 (May 4, 2026) **Total:**": "2f8be8ae-5f49-4cff-9b6d-7d680057d6cc",
+            "2025 Personal Tax Return \u2014 Ben & Laura Sack (Full Detail) xx-xx-9235  ---  ## AS-FILED FIGURES (TurboTax, April 14, 2026)  | Item | Amount | |---|---| | AGI | **$476,735** | | Total federal tax | **": "244b8e1b-8eae-4dfb-9251-f3e999624e13",
+            "Sunday step 2 LEAD ITEM: three orphaned DRIVER duties, and Principle IV held vacuously for seven days (quantum-feed, 2026-08-08)": "aa25ceb4-b901-4f7d-b905-4fa101015c9c",
+            "retraction: float() failing loudly was the right instrument \u2014 RETRACTED. guard on estimatedEPS never surprise. earnings build inherits this": "181224d8-d40b-4c1a-a2ff-b52f15395472",
+            "mind+finance portfolio round \u2014 paper-tracked trade list (2026-07-21) (1,054 sh) \u2014 de-concentration anchor, tax-free 2. \u00a7475 IVV\u2192RSP ~$62k (290 sh) 3. SPY put-spread hedge \u2014 Sep-18 695/650 (~$1,425, 59": "fb51a115-9ed2-482b-a7bf-f3bd91623308",
+            "`pgrep -x tmux` can never fire \u2014 tmux's comm is \"tmux: server\", and the false null was load-bearing on a fleet theory": "4c09329f-dbf5-4054-899b-f28f7c9b767d",
+            "9630 house \u2014 Junior (Flawless Construction) meeting 2026-06-05 \u2014 punch list & decisions painting completion (~7/12) - Final walkthrough (10%, $8,646) triggers after final punch-list - Total remaining": "a874c059-e568-4034-a78b-98a0395bfb01",
+            "Frigate footage loss 2026-08-09: I/O stall \u2192 TIMED-OUT WATCHDOG PROBE \u2192 restart loop. 155 missing minute-files + an uncounted 10th. FIX SHIPPED (f4d5811, on origin), owned by `ha`. UNKNOWN\u21d2DENY validated x27; the probe fix itself only x3; authoriser UNTESTED. Frigate now DISABLED, cameras down for DAYS.": "baee7fea-b0c8-4399-8583-aac48c764b26",
+            "QUEUED (design DONE, build NOT): unwired-tool scan \u2014 29 candidates classified, and the RESULT= heuristic is REFUTED (2026-08-08)": "31413b0a-285e-490f-ae6b-a9a67957e02b",
+            "alpaca trading \u2014 ROLLING ledger (successor to 181224d8, which is frozen) \u2014 day 1 outcomes 2026-08-06": "8bb7a071-dabe-4013-a648-f387735ce2f3",
+            "daily-health.sh false-FAILs for 4h nightly: UTC window vs ET trading day \u2014 and the fix is already written one instrument over (\u00a72d2)": "ea57c4fb-c5cd-4ec5-9f66-163656989822",
+            "server4 operational baseline 2026-08-09 evening \u2014 what is DOWN BY INTENT (seqr \u00d75) and must not be healed or treated as a signal": "9ddf801d-e70b-4712-a800-b3e2063ca4ee",
+            "genomics session topology open items bridge ownership Laura": "ef94185d-36d0-4789-babb-0fd4f4bbf0af",
+            "Pin hygiene: a pin is an instruction to a self who cannot check it (2026-08-04 findings)": "0f901f0c-b687-435c-b8f2-93c0fdcaa0c9",
+            "laurasack.com \u2014 private staging/preview environment (setup + promote/teardown) icly indexed/discoverable. - **Production (LIVE, unchanged):** https://laurasack.com \u2192 host nginx proxies to `laurasite-w": "8b10aa59-2409-4795-b195-279ded6afdc4",
+            "mind: the six-lane corpus, the KB UI, and EDGAR from 6,446 to 6.1M filings \u2014 2026-08-08 build log": "36e26a06-1be2-4dd1-8247-6becc54597af",
+            "RETRACTED DIAGNOSIS: historical-inventory.json's generator does NOT walk the pivot tree \u2014 the \"proven fix\" was already in the code since 2026-07-09, and its agreement with the incumbent is what I misread as validation. Real cause: a transient NFS stall.": "f5b41b09-01b0-4b4f-98f5-c3e7641ec4df",
+            "Silent-defect costumes from the quantum seats (2026-08-07) \u2014 partial cleanup, workaround-as-unfiled-bug, and the safety with no failure mode": "13af6f49-6e3b-4325-95a8-991bbbbcfcc3",
+            "SMS \u2014 Murilo Vieira: stone veneer up, \"enough for the whole foundation\" (2026-08-06)": "31374b56-2b1e-4563-aeea-4da5e088498e",
+            "Instrument method: what a derivation guards, and observation-timestamps measuring the observer (2026-08-03 fleet incident)": "4d875002-bb54-4f76-8b5f-52cb2a1dfd52",
+            "feedback-applovin-brief-cc-ben styled HTML CC ben weekly brief": "e0dc7587-46d9-4f75-a8da-84f86fd443e0",
+            "Assistant Comms Sweep \u2014 2026-08-04 15:53 ET (zero cycle) + Google MCP outage flagged": "6ff63dca-3806-4057-b4d9-627dbe6a5ffe",
+            "d2901063-6de4-4ba8-ae94-9b55356cf43c": "1d7be242-493e-4d7c-9dee-550e549bf482",
+            "\u26a0\ufe0f Chat cards need TWO halves \u2014 the rail AND the instruction to use it (Ben, 2026-08-07)": "017ec9c0-82c2-4252-80f7-88c07e01237c",
+            "alpaca \u2190 mind: intraday news surface (news_realtime) \u2014 queries, health invariants, and the sentiment trap": "27c52651-833a-457e-9f07-4e4a15855785",
+            "laura-work \u2014 ON-SPAWN checklist &amp; current session state": "c98f4783-08f9-429b-b38a-1fdf7b2f36da",
+            "Anti-pattern: the premise carries the load, the conclusion takes the scrutiny": "d929b8e2-c296-4de9-83c0-d9708b20ddb2",
+            "laura-work \u2014 ON-SPAWN checklist and current session state": "c98f4783-08f9-429b-b38a-1fdf7b2f36da",
+            "insurance master index all policies overview navigation": "b88db1bd-5e0a-4214-b210-e062cb94187b",
+            "server4 nightly/weekly maintenance windows \u2014 the Sunday 00:00-04:00 I/O collision (2026-08-09 load-141 incident)": "a67cd345-e0f5-4232-8827-003d47bf2e02",
+            "pool chemistry": "7d39dc3c-48b6-49b2-8dfb-584c7a7129ea",
+            "NAS IP assignment: VyOS DHCP reservation swap for X520 to get 192.168.1.207 nas: 192.168.1.207 \u2192 1c:86:0b:39:6e:5b (X520 eth4) \u2190 NEW - nas-eth0-1g: 192.168.0.183 \u2192 00:11:32:bd:cf:9f (eth0 onboard) \u2190 N": "40d8da0b-58bb-4269-b90f-eec0bf41fc61",
+            "22e067f3-ae52-4204-bed5-cadedefdc709": "ca1a3d2b-c07e-4bdf-9ad9-0947e4c6bd8d",
+            "Generac Mobile Link telemetry dead since 2026-05-11 \u2014 RESOLVED 08-03: generator fine, Wi-Fi module only. Plus: the Sol-Ark GEN input CANNOT verify a weekly exercise": "6a220caf-1bdb-4c52-a398-195dd5e2ecbf",
+            "SHARED corpus index (agents + scripts) \u2014 MEMORY.md at -mnt-nas-data-code-scripts, migrated 2026-08-03": "26958142-686e-4240-827a-d14e7925526f",
+            "cutover gate output provenance census field rename models seat method corpus": "e43f9ac1-fa4e-406d-af63-cd32a8fab04b",
+            "Email \u2014 Chris Hartson (Lamco): needs site visit before finalizing Carrier alt pricing (2026-07-02) ence: - 6/17: Chris's initial Bosch IDS Premium DF quote at $52,910 net. - 6/17: Ben's substantive co": "e4210ed1-e686-4ea7-8779-514e308fdb39",
+            "tmux-crash-watchdog needs BOTH flock and a throttle \u2014 instances pile up and drain as alert bursts (2026-08-09)": "2de1b121-11ee-4749-ae17-d50e971f2f49",
+            "healthcare providers doctors Ben Laura contacts": "9b80ed4f-83cb-4992-adbe-9fa74932b86f",
+            "2027 CORN PLAN \u2014 three staggered sets, 10-day gaps (agreed with Ben 2026-08-08)": "5491494c-eea8-4326-904b-6101f22a5fa9",
+            "agent seat roster domains: shopping groceries brooke electric health mom travel finance cars laura-health hvac insurance house taxes \u2014 what each agent owns": "b88db1bd-5e0a-4214-b210-e062cb94187b",
+            "host-account-swap 2026-08-07: v3 macro no longer fits in one call (88\u2192105\u2192125s callback, monotonic); both legs succeeded HAND-DRIVEN": "a15b0458-9717-4c4b-8986-63eeddc41ceb",
+            "Incident response consumes the resource it investigates \u2014 and a runway measured while idle is a fact about the idleness": "4a7bbd58-1bed-4d12-9eb6-e8b02afde2ec",
+            "Business & professional liability \u2014 Sack (Hartford CANCELLED Oct 2025, D&O undocumented) Ready\" \u2014 final premium audit on 46SBAZH0361 | | **2025-11-26** | Hartford Electronic Refund Notification (bill": "ce1abf0f-318a-461c-87e5-7c15cb225854",
+            "server4 IO bottleneck: `/` is ext4 on a ROTATIONAL PERC H310 volume and Docker's data root lives there \u2014 saturates at ~1-4 MB/s while the NVMe ZFS pools idle at 2-4%": "b46ab7ee-07a2-40d6-9d78-243478d14f03"
+          },
+          "control_ok": true,
+          "status": "ok"
+        },
+        "elapsed_s": 230.2,
+        "host_env": {
+          "load1": 8.54,
+          "load5": 8.94,
+          "load15": 8.66,
+          "io_some_avg60": 5.97,
+          "io_full_avg60": 5.12,
+          "error": null
+        }
+      },
+      "set_stability": {
+        "task": "set_stability",
+        "path": "document",
+        "n_requested": 25,
+        "n_ran": 25,
+        "replicates": 3,
+        "rank1_varied": 0,
+        "id_list_varied": 1,
+        "control_ok": true,
+        "status": "ok",
+        "elapsed_s": 31.3,
+        "host_env": {
+          "load1": 8.36,
+          "load5": 8.89,
+          "load15": 8.66,
+          "io_some_avg60": 5.17,
+          "io_full_avg60": 4.43,
+          "error": null
+        }
+      },
+      "api_surface": {
+        "task": "api_surface",
+        "routes": [
+          "/admin/access-stats",
+          "/admin/leak-incidents",
+          "/admin/passage-indexed-ids",
+          "/admin/recount-tokens",
+          "/answer-loop-audit",
+          "/auditor/actions",
+          "/auditor/sweep",
+          "/auto-store",
+          "/constitution/proposals",
+          "/constitution/propose",
+          "/constitution/resolve",
+          "/context",
+          "/documents",
+          "/documents/{doc_id}",
+          "/documents/{doc_id}/as-of",
+          "/documents/{doc_id}/copy",
+          "/documents/{doc_id}/current",
+          "/documents/{doc_id}/move",
+          "/events",
+          "/health",
+          "/hooks/instructions-loaded",
+          "/hooks/post-compact",
+          "/hooks/pre-compact",
+          "/hooks/session-end",
+          "/hooks/session-start",
+          "/hooks/session-stop",
+          "/index",
+          "/injection-log",
+          "/injection-set",
+          "/log-query",
+          "/providers",
+          "/ready",
+          "/recall",
+          "/reconcile/infra-change",
+          "/search",
+          "/search-documents",
+          "/search-passages",
+          "/store",
+          "/supersede"
+        ],
+        "search_shape": {
+          "document": {
+            "container": "list",
+            "row_keys": [
+              "document",
+              "score"
+            ],
+            "doc_keys": [
+              "content",
+              "created_at",
+              "id",
+              "metadata",
+              "tags",
+              "title",
+              "token_count",
+              "updated_at"
+            ]
+          },
+          "passages": {
+            "container": "list",
+            "row_keys": [
+              "document",
+              "passage",
+              "score"
+            ],
+            "doc_keys": [
+              "class",
+              "constitution_meta",
+              "content",
+              "created_at",
+              "derived_from",
+              "expires_at",
+              "id",
+              "injection_mode",
+              "metadata",
+              "provenance",
+              "reopenability",
+              "scope",
+              "tags",
+              "time_scope",
+              "title",
+              "token_count",
+              "updated_at",
+              "valid_from",
+              "valid_until"
+            ]
+          },
+          "v1-search": {
+            "container": "list",
+            "row_keys": [
+              "document",
+              "score"
+            ],
+            "doc_keys": [
+              "content",
+              "created_at",
+              "id",
+              "metadata",
+              "tags",
+              "title",
+              "token_count",
+              "updated_at"
+            ]
+          }
+        },
+        "control_ok": true,
+        "status": "ok",
+        "elapsed_s": 2.0,
+        "host_env": {
+          "load1": 8.09,
+          "load5": 8.82,
+          "load15": 8.64,
+          "io_some_avg60": 5.1,
+          "io_full_avg60": 4.39,
+          "error": null
+        }
+      }
+    }
+  },
+  "display_names": {
+    "v1": "v1",
+    "v2": "v2"
+  },
+  "probe_timeout_s": 30.0,
+  "common_denominator": {
+    "n": 227,
+    "per_target_gradeable": {
+      "v1": 229,
+      "v2": 228
+    },
+    "dropped_to_align": {
+      "v1": 2,
+      "v2": 1
+    }
+  },
+  "replay": {
+    "requested": 120,
+    "loaded": 120,
+    "from_container": "memo"
+  },
+  "replicates": 2,
+  "host_env_start": {
+    "load1": 6.75,
+    "load5": 6.92,
+    "load15": 7.39,
+    "io_some_avg60": 6.42,
+    "io_full_avg60": 5.65,
+    "error": null
+  },
+  "host_env_end": {
+    "load1": 8.09,
+    "load5": 8.82,
+    "load15": 8.64,
+    "io_some_avg60": 5.1,
+    "io_full_avg60": 4.39,
+    "error": null
+  }
+}

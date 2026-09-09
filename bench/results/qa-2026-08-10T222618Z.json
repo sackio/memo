@@ -1,0 +1,2719 @@
+{
+  "schema": 2,
+  "run_id": "2026-08-10T222618Z",
+  "label": "qwen3-2560 LAN rebuild (v2, main) vs v1 3-small/1536 \u2014 post re-embed + full passage index",
+  "git": {
+    "sha": "17830e7",
+    "dirty": true
+  },
+  "seed": 7,
+  "per_band": 60,
+  "sample": {
+    "id": "s-2026-08-03T184827Z",
+    "path": "/mnt/nas/data/code/memo/bench/samples/default.json",
+    "minted_from": {
+      "url": "http://server4:8000",
+      "corpus_n": 7937
+    }
+  },
+  "targets": [
+    {
+      "name": "v1",
+      "url": "http://server4:8000",
+      "container": "memo",
+      "reachable": true,
+      "resolved": {
+        "model": "openai/text-embedding-3-small",
+        "dims": 1536,
+        "url": null,
+        "retrieval_path": null
+      },
+      "search_paths": {
+        "document": "http 404",
+        "passages": "http 404",
+        "v1-search": "present"
+      },
+      "display_name": "v1",
+      "corpus": {
+        "n": 9229,
+        "ge_1000": 2573,
+        "ge_2000": 665
+      }
+    },
+    {
+      "name": "v2",
+      "url": "http://localhost:8091",
+      "container": "memo-v2",
+      "reachable": true,
+      "resolved": {
+        "model": "qwen3-embedding-4b",
+        "dims": 2560,
+        "url": "http://192.168.1.5:31536/v1",
+        "retrieval_path": "passages"
+      },
+      "search_paths": {
+        "document": "present",
+        "passages": "present",
+        "v1-search": "present"
+      },
+      "display_name": "v2",
+      "corpus": {
+        "n": 9079,
+        "ge_1000": 2564,
+        "ge_2000": 659
+      }
+    }
+  ],
+  "results": {
+    "v1": {
+      "primary_path": "v1-search",
+      "paths_present": [
+        "v1-search"
+      ],
+      "own_title": {
+        "v1-search": {
+          "task": "own_title",
+          "path": "v1-search",
+          "seed": 7,
+          "per_band": 60,
+          "pinned_sample": "s-2026-08-03T184827Z",
+          "bands": [
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 45,
+              "top5": 59,
+              "absent": 0,
+              "failures": 0,
+              "p50_ms": 489.2,
+              "p90_ms": 648.9,
+              "band": "0-200",
+              "pool": 1294
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 41,
+              "top5": 55,
+              "absent": 3,
+              "failures": 0,
+              "p50_ms": 441.3,
+              "p90_ms": 567.0,
+              "band": "200-500",
+              "pool": 2541
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 38,
+              "top5": 45,
+              "absent": 10,
+              "failures": 0,
+              "p50_ms": 433.0,
+              "p90_ms": 525.6,
+              "band": "500-1000",
+              "pool": 2140
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 23,
+              "top5": 34,
+              "absent": 22,
+              "failures": 0,
+              "p50_ms": 429.5,
+              "p90_ms": 537.3,
+              "band": "1000-2000",
+              "pool": 1455
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 9,
+              "top5": 24,
+              "absent": 32,
+              "failures": 0,
+              "p50_ms": 443.3,
+              "p90_ms": 579.8,
+              "band": "2000-",
+              "pool": 392
+            }
+          ],
+          "total_n": 300,
+          "total_pinned": 300,
+          "total_missing": 0,
+          "total_rank1": 156,
+          "unweighted_rank1_pct": 52.0,
+          "total_failures": 0,
+          "control_ok": true,
+          "status": "ok"
+        },
+        "elapsed_s": 281.8,
+        "host_env": {
+          "load1": 9.03,
+          "load5": 8.9,
+          "load15": 7.89,
+          "io_some_avg60": 7.87,
+          "io_full_avg60": 6.57,
+          "error": null
+        },
+        "replicates": 2,
+        "observed_spread": {
+          "v1-search": {
+            "unweighted_rank1_pct": {
+              "min": 52.0,
+              "max": 52.0,
+              "range_pt": 0.0
+            }
+          }
+        }
+      },
+      "content_query": {
+        "v1-search": {
+          "task": "content_query",
+          "path": "v1-search",
+          "seed": 7,
+          "per_band": 60,
+          "pinned_sample": "s-2026-08-03T184827Z",
+          "bands": [
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 53,
+              "top5": 57,
+              "absent": 3,
+              "failures": 0,
+              "band": "0-200",
+              "pool": 494
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 40,
+              "top5": 49,
+              "absent": 10,
+              "failures": 0,
+              "band": "200-500",
+              "pool": 1602
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 29,
+              "top5": 39,
+              "absent": 15,
+              "failures": 0,
+              "band": "500-1000",
+              "pool": 1885
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 5,
+              "top5": 18,
+              "absent": 38,
+              "failures": 0,
+              "band": "1000-2000",
+              "pool": 1437
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 3,
+              "top5": 15,
+              "absent": 36,
+              "failures": 0,
+              "band": "2000-",
+              "pool": 369
+            }
+          ],
+          "total_n": 300,
+          "total_pinned": 300,
+          "total_missing": 0,
+          "total_rank1": 130,
+          "unweighted_rank1_pct": 43.33,
+          "total_failures": 0,
+          "control_ok": true,
+          "status": "ok"
+        },
+        "elapsed_s": 291.6,
+        "host_env": {
+          "load1": 15.44,
+          "load5": 11.69,
+          "load15": 9.23,
+          "io_some_avg60": 8.75,
+          "io_full_avg60": 6.83,
+          "error": null
+        },
+        "replicates": 2,
+        "observed_spread": {
+          "v1-search": {
+            "unweighted_rank1_pct": {
+              "min": 43.33,
+              "max": 43.33,
+              "range_pt": 0.0
+            }
+          }
+        }
+      },
+      "answer_recall": {
+        "v1-search": {
+          "task": "answer_recall",
+          "path": "v1-search",
+          "seed": 7,
+          "per_band": 60,
+          "pinned_sample": "s-2026-08-03T184827Z",
+          "bands": [
+            {
+              "n": 16,
+              "pinned": 17,
+              "missing": 0,
+              "ambiguous": 1,
+              "failures": 0,
+              "off_common": 0,
+              "right_doc_top1": 14,
+              "answer_in_top1": 15,
+              "answer_in_topk": 16,
+              "answer_in_topk_fulldoc": 16,
+              "band": "0-200",
+              "pool": 17
+            },
+            {
+              "n": 53,
+              "pinned": 59,
+              "missing": 0,
+              "ambiguous": 6,
+              "failures": 0,
+              "off_common": 0,
+              "right_doc_top1": 46,
+              "answer_in_top1": 46,
+              "answer_in_topk": 52,
+              "answer_in_topk_fulldoc": 52,
+              "band": "200-500",
+              "pool": 68
+            },
+            {
+              "n": 55,
+              "pinned": 60,
+              "missing": 0,
+              "ambiguous": 5,
+              "failures": 1,
+              "off_common": 0,
+              "right_doc_top1": 43,
+              "answer_in_top1": 43,
+              "answer_in_topk": 54,
+              "answer_in_topk_fulldoc": 54,
+              "band": "500-1000",
+              "pool": 101
+            },
+            {
+              "n": 52,
+              "pinned": 60,
+              "missing": 0,
+              "ambiguous": 8,
+              "failures": 0,
+              "off_common": 0,
+              "right_doc_top1": 32,
+              "answer_in_top1": 32,
+              "answer_in_topk": 51,
+              "answer_in_topk_fulldoc": 51,
+              "band": "1000-2000",
+              "pool": 109
+            },
+            {
+              "n": 52,
+              "pinned": 60,
+              "missing": 0,
+              "ambiguous": 8,
+              "failures": 0,
+              "off_common": 0,
+              "right_doc_top1": 19,
+              "answer_in_top1": 20,
+              "answer_in_topk": 47,
+              "answer_in_topk_fulldoc": 47,
+              "band": "2000-",
+              "pool": 67
+            }
+          ],
+          "total_n": 228,
+          "total_pinned": 256,
+          "total_missing": 0,
+          "total_ambiguous": 28,
+          "total_off_common": 0,
+          "common_denominator": true,
+          "total_failures": 1,
+          "right_doc_top1_pct": 70.11,
+          "answer_in_top1_pct": 71.74,
+          "answer_in_topk_pct": 96.95,
+          "answer_in_topk_fulldoc_pct": 96.95,
+          "span_cost_pt": 0.0,
+          "control_ok": true,
+          "status": "ok"
+        },
+        "elapsed_s": 290.5,
+        "host_env": {
+          "load1": 14.26,
+          "load5": 12.28,
+          "load15": 10.06,
+          "io_some_avg60": 9.91,
+          "io_full_avg60": 8.38,
+          "error": null
+        },
+        "replicates": 2,
+        "observed_spread": {
+          "v1-search": {
+            "answer_in_top1_pct": {
+              "min": 71.74,
+              "max": 72.47,
+              "range_pt": 0.73
+            },
+            "answer_in_topk_fulldoc_pct": {
+              "min": 96.95,
+              "max": 97.31,
+              "range_pt": 0.36
+            },
+            "answer_in_topk_pct": {
+              "min": 96.95,
+              "max": 97.31,
+              "range_pt": 0.36
+            },
+            "right_doc_top1_pct": {
+              "min": 70.11,
+              "max": 70.84,
+              "range_pt": 0.73
+            }
+          }
+        }
+      },
+      "context_fit": {
+        "task": "context_fit",
+        "token_budget": 4000,
+        "pinned_sample": "s-2026-08-03T184827Z",
+        "total_n": 228,
+        "total_missing": 0,
+        "total_ambiguous": 28,
+        "total_failures": 0,
+        "answer_in_context_pct": 83.77,
+        "tokens_per_answer_delivered": 4365.9,
+        "context_tokens_mean": 3657.37,
+        "context_docs_mean": 5.87,
+        "matched_count_mean": 9.96,
+        "truncated_pct": 91.23,
+        "server_duplicates_dropped_mean": null,
+        "budget_used_pct": 91.4,
+        "control_ok": true,
+        "status": "ok",
+        "elapsed_s": 120.3,
+        "host_env": {
+          "load1": 11.86,
+          "load5": 11.88,
+          "load15": 10.17,
+          "io_some_avg60": 6.95,
+          "io_full_avg60": 5.8,
+          "error": null
+        }
+      },
+      "supersession": {
+        "v1-search": {
+          "task": "supersession",
+          "path": "v1-search",
+          "edges": 29,
+          "n_ran": 29,
+          "failures": 0,
+          "replacement_at_1_pct": 24.14,
+          "replacement_in_top5_pct": 55.17,
+          "neither_returned_pct": 24.14,
+          "superseded_still_returned": 21,
+          "control_ok": false,
+          "status": "ok",
+          "why": "superseded memos are STILL being returned \u2014 FR-115 is not filtering, so the rest of this row is meaningless"
+        },
+        "elapsed_s": 27.1,
+        "host_env": {
+          "load1": 10.4,
+          "load5": 11.55,
+          "load15": 10.11,
+          "io_some_avg60": 6.3,
+          "io_full_avg60": 5.39,
+          "error": null
+        },
+        "replicates": 2,
+        "observed_spread": {
+          "v1-search": {
+            "neither_returned_pct": {
+              "min": 24.14,
+              "max": 24.14,
+              "range_pt": 0.0
+            },
+            "replacement_at_1_pct": {
+              "min": 24.14,
+              "max": 24.14,
+              "range_pt": 0.0
+            },
+            "replacement_in_top5_pct": {
+              "min": 55.17,
+              "max": 55.17,
+              "range_pt": 0.0
+            }
+          }
+        }
+      },
+      "hard_negatives": {
+        "v1-search": {
+          "task": "hard_negatives",
+          "path": "v1-search",
+          "n": 228,
+          "failures": 0,
+          "target_rank1_pct": 67.98,
+          "target_absent_from_topk": 7,
+          "confusable_above_target_pct": 25.44,
+          "confusable_present_pct": 95.18,
+          "examples": [
+            {
+              "query": "Invoice: Anthropic Claude Max plan x2 \u2014 $425.00 total (2026-06-07) d on 2026-06-07 (billing Jun 7\u2013Jul 7, 2026)",
+              "right": "$212.50",
+              "wrong_ranked_higher": "$425"
+            },
+            {
+              "query": "Airbnb Trip: Nashua NH -- Jun 22-24 2026 *: HMREDJ4MZA  **Check-in**: Monday Jun 22 after 2:00 PM **Check-out*",
+              "right": "$495",
+              "wrong_ranked_higher": "$200.00"
+            },
+            {
+              "query": "Garden Squirrel Exclusion \u2014 Twinwall Polycarbonate Barrier Project urement status (as of 6/25/2026): - Amazon ",
+              "right": "$210.41",
+              "wrong_ranked_higher": "$108.45"
+            },
+            {
+              "query": "Ben vehicle fleet \u2014 current and historical nder - Registration: renewed Dec 2025 ($60 fee); next renewal ~late",
+              "right": "$2,629,",
+              "wrong_ranked_higher": "$1,000"
+            },
+            {
+              "query": "worker4 \u2014 OS_NO_SERVICES, manual iLO needed (2026-05-09+) 4 entered OS_NO_SERVICES after SSH failures - Smart ",
+              "right": "192.168.1.199:8123",
+              "wrong_ranked_higher": "192.168.0.13"
+            },
+            {
+              "query": "Fiverr competitor intelligence \u2014 14 gig deep-dives 2. basitdotali / ThinkBuilt Solutions LLC \u2014 explicitly regi",
+              "right": "$2,500,",
+              "wrong_ranked_higher": "$150"
+            },
+            {
+              "query": "Laura BWH 403(b) excess contribution \u2014 decided to let it ride to let it ride rather than pursue the ROE. Reaso",
+              "right": "$630",
+              "wrong_ranked_higher": "$2,334"
+            },
+            {
+              "query": "Home Depot Orders \u2014 120 Reedy Meadow Exterior Project separate later order; see sliding-door memo) - Shutters ",
+              "right": "$952.44",
+              "wrong_ranked_higher": "$2,049.70"
+            },
+            {
+              "query": "Inkling ad-profitability model (2026-07-23) upsell (biggest), (2) conversion (landing+creative beat 2.5%), (3)",
+              "right": "$24,",
+              "wrong_ranked_higher": "$100"
+            },
+            {
+              "query": "Assistant Inbox Sweep \u2014 2026-07-31 \u2014 AM ten: 0 (this checkpoint only)  Flagged working set (open): 40  THE TWO",
+              "right": "$2,000.00",
+              "wrong_ranked_higher": "$8,946.30"
+            },
+            {
+              "query": "worker4 K8s node \u2014 K8S_NOT_READY, smart plug offline (2026-05-21) 23 bound to **localhost only**. So `curl htt",
+              "right": "0.0.0.0:8123",
+              "wrong_ranked_higher": "192.168.1.13"
+            },
+            {
+              "query": "SENT \u2014 Paradisus complaint email (billing/bedding/departure), awaiting reply (2026-07-25) on:** they followed ",
+              "right": "$2,258",
+              "wrong_ranked_higher": "$562"
+            }
+          ],
+          "control_ok": true,
+          "status": "ok",
+          "why": null
+        },
+        "elapsed_s": 221.7,
+        "host_env": {
+          "load1": 11.97,
+          "load5": 11.48,
+          "load15": 10.34,
+          "io_some_avg60": 7.19,
+          "io_full_avg60": 6.04,
+          "error": null
+        },
+        "replicates": 2,
+        "observed_spread": {
+          "v1-search": {
+            "confusable_above_target_pct": {
+              "min": 25.44,
+              "max": 25.44,
+              "range_pt": 0.0
+            },
+            "confusable_present_pct": {
+              "min": 95.18,
+              "max": 95.18,
+              "range_pt": 0.0
+            },
+            "target_rank1_pct": {
+              "min": 67.98,
+              "max": 67.98,
+              "range_pt": 0.0
+            }
+          }
+        }
+      },
+      "query_replay": {
+        "v1-search": {
+          "task": "query_replay",
+          "path": "v1-search",
+          "n": 120,
+          "requested": 120,
+          "failures": 0,
+          "returned_nothing": 0,
+          "returned_nothing_pct": 0.0,
+          "latency_p50_s": 0.455,
+          "latency_p95_s": 0.742,
+          "latency_max_s": 1.787,
+          "top1_by_query": {
+            "genomics scrubby memory store migrated documents": "dbea044c-362b-4317-bf2a-ccfb10e7e6f0",
+            "Assistant Inbox Sweep \u2014 2026-07-23 \u2014 PM as such. `gmail_get_thread` showed Ben replied from `family@sack.io` 33 min after receipt on 7/21 \u2014 **PAID $8,946.30 EFT** (Inv #125 + CO#8": "12f6a2bb-1bb7-43ac-87b1-c1cc22b2d04a",
+            "server4 I/O windows make MULTIPLE monitors false-positive (docker-heal unhealthy, disk-monitor host_unreachable). Two windows: 30 */6 daily + Sunday 02:00. Verify before acting or escalating.": "d68ddc9a-a574-4f06-9866-da9b26b6173b",
+            "Garden squirrel barrier: FINAL BOM decided \u2014 flat smooth twinwall polycarbonate, 24\" x 124 lin-ft ing wood top rail - Already have lumber + screws  Recommended option: ThermaGlas 4mm clear twinwall 24": "0b87a95e-49e8-421e-bd7f-d2215f076b9b",
+            "Incident response consumes the resource it investigates \u2014 and a runway measured while idle is a fact about the idleness": "6d8986a5-9ea2-44e4-9458-a6375222d6bc",
+            "SMS \u2014 Nick (+15642308595): yard-work job negotiated 8/10, $350 offered for 3 jobs Friday, awaiting his yes (2026-08-10)": "d7b1d891-cded-4590-b92c-137712023ae7",
+            "Groton \u2014 GELD tariff, NO residential demand charge, HH excludes heat pumps ligibility/structure, especially before Ben claims it.  ## Ben's load, for calibration ~**81,722 kWh/yr** (Apr 2025\u2013May 2026)": "714248a8-620b-485d-8790-f06f32e9cb18",
+            "garden watering rules soil moisture triggers rain delay": "ec9b6083-108e-4e55-9f35-e82eab9e6ac0",
+            "laurasack.com \u2014 private staging/preview environment (setup + promote/teardown) icly indexed/discoverable. - **Production (LIVE, unchanged):** https://laurasack.com \u2192 host nginx proxies to `laurasite-w": "8b10aa59-2409-4795-b195-279ded6afdc4",
+            "quantum-feed: the sealed-agent spec method, and what it found (2026-08-04)": "7c40d196-bf20-4675-b406-d87230d1d8a2",
+            "`pgrep -x tmux` can never fire \u2014 tmux's comm is \"tmux: server\", and the false null was load-bearing on a fleet theory": "136f8b7f-6656-49e6-a1ba-7068f873ea01",
+            "Costco trip history \u2014 backfill via API (2026-05-02) eab5484`, `da76285f`, `3bdacacd`).  ## Summary by period  | Date | Total | Items | Savings | Barcode | |---|---|---|---|---| | 2025-02-21 |": "a874d766-0e3c-4d95-85ce-2f6d3d84848e",
+            "memo-qa control probe: is /context instrumented": "72336a84-e464-4522-aea1-8f4fb5428b35",
+            "barn electrical circuit amps 240V subpanel mining power": "971198bf-4240-4a56-a55a-30465b293590",
+            "A plausible mechanism at the right magnitude TERMINATES THE SEARCH, and at small residuals magnitude agreement is nearly free \u2014 so the fit that persuades you is the one carrying least information": "466d8a1c-1333-40db-8344-515b070f56f4",
+            "Generac Mobile Link telemetry dead since 2026-05-11 (~12 wks) + why the Sol-Ark GEN input CANNOT verify a weekly exercise": "ff6a4b75-595b-4dbd-9b49-5d6e8acd44df",
+            "worker4 \u2014 OS_NO_SERVICES, manual iLO needed (2026-05-09+) 4 entered OS_NO_SERVICES after SSH failures - Smart plug offline \u2014 automated power cycle not possible - Home Assistant briefly unreachable (": "bcce55b7-f84b-4988-800f-42fb8abe98a8",
+            "6e91306f-397e-4614-ba9e-95b7b0271d49": "74cc6402-6dc7-4d2c-9931-0be36045138f",
+            "\u26d4 HOURLY RE-EMBED LOOP (200 chunks/hr) + STABLE-WRONG transcript choice decided by directory NAME \u2014 do when embargo lifts": "1e203937-8354-44e8-99c8-316c4a88c256",
+            "Server4 \u2014 Hosted Sites & Nginx Vhosts (partial April-2026 snapshot; live count 80)": "dba33532-16a8-4038-955b-a08af7ef3b0b",
+            "quantum-data embport: the ~68% client-side cost is an NFS METADATA STORM (~512 ops + 128 small-file creates per batch), NOT the 1.31 MB vector write \u2014 third instance of one shape in a day": "0000b563-cec3-47ab-a582-659ff18be032",
+            "b4170d4a-940c-4057-8e92-7c79bdf250aa": "b5e164c7-8525-42a4-9b9b-9045a47d9cb6",
+            "Barn cluster network performance \u2014 post-migration speed-test matrix (2026-06-01) 68.1.207 192.168.1.207 dev enp65s0 src 192.168.0.109 uid 1000  $ ss -tn dst 192.168.1.207 dport 2049 ESTAB 0      0": "485ead47-a59f-463d-a60f-3139f4903046",
+            "RESOLVED IN BEN'S FAVOUR \u2014 Paradisus $562 Amex chargeback D-100537758 credited (2026-08-10)": "1787f74e-3712-4fa7-96a9-7a5ecb749c51",
+            "HVAC plan": "6a171309-39d4-4151-b6d8-f6b1089684cd",
+            "host-account-swap 2026-08-08 (server4\u2192ben): profile REUSE makes a mint ~15s \u2014 and the anti-bot gate fired for the first time, plausibly because of it": "91c9b13a-0ce1-4040-acf6-f503aa407844",
+            "Frigate NVR Setup on Server4 t usable. Must use the USB version.  **Recommended purchase**: Google Coral USB Accelerator (Google model G950-01456-01) - **B07R53D12W** \u2014": "df08714a-f7d9-49d8-ac94-8534f5720ce5",
+            "Sack family insurance \u2014 MASTER INDEX (all lines, rev. 2026-07-22 deep sweep) 0375164 | via MGB employer | calendar year | [[sack-family-insurance-current-coverage]] | | **Pet (Brooke)** | Trupanion |": "da463773-106a-4901-8f5b-890e496e058f",
+            "e98995e9-92a6-4a15-962b-e1a3f29d1426": "376aab02-6ede-42e0-90e2-1bf47a9f294f",
+            "BJ's-via-DoorDash trip 2026-07-30 $78.87 \u2014 DOUBLE-ORDER DAY (both in-store + delivery) carrots, cabbage, buffalo chicken, Wilde chips \u2014 all doubled  **Day total across both channels**: **$61.72 (in-st": "e9215dba-9a23-4631-a207-2953a80b3611",
+            "Source-fidelity census starvation: a 119h sweep outage, a global stamp over 7 lanes, and five wrong-set errors in one hour (2026-08-09)": "8208304c-4666-4c3d-b21d-ae85185b4fcc",
+            "Matley Pool Service \u2014 Relationship & History d) | | 2021-09-01, 10-19, 10-23 | Closing + follow-up | | | | 2022-04-25 | Opening | | | | 2022-04/05 | **Saltwater conversion estimate** |": "68b996f4-8c72-4b82-aef1-91e52a79f3a6",
+            "Four rules for asserting and recording: don't ship a guess \u00b7 one query away \u00b7 name the mechanism \u00b7 beware market-wide claims \u2014 two independent derivations agreeing beat either alone. alpaca derived $5": "941a1b23-dd10-4439-93be-1209557ab35b",
+            "v1\u2194v2 cutover + rollback runbook \u2014 READY (all prerequisites done, 2026-08-10)": "e8899224-8698-4ef3-b54b-e11039e330e2",
+            "pool chemistry": "7d39dc3c-48b6-49b2-8dfb-584c7a7129ea",
+            "Backup verification 2026-08-09: the NVMe symlink broke a third consumer, and nothing watched memo at all": "3ce34534-8b4b-4ae4-8657-42ffa242e21b",
+            "399d6085-d032-4e43-9dad-1ec9e9b1741a": "74cc6402-6dc7-4d2c-9931-0be36045138f",
+            "code agent \u2014 new-projects incubator (migrated office \u2192 server3, 2026-08-03)": "240a7770-9e03-45c3-9a41-bb906f1b6942",
+            "groton receipt log: tokens are response-verified, ROWS ARE NOT \u2014 n comes from the request (found 2026-08-08)": "42bbb9c2-233a-4671-af18-a45998011eb0",
+            "Linode Relay Server (173.255.233.16) tent tunnel between relay and server4:  | Endpoint | WireGuard IP | Public Key | |----------|-------------|------------| | relay (Linode) |": "cedefdf4-60b8-4bf5-ad5e-07abb814cc51",
+            "ATC host-zone broadcast block (temporary) \u2014 2026-08-04 fleet token-exhaustion fix": "9ce89a58-b124-487f-9ac8-8028f4f2c731",
+            "4a7bbd58-1bed-4d12-9eb6-e8b02afde2ec": "b5e164c7-8525-42a4-9b9b-9045a47d9cb6",
+            "Frigate footage loss 2026-08-09: I/O stall \u2192 TIMED-OUT WATCHDOG PROBE \u2192 restart loop. 155 missing minute-files + an uncounted 10th. FIX SHIPPED (f4d5811, on origin), owned by `ha`. UNKNOWN\u21d2DENY validated x27; the probe fix itself only x3; authoriser UNTESTED. Frigate now DISABLED, cameras down for DAYS.": "bd0a5bce-ad7d-4e55-a48f-6641239ff4dc",
+            "memo_store placeholder": "b5388261-c566-46c3-a603-03fbd155ec8a",
+            "915303e2-b7d0-456e-8fda-d2c2efe35d43": "74cc6402-6dc7-4d2c-9931-0be36045138f",
+            "Sunday step 2 LEAD: two orphaned DRIVER duties + a latent unconditional stamp (\u26d4 the earlier \"Principle IV held vacuously\" claim in here is RETRACTED) \u2014 quantum-feed 2026-08-08": "9966599b-ca8a-4813-86ae-bf1f603d9c65",
+            "sure finance self-hosted plaid sync": "e2cc11ba-1a09-4714-82be-3df60374a04b",
+            "Generac Mobile Link telemetry dead since 2026-05-11 \u2014 RESOLVED 08-03: generator fine, Wi-Fi module only. Plus: the Sol-Ark GEN input CANNOT verify a weekly exercise": "ff6a4b75-595b-4dbd-9b49-5d6e8acd44df",
+            "feedback-applovin-brief-cc-ben styled HTML CC ben weekly brief": "e0dc7587-46d9-4f75-a8da-84f86fd443e0",
+            "HA media integrations \u2014 Kodi, Samsung TV, Fire Stick setup and dashboard ## Kodi instances - Bedroom:": "f5f79ef4-338e-4ac6-a9c8-cb2ea4b4fac0",
+            "ollm state of play server3 seat": "ab8f8629-e730-4808-a064-aa3bd16cf66d",
+            "server4 snap-docker: output is SILENTLY EMPTY when stdout is a regular file (`> file`) \u2014 pipe or `$( )` always; rc=0 and stderr empty": "d31586bf-658c-4b22-a796-955db6cdbe6f",
+            "2027 Garden Expansion Plan \u2014 blueberry relocation + asparagus conversion [\u26a0\ufe0f ON HOLD 2026-08-04 \u2014 do not execute, see hold memo]": "a88c0921-9859-414f-8d29-5b13bf8e89e9",
+            "2a773e01-be78-43f6-8d45-e22a633b2ab9": "b5e164c7-8525-42a4-9b9b-9045a47d9cb6",
+            "ROOT CAUSE: historical-inventory.json is 4.9 days stale because its generator HANGS on an os.walk of the pivot tree over NFS \u2014 fix is proven (13.5s vs indefinite), QUEUED not built": "f5b41b09-01b0-4b4f-98f5-c3e7641ec4df",
+            "Tesla send destination to car script Home Assistant Tessa navigation": "97f79869-bd64-46b8-9fcf-dc406b942dfc",
+            "quantum-data 2026-08-10 ADDENDUM to d4f7e32b: the ETF FIRE (upstream), --emit-catchup, and a bind I chose not to resolve": "f5fa8d5a-2368-4907-8b7c-8eb3adc32ed4",
+            "TRAP: `atc_schedule_list(mine=true)` filters by OWNER, not creator \u2014 plus the fleet schedule snapshot 2026-08-06": "9e636e1a-f89c-4350-877c-b192073790e1",
+            "Shell idiom hazard: `ps -o etime= -p PID || echo \"DONE\"` \u2014 the NUMBER is the liveness signal, and it reads as completion": "56814309-a6f8-4b6f-80c6-2679e74e0740",
+            "Optimum Nutrition Gold Standard whey protein Ben supplement subscribe save": "63cebf5a-6cf5-4ba9-a08f-be5dcad7bb24",
+            "HWM docket CASE #2 \u2014 same defect on the Slack path; and a mitigation that records a vanished message as chosen silence": "63ab5f94-c8ca-43c4-b4d6-ddbe2f1dd71b",
+            "Laura Sack's CCU checking \u2014 the premium-draft account (full details, per Ben's explicit instruction)": "148d7396-c0a7-4903-acf5-b369692949db",
+            "server4 I/O incident 2026-08-09 server6 frigate recording gap PSI stall client-side SSH": "bc1a3691-c793-47e4-8294-200c3b4c27dd",
+            "6ed8b3fb-0f5a-4c9c-8079-41eb18e59046": "b5e164c7-8525-42a4-9b9b-9045a47d9cb6",
+            "\ud83d\udd34 NAV RESUME v37 \u2014 FRESH NO-RESUME SEAT INBOUND. \u26d4 ZERO CRONS by operator directive. Pin 82709906 (v30). State file OPENS with a banner + CURRENT WORK block \u2014 read that first. Spec re-cut at STEP 2 of 5, gated on Ben's feedback.": "20fe0d81-3510-4fd6-a32b-5e883c365b03",
+            "buffet-buster: v0.20.0: price-gated celebration, auto-resize money text, richer money FX, photo record (1038ec1) to keep score' line when no price. - AutoSizeMoney: one-line money text that shrinks to": "757b8f60-739a-4c18-8af5-48dae37d5f63",
+            "0db146fc-c54f-49f4-9749-f85804e8ba78": "b5e164c7-8525-42a4-9b9b-9045a47d9cb6",
+            "GE washer GFW550SSN3WW \u2014 2026-08-03 post-lock-replacement progression: lock fitted, still fails, NOW CLICKS (board drive likely alive)": "b28ea866-18ee-4b9d-8c52-7e959819206b",
+            "CROSS-SEAT DEPENDENCY \u2014 `finance` holds the Aug 12 Amex D-100537758 doc-deadline watcher; `assistant` deliberately stood down (2026-08-05)": "bdd1bcf5-859e-4d95-826e-2331666f0078",
+            "memo v1 vs v2 benchmark, replicated retest 2026-08-09 \u2014 v2 wins every quality axis; v1's supersession filter is not filtering": "c65a7980-d41a-48fc-8aa3-578a197be9d6",
+            "Insurance \u2014 Auto (Progressive Direct #968850121)": "9779c45e-6a9b-4cae-b289-bb137063bd7f",
+            "BJ's Wholesale trip history \u2014 4 orders since Nov 2025 s 11/30/2026. **Home club:** Nashua, NH. **Period:** 2025-11-30 \u2192 2026-02-13 (~2.5 months active). **Total:** 4 orders + membership signup,": "d4527769-21f2-4d8a-97c6-a7751ce314ba",
+            "f34e1e92-7136-442d-a9e3-3e7f8fe9677f": "74cc6402-6dc7-4d2c-9931-0be36045138f",
+            "Frigate gaps \u2014 HANDOFF TO `agents` (Ben stopped it 2026-08-09 09:40). Cheap fix APPLIED; two published claims RETRACTED. A monitor that causes the outage it prevents.": "24a92cba-9073-4495-a6d7-6c890c796223",
+            "library seat halt queue quote_intensity_probe Principle VI cordon sweep FR draft T116": "f75136da-5966-4964-9c3d-ad6d9a7334a7",
+            "\u2705 RESOLVED 2026-08-06: ASR duplicate-transcript re-embed loop + vod5530 \u2014 commit 8e18857. Lessons kept.": "638b87b7-eaef-410b-91c6-ae51704f1603",
+            "dojo 2026-08-09: the 201-cell taxonomy completed, and nine measured traps \u2014 every defect was silent and looked like success": "fc542a77-b358-4c47-bd1a-db45c5ba0f00",
+            "QUEUED FEATURE \u2014 super-agent \"finder mode\" (walk back to a saved waypoint). Build when token rationing lifts.": "1b72e024-61aa-47ed-81ec-8ae95ab50f75",
+            "models seat \u2014 2026-08-09 method corpus: the wrong-set defect class, and the instruments built against it": "fbbc32c0-6649-4917-902d-c7e369da3346",
+            "11a94e1c-b76a-4ae8-8e79-8de1226884c9": "b5e164c7-8525-42a4-9b9b-9045a47d9cb6",
+            "groton town agent project state current work": "66a2592c-16bc-4ccc-ad65-e3f61fd01281",
+            "Assistant Inbox Sweep \u2014 2026-07-31 \u2014 AM ten: 0 (this checkpoint only)  Flagged working set (open): 40  THE TWO NEW ITEMS 1. Amex \"We've received your payment\", acct ending 91006 \u2014": "6b6bb993-8500-44e3-aaf8-e6ccc398b389",
+            "lesson a field on a burn list cannot carry a distinction test a different field": "5c2bf3ac-7135-4f95-8e8f-bdfe0bf8619e",
+            "anti-ARP-spoof defense barn workers nft ingress gateway MAC pin": "e0da1869-19b3-47a3-8700-45adbb613c09",
+            "Fiber spec FINAL + FS QUOTE SENT \u2014 armored non-metallic; unarmored recommendation RETRACTED [v4] g (disclosed to Ben, NOT recommended) If no vendor builds non-metallic pre-term at \u2265350 ft: **Amazon YU": "61685b95-45c8-4499-b107-725ac4393fa5",
+            "Insurance \u2014 Disability (MetLife, Ben + Laura)": "35d5bc9d-47a4-48e6-8868-1d5fa3fc6d57",
+            "collapse inversion instrument failure detector predicate evidence logic": "6fc94fa9-fe33-4211-92ab-9389cad07c42",
+            "\u26d4 OAuth grants need a RECENT sign-in \u2014 a valid session is NOT a grant-capable one. Three states, two probes. (2026-08-08; +08-09 drain-then-flip: fire the trigger early, mint the session late)": "490b4f83-a351-43af-a666-ee06d2ac2ea2",
+            "Epistemics: a cause that explains the phenomenon but not its magnitude is not a cause yet (2026-08-08)": "8956ef17-f33a-4d4e-82c7-02d717b0294a",
+            "Costco Nashua trip 2026-07-01 \u2014 chickpeas + paper goods + cadence restock Costco Wholesale #307 Nashua NH (311 Daniel Webster Hwy) trip 2026-07-01 at 13:34, Visa *6637 chip-read. Member 111813351592.": "da76285f-e376-4307-aa09-82defab16e06",
+            "d098e728-69ab-431b-a10a-0a9745712eed": "74cc6402-6dc7-4d2c-9931-0be36045138f",
+            "Repeated alert fired daily and said nothing new: the escalating fact belongs in the BODY, not the dedup key": "611295ea-31c8-4133-a802-c386cc704716",
+            "Ecowitt GW2000 gateway web UI password / weather station login credentials": "2117edf7-0f35-4ee7-9f35-746b5a3130c7",
+            "worker15 Hardware Failure (2026-04-17) ycles):  - Smart plug ON (last state change via cluster-heal cycle) - No MAC in ARP on any LAN host (office or server4) - No DHCP lease for": "3af9cd82-4a07-41f7-a88e-33c84399aa12",
+            "mind: the prefilter skips 37% of the real corpus but 0% of the eval set \u2014 the labelled set is unrepresentative on exactly that axis (2026-08-09)": "a26d9136-a22d-47a9-aaf6-7c31ac6564ff",
+            "server4 kube-apiserver needs explicit --advertise-address .168.0.168:16443` entry which is NOT a real IP on server4 \u2014 server4's actual addresses are 192.168.1.168 (eno1, primary LAN) plus barn NICs": "e2b7e61b-1ab6-404c-ae54-07834ce06e1f",
+            "contractor contacts phone numbers house": "1205f5ed-2d94-414c-b541-78866f2fe9ad",
+            "\ud83d\udfe2 NAV RESUME v35 \u2014 pin 96bde3ec (v28), cron 564103fb. Corpus=209. Emitter ownership RULED MINE; 008 park wired (af4bc3b4\u21925ce7df5d) \u2014 its unpark condition was unsound TWICE. Order locked; Ben owes user-story feedback.": "4a41e707-5e7d-4836-a031-0912a6f6074d",
+            "Insurance seat \u2014 SCOPE BOUNDARY: do not raise infrastructure/NAS/permissions topics with Ben (2026-08-03)": "c3f3cbe8-458c-4488-9b44-f1dcccb56026",
+            "quantum-feed DATA (part 2): exhaustive units map falsifies year-alignment; odd-lot discriminator REFUTES ITSELF; intraday worst-window tool; stress cost table 2026 quotes $0.0499). Use the per-ticker": "f860fd08-5750-4123-bc34-199fbaf0397f",
+            "Lesson \u2014 a field on a known-burn list cannot carry a distinction; test a different field (Amex D-100939135, 2026-08-05)": "fda987ed-ab3a-4adf-93cc-bcb2ae21c3cc",
+            "personal assistant session role scope operations bootstrap": "01bd987b-c111-4ca9-a3a0-3e5cddcec75b",
+            "[\u26a0\ufe0f DASHBOARD PORTS CORRECTED 2026-06-19 \u2192 unified :3000; library backend :8742 NOT :8732] quantum-data DASHBOARD 2026-06-12 (DATA+LIBRARY pages, master @05d6466f) \u2014 topology superseded by 7d5b0678 fa": "d72f3805-711c-4195-b9c4-e5b60b7be3f6",
+            "192.168.1.254 = the router itself: ARP alert of 2026-08-09 resolved BENIGN (measured), + the corrected single-equality gateway rule": "930641b7-fff5-485e-a34f-26308d8730d4",
+            "Maynard 2026-08-10: GIB dead for 2026, forms received, Brighthouse bank change APPLIED, MetLife pending": "0a645d36-54e0-427a-9b82-c89d14508b4b",
+            "server4 docker on NVMe: snap confinement, PERC H310 hardware reality, and the data-root design": "9610818c-e428-4a5d-9fc0-ace5d31cebed",
+            "coordinating redundant triggers dedupe before sending verification traps": "13da83a7-9c9b-4f1c-b750-a8c9db416e95",
+            "alpaca session migration server3 host change August 2026": "d5f7b281-ccaa-4995-a5ae-6a3c395e5f5c",
+            "recompute cost lever 6219 historical feature days never recomputed 1.7 days to 32 days chunk size 18x memory 13.4 GB Rust bin peak accumulates": "5a280e1f-62e7-4a7d-ad80-003bca15a692",
+            "Groton host ADDENDUM 2026-08-03: server3 has READ-ONLY NAS \u2014 cannot run pipeline or git commit; office ssh fixed; cron cadence": "3bda52ca-10e5-491e-9f02-fce60f4444cc",
+            "quantum-data DEFECTS (deferred under drought), news_embcache_prewarm: (1) silent receipt drop \u2014 `dropped=0` is NOT proof of complete accounting; (2) NAS-default cache lookup; (3) batch budget denominated in ESTIMATED tokens \u2014 invisible from my seat by construction": "00ccad55-5e14-4faf-ac02-f8a336976bab",
+            "Picture book manuscript \u2014 \"The River Went On\", Magill family, 12 spreads (2026-08-10)": "9f3a8d5e-2a0b-4b68-8007-b0381f7b0273",
+            "Groton Water Expansion \u2014 does 120 Reedy Meadow qualify? (analysis 2026-07-28) -| | Total capital | $17.63M | $16.78M | | **Groton's share** | **$5.57M** | **$12.92M** | | Groton 30-yr DWSRF monthly (0": "993b2e79-efce-430b-a17b-f4eb85082e2d",
+            "b924d285-9eda-4aa0-a577-2ea73618f58e": "b5e164c7-8525-42a4-9b9b-9045a47d9cb6",
+            "electric seat \u2014 ACTIVE PROJECT as of 2026-08-05 14:20 EDT: pool-deck GFCI fault, Ben mid-decision on resin vs kits. Verified ASINs, prices, six traps, and what is still open.": "dae130cf-8113-4e24-b631-16e95e63c416",
+            "Pin hygiene: a pin is an instruction to a self who cannot check it (2026-08-04 findings)": "b64daa28-1024-41a7-9d3e-3d0d0c1a22f0",
+            "current plantings 2026 garden beds what is planted": "68ad17f0-29c4-4a36-95fe-f50f13d80d0b",
+            "b8e33f3b-bdc5-4158-80f4-b9c07b2a598e": "1d7be242-493e-4d7c-9dee-550e549bf482",
+            "quantum-feed: #002 DATA COMPLETE \u2014 2,849-ticker universe backfilled to ~2009 (e10f283b) rror \u2192 Unclassified); (2) sane-cap-vs-continuity ordering \u2014 eps path now sane-checked AFTER basis resolution \u2192 G": "2c8da055-74ba-4c93-8091-87291901f949",
+            "embport deferred live-path defects silent receipt drop NAS cache lookup": "c0a820e9-9ba6-4ac3-8130-239de059f19a"
+          },
+          "control_ok": true,
+          "status": "ok"
+        },
+        "elapsed_s": 60.0,
+        "host_env": {
+          "load1": 12.98,
+          "load5": 11.72,
+          "load15": 10.49,
+          "io_some_avg60": 7.93,
+          "io_full_avg60": 6.72,
+          "error": null
+        }
+      },
+      "set_stability": {
+        "task": "set_stability",
+        "path": "v1-search",
+        "n_requested": 25,
+        "n_ran": 25,
+        "replicates": 3,
+        "rank1_varied": 0,
+        "id_list_varied": 1,
+        "control_ok": true,
+        "status": "ok",
+        "elapsed_s": 36.0,
+        "host_env": {
+          "load1": 11.36,
+          "load5": 11.45,
+          "load15": 10.44,
+          "io_some_avg60": 7.02,
+          "io_full_avg60": 6.1,
+          "error": null
+        }
+      },
+      "api_surface": {
+        "task": "api_surface",
+        "routes": [
+          "/admin/access-stats",
+          "/admin/leak-incidents",
+          "/admin/recount-tokens",
+          "/auto-store",
+          "/context",
+          "/documents",
+          "/documents/{doc_id}",
+          "/documents/{doc_id}/copy",
+          "/documents/{doc_id}/move",
+          "/health",
+          "/index",
+          "/ready",
+          "/search"
+        ],
+        "search_shape": {
+          "document": {
+            "error": "HTTPError"
+          },
+          "passages": {
+            "error": "HTTPError"
+          },
+          "v1-search": {
+            "container": "list",
+            "row_keys": [
+              "document",
+              "score"
+            ],
+            "doc_keys": [
+              "content",
+              "created_at",
+              "id",
+              "metadata",
+              "tags",
+              "title",
+              "token_count",
+              "updated_at"
+            ]
+          }
+        },
+        "control_ok": true,
+        "status": "ok",
+        "elapsed_s": 0.5,
+        "host_env": {
+          "load1": 11.36,
+          "load5": 11.45,
+          "load15": 10.44,
+          "io_some_avg60": 7.02,
+          "io_full_avg60": 6.1,
+          "error": null
+        }
+      }
+    },
+    "v2": {
+      "primary_path": "document",
+      "paths_present": [
+        "document",
+        "passages",
+        "v1-search"
+      ],
+      "own_title": {
+        "document": {
+          "task": "own_title",
+          "path": "document",
+          "seed": 7,
+          "per_band": 60,
+          "pinned_sample": "s-2026-08-03T184827Z",
+          "bands": [
+            {
+              "n": 59,
+              "pinned": 60,
+              "missing": 1,
+              "rank1": 44,
+              "top5": 56,
+              "absent": 2,
+              "failures": 0,
+              "p50_ms": 217.3,
+              "p90_ms": 248.9,
+              "band": "0-200",
+              "pool": 1294
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 38,
+              "top5": 54,
+              "absent": 5,
+              "failures": 0,
+              "p50_ms": 206.8,
+              "p90_ms": 229.7,
+              "band": "200-500",
+              "pool": 2541
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 37,
+              "top5": 48,
+              "absent": 9,
+              "failures": 0,
+              "p50_ms": 222.0,
+              "p90_ms": 243.0,
+              "band": "500-1000",
+              "pool": 2140
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 41,
+              "top5": 50,
+              "absent": 10,
+              "failures": 0,
+              "p50_ms": 225.1,
+              "p90_ms": 240.4,
+              "band": "1000-2000",
+              "pool": 1455
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 38,
+              "top5": 50,
+              "absent": 4,
+              "failures": 0,
+              "p50_ms": 209.5,
+              "p90_ms": 235.3,
+              "band": "2000-",
+              "pool": 392
+            }
+          ],
+          "total_n": 299,
+          "total_pinned": 300,
+          "total_missing": 1,
+          "total_rank1": 198,
+          "unweighted_rank1_pct": 66.25,
+          "total_failures": 0,
+          "control_ok": true,
+          "status": "ok"
+        },
+        "passages": {
+          "task": "own_title",
+          "path": "passages",
+          "seed": 7,
+          "per_band": 60,
+          "pinned_sample": "s-2026-08-03T184827Z",
+          "bands": [
+            {
+              "n": 59,
+              "pinned": 60,
+              "missing": 1,
+              "rank1": 44,
+              "top5": 55,
+              "absent": 2,
+              "failures": 0,
+              "p50_ms": 513.1,
+              "p90_ms": 592.9,
+              "band": "0-200",
+              "pool": 1294
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 37,
+              "top5": 52,
+              "absent": 6,
+              "failures": 0,
+              "p50_ms": 511.5,
+              "p90_ms": 575.3,
+              "band": "200-500",
+              "pool": 2541
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 35,
+              "top5": 44,
+              "absent": 14,
+              "failures": 0,
+              "p50_ms": 497.8,
+              "p90_ms": 539.6,
+              "band": "500-1000",
+              "pool": 2140
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 33,
+              "top5": 51,
+              "absent": 6,
+              "failures": 0,
+              "p50_ms": 486.5,
+              "p90_ms": 526.9,
+              "band": "1000-2000",
+              "pool": 1455
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 34,
+              "top5": 48,
+              "absent": 8,
+              "failures": 0,
+              "p50_ms": 491.6,
+              "p90_ms": 512.9,
+              "band": "2000-",
+              "pool": 392
+            }
+          ],
+          "total_n": 299,
+          "total_pinned": 300,
+          "total_missing": 1,
+          "total_rank1": 183,
+          "unweighted_rank1_pct": 61.25,
+          "total_failures": 0,
+          "control_ok": true,
+          "status": "ok"
+        },
+        "v1-search": {
+          "task": "own_title",
+          "path": "v1-search",
+          "seed": 7,
+          "per_band": 60,
+          "pinned_sample": "s-2026-08-03T184827Z",
+          "bands": [
+            {
+              "n": 59,
+              "pinned": 60,
+              "missing": 1,
+              "rank1": 44,
+              "top5": 55,
+              "absent": 2,
+              "failures": 0,
+              "p50_ms": 480.2,
+              "p90_ms": 502.5,
+              "band": "0-200",
+              "pool": 1294
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 37,
+              "top5": 52,
+              "absent": 6,
+              "failures": 0,
+              "p50_ms": 493.8,
+              "p90_ms": 521.5,
+              "band": "200-500",
+              "pool": 2541
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 35,
+              "top5": 44,
+              "absent": 14,
+              "failures": 0,
+              "p50_ms": 487.6,
+              "p90_ms": 522.9,
+              "band": "500-1000",
+              "pool": 2140
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 33,
+              "top5": 51,
+              "absent": 6,
+              "failures": 0,
+              "p50_ms": 485.0,
+              "p90_ms": 502.0,
+              "band": "1000-2000",
+              "pool": 1455
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 34,
+              "top5": 48,
+              "absent": 8,
+              "failures": 0,
+              "p50_ms": 474.8,
+              "p90_ms": 500.1,
+              "band": "2000-",
+              "pool": 392
+            }
+          ],
+          "total_n": 299,
+          "total_pinned": 300,
+          "total_missing": 1,
+          "total_rank1": 183,
+          "unweighted_rank1_pct": 61.25,
+          "total_failures": 0,
+          "control_ok": true,
+          "status": "ok"
+        },
+        "elapsed_s": 738.4,
+        "host_env": {
+          "load1": 10.34,
+          "load5": 10.03,
+          "load15": 10.2,
+          "io_some_avg60": 7.48,
+          "io_full_avg60": 6.09,
+          "error": null
+        },
+        "replicates": 2,
+        "observed_spread": {
+          "document": {
+            "unweighted_rank1_pct": {
+              "min": 66.25,
+              "max": 66.25,
+              "range_pt": 0.0
+            }
+          },
+          "passages": {
+            "unweighted_rank1_pct": {
+              "min": 61.25,
+              "max": 61.25,
+              "range_pt": 0.0
+            }
+          },
+          "v1-search": {
+            "unweighted_rank1_pct": {
+              "min": 61.25,
+              "max": 61.25,
+              "range_pt": 0.0
+            }
+          }
+        }
+      },
+      "content_query": {
+        "document": {
+          "task": "content_query",
+          "path": "document",
+          "seed": 7,
+          "per_band": 60,
+          "pinned_sample": "s-2026-08-03T184827Z",
+          "bands": [
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 50,
+              "top5": 54,
+              "absent": 3,
+              "failures": 0,
+              "band": "0-200",
+              "pool": 494
+            },
+            {
+              "n": 58,
+              "pinned": 60,
+              "missing": 2,
+              "rank1": 39,
+              "top5": 53,
+              "absent": 3,
+              "failures": 0,
+              "band": "200-500",
+              "pool": 1602
+            },
+            {
+              "n": 59,
+              "pinned": 60,
+              "missing": 1,
+              "rank1": 33,
+              "top5": 42,
+              "absent": 11,
+              "failures": 0,
+              "band": "500-1000",
+              "pool": 1885
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 17,
+              "top5": 35,
+              "absent": 16,
+              "failures": 0,
+              "band": "1000-2000",
+              "pool": 1437
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 9,
+              "top5": 24,
+              "absent": 31,
+              "failures": 0,
+              "band": "2000-",
+              "pool": 369
+            }
+          ],
+          "total_n": 297,
+          "total_pinned": 300,
+          "total_missing": 3,
+          "total_rank1": 148,
+          "unweighted_rank1_pct": 49.97,
+          "total_failures": 0,
+          "control_ok": true,
+          "status": "ok"
+        },
+        "passages": {
+          "task": "content_query",
+          "path": "passages",
+          "seed": 7,
+          "per_band": 60,
+          "pinned_sample": "s-2026-08-03T184827Z",
+          "bands": [
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 49,
+              "top5": 54,
+              "absent": 5,
+              "failures": 0,
+              "band": "0-200",
+              "pool": 494
+            },
+            {
+              "n": 58,
+              "pinned": 60,
+              "missing": 2,
+              "rank1": 36,
+              "top5": 48,
+              "absent": 6,
+              "failures": 0,
+              "band": "200-500",
+              "pool": 1602
+            },
+            {
+              "n": 59,
+              "pinned": 60,
+              "missing": 1,
+              "rank1": 30,
+              "top5": 50,
+              "absent": 4,
+              "failures": 0,
+              "band": "500-1000",
+              "pool": 1885
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 37,
+              "top5": 50,
+              "absent": 5,
+              "failures": 0,
+              "band": "1000-2000",
+              "pool": 1437
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 31,
+              "top5": 48,
+              "absent": 9,
+              "failures": 0,
+              "band": "2000-",
+              "pool": 369
+            }
+          ],
+          "total_n": 297,
+          "total_pinned": 300,
+          "total_missing": 3,
+          "total_rank1": 183,
+          "unweighted_rank1_pct": 61.58,
+          "total_failures": 0,
+          "control_ok": true,
+          "status": "ok"
+        },
+        "v1-search": {
+          "task": "content_query",
+          "path": "v1-search",
+          "seed": 7,
+          "per_band": 60,
+          "pinned_sample": "s-2026-08-03T184827Z",
+          "bands": [
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 49,
+              "top5": 54,
+              "absent": 5,
+              "failures": 0,
+              "band": "0-200",
+              "pool": 494
+            },
+            {
+              "n": 58,
+              "pinned": 60,
+              "missing": 2,
+              "rank1": 36,
+              "top5": 48,
+              "absent": 6,
+              "failures": 0,
+              "band": "200-500",
+              "pool": 1602
+            },
+            {
+              "n": 59,
+              "pinned": 60,
+              "missing": 1,
+              "rank1": 30,
+              "top5": 50,
+              "absent": 4,
+              "failures": 0,
+              "band": "500-1000",
+              "pool": 1885
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 37,
+              "top5": 50,
+              "absent": 5,
+              "failures": 0,
+              "band": "1000-2000",
+              "pool": 1437
+            },
+            {
+              "n": 60,
+              "pinned": 60,
+              "missing": 0,
+              "rank1": 31,
+              "top5": 48,
+              "absent": 9,
+              "failures": 0,
+              "band": "2000-",
+              "pool": 369
+            }
+          ],
+          "total_n": 297,
+          "total_pinned": 300,
+          "total_missing": 3,
+          "total_rank1": 183,
+          "unweighted_rank1_pct": 61.58,
+          "total_failures": 0,
+          "control_ok": true,
+          "status": "ok"
+        },
+        "elapsed_s": 733.9,
+        "host_env": {
+          "load1": 9.02,
+          "load5": 9.88,
+          "load15": 9.98,
+          "io_some_avg60": 8.03,
+          "io_full_avg60": 7.0,
+          "error": null
+        },
+        "replicates": 2,
+        "observed_spread": {
+          "document": {
+            "unweighted_rank1_pct": {
+              "min": 49.63,
+              "max": 49.97,
+              "range_pt": 0.34
+            }
+          },
+          "passages": {
+            "unweighted_rank1_pct": {
+              "min": 61.58,
+              "max": 61.58,
+              "range_pt": 0.0
+            }
+          },
+          "v1-search": {
+            "unweighted_rank1_pct": {
+              "min": 61.58,
+              "max": 61.58,
+              "range_pt": 0.0
+            }
+          }
+        }
+      },
+      "answer_recall": {
+        "document": {
+          "task": "answer_recall",
+          "path": "document",
+          "seed": 7,
+          "per_band": 60,
+          "pinned_sample": "s-2026-08-03T184827Z",
+          "bands": [
+            {
+              "n": 16,
+              "pinned": 17,
+              "missing": 0,
+              "ambiguous": 1,
+              "failures": 0,
+              "off_common": 0,
+              "right_doc_top1": 14,
+              "answer_in_top1": 15,
+              "answer_in_topk": 16,
+              "answer_in_topk_fulldoc": 16,
+              "band": "0-200",
+              "pool": 17
+            },
+            {
+              "n": 53,
+              "pinned": 59,
+              "missing": 0,
+              "ambiguous": 6,
+              "failures": 0,
+              "off_common": 0,
+              "right_doc_top1": 43,
+              "answer_in_top1": 43,
+              "answer_in_topk": 52,
+              "answer_in_topk_fulldoc": 52,
+              "band": "200-500",
+              "pool": 68
+            },
+            {
+              "n": 55,
+              "pinned": 60,
+              "missing": 0,
+              "ambiguous": 5,
+              "failures": 0,
+              "off_common": 0,
+              "right_doc_top1": 46,
+              "answer_in_top1": 46,
+              "answer_in_topk": 53,
+              "answer_in_topk_fulldoc": 53,
+              "band": "500-1000",
+              "pool": 101
+            },
+            {
+              "n": 52,
+              "pinned": 60,
+              "missing": 0,
+              "ambiguous": 8,
+              "failures": 0,
+              "off_common": 0,
+              "right_doc_top1": 41,
+              "answer_in_top1": 41,
+              "answer_in_topk": 52,
+              "answer_in_topk_fulldoc": 52,
+              "band": "1000-2000",
+              "pool": 109
+            },
+            {
+              "n": 52,
+              "pinned": 60,
+              "missing": 0,
+              "ambiguous": 8,
+              "failures": 0,
+              "off_common": 0,
+              "right_doc_top1": 29,
+              "answer_in_top1": 30,
+              "answer_in_topk": 51,
+              "answer_in_topk_fulldoc": 51,
+              "band": "2000-",
+              "pool": 67
+            }
+          ],
+          "total_n": 228,
+          "total_pinned": 256,
+          "total_missing": 0,
+          "total_ambiguous": 28,
+          "total_off_common": 0,
+          "common_denominator": true,
+          "total_failures": 0,
+          "right_doc_top1_pct": 77.38,
+          "answer_in_top1_pct": 79.01,
+          "answer_in_topk_pct": 98.51,
+          "answer_in_topk_fulldoc_pct": 98.51,
+          "span_cost_pt": 0.0,
+          "control_ok": true,
+          "status": "ok"
+        },
+        "passages": {
+          "task": "answer_recall",
+          "path": "passages",
+          "seed": 7,
+          "per_band": 60,
+          "pinned_sample": "s-2026-08-03T184827Z",
+          "bands": [
+            {
+              "n": 16,
+              "pinned": 17,
+              "missing": 0,
+              "ambiguous": 1,
+              "failures": 0,
+              "off_common": 0,
+              "right_doc_top1": 14,
+              "answer_in_top1": 15,
+              "answer_in_topk": 16,
+              "answer_in_topk_fulldoc": 16,
+              "band": "0-200",
+              "pool": 17
+            },
+            {
+              "n": 53,
+              "pinned": 59,
+              "missing": 0,
+              "ambiguous": 6,
+              "failures": 0,
+              "off_common": 0,
+              "right_doc_top1": 43,
+              "answer_in_top1": 40,
+              "answer_in_topk": 48,
+              "answer_in_topk_fulldoc": 52,
+              "band": "200-500",
+              "pool": 68
+            },
+            {
+              "n": 55,
+              "pinned": 60,
+              "missing": 0,
+              "ambiguous": 5,
+              "failures": 0,
+              "off_common": 0,
+              "right_doc_top1": 44,
+              "answer_in_top1": 33,
+              "answer_in_topk": 40,
+              "answer_in_topk_fulldoc": 54,
+              "band": "500-1000",
+              "pool": 101
+            },
+            {
+              "n": 52,
+              "pinned": 60,
+              "missing": 0,
+              "ambiguous": 8,
+              "failures": 0,
+              "off_common": 0,
+              "right_doc_top1": 40,
+              "answer_in_top1": 28,
+              "answer_in_topk": 36,
+              "answer_in_topk_fulldoc": 52,
+              "band": "1000-2000",
+              "pool": 109
+            },
+            {
+              "n": 52,
+              "pinned": 60,
+              "missing": 0,
+              "ambiguous": 8,
+              "failures": 0,
+              "off_common": 0,
+              "right_doc_top1": 34,
+              "answer_in_top1": 30,
+              "answer_in_topk": 39,
+              "answer_in_topk_fulldoc": 50,
+              "band": "2000-",
+              "pool": 67
+            }
+          ],
+          "total_n": 228,
+          "total_pinned": 256,
+          "total_missing": 0,
+          "total_ambiguous": 28,
+          "total_off_common": 0,
+          "common_denominator": true,
+          "total_failures": 0,
+          "right_doc_top1_pct": 78.19,
+          "answer_in_top1_pct": 68.15,
+          "answer_in_topk_pct": 81.5,
+          "answer_in_topk_fulldoc_pct": 98.49,
+          "span_cost_pt": 16.99,
+          "control_ok": true,
+          "status": "ok"
+        },
+        "v1-search": {
+          "task": "answer_recall",
+          "path": "v1-search",
+          "seed": 7,
+          "per_band": 60,
+          "pinned_sample": "s-2026-08-03T184827Z",
+          "bands": [
+            {
+              "n": 16,
+              "pinned": 17,
+              "missing": 0,
+              "ambiguous": 1,
+              "failures": 0,
+              "off_common": 0,
+              "right_doc_top1": 14,
+              "answer_in_top1": 15,
+              "answer_in_topk": 16,
+              "answer_in_topk_fulldoc": 16,
+              "band": "0-200",
+              "pool": 17
+            },
+            {
+              "n": 53,
+              "pinned": 59,
+              "missing": 0,
+              "ambiguous": 6,
+              "failures": 0,
+              "off_common": 0,
+              "right_doc_top1": 43,
+              "answer_in_top1": 43,
+              "answer_in_topk": 52,
+              "answer_in_topk_fulldoc": 52,
+              "band": "200-500",
+              "pool": 68
+            },
+            {
+              "n": 55,
+              "pinned": 60,
+              "missing": 0,
+              "ambiguous": 5,
+              "failures": 0,
+              "off_common": 0,
+              "right_doc_top1": 44,
+              "answer_in_top1": 45,
+              "answer_in_topk": 54,
+              "answer_in_topk_fulldoc": 54,
+              "band": "500-1000",
+              "pool": 101
+            },
+            {
+              "n": 52,
+              "pinned": 60,
+              "missing": 0,
+              "ambiguous": 8,
+              "failures": 0,
+              "off_common": 0,
+              "right_doc_top1": 40,
+              "answer_in_top1": 40,
+              "answer_in_topk": 52,
+              "answer_in_topk_fulldoc": 52,
+              "band": "1000-2000",
+              "pool": 109
+            },
+            {
+              "n": 52,
+              "pinned": 60,
+              "missing": 0,
+              "ambiguous": 8,
+              "failures": 0,
+              "off_common": 0,
+              "right_doc_top1": 34,
+              "answer_in_top1": 35,
+              "answer_in_topk": 50,
+              "answer_in_topk_fulldoc": 50,
+              "band": "2000-",
+              "pool": 67
+            }
+          ],
+          "total_n": 228,
+          "total_pinned": 256,
+          "total_missing": 0,
+          "total_ambiguous": 28,
+          "total_off_common": 0,
+          "common_denominator": true,
+          "total_failures": 0,
+          "right_doc_top1_pct": 78.19,
+          "answer_in_top1_pct": 80.19,
+          "answer_in_topk_pct": 98.49,
+          "answer_in_topk_fulldoc_pct": 98.49,
+          "span_cost_pt": 0.0,
+          "control_ok": true,
+          "status": "ok"
+        },
+        "elapsed_s": 582.7,
+        "host_env": {
+          "load1": 9.21,
+          "load5": 10.11,
+          "load15": 9.9,
+          "io_some_avg60": 7.62,
+          "io_full_avg60": 6.22,
+          "error": null
+        },
+        "replicates": 2,
+        "observed_spread": {
+          "document": {
+            "answer_in_top1_pct": {
+              "min": 79.01,
+              "max": 79.01,
+              "range_pt": 0.0
+            },
+            "answer_in_topk_fulldoc_pct": {
+              "min": 98.51,
+              "max": 98.51,
+              "range_pt": 0.0
+            },
+            "answer_in_topk_pct": {
+              "min": 98.51,
+              "max": 98.51,
+              "range_pt": 0.0
+            },
+            "right_doc_top1_pct": {
+              "min": 77.38,
+              "max": 77.38,
+              "range_pt": 0.0
+            }
+          },
+          "passages": {
+            "answer_in_top1_pct": {
+              "min": 68.15,
+              "max": 68.15,
+              "range_pt": 0.0
+            },
+            "answer_in_topk_fulldoc_pct": {
+              "min": 98.49,
+              "max": 98.49,
+              "range_pt": 0.0
+            },
+            "answer_in_topk_pct": {
+              "min": 81.5,
+              "max": 81.5,
+              "range_pt": 0.0
+            },
+            "right_doc_top1_pct": {
+              "min": 78.19,
+              "max": 78.19,
+              "range_pt": 0.0
+            }
+          },
+          "v1-search": {
+            "answer_in_top1_pct": {
+              "min": 80.19,
+              "max": 80.19,
+              "range_pt": 0.0
+            },
+            "answer_in_topk_fulldoc_pct": {
+              "min": 98.49,
+              "max": 98.49,
+              "range_pt": 0.0
+            },
+            "answer_in_topk_pct": {
+              "min": 98.49,
+              "max": 98.49,
+              "range_pt": 0.0
+            },
+            "right_doc_top1_pct": {
+              "min": 78.19,
+              "max": 78.19,
+              "range_pt": 0.0
+            }
+          }
+        }
+      },
+      "context_fit": {
+        "task": "context_fit",
+        "token_budget": 4000,
+        "pinned_sample": "s-2026-08-03T184827Z",
+        "total_n": 228,
+        "total_missing": 0,
+        "total_ambiguous": 28,
+        "total_failures": 0,
+        "answer_in_context_pct": 87.28,
+        "tokens_per_answer_delivered": 4194.6,
+        "context_tokens_mean": 3661.1,
+        "context_docs_mean": 4.96,
+        "matched_count_mean": 10.0,
+        "truncated_pct": 96.05,
+        "server_duplicates_dropped_mean": 0.01,
+        "budget_used_pct": 91.5,
+        "control_ok": true,
+        "status": "ok",
+        "elapsed_s": 122.8,
+        "host_env": {
+          "load1": 10.32,
+          "load5": 10.35,
+          "load15": 10.02,
+          "io_some_avg60": 6.77,
+          "io_full_avg60": 5.55,
+          "error": null
+        }
+      },
+      "supersession": {
+        "document": {
+          "task": "supersession",
+          "path": "document",
+          "edges": 29,
+          "n_ran": 29,
+          "failures": 0,
+          "replacement_at_1_pct": 27.59,
+          "replacement_in_top5_pct": 65.52,
+          "neither_returned_pct": 17.24,
+          "superseded_still_returned": 21,
+          "control_ok": false,
+          "status": "ok",
+          "why": "superseded memos are STILL being returned \u2014 FR-115 is not filtering, so the rest of this row is meaningless"
+        },
+        "passages": {
+          "task": "supersession",
+          "path": "passages",
+          "edges": 29,
+          "n_ran": 29,
+          "failures": 0,
+          "replacement_at_1_pct": 41.38,
+          "replacement_in_top5_pct": 82.76,
+          "neither_returned_pct": 3.45,
+          "superseded_still_returned": 27,
+          "control_ok": false,
+          "status": "ok",
+          "why": "superseded memos are STILL being returned \u2014 FR-115 is not filtering, so the rest of this row is meaningless"
+        },
+        "v1-search": {
+          "task": "supersession",
+          "path": "v1-search",
+          "edges": 29,
+          "n_ran": 29,
+          "failures": 0,
+          "replacement_at_1_pct": 41.38,
+          "replacement_in_top5_pct": 82.76,
+          "neither_returned_pct": 3.45,
+          "superseded_still_returned": 27,
+          "control_ok": false,
+          "status": "ok",
+          "why": "superseded memos are STILL being returned \u2014 FR-115 is not filtering, so the rest of this row is meaningless"
+        },
+        "elapsed_s": 70.1,
+        "host_env": {
+          "load1": 9.5,
+          "load5": 10.19,
+          "load15": 9.99,
+          "io_some_avg60": 7.43,
+          "io_full_avg60": 6.05,
+          "error": null
+        },
+        "replicates": 2,
+        "observed_spread": {
+          "document": {
+            "neither_returned_pct": {
+              "min": 17.24,
+              "max": 17.24,
+              "range_pt": 0.0
+            },
+            "replacement_at_1_pct": {
+              "min": 27.59,
+              "max": 27.59,
+              "range_pt": 0.0
+            },
+            "replacement_in_top5_pct": {
+              "min": 65.52,
+              "max": 65.52,
+              "range_pt": 0.0
+            }
+          },
+          "passages": {
+            "neither_returned_pct": {
+              "min": 3.45,
+              "max": 3.45,
+              "range_pt": 0.0
+            },
+            "replacement_at_1_pct": {
+              "min": 41.38,
+              "max": 41.38,
+              "range_pt": 0.0
+            },
+            "replacement_in_top5_pct": {
+              "min": 82.76,
+              "max": 82.76,
+              "range_pt": 0.0
+            }
+          },
+          "v1-search": {
+            "neither_returned_pct": {
+              "min": 3.45,
+              "max": 3.45,
+              "range_pt": 0.0
+            },
+            "replacement_at_1_pct": {
+              "min": 41.38,
+              "max": 41.38,
+              "range_pt": 0.0
+            },
+            "replacement_in_top5_pct": {
+              "min": 82.76,
+              "max": 82.76,
+              "range_pt": 0.0
+            }
+          }
+        }
+      },
+      "hard_negatives": {
+        "document": {
+          "task": "hard_negatives",
+          "path": "document",
+          "n": 228,
+          "failures": 0,
+          "target_rank1_pct": 75.88,
+          "target_absent_from_topk": 4,
+          "confusable_above_target_pct": 19.74,
+          "confusable_present_pct": 93.86,
+          "examples": [
+            {
+              "query": "K8s barn cluster: worker IP gotchas + WAVE-1 rule (2026-06-17) ## Worker IP mapping (easy to confuse) - **work",
+              "right": "192.168.0.32",
+              "wrong_ranked_higher": "192.168.0.10"
+            },
+            {
+              "query": "Airbnb Trip: Nashua NH -- Jun 22-24 2026 *: HMREDJ4MZA  **Check-in**: Monday Jun 22 after 2:00 PM **Check-out*",
+              "right": "$495",
+              "wrong_ranked_higher": "$200.00"
+            },
+            {
+              "query": "Garden Squirrel Exclusion \u2014 Twinwall Polycarbonate Barrier Project urement status (as of 6/25/2026): - Amazon ",
+              "right": "$210.41",
+              "wrong_ranked_higher": "$108.45"
+            },
+            {
+              "query": "NAS IP assignment: VyOS DHCP reservation swap for X520 to get 192.168.1.207 nas: 192.168.1.207 \u2192 1c:86:0b:39:6",
+              "right": "192.168.1.11",
+              "wrong_ranked_higher": "192.168.1.207"
+            },
+            {
+              "query": "worker4 \u2014 OS_NO_SERVICES, manual iLO needed (2026-05-09+) 4 entered OS_NO_SERVICES after SSH failures - Smart ",
+              "right": "192.168.1.199:8123",
+              "wrong_ranked_higher": "192.168.0.13"
+            },
+            {
+              "query": "Fiverr competitor intelligence \u2014 14 gig deep-dives 2. basitdotali / ThinkBuilt Solutions LLC \u2014 explicitly regi",
+              "right": "$2,500,",
+              "wrong_ranked_higher": "$150"
+            },
+            {
+              "query": "Laura BWH 403(b) excess contribution \u2014 decided to let it ride to let it ride rather than pursue the ROE. Reaso",
+              "right": "$630",
+              "wrong_ranked_higher": "$2,334"
+            },
+            {
+              "query": "Omada Controller \u2014 server4 instance details TP-Link Omada controller running on server4.  **URLs:** - HTTPS: h",
+              "right": "192.168.1.168:8088",
+              "wrong_ranked_higher": "192.168.1.168"
+            },
+            {
+              "query": "Home Depot Orders \u2014 120 Reedy Meadow Exterior Project separate later order; see sliding-door memo) - Shutters ",
+              "right": "$952.44",
+              "wrong_ranked_higher": "$2,049.70"
+            },
+            {
+              "query": "HVAC Replacement \u2014 Quote Search (May 2026) 15 to reschedule (voicemail) - **Status**: \u26a0\ufe0f NEEDS REPLY \u2014 call Ho",
+              "right": "+18883063893",
+              "wrong_ranked_higher": "+19784860600"
+            },
+            {
+              "query": "OctoPrint Pi Zero 2 W \u2014 Setup & Access toward HDMI side on Pi Zero - **cam2 (side view)**: ustreamer port 8081",
+              "right": "127.0.0.1:8081",
+              "wrong_ranked_higher": "192.168.1.232"
+            },
+            {
+              "query": "quantum-feed: tools added 2026-07-09 (sweep, selfheal, completeness, universes) tem mounts per host (nfs/noise",
+              "right": "192.168.1.57:30379",
+              "wrong_ranked_higher": "192.168.1.207"
+            }
+          ],
+          "control_ok": true,
+          "status": "ok",
+          "why": null
+        },
+        "passages": {
+          "task": "hard_negatives",
+          "path": "passages",
+          "n": 228,
+          "failures": 0,
+          "target_rank1_pct": 76.75,
+          "target_absent_from_topk": 4,
+          "confusable_above_target_pct": 20.18,
+          "confusable_present_pct": 94.74,
+          "examples": [
+            {
+              "query": "K8s barn cluster: worker IP gotchas + WAVE-1 rule (2026-06-17) ## Worker IP mapping (easy to confuse) - **work",
+              "right": "192.168.0.32",
+              "wrong_ranked_higher": "192.168.0.10"
+            },
+            {
+              "query": "Airbnb Trip: Nashua NH -- Jun 22-24 2026 *: HMREDJ4MZA  **Check-in**: Monday Jun 22 after 2:00 PM **Check-out*",
+              "right": "$495",
+              "wrong_ranked_higher": "$200.00"
+            },
+            {
+              "query": "Garden Squirrel Exclusion \u2014 Twinwall Polycarbonate Barrier Project urement status (as of 6/25/2026): - Amazon ",
+              "right": "$210.41",
+              "wrong_ranked_higher": "$108.45"
+            },
+            {
+              "query": "Fidelity browser macro: status, known bugs, and saved credentials n/.config/finance-secrets/fidelity.env (mode",
+              "right": "$1,045,154",
+              "wrong_ranked_higher": "$962"
+            },
+            {
+              "query": "NAS IP assignment: VyOS DHCP reservation swap for X520 to get 192.168.1.207 nas: 192.168.1.207 \u2192 1c:86:0b:39:6",
+              "right": "192.168.1.11",
+              "wrong_ranked_higher": "192.168.1.3"
+            },
+            {
+              "query": "Aquarium 55g freshwater \u2014 pending light/feeder upgrade cart (June 2026) g Aqueon Versa-Top covers and upgradin",
+              "right": "$233.87",
+              "wrong_ranked_higher": "$100"
+            },
+            {
+              "query": "\u2b50 spec 006 FR-001 dry-run: LIVE signal count = 3,012 (not ~2,100 \u2014 that was exact at 05-30; +913 June-era). Ca",
+              "right": "192.168.1.57:30017",
+              "wrong_ranked_higher": "192.168.1.42:27017"
+            },
+            {
+              "query": "Laura BWH 403(b) excess contribution \u2014 decided to let it ride to let it ride rather than pursue the ROE. Reaso",
+              "right": "$630",
+              "wrong_ranked_higher": "$2,334"
+            },
+            {
+              "query": "Omada Controller \u2014 server4 instance details TP-Link Omada controller running on server4.  **URLs:** - HTTPS: h",
+              "right": "192.168.1.168:8088",
+              "wrong_ranked_higher": "192.168.1.168"
+            },
+            {
+              "query": "Pi KVM testers: both directions confirmed working (2026-06-04) in ST7789VW 240x240 SPI + 5-way joystick + 3 ke",
+              "right": "b8:27:eb:b4:47:4e",
+              "wrong_ranked_higher": "88:a2:9e:ca:a4:72"
+            },
+            {
+              "query": "HVAC Replacement \u2014 Quote Search (May 2026) 15 to reschedule (voicemail) - **Status**: \u26a0\ufe0f NEEDS REPLY \u2014 call Ho",
+              "right": "+18883063893",
+              "wrong_ranked_higher": "+18443241660"
+            },
+            {
+              "query": "OctoPrint Pi Zero 2 W \u2014 Setup & Access toward HDMI side on Pi Zero - **cam2 (side view)**: ustreamer port 8081",
+              "right": "127.0.0.1:8081",
+              "wrong_ranked_higher": "192.168.1.232"
+            }
+          ],
+          "control_ok": true,
+          "status": "ok",
+          "why": null
+        },
+        "v1-search": {
+          "task": "hard_negatives",
+          "path": "v1-search",
+          "n": 228,
+          "failures": 0,
+          "target_rank1_pct": 76.75,
+          "target_absent_from_topk": 4,
+          "confusable_above_target_pct": 20.18,
+          "confusable_present_pct": 94.74,
+          "examples": [
+            {
+              "query": "K8s barn cluster: worker IP gotchas + WAVE-1 rule (2026-06-17) ## Worker IP mapping (easy to confuse) - **work",
+              "right": "192.168.0.32",
+              "wrong_ranked_higher": "192.168.0.10"
+            },
+            {
+              "query": "Airbnb Trip: Nashua NH -- Jun 22-24 2026 *: HMREDJ4MZA  **Check-in**: Monday Jun 22 after 2:00 PM **Check-out*",
+              "right": "$495",
+              "wrong_ranked_higher": "$200.00"
+            },
+            {
+              "query": "Garden Squirrel Exclusion \u2014 Twinwall Polycarbonate Barrier Project urement status (as of 6/25/2026): - Amazon ",
+              "right": "$210.41",
+              "wrong_ranked_higher": "$108.45"
+            },
+            {
+              "query": "Fidelity browser macro: status, known bugs, and saved credentials n/.config/finance-secrets/fidelity.env (mode",
+              "right": "$1,045,154",
+              "wrong_ranked_higher": "$962"
+            },
+            {
+              "query": "NAS IP assignment: VyOS DHCP reservation swap for X520 to get 192.168.1.207 nas: 192.168.1.207 \u2192 1c:86:0b:39:6",
+              "right": "192.168.1.11",
+              "wrong_ranked_higher": "192.168.1.3"
+            },
+            {
+              "query": "Aquarium 55g freshwater \u2014 pending light/feeder upgrade cart (June 2026) g Aqueon Versa-Top covers and upgradin",
+              "right": "$233.87",
+              "wrong_ranked_higher": "$100"
+            },
+            {
+              "query": "\u2b50 spec 006 FR-001 dry-run: LIVE signal count = 3,012 (not ~2,100 \u2014 that was exact at 05-30; +913 June-era). Ca",
+              "right": "192.168.1.57:30017",
+              "wrong_ranked_higher": "192.168.1.42:27017"
+            },
+            {
+              "query": "Laura BWH 403(b) excess contribution \u2014 decided to let it ride to let it ride rather than pursue the ROE. Reaso",
+              "right": "$630",
+              "wrong_ranked_higher": "$2,334"
+            },
+            {
+              "query": "Omada Controller \u2014 server4 instance details TP-Link Omada controller running on server4.  **URLs:** - HTTPS: h",
+              "right": "192.168.1.168:8088",
+              "wrong_ranked_higher": "192.168.1.168"
+            },
+            {
+              "query": "Pi KVM testers: both directions confirmed working (2026-06-04) in ST7789VW 240x240 SPI + 5-way joystick + 3 ke",
+              "right": "b8:27:eb:b4:47:4e",
+              "wrong_ranked_higher": "88:a2:9e:ca:a4:72"
+            },
+            {
+              "query": "HVAC Replacement \u2014 Quote Search (May 2026) 15 to reschedule (voicemail) - **Status**: \u26a0\ufe0f NEEDS REPLY \u2014 call Ho",
+              "right": "+18883063893",
+              "wrong_ranked_higher": "+18443241660"
+            },
+            {
+              "query": "OctoPrint Pi Zero 2 W \u2014 Setup & Access toward HDMI side on Pi Zero - **cam2 (side view)**: ustreamer port 8081",
+              "right": "127.0.0.1:8081",
+              "wrong_ranked_higher": "192.168.1.232"
+            }
+          ],
+          "control_ok": true,
+          "status": "ok",
+          "why": null
+        },
+        "elapsed_s": 586.9,
+        "host_env": {
+          "load1": 11.05,
+          "load5": 9.75,
+          "load15": 9.82,
+          "io_some_avg60": 5.3,
+          "io_full_avg60": 4.54,
+          "error": null
+        },
+        "replicates": 2,
+        "observed_spread": {
+          "document": {
+            "confusable_above_target_pct": {
+              "min": 19.74,
+              "max": 19.74,
+              "range_pt": 0.0
+            },
+            "confusable_present_pct": {
+              "min": 93.86,
+              "max": 93.86,
+              "range_pt": 0.0
+            },
+            "target_rank1_pct": {
+              "min": 75.88,
+              "max": 75.88,
+              "range_pt": 0.0
+            }
+          },
+          "passages": {
+            "confusable_above_target_pct": {
+              "min": 20.18,
+              "max": 20.18,
+              "range_pt": 0.0
+            },
+            "confusable_present_pct": {
+              "min": 94.74,
+              "max": 94.74,
+              "range_pt": 0.0
+            },
+            "target_rank1_pct": {
+              "min": 76.75,
+              "max": 76.75,
+              "range_pt": 0.0
+            }
+          },
+          "v1-search": {
+            "confusable_above_target_pct": {
+              "min": 20.18,
+              "max": 20.18,
+              "range_pt": 0.0
+            },
+            "confusable_present_pct": {
+              "min": 94.74,
+              "max": 94.74,
+              "range_pt": 0.0
+            },
+            "target_rank1_pct": {
+              "min": 76.75,
+              "max": 76.75,
+              "range_pt": 0.0
+            }
+          }
+        }
+      },
+      "query_replay": {
+        "document": {
+          "task": "query_replay",
+          "path": "document",
+          "n": 120,
+          "requested": 120,
+          "failures": 0,
+          "returned_nothing": 0,
+          "returned_nothing_pct": 0.0,
+          "latency_p50_s": 0.224,
+          "latency_p95_s": 0.252,
+          "latency_max_s": 0.313,
+          "top1_by_query": {
+            "genomics scrubby memory store migrated documents": "27a160a1-a9ba-40d5-b9e6-b1e5705cdc50",
+            "Assistant Inbox Sweep \u2014 2026-07-23 \u2014 PM as such. `gmail_get_thread` showed Ben replied from `family@sack.io` 33 min after receipt on 7/21 \u2014 **PAID $8,946.30 EFT** (Inv #125 + CO#8": "006f9097-ee50-44c4-8b6b-27c1dcc6f55b",
+            "server4 I/O windows make MULTIPLE monitors false-positive (docker-heal unhealthy, disk-monitor host_unreachable). Two windows: 30 */6 daily + Sunday 02:00. Verify before acting or escalating.": "4effebfa-faf8-4ca8-83f9-aaef7d4f0493",
+            "Garden squirrel barrier: FINAL BOM decided \u2014 flat smooth twinwall polycarbonate, 24\" x 124 lin-ft ing wood top rail - Already have lumber + screws  Recommended option: ThermaGlas 4mm clear twinwall 24": "0b87a95e-49e8-421e-bd7f-d2215f076b9b",
+            "Incident response consumes the resource it investigates \u2014 and a runway measured while idle is a fact about the idleness": "6d8986a5-9ea2-44e4-9458-a6375222d6bc",
+            "SMS \u2014 Nick (+15642308595): yard-work job negotiated 8/10, $350 offered for 3 jobs Friday, awaiting his yes (2026-08-10)": "4b6d27fb-5c2f-4bae-9089-60216cb89452",
+            "Groton \u2014 GELD tariff, NO residential demand charge, HH excludes heat pumps ligibility/structure, especially before Ben claims it.  ## Ben's load, for calibration ~**81,722 kWh/yr** (Apr 2025\u2013May 2026)": "714248a8-620b-485d-8790-f06f32e9cb18",
+            "garden watering rules soil moisture triggers rain delay": "94ec04f7-383d-4772-83e9-cbf6095750d2",
+            "laurasack.com \u2014 private staging/preview environment (setup + promote/teardown) icly indexed/discoverable. - **Production (LIVE, unchanged):** https://laurasack.com \u2192 host nginx proxies to `laurasite-w": "8b10aa59-2409-4795-b195-279ded6afdc4",
+            "quantum-feed: the sealed-agent spec method, and what it found (2026-08-04)": "e623edff-2df8-42fb-9c25-538d3b08f83e",
+            "`pgrep -x tmux` can never fire \u2014 tmux's comm is \"tmux: server\", and the false null was load-bearing on a fleet theory": "4c09329f-dbf5-4054-899b-f28f7c9b767d",
+            "Costco trip history \u2014 backfill via API (2026-05-02) eab5484`, `da76285f`, `3bdacacd`).  ## Summary by period  | Date | Total | Items | Savings | Barcode | |---|---|---|---|---| | 2025-02-21 |": "83f26022-8074-4b58-8f56-322d5c834006",
+            "memo-qa control probe: is /context instrumented": "72336a84-e464-4522-aea1-8f4fb5428b35",
+            "barn electrical circuit amps 240V subpanel mining power": "e76d7563-8985-4ce9-a216-e65bb00a9b4b",
+            "A plausible mechanism at the right magnitude TERMINATES THE SEARCH, and at small residuals magnitude agreement is nearly free \u2014 so the fit that persuades you is the one carrying least information": "a4f6d659-1ef6-4b3c-ac66-b38df60c8a51",
+            "Generac Mobile Link telemetry dead since 2026-05-11 (~12 wks) + why the Sol-Ark GEN input CANNOT verify a weekly exercise": "d5a85984-4114-4e4a-9479-bcfe41741f22",
+            "worker4 \u2014 OS_NO_SERVICES, manual iLO needed (2026-05-09+) 4 entered OS_NO_SERVICES after SSH failures - Smart plug offline \u2014 automated power cycle not possible - Home Assistant briefly unreachable (": "bcce55b7-f84b-4988-800f-42fb8abe98a8",
+            "6e91306f-397e-4614-ba9e-95b7b0271d49": "f68359dd-74b2-457f-ae63-16d884038981",
+            "\u26d4 HOURLY RE-EMBED LOOP (200 chunks/hr) + STABLE-WRONG transcript choice decided by directory NAME \u2014 do when embargo lifts": "638b87b7-eaef-410b-91c6-ae51704f1603",
+            "Server4 \u2014 Hosted Sites & Nginx Vhosts (partial April-2026 snapshot; live count 80)": "dba33532-16a8-4038-955b-a08af7ef3b0b",
+            "quantum-data embport: the ~68% client-side cost is an NFS METADATA STORM (~512 ops + 128 small-file creates per batch), NOT the 1.31 MB vector write \u2014 third instance of one shape in a day": "43b9a160-f085-4d10-95c7-9b9c25269098",
+            "b4170d4a-940c-4057-8e92-7c79bdf250aa": "4f780e79-e527-4a7f-872c-faa762f88291",
+            "Barn cluster network performance \u2014 post-migration speed-test matrix (2026-06-01) 68.1.207 192.168.1.207 dev enp65s0 src 192.168.0.109 uid 1000  $ ss -tn dst 192.168.1.207 dport 2049 ESTAB 0      0": "485ead47-a59f-463d-a60f-3139f4903046",
+            "RESOLVED IN BEN'S FAVOUR \u2014 Paradisus $562 Amex chargeback D-100537758 credited (2026-08-10)": "1787f74e-3712-4fa7-96a9-7a5ecb749c51",
+            "HVAC plan": "6a171309-39d4-4151-b6d8-f6b1089684cd",
+            "host-account-swap 2026-08-08 (server4\u2192ben): profile REUSE makes a mint ~15s \u2014 and the anti-bot gate fired for the first time, plausibly because of it": "91c9b13a-0ce1-4040-acf6-f503aa407844",
+            "Frigate NVR Setup on Server4 t usable. Must use the USB version.  **Recommended purchase**: Google Coral USB Accelerator (Google model G950-01456-01) - **B07R53D12W** \u2014": "df08714a-f7d9-49d8-ac94-8534f5720ce5",
+            "Sack family insurance \u2014 MASTER INDEX (all lines, rev. 2026-07-22 deep sweep) 0375164 | via MGB employer | calendar year | [[sack-family-insurance-current-coverage]] | | **Pet (Brooke)** | Trupanion |": "fa138eb1-b283-4b7f-b384-36afa4356873",
+            "e98995e9-92a6-4a15-962b-e1a3f29d1426": "24ecbe4b-9df5-4bdf-b414-6923784ea2db",
+            "BJ's-via-DoorDash trip 2026-07-30 $78.87 \u2014 DOUBLE-ORDER DAY (both in-store + delivery) carrots, cabbage, buffalo chicken, Wilde chips \u2014 all doubled  **Day total across both channels**: **$61.72 (in-st": "e9215dba-9a23-4631-a207-2953a80b3611",
+            "Source-fidelity census starvation: a 119h sweep outage, a global stamp over 7 lanes, and five wrong-set errors in one hour (2026-08-09)": "8208304c-4666-4c3d-b21d-ae85185b4fcc",
+            "Matley Pool Service \u2014 Relationship & History d) | | 2021-09-01, 10-19, 10-23 | Closing + follow-up | | | | 2022-04-25 | Opening | | | | 2022-04/05 | **Saltwater conversion estimate** |": "c311f205-6142-4d19-a5f2-996ec01f2320",
+            "Four rules for asserting and recording: don't ship a guess \u00b7 one query away \u00b7 name the mechanism \u00b7 beware market-wide claims \u2014 two independent derivations agreeing beat either alone. alpaca derived $5": "46a378e4-0976-462a-aece-f8af90d841ae",
+            "v1\u2194v2 cutover + rollback runbook \u2014 READY (all prerequisites done, 2026-08-10)": "e8899224-8698-4ef3-b54b-e11039e330e2",
+            "pool chemistry": "7d39dc3c-48b6-49b2-8dfb-584c7a7129ea",
+            "Backup verification 2026-08-09: the NVMe symlink broke a third consumer, and nothing watched memo at all": "3ce34534-8b4b-4ae4-8657-42ffa242e21b",
+            "399d6085-d032-4e43-9dad-1ec9e9b1741a": "f68359dd-74b2-457f-ae63-16d884038981",
+            "code agent \u2014 new-projects incubator (migrated office \u2192 server3, 2026-08-03)": "240a7770-9e03-45c3-9a41-bb906f1b6942",
+            "groton receipt log: tokens are response-verified, ROWS ARE NOT \u2014 n comes from the request (found 2026-08-08)": "86d25a2b-1f69-4dcc-82ff-fe529986fffe",
+            "Linode Relay Server (173.255.233.16) tent tunnel between relay and server4:  | Endpoint | WireGuard IP | Public Key | |----------|-------------|------------| | relay (Linode) |": "e7069fd4-eb86-4ec7-813a-3bfb0f8a87f7",
+            "ATC host-zone broadcast block (temporary) \u2014 2026-08-04 fleet token-exhaustion fix": "9ce89a58-b124-487f-9ac8-8028f4f2c731",
+            "4a7bbd58-1bed-4d12-9eb6-e8b02afde2ec": "cf72ca56-f3ab-4c43-96ec-892e0ee91bfc",
+            "Frigate footage loss 2026-08-09: I/O stall \u2192 TIMED-OUT WATCHDOG PROBE \u2192 restart loop. 155 missing minute-files + an uncounted 10th. FIX SHIPPED (f4d5811, on origin), owned by `ha`. UNKNOWN\u21d2DENY validated x27; the probe fix itself only x3; authoriser UNTESTED. Frigate now DISABLED, cameras down for DAYS.": "bd0a5bce-ad7d-4e55-a48f-6641239ff4dc",
+            "memo_store placeholder": "993b8034-821f-429c-9ec6-ae05bc16093d",
+            "915303e2-b7d0-456e-8fda-d2c2efe35d43": "f68359dd-74b2-457f-ae63-16d884038981",
+            "Sunday step 2 LEAD: two orphaned DRIVER duties + a latent unconditional stamp (\u26d4 the earlier \"Principle IV held vacuously\" claim in here is RETRACTED) \u2014 quantum-feed 2026-08-08": "aa25ceb4-b901-4f7d-b905-4fa101015c9c",
+            "sure finance self-hosted plaid sync": "bf744bc8-6599-4a5f-a386-2bf9e5dd6329",
+            "Generac Mobile Link telemetry dead since 2026-05-11 \u2014 RESOLVED 08-03: generator fine, Wi-Fi module only. Plus: the Sol-Ark GEN input CANNOT verify a weekly exercise": "d5a85984-4114-4e4a-9479-bcfe41741f22",
+            "feedback-applovin-brief-cc-ben styled HTML CC ben weekly brief": "e0dc7587-46d9-4f75-a8da-84f86fd443e0",
+            "HA media integrations \u2014 Kodi, Samsung TV, Fire Stick setup and dashboard ## Kodi instances - Bedroom:": "4459971d-7a83-4fe0-b65c-2e026ad6885c",
+            "ollm state of play server3 seat": "1beac4a2-57ec-4084-9c95-d0ef9c4713f6",
+            "server4 snap-docker: output is SILENTLY EMPTY when stdout is a regular file (`> file`) \u2014 pipe or `$( )` always; rc=0 and stderr empty": "935ff519-755c-4152-baa8-4b72bbd5301b",
+            "2027 Garden Expansion Plan \u2014 blueberry relocation + asparagus conversion [\u26a0\ufe0f ON HOLD 2026-08-04 \u2014 do not execute, see hold memo]": "1dda0f1f-130e-480c-ae40-059b06d65d43",
+            "2a773e01-be78-43f6-8d45-e22a633b2ab9": "f68359dd-74b2-457f-ae63-16d884038981",
+            "ROOT CAUSE: historical-inventory.json is 4.9 days stale because its generator HANGS on an os.walk of the pivot tree over NFS \u2014 fix is proven (13.5s vs indefinite), QUEUED not built": "f5b41b09-01b0-4b4f-98f5-c3e7641ec4df",
+            "Tesla send destination to car script Home Assistant Tessa navigation": "1f99422d-84e8-41cb-987f-7a991926573a",
+            "quantum-data 2026-08-10 ADDENDUM to d4f7e32b: the ETF FIRE (upstream), --emit-catchup, and a bind I chose not to resolve": "1b11b827-7f0b-4312-b911-ab3e76910969",
+            "TRAP: `atc_schedule_list(mine=true)` filters by OWNER, not creator \u2014 plus the fleet schedule snapshot 2026-08-06": "9e636e1a-f89c-4350-877c-b192073790e1",
+            "Shell idiom hazard: `ps -o etime= -p PID || echo \"DONE\"` \u2014 the NUMBER is the liveness signal, and it reads as completion": "56814309-a6f8-4b6f-80c6-2679e74e0740",
+            "Optimum Nutrition Gold Standard whey protein Ben supplement subscribe save": "49eeea0a-6164-4175-aef1-955e7116d166",
+            "HWM docket CASE #2 \u2014 same defect on the Slack path; and a mitigation that records a vanished message as chosen silence": "63ab5f94-c8ca-43c4-b4d6-ddbe2f1dd71b",
+            "Laura Sack's CCU checking \u2014 the premium-draft account (full details, per Ben's explicit instruction)": "148d7396-c0a7-4903-acf5-b369692949db",
+            "server4 I/O incident 2026-08-09 server6 frigate recording gap PSI stall client-side SSH": "bc1a3691-c793-47e4-8294-200c3b4c27dd",
+            "6ed8b3fb-0f5a-4c9c-8079-41eb18e59046": "59752c22-70e0-440f-8fee-1eb8feddfa30",
+            "\ud83d\udd34 NAV RESUME v37 \u2014 FRESH NO-RESUME SEAT INBOUND. \u26d4 ZERO CRONS by operator directive. Pin 82709906 (v30). State file OPENS with a banner + CURRENT WORK block \u2014 read that first. Spec re-cut at STEP 2 of 5, gated on Ben's feedback.": "6e91306f-397e-4614-ba9e-95b7b0271d49",
+            "buffet-buster: v0.20.0: price-gated celebration, auto-resize money text, richer money FX, photo record (1038ec1) to keep score' line when no price. - AutoSizeMoney: one-line money text that shrinks to": "757b8f60-739a-4c18-8af5-48dae37d5f63",
+            "0db146fc-c54f-49f4-9749-f85804e8ba78": "59752c22-70e0-440f-8fee-1eb8feddfa30",
+            "GE washer GFW550SSN3WW \u2014 2026-08-03 post-lock-replacement progression: lock fitted, still fails, NOW CLICKS (board drive likely alive)": "b28ea866-18ee-4b9d-8c52-7e959819206b",
+            "CROSS-SEAT DEPENDENCY \u2014 `finance` holds the Aug 12 Amex D-100537758 doc-deadline watcher; `assistant` deliberately stood down (2026-08-05)": "bdd1bcf5-859e-4d95-826e-2331666f0078",
+            "memo v1 vs v2 benchmark, replicated retest 2026-08-09 \u2014 v2 wins every quality axis; v1's supersession filter is not filtering": "dc84699b-162e-4220-9db1-147308ade071",
+            "Insurance \u2014 Auto (Progressive Direct #968850121)": "9779c45e-6a9b-4cae-b289-bb137063bd7f",
+            "BJ's Wholesale trip history \u2014 4 orders since Nov 2025 s 11/30/2026. **Home club:** Nashua, NH. **Period:** 2025-11-30 \u2192 2026-02-13 (~2.5 months active). **Total:** 4 orders + membership signup,": "d4527769-21f2-4d8a-97c6-a7751ce314ba",
+            "f34e1e92-7136-442d-a9e3-3e7f8fe9677f": "f68359dd-74b2-457f-ae63-16d884038981",
+            "Frigate gaps \u2014 HANDOFF TO `agents` (Ben stopped it 2026-08-09 09:40). Cheap fix APPLIED; two published claims RETRACTED. A monitor that causes the outage it prevents.": "24fcb6e8-6b94-4881-b403-8d5dde5cf8b7",
+            "library seat halt queue quote_intensity_probe Principle VI cordon sweep FR draft T116": "6242c9b2-0fde-47f4-a174-88fdbd8442e4",
+            "\u2705 RESOLVED 2026-08-06: ASR duplicate-transcript re-embed loop + vod5530 \u2014 commit 8e18857. Lessons kept.": "638b87b7-eaef-410b-91c6-ae51704f1603",
+            "dojo 2026-08-09: the 201-cell taxonomy completed, and nine measured traps \u2014 every defect was silent and looked like success": "57f7cf8a-2f1f-4bd0-afa4-443ef94cbfca",
+            "QUEUED FEATURE \u2014 super-agent \"finder mode\" (walk back to a saved waypoint). Build when token rationing lifts.": "1a1a540f-740b-4652-beb1-886567f8fce6",
+            "models seat \u2014 2026-08-09 method corpus: the wrong-set defect class, and the instruments built against it": "5e889e99-5e73-4b25-94b9-26ff11b9cc41",
+            "11a94e1c-b76a-4ae8-8e79-8de1226884c9": "8dbe3f0e-4266-476a-9f55-a599c7f61b4d",
+            "groton town agent project state current work": "d5351291-11fc-4806-8ddd-92b4928cdb0e",
+            "Assistant Inbox Sweep \u2014 2026-07-31 \u2014 AM ten: 0 (this checkpoint only)  Flagged working set (open): 40  THE TWO NEW ITEMS 1. Amex \"We've received your payment\", acct ending 91006 \u2014": "ee423409-90e2-47d0-a53a-d1225cc7c6f8",
+            "lesson a field on a burn list cannot carry a distinction test a different field": "fda987ed-ab3a-4adf-93cc-bcb2ae21c3cc",
+            "anti-ARP-spoof defense barn workers nft ingress gateway MAC pin": "41a388d9-57f1-4b35-9be7-69feb8059281",
+            "Fiber spec FINAL + FS QUOTE SENT \u2014 armored non-metallic; unarmored recommendation RETRACTED [v4] g (disclosed to Ben, NOT recommended) If no vendor builds non-metallic pre-term at \u2265350 ft: **Amazon YU": "359e9b5a-4ee3-4b46-8c6c-3c09d6ea1010",
+            "Insurance \u2014 Disability (MetLife, Ben + Laura)": "35d5bc9d-47a4-48e6-8868-1d5fa3fc6d57",
+            "collapse inversion instrument failure detector predicate evidence logic": "6fc94fa9-fe33-4211-92ab-9389cad07c42",
+            "\u26d4 OAuth grants need a RECENT sign-in \u2014 a valid session is NOT a grant-capable one. Three states, two probes. (2026-08-08; +08-09 drain-then-flip: fire the trigger early, mint the session late)": "91c9b13a-0ce1-4040-acf6-f503aa407844",
+            "Epistemics: a cause that explains the phenomenon but not its magnitude is not a cause yet (2026-08-08)": "53bcd548-dd2d-4a13-873c-6ae973379819",
+            "Costco Nashua trip 2026-07-01 \u2014 chickpeas + paper goods + cadence restock Costco Wholesale #307 Nashua NH (311 Daniel Webster Hwy) trip 2026-07-01 at 13:34, Visa *6637 chip-read. Member 111813351592.": "3598023d-9d6e-45e2-b288-dd3035486f1d",
+            "d098e728-69ab-431b-a10a-0a9745712eed": "f68359dd-74b2-457f-ae63-16d884038981",
+            "Repeated alert fired daily and said nothing new: the escalating fact belongs in the BODY, not the dedup key": "b8e33f3b-bdc5-4158-80f4-b9c07b2a598e",
+            "Ecowitt GW2000 gateway web UI password / weather station login credentials": "2117edf7-0f35-4ee7-9f35-746b5a3130c7",
+            "worker15 Hardware Failure (2026-04-17) ycles):  - Smart plug ON (last state change via cluster-heal cycle) - No MAC in ARP on any LAN host (office or server4) - No DHCP lease for": "3af9cd82-4a07-41f7-a88e-33c84399aa12",
+            "mind: the prefilter skips 37% of the real corpus but 0% of the eval set \u2014 the labelled set is unrepresentative on exactly that axis (2026-08-09)": "a26d9136-a22d-47a9-aaf6-7c31ac6564ff",
+            "server4 kube-apiserver needs explicit --advertise-address .168.0.168:16443` entry which is NOT a real IP on server4 \u2014 server4's actual addresses are 192.168.1.168 (eno1, primary LAN) plus barn NICs": "e2b7e61b-1ab6-404c-ae54-07834ce06e1f",
+            "contractor contacts phone numbers house": "8e77a902-af09-4fcc-aa2f-861f4030eb1c",
+            "\ud83d\udfe2 NAV RESUME v35 \u2014 pin 96bde3ec (v28), cron 564103fb. Corpus=209. Emitter ownership RULED MINE; 008 park wired (af4bc3b4\u21925ce7df5d) \u2014 its unpark condition was unsound TWICE. Order locked; Ben owes user-story feedback.": "6e91306f-397e-4614-ba9e-95b7b0271d49",
+            "Insurance seat \u2014 SCOPE BOUNDARY: do not raise infrastructure/NAS/permissions topics with Ben (2026-08-03)": "74d53171-b940-4ba6-9bbc-a88cf36aa83c",
+            "quantum-feed DATA (part 2): exhaustive units map falsifies year-alignment; odd-lot discriminator REFUTES ITSELF; intraday worst-window tool; stress cost table 2026 quotes $0.0499). Use the per-ticker": "92fda2c7-54d3-4175-b04c-3133206b5061",
+            "Lesson \u2014 a field on a known-burn list cannot carry a distinction; test a different field (Amex D-100939135, 2026-08-05)": "fda987ed-ab3a-4adf-93cc-bcb2ae21c3cc",
+            "personal assistant session role scope operations bootstrap": "722600e7-2931-44ab-b2be-79ba3101c657",
+            "[\u26a0\ufe0f DASHBOARD PORTS CORRECTED 2026-06-19 \u2192 unified :3000; library backend :8742 NOT :8732] quantum-data DASHBOARD 2026-06-12 (DATA+LIBRARY pages, master @05d6466f) \u2014 topology superseded by 7d5b0678 fa": "ff6db753-e548-4ca3-b70c-773333522791",
+            "192.168.1.254 = the router itself: ARP alert of 2026-08-09 resolved BENIGN (measured), + the corrected single-equality gateway rule": "930641b7-fff5-485e-a34f-26308d8730d4",
+            "Maynard 2026-08-10: GIB dead for 2026, forms received, Brighthouse bank change APPLIED, MetLife pending": "1249d28d-f86e-43ee-89af-1e2b7386542f",
+            "server4 docker on NVMe: snap confinement, PERC H310 hardware reality, and the data-root design": "9610818c-e428-4a5d-9fc0-ace5d31cebed",
+            "coordinating redundant triggers dedupe before sending verification traps": "b4170d4a-940c-4057-8e92-7c79bdf250aa",
+            "alpaca session migration server3 host change August 2026": "8ac084bd-e190-4d2d-b569-82ecbc7c00ff",
+            "recompute cost lever 6219 historical feature days never recomputed 1.7 days to 32 days chunk size 18x memory 13.4 GB Rust bin peak accumulates": "37f86fb6-0f04-48dd-b92e-01e2950d4733",
+            "Groton host ADDENDUM 2026-08-03: server3 has READ-ONLY NAS \u2014 cannot run pipeline or git commit; office ssh fixed; cron cadence": "3bda52ca-10e5-491e-9f02-fce60f4444cc",
+            "quantum-data DEFECTS (deferred under drought), news_embcache_prewarm: (1) silent receipt drop \u2014 `dropped=0` is NOT proof of complete accounting; (2) NAS-default cache lookup; (3) batch budget denominated in ESTIMATED tokens \u2014 invisible from my seat by construction": "3098602c-8d58-418a-9b51-4a99e1bf470b",
+            "Picture book manuscript \u2014 \"The River Went On\", Magill family, 12 spreads (2026-08-10)": "d7fa5235-4cb3-4355-87a2-e15b01e8442e",
+            "Groton Water Expansion \u2014 does 120 Reedy Meadow qualify? (analysis 2026-07-28) -| | Total capital | $17.63M | $16.78M | | **Groton's share** | **$5.57M** | **$12.92M** | | Groton 30-yr DWSRF monthly (0": "993b2e79-efce-430b-a17b-f4eb85082e2d",
+            "b924d285-9eda-4aa0-a577-2ea73618f58e": "8b8ae533-9394-43ba-bd78-ff3a2ea8918d",
+            "electric seat \u2014 ACTIVE PROJECT as of 2026-08-05 14:20 EDT: pool-deck GFCI fault, Ben mid-decision on resin vs kits. Verified ASINs, prices, six traps, and what is still open.": "90809380-1a40-4efa-825e-baee2172b574",
+            "Pin hygiene: a pin is an instruction to a self who cannot check it (2026-08-04 findings)": "8961378d-04c7-4b44-8879-f1764d415703",
+            "current plantings 2026 garden beds what is planted": "e0f76b5a-c164-4027-911b-dfb14f10bedf",
+            "b8e33f3b-bdc5-4158-80f4-b9c07b2a598e": "8b8ae533-9394-43ba-bd78-ff3a2ea8918d",
+            "quantum-feed: #002 DATA COMPLETE \u2014 2,849-ticker universe backfilled to ~2009 (e10f283b) rror \u2192 Unclassified); (2) sane-cap-vs-continuity ordering \u2014 eps path now sane-checked AFTER basis resolution \u2192 G": "f5948cc1-4624-4da5-a661-6f61836d4315",
+            "embport deferred live-path defects silent receipt drop NAS cache lookup": "c0a820e9-9ba6-4ac3-8130-239de059f19a"
+          },
+          "control_ok": true,
+          "status": "ok"
+        },
+        "passages": {
+          "task": "query_replay",
+          "path": "passages",
+          "n": 120,
+          "requested": 120,
+          "failures": 0,
+          "returned_nothing": 0,
+          "returned_nothing_pct": 0.0,
+          "latency_p50_s": 0.504,
+          "latency_p95_s": 0.545,
+          "latency_max_s": 0.647,
+          "top1_by_query": {
+            "genomics scrubby memory store migrated documents": "27a160a1-a9ba-40d5-b9e6-b1e5705cdc50",
+            "Assistant Inbox Sweep \u2014 2026-07-23 \u2014 PM as such. `gmail_get_thread` showed Ben replied from `family@sack.io` 33 min after receipt on 7/21 \u2014 **PAID $8,946.30 EFT** (Inv #125 + CO#8": "12f6a2bb-1bb7-43ac-87b1-c1cc22b2d04a",
+            "server4 I/O windows make MULTIPLE monitors false-positive (docker-heal unhealthy, disk-monitor host_unreachable). Two windows: 30 */6 daily + Sunday 02:00. Verify before acting or escalating.": "4effebfa-faf8-4ca8-83f9-aaef7d4f0493",
+            "Garden squirrel barrier: FINAL BOM decided \u2014 flat smooth twinwall polycarbonate, 24\" x 124 lin-ft ing wood top rail - Already have lumber + screws  Recommended option: ThermaGlas 4mm clear twinwall 24": "0b87a95e-49e8-421e-bd7f-d2215f076b9b",
+            "Incident response consumes the resource it investigates \u2014 and a runway measured while idle is a fact about the idleness": "4a7bbd58-1bed-4d12-9eb6-e8b02afde2ec",
+            "SMS \u2014 Nick (+15642308595): yard-work job negotiated 8/10, $350 offered for 3 jobs Friday, awaiting his yes (2026-08-10)": "4b6d27fb-5c2f-4bae-9089-60216cb89452",
+            "Groton \u2014 GELD tariff, NO residential demand charge, HH excludes heat pumps ligibility/structure, especially before Ben claims it.  ## Ben's load, for calibration ~**81,722 kWh/yr** (Apr 2025\u2013May 2026)": "b30436c6-258c-40bc-a4b8-5ee8d348bcbc",
+            "garden watering rules soil moisture triggers rain delay": "7306786e-6a7e-4bb5-badb-aafab7e8a6b6",
+            "laurasack.com \u2014 private staging/preview environment (setup + promote/teardown) icly indexed/discoverable. - **Production (LIVE, unchanged):** https://laurasack.com \u2192 host nginx proxies to `laurasite-w": "8b10aa59-2409-4795-b195-279ded6afdc4",
+            "quantum-feed: the sealed-agent spec method, and what it found (2026-08-04)": "8689a84f-68b5-49aa-8c72-131ad2b09e10",
+            "`pgrep -x tmux` can never fire \u2014 tmux's comm is \"tmux: server\", and the false null was load-bearing on a fleet theory": "4c09329f-dbf5-4054-899b-f28f7c9b767d",
+            "Costco trip history \u2014 backfill via API (2026-05-02) eab5484`, `da76285f`, `3bdacacd`).  ## Summary by period  | Date | Total | Items | Savings | Barcode | |---|---|---|---|---| | 2025-02-21 |": "83f26022-8074-4b58-8f56-322d5c834006",
+            "memo-qa control probe: is /context instrumented": "72336a84-e464-4522-aea1-8f4fb5428b35",
+            "barn electrical circuit amps 240V subpanel mining power": "e76d7563-8985-4ce9-a216-e65bb00a9b4b",
+            "A plausible mechanism at the right magnitude TERMINATES THE SEARCH, and at small residuals magnitude agreement is nearly free \u2014 so the fit that persuades you is the one carrying least information": "a4f6d659-1ef6-4b3c-ac66-b38df60c8a51",
+            "Generac Mobile Link telemetry dead since 2026-05-11 (~12 wks) + why the Sol-Ark GEN input CANNOT verify a weekly exercise": "d5a85984-4114-4e4a-9479-bcfe41741f22",
+            "worker4 \u2014 OS_NO_SERVICES, manual iLO needed (2026-05-09+) 4 entered OS_NO_SERVICES after SSH failures - Smart plug offline \u2014 automated power cycle not possible - Home Assistant briefly unreachable (": "649f22aa-9ce8-4398-bdfa-97fdd75b9e88",
+            "6e91306f-397e-4614-ba9e-95b7b0271d49": "96907e44-ec32-4170-ba88-74021ee8d40c",
+            "\u26d4 HOURLY RE-EMBED LOOP (200 chunks/hr) + STABLE-WRONG transcript choice decided by directory NAME \u2014 do when embargo lifts": "638b87b7-eaef-410b-91c6-ae51704f1603",
+            "Server4 \u2014 Hosted Sites & Nginx Vhosts (partial April-2026 snapshot; live count 80)": "dba33532-16a8-4038-955b-a08af7ef3b0b",
+            "quantum-data embport: the ~68% client-side cost is an NFS METADATA STORM (~512 ops + 128 small-file creates per batch), NOT the 1.31 MB vector write \u2014 third instance of one shape in a day": "43b9a160-f085-4d10-95c7-9b9c25269098",
+            "b4170d4a-940c-4057-8e92-7c79bdf250aa": "cf72ca56-f3ab-4c43-96ec-892e0ee91bfc",
+            "Barn cluster network performance \u2014 post-migration speed-test matrix (2026-06-01) 68.1.207 192.168.1.207 dev enp65s0 src 192.168.0.109 uid 1000  $ ss -tn dst 192.168.1.207 dport 2049 ESTAB 0      0": "485ead47-a59f-463d-a60f-3139f4903046",
+            "RESOLVED IN BEN'S FAVOUR \u2014 Paradisus $562 Amex chargeback D-100537758 credited (2026-08-10)": "20b908ca-30c0-4660-ac56-9bcf74bcaaff",
+            "HVAC plan": "249af63e-ed3a-48d6-a39d-7b61e95a84c0",
+            "host-account-swap 2026-08-08 (server4\u2192ben): profile REUSE makes a mint ~15s \u2014 and the anti-bot gate fired for the first time, plausibly because of it": "91c9b13a-0ce1-4040-acf6-f503aa407844",
+            "Frigate NVR Setup on Server4 t usable. Must use the USB version.  **Recommended purchase**: Google Coral USB Accelerator (Google model G950-01456-01) - **B07R53D12W** \u2014": "df08714a-f7d9-49d8-ac94-8534f5720ce5",
+            "Sack family insurance \u2014 MASTER INDEX (all lines, rev. 2026-07-22 deep sweep) 0375164 | via MGB employer | calendar year | [[sack-family-insurance-current-coverage]] | | **Pet (Brooke)** | Trupanion |": "fa138eb1-b283-4b7f-b384-36afa4356873",
+            "e98995e9-92a6-4a15-962b-e1a3f29d1426": "8b8ae533-9394-43ba-bd78-ff3a2ea8918d",
+            "BJ's-via-DoorDash trip 2026-07-30 $78.87 \u2014 DOUBLE-ORDER DAY (both in-store + delivery) carrots, cabbage, buffalo chicken, Wilde chips \u2014 all doubled  **Day total across both channels**: **$61.72 (in-st": "e9215dba-9a23-4631-a207-2953a80b3611",
+            "Source-fidelity census starvation: a 119h sweep outage, a global stamp over 7 lanes, and five wrong-set errors in one hour (2026-08-09)": "8208304c-4666-4c3d-b21d-ae85185b4fcc",
+            "Matley Pool Service \u2014 Relationship & History d) | | 2021-09-01, 10-19, 10-23 | Closing + follow-up | | | | 2022-04-25 | Opening | | | | 2022-04/05 | **Saltwater conversion estimate** |": "c311f205-6142-4d19-a5f2-996ec01f2320",
+            "Four rules for asserting and recording: don't ship a guess \u00b7 one query away \u00b7 name the mechanism \u00b7 beware market-wide claims \u2014 two independent derivations agreeing beat either alone. alpaca derived $5": "46a378e4-0976-462a-aece-f8af90d841ae",
+            "v1\u2194v2 cutover + rollback runbook \u2014 READY (all prerequisites done, 2026-08-10)": "e8899224-8698-4ef3-b54b-e11039e330e2",
+            "pool chemistry": "fe064b27-2a55-4cbd-b0de-4ce5918fed8f",
+            "Backup verification 2026-08-09: the NVMe symlink broke a third consumer, and nothing watched memo at all": "3ce34534-8b4b-4ae4-8657-42ffa242e21b",
+            "399d6085-d032-4e43-9dad-1ec9e9b1741a": "59752c22-70e0-440f-8fee-1eb8feddfa30",
+            "code agent \u2014 new-projects incubator (migrated office \u2192 server3, 2026-08-03)": "240a7770-9e03-45c3-9a41-bb906f1b6942",
+            "groton receipt log: tokens are response-verified, ROWS ARE NOT \u2014 n comes from the request (found 2026-08-08)": "7b4c4d52-000d-4424-8542-e3bf36a164e9",
+            "Linode Relay Server (173.255.233.16) tent tunnel between relay and server4:  | Endpoint | WireGuard IP | Public Key | |----------|-------------|------------| | relay (Linode) |": "e7069fd4-eb86-4ec7-813a-3bfb0f8a87f7",
+            "ATC host-zone broadcast block (temporary) \u2014 2026-08-04 fleet token-exhaustion fix": "9ce89a58-b124-487f-9ac8-8028f4f2c731",
+            "4a7bbd58-1bed-4d12-9eb6-e8b02afde2ec": "cba55715-6b31-4db7-a4b8-eedc97a12dc1",
+            "Frigate footage loss 2026-08-09: I/O stall \u2192 TIMED-OUT WATCHDOG PROBE \u2192 restart loop. 155 missing minute-files + an uncounted 10th. FIX SHIPPED (f4d5811, on origin), owned by `ha`. UNKNOWN\u21d2DENY validated x27; the probe fix itself only x3; authoriser UNTESTED. Frigate now DISABLED, cameras down for DAYS.": "7234781c-d502-4793-ae18-026f377634e7",
+            "memo_store placeholder": "993b8034-821f-429c-9ec6-ae05bc16093d",
+            "915303e2-b7d0-456e-8fda-d2c2efe35d43": "7e51625d-1e0a-4d29-8e7c-a16e77f368e4",
+            "Sunday step 2 LEAD: two orphaned DRIVER duties + a latent unconditional stamp (\u26d4 the earlier \"Principle IV held vacuously\" claim in here is RETRACTED) \u2014 quantum-feed 2026-08-08": "9966599b-ca8a-4813-86ae-bf1f603d9c65",
+            "sure finance self-hosted plaid sync": "48308d0a-cb64-4f70-8e39-e83b65649a72",
+            "Generac Mobile Link telemetry dead since 2026-05-11 \u2014 RESOLVED 08-03: generator fine, Wi-Fi module only. Plus: the Sol-Ark GEN input CANNOT verify a weekly exercise": "d5a85984-4114-4e4a-9479-bcfe41741f22",
+            "feedback-applovin-brief-cc-ben styled HTML CC ben weekly brief": "e0dc7587-46d9-4f75-a8da-84f86fd443e0",
+            "HA media integrations \u2014 Kodi, Samsung TV, Fire Stick setup and dashboard ## Kodi instances - Bedroom:": "f5f79ef4-338e-4ac6-a9c8-cb2ea4b4fac0",
+            "ollm state of play server3 seat": "ebd8181d-cfa2-46e8-954f-ee2ddd740b3d",
+            "server4 snap-docker: output is SILENTLY EMPTY when stdout is a regular file (`> file`) \u2014 pipe or `$( )` always; rc=0 and stderr empty": "d31586bf-658c-4b22-a796-955db6cdbe6f",
+            "2027 Garden Expansion Plan \u2014 blueberry relocation + asparagus conversion [\u26a0\ufe0f ON HOLD 2026-08-04 \u2014 do not execute, see hold memo]": "1dda0f1f-130e-480c-ae40-059b06d65d43",
+            "2a773e01-be78-43f6-8d45-e22a633b2ab9": "348e690c-7cae-4638-97ef-f0ceb6199c41",
+            "ROOT CAUSE: historical-inventory.json is 4.9 days stale because its generator HANGS on an os.walk of the pivot tree over NFS \u2014 fix is proven (13.5s vs indefinite), QUEUED not built": "f5b41b09-01b0-4b4f-98f5-c3e7641ec4df",
+            "Tesla send destination to car script Home Assistant Tessa navigation": "1f99422d-84e8-41cb-987f-7a991926573a",
+            "quantum-data 2026-08-10 ADDENDUM to d4f7e32b: the ETF FIRE (upstream), --emit-catchup, and a bind I chose not to resolve": "1b11b827-7f0b-4312-b911-ab3e76910969",
+            "TRAP: `atc_schedule_list(mine=true)` filters by OWNER, not creator \u2014 plus the fleet schedule snapshot 2026-08-06": "9e636e1a-f89c-4350-877c-b192073790e1",
+            "Shell idiom hazard: `ps -o etime= -p PID || echo \"DONE\"` \u2014 the NUMBER is the liveness signal, and it reads as completion": "56814309-a6f8-4b6f-80c6-2679e74e0740",
+            "Optimum Nutrition Gold Standard whey protein Ben supplement subscribe save": "928e09c1-e6ec-4b72-866e-4d7cbf66710a",
+            "HWM docket CASE #2 \u2014 same defect on the Slack path; and a mitigation that records a vanished message as chosen silence": "63ab5f94-c8ca-43c4-b4d6-ddbe2f1dd71b",
+            "Laura Sack's CCU checking \u2014 the premium-draft account (full details, per Ben's explicit instruction)": "148d7396-c0a7-4903-acf5-b369692949db",
+            "server4 I/O incident 2026-08-09 server6 frigate recording gap PSI stall client-side SSH": "4effebfa-faf8-4ca8-83f9-aaef7d4f0493",
+            "6ed8b3fb-0f5a-4c9c-8079-41eb18e59046": "376aab02-6ede-42e0-90e2-1bf47a9f294f",
+            "\ud83d\udd34 NAV RESUME v37 \u2014 FRESH NO-RESUME SEAT INBOUND. \u26d4 ZERO CRONS by operator directive. Pin 82709906 (v30). State file OPENS with a banner + CURRENT WORK block \u2014 read that first. Spec re-cut at STEP 2 of 5, gated on Ben's feedback.": "cbad3011-e5f5-4957-ab41-fb46865057d7",
+            "buffet-buster: v0.20.0: price-gated celebration, auto-resize money text, richer money FX, photo record (1038ec1) to keep score' line when no price. - AutoSizeMoney: one-line money text that shrinks to": "757b8f60-739a-4c18-8af5-48dae37d5f63",
+            "0db146fc-c54f-49f4-9749-f85804e8ba78": "4f780e79-e527-4a7f-872c-faa762f88291",
+            "GE washer GFW550SSN3WW \u2014 2026-08-03 post-lock-replacement progression: lock fitted, still fails, NOW CLICKS (board drive likely alive)": "b28ea866-18ee-4b9d-8c52-7e959819206b",
+            "CROSS-SEAT DEPENDENCY \u2014 `finance` holds the Aug 12 Amex D-100537758 doc-deadline watcher; `assistant` deliberately stood down (2026-08-05)": "bdd1bcf5-859e-4d95-826e-2331666f0078",
+            "memo v1 vs v2 benchmark, replicated retest 2026-08-09 \u2014 v2 wins every quality axis; v1's supersession filter is not filtering": "dc84699b-162e-4220-9db1-147308ade071",
+            "Insurance \u2014 Auto (Progressive Direct #968850121)": "9779c45e-6a9b-4cae-b289-bb137063bd7f",
+            "BJ's Wholesale trip history \u2014 4 orders since Nov 2025 s 11/30/2026. **Home club:** Nashua, NH. **Period:** 2025-11-30 \u2192 2026-02-13 (~2.5 months active). **Total:** 4 orders + membership signup,": "d4527769-21f2-4d8a-97c6-a7751ce314ba",
+            "f34e1e92-7136-442d-a9e3-3e7f8fe9677f": "edf08122-ac54-48b4-8138-02e7f94c0761",
+            "Frigate gaps \u2014 HANDOFF TO `agents` (Ben stopped it 2026-08-09 09:40). Cheap fix APPLIED; two published claims RETRACTED. A monitor that causes the outage it prevents.": "7234781c-d502-4793-ae18-026f377634e7",
+            "library seat halt queue quote_intensity_probe Principle VI cordon sweep FR draft T116": "caf58b71-584a-4aca-8d0d-f6ab4f0f5fa7",
+            "\u2705 RESOLVED 2026-08-06: ASR duplicate-transcript re-embed loop + vod5530 \u2014 commit 8e18857. Lessons kept.": "638b87b7-eaef-410b-91c6-ae51704f1603",
+            "dojo 2026-08-09: the 201-cell taxonomy completed, and nine measured traps \u2014 every defect was silent and looked like success": "57f7cf8a-2f1f-4bd0-afa4-443ef94cbfca",
+            "QUEUED FEATURE \u2014 super-agent \"finder mode\" (walk back to a saved waypoint). Build when token rationing lifts.": "fdee1cc7-81ae-473e-b6d1-a56cf7416bf2",
+            "models seat \u2014 2026-08-09 method corpus: the wrong-set defect class, and the instruments built against it": "2c0df489-f9a5-4821-a561-61630f8ff2ec",
+            "11a94e1c-b76a-4ae8-8e79-8de1226884c9": "59752c22-70e0-440f-8fee-1eb8feddfa30",
+            "groton town agent project state current work": "d5351291-11fc-4806-8ddd-92b4928cdb0e",
+            "Assistant Inbox Sweep \u2014 2026-07-31 \u2014 AM ten: 0 (this checkpoint only)  Flagged working set (open): 40  THE TWO NEW ITEMS 1. Amex \"We've received your payment\", acct ending 91006 \u2014": "ee423409-90e2-47d0-a53a-d1225cc7c6f8",
+            "lesson a field on a burn list cannot carry a distinction test a different field": "fda987ed-ab3a-4adf-93cc-bcb2ae21c3cc",
+            "anti-ARP-spoof defense barn workers nft ingress gateway MAC pin": "41a388d9-57f1-4b35-9be7-69feb8059281",
+            "Fiber spec FINAL + FS QUOTE SENT \u2014 armored non-metallic; unarmored recommendation RETRACTED [v4] g (disclosed to Ben, NOT recommended) If no vendor builds non-metallic pre-term at \u2265350 ft: **Amazon YU": "359e9b5a-4ee3-4b46-8c6c-3c09d6ea1010",
+            "Insurance \u2014 Disability (MetLife, Ben + Laura)": "35d5bc9d-47a4-48e6-8868-1d5fa3fc6d57",
+            "collapse inversion instrument failure detector predicate evidence logic": "6fc94fa9-fe33-4211-92ab-9389cad07c42",
+            "\u26d4 OAuth grants need a RECENT sign-in \u2014 a valid session is NOT a grant-capable one. Three states, two probes. (2026-08-08; +08-09 drain-then-flip: fire the trigger early, mint the session late)": "6ba8db92-b419-42e9-bc1c-55000071d33a",
+            "Epistemics: a cause that explains the phenomenon but not its magnitude is not a cause yet (2026-08-08)": "ee1ade93-7608-4173-8f6d-fad887d125b7",
+            "Costco Nashua trip 2026-07-01 \u2014 chickpeas + paper goods + cadence restock Costco Wholesale #307 Nashua NH (311 Daniel Webster Hwy) trip 2026-07-01 at 13:34, Visa *6637 chip-read. Member 111813351592.": "3598023d-9d6e-45e2-b288-dd3035486f1d",
+            "d098e728-69ab-431b-a10a-0a9745712eed": "908221bd-cf88-4402-bee6-61d1ed0777b7",
+            "Repeated alert fired daily and said nothing new: the escalating fact belongs in the BODY, not the dedup key": "b8e33f3b-bdc5-4158-80f4-b9c07b2a598e",
+            "Ecowitt GW2000 gateway web UI password / weather station login credentials": "2117edf7-0f35-4ee7-9f35-746b5a3130c7",
+            "worker15 Hardware Failure (2026-04-17) ycles):  - Smart plug ON (last state change via cluster-heal cycle) - No MAC in ARP on any LAN host (office or server4) - No DHCP lease for": "3af9cd82-4a07-41f7-a88e-33c84399aa12",
+            "mind: the prefilter skips 37% of the real corpus but 0% of the eval set \u2014 the labelled set is unrepresentative on exactly that axis (2026-08-09)": "a26d9136-a22d-47a9-aaf6-7c31ac6564ff",
+            "server4 kube-apiserver needs explicit --advertise-address .168.0.168:16443` entry which is NOT a real IP on server4 \u2014 server4's actual addresses are 192.168.1.168 (eno1, primary LAN) plus barn NICs": "ac22af6a-dea3-4958-ab95-f4991ee689dc",
+            "contractor contacts phone numbers house": "48aecf9f-a215-4c91-b0ac-fa7458c8b180",
+            "\ud83d\udfe2 NAV RESUME v35 \u2014 pin 96bde3ec (v28), cron 564103fb. Corpus=209. Emitter ownership RULED MINE; 008 park wired (af4bc3b4\u21925ce7df5d) \u2014 its unpark condition was unsound TWICE. Order locked; Ben owes user-story feedback.": "c3250965-71aa-4808-bbd5-552ce48bb840",
+            "Insurance seat \u2014 SCOPE BOUNDARY: do not raise infrastructure/NAS/permissions topics with Ben (2026-08-03)": "74d53171-b940-4ba6-9bbc-a88cf36aa83c",
+            "quantum-feed DATA (part 2): exhaustive units map falsifies year-alignment; odd-lot discriminator REFUTES ITSELF; intraday worst-window tool; stress cost table 2026 quotes $0.0499). Use the per-ticker": "92fda2c7-54d3-4175-b04c-3133206b5061",
+            "Lesson \u2014 a field on a known-burn list cannot carry a distinction; test a different field (Amex D-100939135, 2026-08-05)": "fda987ed-ab3a-4adf-93cc-bcb2ae21c3cc",
+            "personal assistant session role scope operations bootstrap": "722600e7-2931-44ab-b2be-79ba3101c657",
+            "[\u26a0\ufe0f DASHBOARD PORTS CORRECTED 2026-06-19 \u2192 unified :3000; library backend :8742 NOT :8732] quantum-data DASHBOARD 2026-06-12 (DATA+LIBRARY pages, master @05d6466f) \u2014 topology superseded by 7d5b0678 fa": "ff6db753-e548-4ca3-b70c-773333522791",
+            "192.168.1.254 = the router itself: ARP alert of 2026-08-09 resolved BENIGN (measured), + the corrected single-equality gateway rule": "930641b7-fff5-485e-a34f-26308d8730d4",
+            "Maynard 2026-08-10: GIB dead for 2026, forms received, Brighthouse bank change APPLIED, MetLife pending": "dd4e2a5d-638d-4de0-81ac-ebd4511e57c6",
+            "server4 docker on NVMe: snap confinement, PERC H310 hardware reality, and the data-root design": "9610818c-e428-4a5d-9fc0-ace5d31cebed",
+            "coordinating redundant triggers dedupe before sending verification traps": "b4170d4a-940c-4057-8e92-7c79bdf250aa",
+            "alpaca session migration server3 host change August 2026": "416a4ffc-bb93-4378-b2cb-66b1a2c07394",
+            "recompute cost lever 6219 historical feature days never recomputed 1.7 days to 32 days chunk size 18x memory 13.4 GB Rust bin peak accumulates": "37f86fb6-0f04-48dd-b92e-01e2950d4733",
+            "Groton host ADDENDUM 2026-08-03: server3 has READ-ONLY NAS \u2014 cannot run pipeline or git commit; office ssh fixed; cron cadence": "3bda52ca-10e5-491e-9f02-fce60f4444cc",
+            "quantum-data DEFECTS (deferred under drought), news_embcache_prewarm: (1) silent receipt drop \u2014 `dropped=0` is NOT proof of complete accounting; (2) NAS-default cache lookup; (3) batch budget denominated in ESTIMATED tokens \u2014 invisible from my seat by construction": "3098602c-8d58-418a-9b51-4a99e1bf470b",
+            "Picture book manuscript \u2014 \"The River Went On\", Magill family, 12 spreads (2026-08-10)": "9a5afe42-2322-41c5-ad2d-84ef06eb19c5",
+            "Groton Water Expansion \u2014 does 120 Reedy Meadow qualify? (analysis 2026-07-28) -| | Total capital | $17.63M | $16.78M | | **Groton's share** | **$5.57M** | **$12.92M** | | Groton 30-yr DWSRF monthly (0": "993b2e79-efce-430b-a17b-f4eb85082e2d",
+            "b924d285-9eda-4aa0-a577-2ea73618f58e": "4f780e79-e527-4a7f-872c-faa762f88291",
+            "electric seat \u2014 ACTIVE PROJECT as of 2026-08-05 14:20 EDT: pool-deck GFCI fault, Ben mid-decision on resin vs kits. Verified ASINs, prices, six traps, and what is still open.": "28620805-543e-4e0b-86ae-66b79e29dc06",
+            "Pin hygiene: a pin is an instruction to a self who cannot check it (2026-08-04 findings)": "c9fa49b5-84c4-448f-8f48-10effaa4d5a8",
+            "current plantings 2026 garden beds what is planted": "2ee6c85f-eeb7-4226-878c-dff969e9b9d8",
+            "b8e33f3b-bdc5-4158-80f4-b9c07b2a598e": "f7628e7b-94d0-4e56-966d-dd7dd0305d29",
+            "quantum-feed: #002 DATA COMPLETE \u2014 2,849-ticker universe backfilled to ~2009 (e10f283b) rror \u2192 Unclassified); (2) sane-cap-vs-continuity ordering \u2014 eps path now sane-checked AFTER basis resolution \u2192 G": "f5948cc1-4624-4da5-a661-6f61836d4315",
+            "embport deferred live-path defects silent receipt drop NAS cache lookup": "3098602c-8d58-418a-9b51-4a99e1bf470b"
+          },
+          "control_ok": true,
+          "status": "ok"
+        },
+        "v1-search": {
+          "task": "query_replay",
+          "path": "v1-search",
+          "n": 120,
+          "requested": 120,
+          "failures": 0,
+          "returned_nothing": 0,
+          "returned_nothing_pct": 0.0,
+          "latency_p50_s": 0.486,
+          "latency_p95_s": 0.514,
+          "latency_max_s": 0.544,
+          "top1_by_query": {
+            "genomics scrubby memory store migrated documents": "27a160a1-a9ba-40d5-b9e6-b1e5705cdc50",
+            "Assistant Inbox Sweep \u2014 2026-07-23 \u2014 PM as such. `gmail_get_thread` showed Ben replied from `family@sack.io` 33 min after receipt on 7/21 \u2014 **PAID $8,946.30 EFT** (Inv #125 + CO#8": "12f6a2bb-1bb7-43ac-87b1-c1cc22b2d04a",
+            "server4 I/O windows make MULTIPLE monitors false-positive (docker-heal unhealthy, disk-monitor host_unreachable). Two windows: 30 */6 daily + Sunday 02:00. Verify before acting or escalating.": "4effebfa-faf8-4ca8-83f9-aaef7d4f0493",
+            "Garden squirrel barrier: FINAL BOM decided \u2014 flat smooth twinwall polycarbonate, 24\" x 124 lin-ft ing wood top rail - Already have lumber + screws  Recommended option: ThermaGlas 4mm clear twinwall 24": "0b87a95e-49e8-421e-bd7f-d2215f076b9b",
+            "Incident response consumes the resource it investigates \u2014 and a runway measured while idle is a fact about the idleness": "4a7bbd58-1bed-4d12-9eb6-e8b02afde2ec",
+            "SMS \u2014 Nick (+15642308595): yard-work job negotiated 8/10, $350 offered for 3 jobs Friday, awaiting his yes (2026-08-10)": "4b6d27fb-5c2f-4bae-9089-60216cb89452",
+            "Groton \u2014 GELD tariff, NO residential demand charge, HH excludes heat pumps ligibility/structure, especially before Ben claims it.  ## Ben's load, for calibration ~**81,722 kWh/yr** (Apr 2025\u2013May 2026)": "b30436c6-258c-40bc-a4b8-5ee8d348bcbc",
+            "garden watering rules soil moisture triggers rain delay": "7306786e-6a7e-4bb5-badb-aafab7e8a6b6",
+            "laurasack.com \u2014 private staging/preview environment (setup + promote/teardown) icly indexed/discoverable. - **Production (LIVE, unchanged):** https://laurasack.com \u2192 host nginx proxies to `laurasite-w": "8b10aa59-2409-4795-b195-279ded6afdc4",
+            "quantum-feed: the sealed-agent spec method, and what it found (2026-08-04)": "8689a84f-68b5-49aa-8c72-131ad2b09e10",
+            "`pgrep -x tmux` can never fire \u2014 tmux's comm is \"tmux: server\", and the false null was load-bearing on a fleet theory": "4c09329f-dbf5-4054-899b-f28f7c9b767d",
+            "Costco trip history \u2014 backfill via API (2026-05-02) eab5484`, `da76285f`, `3bdacacd`).  ## Summary by period  | Date | Total | Items | Savings | Barcode | |---|---|---|---|---| | 2025-02-21 |": "83f26022-8074-4b58-8f56-322d5c834006",
+            "memo-qa control probe: is /context instrumented": "72336a84-e464-4522-aea1-8f4fb5428b35",
+            "barn electrical circuit amps 240V subpanel mining power": "e76d7563-8985-4ce9-a216-e65bb00a9b4b",
+            "A plausible mechanism at the right magnitude TERMINATES THE SEARCH, and at small residuals magnitude agreement is nearly free \u2014 so the fit that persuades you is the one carrying least information": "a4f6d659-1ef6-4b3c-ac66-b38df60c8a51",
+            "Generac Mobile Link telemetry dead since 2026-05-11 (~12 wks) + why the Sol-Ark GEN input CANNOT verify a weekly exercise": "d5a85984-4114-4e4a-9479-bcfe41741f22",
+            "worker4 \u2014 OS_NO_SERVICES, manual iLO needed (2026-05-09+) 4 entered OS_NO_SERVICES after SSH failures - Smart plug offline \u2014 automated power cycle not possible - Home Assistant briefly unreachable (": "649f22aa-9ce8-4398-bdfa-97fdd75b9e88",
+            "6e91306f-397e-4614-ba9e-95b7b0271d49": "96907e44-ec32-4170-ba88-74021ee8d40c",
+            "\u26d4 HOURLY RE-EMBED LOOP (200 chunks/hr) + STABLE-WRONG transcript choice decided by directory NAME \u2014 do when embargo lifts": "638b87b7-eaef-410b-91c6-ae51704f1603",
+            "Server4 \u2014 Hosted Sites & Nginx Vhosts (partial April-2026 snapshot; live count 80)": "dba33532-16a8-4038-955b-a08af7ef3b0b",
+            "quantum-data embport: the ~68% client-side cost is an NFS METADATA STORM (~512 ops + 128 small-file creates per batch), NOT the 1.31 MB vector write \u2014 third instance of one shape in a day": "43b9a160-f085-4d10-95c7-9b9c25269098",
+            "b4170d4a-940c-4057-8e92-7c79bdf250aa": "cf72ca56-f3ab-4c43-96ec-892e0ee91bfc",
+            "Barn cluster network performance \u2014 post-migration speed-test matrix (2026-06-01) 68.1.207 192.168.1.207 dev enp65s0 src 192.168.0.109 uid 1000  $ ss -tn dst 192.168.1.207 dport 2049 ESTAB 0      0": "485ead47-a59f-463d-a60f-3139f4903046",
+            "RESOLVED IN BEN'S FAVOUR \u2014 Paradisus $562 Amex chargeback D-100537758 credited (2026-08-10)": "20b908ca-30c0-4660-ac56-9bcf74bcaaff",
+            "HVAC plan": "249af63e-ed3a-48d6-a39d-7b61e95a84c0",
+            "host-account-swap 2026-08-08 (server4\u2192ben): profile REUSE makes a mint ~15s \u2014 and the anti-bot gate fired for the first time, plausibly because of it": "91c9b13a-0ce1-4040-acf6-f503aa407844",
+            "Frigate NVR Setup on Server4 t usable. Must use the USB version.  **Recommended purchase**: Google Coral USB Accelerator (Google model G950-01456-01) - **B07R53D12W** \u2014": "df08714a-f7d9-49d8-ac94-8534f5720ce5",
+            "Sack family insurance \u2014 MASTER INDEX (all lines, rev. 2026-07-22 deep sweep) 0375164 | via MGB employer | calendar year | [[sack-family-insurance-current-coverage]] | | **Pet (Brooke)** | Trupanion |": "fa138eb1-b283-4b7f-b384-36afa4356873",
+            "e98995e9-92a6-4a15-962b-e1a3f29d1426": "8b8ae533-9394-43ba-bd78-ff3a2ea8918d",
+            "BJ's-via-DoorDash trip 2026-07-30 $78.87 \u2014 DOUBLE-ORDER DAY (both in-store + delivery) carrots, cabbage, buffalo chicken, Wilde chips \u2014 all doubled  **Day total across both channels**: **$61.72 (in-st": "e9215dba-9a23-4631-a207-2953a80b3611",
+            "Source-fidelity census starvation: a 119h sweep outage, a global stamp over 7 lanes, and five wrong-set errors in one hour (2026-08-09)": "8208304c-4666-4c3d-b21d-ae85185b4fcc",
+            "Matley Pool Service \u2014 Relationship & History d) | | 2021-09-01, 10-19, 10-23 | Closing + follow-up | | | | 2022-04-25 | Opening | | | | 2022-04/05 | **Saltwater conversion estimate** |": "c311f205-6142-4d19-a5f2-996ec01f2320",
+            "Four rules for asserting and recording: don't ship a guess \u00b7 one query away \u00b7 name the mechanism \u00b7 beware market-wide claims \u2014 two independent derivations agreeing beat either alone. alpaca derived $5": "46a378e4-0976-462a-aece-f8af90d841ae",
+            "v1\u2194v2 cutover + rollback runbook \u2014 READY (all prerequisites done, 2026-08-10)": "e8899224-8698-4ef3-b54b-e11039e330e2",
+            "pool chemistry": "fe064b27-2a55-4cbd-b0de-4ce5918fed8f",
+            "Backup verification 2026-08-09: the NVMe symlink broke a third consumer, and nothing watched memo at all": "3ce34534-8b4b-4ae4-8657-42ffa242e21b",
+            "399d6085-d032-4e43-9dad-1ec9e9b1741a": "59752c22-70e0-440f-8fee-1eb8feddfa30",
+            "code agent \u2014 new-projects incubator (migrated office \u2192 server3, 2026-08-03)": "240a7770-9e03-45c3-9a41-bb906f1b6942",
+            "groton receipt log: tokens are response-verified, ROWS ARE NOT \u2014 n comes from the request (found 2026-08-08)": "7b4c4d52-000d-4424-8542-e3bf36a164e9",
+            "Linode Relay Server (173.255.233.16) tent tunnel between relay and server4:  | Endpoint | WireGuard IP | Public Key | |----------|-------------|------------| | relay (Linode) |": "e7069fd4-eb86-4ec7-813a-3bfb0f8a87f7",
+            "ATC host-zone broadcast block (temporary) \u2014 2026-08-04 fleet token-exhaustion fix": "9ce89a58-b124-487f-9ac8-8028f4f2c731",
+            "4a7bbd58-1bed-4d12-9eb6-e8b02afde2ec": "cba55715-6b31-4db7-a4b8-eedc97a12dc1",
+            "Frigate footage loss 2026-08-09: I/O stall \u2192 TIMED-OUT WATCHDOG PROBE \u2192 restart loop. 155 missing minute-files + an uncounted 10th. FIX SHIPPED (f4d5811, on origin), owned by `ha`. UNKNOWN\u21d2DENY validated x27; the probe fix itself only x3; authoriser UNTESTED. Frigate now DISABLED, cameras down for DAYS.": "7234781c-d502-4793-ae18-026f377634e7",
+            "memo_store placeholder": "993b8034-821f-429c-9ec6-ae05bc16093d",
+            "915303e2-b7d0-456e-8fda-d2c2efe35d43": "7e51625d-1e0a-4d29-8e7c-a16e77f368e4",
+            "Sunday step 2 LEAD: two orphaned DRIVER duties + a latent unconditional stamp (\u26d4 the earlier \"Principle IV held vacuously\" claim in here is RETRACTED) \u2014 quantum-feed 2026-08-08": "9966599b-ca8a-4813-86ae-bf1f603d9c65",
+            "sure finance self-hosted plaid sync": "48308d0a-cb64-4f70-8e39-e83b65649a72",
+            "Generac Mobile Link telemetry dead since 2026-05-11 \u2014 RESOLVED 08-03: generator fine, Wi-Fi module only. Plus: the Sol-Ark GEN input CANNOT verify a weekly exercise": "d5a85984-4114-4e4a-9479-bcfe41741f22",
+            "feedback-applovin-brief-cc-ben styled HTML CC ben weekly brief": "e0dc7587-46d9-4f75-a8da-84f86fd443e0",
+            "HA media integrations \u2014 Kodi, Samsung TV, Fire Stick setup and dashboard ## Kodi instances - Bedroom:": "f5f79ef4-338e-4ac6-a9c8-cb2ea4b4fac0",
+            "ollm state of play server3 seat": "ebd8181d-cfa2-46e8-954f-ee2ddd740b3d",
+            "server4 snap-docker: output is SILENTLY EMPTY when stdout is a regular file (`> file`) \u2014 pipe or `$( )` always; rc=0 and stderr empty": "d31586bf-658c-4b22-a796-955db6cdbe6f",
+            "2027 Garden Expansion Plan \u2014 blueberry relocation + asparagus conversion [\u26a0\ufe0f ON HOLD 2026-08-04 \u2014 do not execute, see hold memo]": "1dda0f1f-130e-480c-ae40-059b06d65d43",
+            "2a773e01-be78-43f6-8d45-e22a633b2ab9": "348e690c-7cae-4638-97ef-f0ceb6199c41",
+            "ROOT CAUSE: historical-inventory.json is 4.9 days stale because its generator HANGS on an os.walk of the pivot tree over NFS \u2014 fix is proven (13.5s vs indefinite), QUEUED not built": "f5b41b09-01b0-4b4f-98f5-c3e7641ec4df",
+            "Tesla send destination to car script Home Assistant Tessa navigation": "1f99422d-84e8-41cb-987f-7a991926573a",
+            "quantum-data 2026-08-10 ADDENDUM to d4f7e32b: the ETF FIRE (upstream), --emit-catchup, and a bind I chose not to resolve": "1b11b827-7f0b-4312-b911-ab3e76910969",
+            "TRAP: `atc_schedule_list(mine=true)` filters by OWNER, not creator \u2014 plus the fleet schedule snapshot 2026-08-06": "9e636e1a-f89c-4350-877c-b192073790e1",
+            "Shell idiom hazard: `ps -o etime= -p PID || echo \"DONE\"` \u2014 the NUMBER is the liveness signal, and it reads as completion": "56814309-a6f8-4b6f-80c6-2679e74e0740",
+            "Optimum Nutrition Gold Standard whey protein Ben supplement subscribe save": "928e09c1-e6ec-4b72-866e-4d7cbf66710a",
+            "HWM docket CASE #2 \u2014 same defect on the Slack path; and a mitigation that records a vanished message as chosen silence": "63ab5f94-c8ca-43c4-b4d6-ddbe2f1dd71b",
+            "Laura Sack's CCU checking \u2014 the premium-draft account (full details, per Ben's explicit instruction)": "148d7396-c0a7-4903-acf5-b369692949db",
+            "server4 I/O incident 2026-08-09 server6 frigate recording gap PSI stall client-side SSH": "4effebfa-faf8-4ca8-83f9-aaef7d4f0493",
+            "6ed8b3fb-0f5a-4c9c-8079-41eb18e59046": "376aab02-6ede-42e0-90e2-1bf47a9f294f",
+            "\ud83d\udd34 NAV RESUME v37 \u2014 FRESH NO-RESUME SEAT INBOUND. \u26d4 ZERO CRONS by operator directive. Pin 82709906 (v30). State file OPENS with a banner + CURRENT WORK block \u2014 read that first. Spec re-cut at STEP 2 of 5, gated on Ben's feedback.": "cbad3011-e5f5-4957-ab41-fb46865057d7",
+            "buffet-buster: v0.20.0: price-gated celebration, auto-resize money text, richer money FX, photo record (1038ec1) to keep score' line when no price. - AutoSizeMoney: one-line money text that shrinks to": "757b8f60-739a-4c18-8af5-48dae37d5f63",
+            "0db146fc-c54f-49f4-9749-f85804e8ba78": "4f780e79-e527-4a7f-872c-faa762f88291",
+            "GE washer GFW550SSN3WW \u2014 2026-08-03 post-lock-replacement progression: lock fitted, still fails, NOW CLICKS (board drive likely alive)": "b28ea866-18ee-4b9d-8c52-7e959819206b",
+            "CROSS-SEAT DEPENDENCY \u2014 `finance` holds the Aug 12 Amex D-100537758 doc-deadline watcher; `assistant` deliberately stood down (2026-08-05)": "bdd1bcf5-859e-4d95-826e-2331666f0078",
+            "memo v1 vs v2 benchmark, replicated retest 2026-08-09 \u2014 v2 wins every quality axis; v1's supersession filter is not filtering": "dc84699b-162e-4220-9db1-147308ade071",
+            "Insurance \u2014 Auto (Progressive Direct #968850121)": "9779c45e-6a9b-4cae-b289-bb137063bd7f",
+            "BJ's Wholesale trip history \u2014 4 orders since Nov 2025 s 11/30/2026. **Home club:** Nashua, NH. **Period:** 2025-11-30 \u2192 2026-02-13 (~2.5 months active). **Total:** 4 orders + membership signup,": "d4527769-21f2-4d8a-97c6-a7751ce314ba",
+            "f34e1e92-7136-442d-a9e3-3e7f8fe9677f": "edf08122-ac54-48b4-8138-02e7f94c0761",
+            "Frigate gaps \u2014 HANDOFF TO `agents` (Ben stopped it 2026-08-09 09:40). Cheap fix APPLIED; two published claims RETRACTED. A monitor that causes the outage it prevents.": "7234781c-d502-4793-ae18-026f377634e7",
+            "library seat halt queue quote_intensity_probe Principle VI cordon sweep FR draft T116": "caf58b71-584a-4aca-8d0d-f6ab4f0f5fa7",
+            "\u2705 RESOLVED 2026-08-06: ASR duplicate-transcript re-embed loop + vod5530 \u2014 commit 8e18857. Lessons kept.": "638b87b7-eaef-410b-91c6-ae51704f1603",
+            "dojo 2026-08-09: the 201-cell taxonomy completed, and nine measured traps \u2014 every defect was silent and looked like success": "57f7cf8a-2f1f-4bd0-afa4-443ef94cbfca",
+            "QUEUED FEATURE \u2014 super-agent \"finder mode\" (walk back to a saved waypoint). Build when token rationing lifts.": "fdee1cc7-81ae-473e-b6d1-a56cf7416bf2",
+            "models seat \u2014 2026-08-09 method corpus: the wrong-set defect class, and the instruments built against it": "2c0df489-f9a5-4821-a561-61630f8ff2ec",
+            "11a94e1c-b76a-4ae8-8e79-8de1226884c9": "59752c22-70e0-440f-8fee-1eb8feddfa30",
+            "groton town agent project state current work": "d5351291-11fc-4806-8ddd-92b4928cdb0e",
+            "Assistant Inbox Sweep \u2014 2026-07-31 \u2014 AM ten: 0 (this checkpoint only)  Flagged working set (open): 40  THE TWO NEW ITEMS 1. Amex \"We've received your payment\", acct ending 91006 \u2014": "ee423409-90e2-47d0-a53a-d1225cc7c6f8",
+            "lesson a field on a burn list cannot carry a distinction test a different field": "fda987ed-ab3a-4adf-93cc-bcb2ae21c3cc",
+            "anti-ARP-spoof defense barn workers nft ingress gateway MAC pin": "41a388d9-57f1-4b35-9be7-69feb8059281",
+            "Fiber spec FINAL + FS QUOTE SENT \u2014 armored non-metallic; unarmored recommendation RETRACTED [v4] g (disclosed to Ben, NOT recommended) If no vendor builds non-metallic pre-term at \u2265350 ft: **Amazon YU": "359e9b5a-4ee3-4b46-8c6c-3c09d6ea1010",
+            "Insurance \u2014 Disability (MetLife, Ben + Laura)": "35d5bc9d-47a4-48e6-8868-1d5fa3fc6d57",
+            "collapse inversion instrument failure detector predicate evidence logic": "6fc94fa9-fe33-4211-92ab-9389cad07c42",
+            "\u26d4 OAuth grants need a RECENT sign-in \u2014 a valid session is NOT a grant-capable one. Three states, two probes. (2026-08-08; +08-09 drain-then-flip: fire the trigger early, mint the session late)": "6ba8db92-b419-42e9-bc1c-55000071d33a",
+            "Epistemics: a cause that explains the phenomenon but not its magnitude is not a cause yet (2026-08-08)": "ee1ade93-7608-4173-8f6d-fad887d125b7",
+            "Costco Nashua trip 2026-07-01 \u2014 chickpeas + paper goods + cadence restock Costco Wholesale #307 Nashua NH (311 Daniel Webster Hwy) trip 2026-07-01 at 13:34, Visa *6637 chip-read. Member 111813351592.": "3598023d-9d6e-45e2-b288-dd3035486f1d",
+            "d098e728-69ab-431b-a10a-0a9745712eed": "908221bd-cf88-4402-bee6-61d1ed0777b7",
+            "Repeated alert fired daily and said nothing new: the escalating fact belongs in the BODY, not the dedup key": "b8e33f3b-bdc5-4158-80f4-b9c07b2a598e",
+            "Ecowitt GW2000 gateway web UI password / weather station login credentials": "2117edf7-0f35-4ee7-9f35-746b5a3130c7",
+            "worker15 Hardware Failure (2026-04-17) ycles):  - Smart plug ON (last state change via cluster-heal cycle) - No MAC in ARP on any LAN host (office or server4) - No DHCP lease for": "3af9cd82-4a07-41f7-a88e-33c84399aa12",
+            "mind: the prefilter skips 37% of the real corpus but 0% of the eval set \u2014 the labelled set is unrepresentative on exactly that axis (2026-08-09)": "a26d9136-a22d-47a9-aaf6-7c31ac6564ff",
+            "server4 kube-apiserver needs explicit --advertise-address .168.0.168:16443` entry which is NOT a real IP on server4 \u2014 server4's actual addresses are 192.168.1.168 (eno1, primary LAN) plus barn NICs": "ac22af6a-dea3-4958-ab95-f4991ee689dc",
+            "contractor contacts phone numbers house": "48aecf9f-a215-4c91-b0ac-fa7458c8b180",
+            "\ud83d\udfe2 NAV RESUME v35 \u2014 pin 96bde3ec (v28), cron 564103fb. Corpus=209. Emitter ownership RULED MINE; 008 park wired (af4bc3b4\u21925ce7df5d) \u2014 its unpark condition was unsound TWICE. Order locked; Ben owes user-story feedback.": "c3250965-71aa-4808-bbd5-552ce48bb840",
+            "Insurance seat \u2014 SCOPE BOUNDARY: do not raise infrastructure/NAS/permissions topics with Ben (2026-08-03)": "74d53171-b940-4ba6-9bbc-a88cf36aa83c",
+            "quantum-feed DATA (part 2): exhaustive units map falsifies year-alignment; odd-lot discriminator REFUTES ITSELF; intraday worst-window tool; stress cost table 2026 quotes $0.0499). Use the per-ticker": "92fda2c7-54d3-4175-b04c-3133206b5061",
+            "Lesson \u2014 a field on a known-burn list cannot carry a distinction; test a different field (Amex D-100939135, 2026-08-05)": "fda987ed-ab3a-4adf-93cc-bcb2ae21c3cc",
+            "personal assistant session role scope operations bootstrap": "722600e7-2931-44ab-b2be-79ba3101c657",
+            "[\u26a0\ufe0f DASHBOARD PORTS CORRECTED 2026-06-19 \u2192 unified :3000; library backend :8742 NOT :8732] quantum-data DASHBOARD 2026-06-12 (DATA+LIBRARY pages, master @05d6466f) \u2014 topology superseded by 7d5b0678 fa": "ff6db753-e548-4ca3-b70c-773333522791",
+            "192.168.1.254 = the router itself: ARP alert of 2026-08-09 resolved BENIGN (measured), + the corrected single-equality gateway rule": "930641b7-fff5-485e-a34f-26308d8730d4",
+            "Maynard 2026-08-10: GIB dead for 2026, forms received, Brighthouse bank change APPLIED, MetLife pending": "dd4e2a5d-638d-4de0-81ac-ebd4511e57c6",
+            "server4 docker on NVMe: snap confinement, PERC H310 hardware reality, and the data-root design": "9610818c-e428-4a5d-9fc0-ace5d31cebed",
+            "coordinating redundant triggers dedupe before sending verification traps": "b4170d4a-940c-4057-8e92-7c79bdf250aa",
+            "alpaca session migration server3 host change August 2026": "416a4ffc-bb93-4378-b2cb-66b1a2c07394",
+            "recompute cost lever 6219 historical feature days never recomputed 1.7 days to 32 days chunk size 18x memory 13.4 GB Rust bin peak accumulates": "37f86fb6-0f04-48dd-b92e-01e2950d4733",
+            "Groton host ADDENDUM 2026-08-03: server3 has READ-ONLY NAS \u2014 cannot run pipeline or git commit; office ssh fixed; cron cadence": "3bda52ca-10e5-491e-9f02-fce60f4444cc",
+            "quantum-data DEFECTS (deferred under drought), news_embcache_prewarm: (1) silent receipt drop \u2014 `dropped=0` is NOT proof of complete accounting; (2) NAS-default cache lookup; (3) batch budget denominated in ESTIMATED tokens \u2014 invisible from my seat by construction": "3098602c-8d58-418a-9b51-4a99e1bf470b",
+            "Picture book manuscript \u2014 \"The River Went On\", Magill family, 12 spreads (2026-08-10)": "9a5afe42-2322-41c5-ad2d-84ef06eb19c5",
+            "Groton Water Expansion \u2014 does 120 Reedy Meadow qualify? (analysis 2026-07-28) -| | Total capital | $17.63M | $16.78M | | **Groton's share** | **$5.57M** | **$12.92M** | | Groton 30-yr DWSRF monthly (0": "993b2e79-efce-430b-a17b-f4eb85082e2d",
+            "b924d285-9eda-4aa0-a577-2ea73618f58e": "4f780e79-e527-4a7f-872c-faa762f88291",
+            "electric seat \u2014 ACTIVE PROJECT as of 2026-08-05 14:20 EDT: pool-deck GFCI fault, Ben mid-decision on resin vs kits. Verified ASINs, prices, six traps, and what is still open.": "28620805-543e-4e0b-86ae-66b79e29dc06",
+            "Pin hygiene: a pin is an instruction to a self who cannot check it (2026-08-04 findings)": "c9fa49b5-84c4-448f-8f48-10effaa4d5a8",
+            "current plantings 2026 garden beds what is planted": "2ee6c85f-eeb7-4226-878c-dff969e9b9d8",
+            "b8e33f3b-bdc5-4158-80f4-b9c07b2a598e": "f7628e7b-94d0-4e56-966d-dd7dd0305d29",
+            "quantum-feed: #002 DATA COMPLETE \u2014 2,849-ticker universe backfilled to ~2009 (e10f283b) rror \u2192 Unclassified); (2) sane-cap-vs-continuity ordering \u2014 eps path now sane-checked AFTER basis resolution \u2192 G": "f5948cc1-4624-4da5-a661-6f61836d4315",
+            "embport deferred live-path defects silent receipt drop NAS cache lookup": "3098602c-8d58-418a-9b51-4a99e1bf470b"
+          },
+          "control_ok": true,
+          "status": "ok"
+        },
+        "elapsed_s": 146.1,
+        "host_env": {
+          "load1": 8.17,
+          "load5": 9.99,
+          "load15": 9.99,
+          "io_some_avg60": 6.28,
+          "io_full_avg60": 5.22,
+          "error": null
+        }
+      },
+      "set_stability": {
+        "task": "set_stability",
+        "path": "document",
+        "n_requested": 25,
+        "n_ran": 25,
+        "replicates": 3,
+        "rank1_varied": 0,
+        "id_list_varied": 3,
+        "control_ok": true,
+        "status": "ok",
+        "elapsed_s": 17.2,
+        "host_env": {
+          "load1": 7.69,
+          "load5": 9.8,
+          "load15": 9.92,
+          "io_some_avg60": 6.02,
+          "io_full_avg60": 5.09,
+          "error": null
+        }
+      },
+      "api_surface": {
+        "task": "api_surface",
+        "routes": [
+          "/admin/access-stats",
+          "/admin/leak-incidents",
+          "/admin/passage-indexed-ids",
+          "/admin/recount-tokens",
+          "/answer-loop-audit",
+          "/auditor/actions",
+          "/auditor/sweep",
+          "/auto-store",
+          "/constitution/proposals",
+          "/constitution/propose",
+          "/constitution/resolve",
+          "/context",
+          "/documents",
+          "/documents/{doc_id}",
+          "/documents/{doc_id}/as-of",
+          "/documents/{doc_id}/current",
+          "/events",
+          "/health",
+          "/hooks/instructions-loaded",
+          "/hooks/post-compact",
+          "/hooks/pre-compact",
+          "/hooks/session-end",
+          "/hooks/session-start",
+          "/hooks/session-stop",
+          "/index",
+          "/injection-log",
+          "/injection-set",
+          "/log-query",
+          "/providers",
+          "/ready",
+          "/recall",
+          "/reconcile/infra-change",
+          "/search",
+          "/search-documents",
+          "/search-passages",
+          "/store",
+          "/supersede"
+        ],
+        "search_shape": {
+          "document": {
+            "container": "list",
+            "row_keys": [
+              "document",
+              "score"
+            ],
+            "doc_keys": [
+              "content",
+              "created_at",
+              "id",
+              "metadata",
+              "tags",
+              "title",
+              "token_count",
+              "updated_at"
+            ]
+          },
+          "passages": {
+            "container": "list",
+            "row_keys": [
+              "document",
+              "passage",
+              "score"
+            ],
+            "doc_keys": [
+              "class",
+              "constitution_meta",
+              "content",
+              "created_at",
+              "derived_from",
+              "expires_at",
+              "id",
+              "injection_mode",
+              "metadata",
+              "provenance",
+              "reopenability",
+              "scope",
+              "tags",
+              "time_scope",
+              "title",
+              "token_count",
+              "updated_at",
+              "valid_from",
+              "valid_until"
+            ]
+          },
+          "v1-search": {
+            "container": "list",
+            "row_keys": [
+              "document",
+              "score"
+            ],
+            "doc_keys": [
+              "content",
+              "created_at",
+              "id",
+              "metadata",
+              "tags",
+              "title",
+              "token_count",
+              "updated_at"
+            ]
+          }
+        },
+        "control_ok": true,
+        "status": "ok",
+        "elapsed_s": 1.5,
+        "host_env": {
+          "load1": 7.69,
+          "load5": 9.8,
+          "load15": 9.92,
+          "io_some_avg60": 5.88,
+          "io_full_avg60": 4.99,
+          "error": null
+        }
+      }
+    }
+  },
+  "display_names": {
+    "v1": "v1",
+    "v2": "v2"
+  },
+  "probe_timeout_s": 30.0,
+  "common_denominator": {
+    "n": 228,
+    "per_target_gradeable": {
+      "v1": 228,
+      "v2": 228
+    },
+    "dropped_to_align": {
+      "v1": 0,
+      "v2": 0
+    }
+  },
+  "replay": {
+    "requested": 120,
+    "loaded": 120,
+    "from_container": "memo"
+  },
+  "replicates": 2,
+  "host_env_start": {
+    "load1": 10.97,
+    "load5": 9.11,
+    "load15": 7.61,
+    "io_some_avg60": 10.05,
+    "io_full_avg60": 8.73,
+    "error": null
+  },
+  "host_env_end": {
+    "load1": 7.69,
+    "load5": 9.8,
+    "load15": 9.92,
+    "io_some_avg60": 5.88,
+    "io_full_avg60": 4.99,
+    "error": null
+  }
+}

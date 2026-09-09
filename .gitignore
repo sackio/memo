@@ -12,3 +12,15 @@ ui/dist/
 # Single-global migration export artifacts (kept on NAS only)
 migration-*/
 scratchpad/
+
+# Deploy/retest scratch from the 2026-08 cutover work — belongs in /tmp, kept here only
+# because it was written before that rule was applied. Not knowledge; do not commit.
+.deploy*.log*
+.deploy-and-retest.sh
+.retest*.log
+.retest*.sh
+.retest.pid
+.rollback-image-id
+.pruned-dupes-*.json
+*.bak-*
+office-recovery-*/
