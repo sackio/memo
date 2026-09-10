@@ -15,7 +15,16 @@ PARK_DESIG = re.compile(r"\b(?:[Ll]evel ?\d{1,2}|[Rr]ow ([A-Z])(?![A-Za-z])|[Ss]
 PARK_STRONG = re.compile(r"(where I parked|where i left the car|left the car (at|in)|car is (at|in|parked))")
 # Weak: needs a parking-domain word nearby. NOTE: no "parked on" — that's metaphorical
 # ("the session is parked on X") far more often than literal.
-PARK_WEAK = re.compile(r"(parked|valet)", re.I)
+# ⛔ AGENT-SENSE OBJECTS EXCLUDED 2026-09-10 (Ben: "fix all"). This fleet parks
+# WORK, not cars: "both parked warnings cleared", "the question is parked",
+# "exec still parked". The domain-word check within +/-120 chars does not save
+# you here, because a long agent report almost always contains one somewhere.
+# ⇒ Decide on the OBJECT of the verb, which is unambiguous: a vehicle is never
+# a warning, a job or a thread. Measured: this was the last surviving false
+# positive after the keypad/confirmation fixes, from agentkit session f52d31d0.
+PARK_WEAK = re.compile(
+    r"(parked(?!\s+(?:warning|job|session|seat|task|work|thread|question|topic"
+    r"|item|process|run|issue|decision|ticket|branch|PR|change|review)s?\b)|valet)", re.I)
 # Two parts, because the airport codes are DESIGNATORS and the rest are words.
 # Measured 2026-07-31: running the codes unanchored under re.I made `ORD` match
 # rec*ord*s / co*ord*inator / w*ord* and `EWR` match r*ewr*itten — between them
@@ -44,13 +53,38 @@ PARK_DOMAIN_CODE = re.compile(r"\b(BOS|JFK|LGA|MHT|EWR|SFO|LAX|ORD|DCA|IAD|DFW)\
 def _park_domain(window: str):
     return PARK_DOMAIN_WORD.search(window) or PARK_DOMAIN_CODE.search(window)
 
-BOOKING = re.compile(r"(confirmation:?\s*[A-Z0-9]{5,7}\b|\bPNR\b|record locator|conf ?#\s*[A-Z0-9]{4,}|booking\s*[A-Z0-9]{5,8}|voucher ?#)")
-CODE    = re.compile(r"(lock ?box|gate code|door code|garage code|keypad|wifi password|combo ?\d{3,}|combination ?\d{3,})", re.I)
+# ⛔ EVERY TOKEN HERE MUST CONTAIN A DIGIT. Corrected 2026-09-10 (Ben: "fix all").
+# `confirmation:?\s*[A-Z0-9]{5,7}` accepted a run of pure uppercase LETTERS, so
+# "confirmation: PASSED" and "confirmation: FAILED" matched — and this seat writes
+# both constantly in its own watch reports. A real record locator always carries a
+# digit; an English word in caps never does. Same fix applied to conf# and booking.
+BOOKING = re.compile(r"(confirmation:?\s*(?=[A-Z0-9]{5,7}\b)[A-Z0-9]*\d[A-Z0-9]*\b|\bPNR\b|record locator|conf ?#\s*(?=[A-Z0-9]{4,}\b)[A-Z0-9]*\d[A-Z0-9]*\b|booking\s*(?=[A-Z0-9]{5,8}\b)[A-Z0-9]*\d[A-Z0-9]*\b|voucher ?#)")
+# ⛔ BARE `keypad` REMOVED 2026-09-10 (Ben: "fix all"). It was the single largest
+# false-positive source in twelve consecutive 100%-FP cycles, and the reason is
+# self-reference: this seat's own standing pin and watch reports contain the word
+# `keypad` while DESCRIBING this detector, so the instrument matched its own
+# documentation and reported itself as a captured datum. ⭐ An instrument whose
+# trigger vocabulary appears in its own description will measure itself.
+# ⇒ `keypad` now requires an actual code within ~40 chars, which is the thing worth
+# capturing anyway. A keypad with no number in sight is prose, not a datum.
+CODE    = re.compile(r"(lock ?box|gate code|door code|garage code"
+                     r"|keypad[^.\n]{0,40}?\b\d{3,}"
+                     r"|wifi password|combo ?\d{3,}|combination ?\d{3,})", re.I)
 CASH    = re.compile(r"(paid \$?\d+ (?:cash )?to [A-Z]\w+|owes? \$?\d+ to [A-Z]\w+|Venmo(?:ed|d)? [A-Z]\w+|Zelle(?:d)? [A-Z]\w+)")
-SEAT    = re.compile(r"(\bseat ?\d{1,2}[A-F]\b|\bgate ?[A-Z]\d{1,2}\b)")
+# ⚠️ `gate ?[A-Z]\d` tightened 2026-09-10: it must not be preceded by a word that
+# makes it a different kind of gate. This fleet says "push-gate A1", "gate B2 check"
+# about CI gates constantly, and an airport gate is never qualified that way.
+SEAT    = re.compile(r"(\bseat ?\d{1,2}[A-F]\b"
+                     r"|(?<![-\w])(?<!push.)(?<!ci.)gate ?[A-Z]\d{1,2}\b)")
 
 # Engineering-chatter reject, applied to a WINDOW around the match only.
-ENG = re.compile(r"(```|gate=|\bPASS\b|\bFAIL\b|commit |\bsha\b|FR-\d|\bT\d{3}\b|attest|beacon|kubectl|docker|pytest|stderr|traceback|@[0-9a-f]{8}\b|halt-trigger|memo_store|\.jsonl)", re.I)
+# ⛔ ADDED 2026-09-10: the detector's OWN vocabulary. Four of five hits on the
+# 2026-09-10 cycle were this seat's prose ABOUT the detector — its standing pin
+# naming `capture_miss_scan.py`, and the positive control quoting its own anchor
+# ("Level 6"). Nothing in the old reject list covered self-description, so the
+# instrument counted its own documentation as findings and the count only grew.
+ENG = re.compile(r"(```|gate=|\bPASS\b|\bFAIL\b|commit |\bsha\b|FR-\d|\bT\d{3}\b|attest|beacon|kubectl|docker|pytest|stderr|traceback|@[0-9a-f]{8}\b|halt-trigger|memo_store|\.jsonl"
+                 r"|capture.?miss|false.positive|\bFP\b|detector|positive control|PARK_|CAPMISS|memo-minder|minder cycle)", re.I)
 NOISE = re.compile(r"^(<system-reminder|<local-command|<command-name|Caveat:|\[SYSTEM)")
 STORE = re.compile(r"(memo_store|POST /documents)", re.I)
 

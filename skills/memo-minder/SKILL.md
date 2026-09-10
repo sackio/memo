@@ -53,7 +53,7 @@ host <hostname> · lookback <N>d · skips: <…>
 
 **Args:** `--days N` (default 2) · `--dry-run` (analyse, change nothing) · `--full` / `--daily-only`
 (force phase set) · `--skip <phase>` where phase ∈ `mine · capture-miss · liveness · gitpulse ·
-write · perproject · checkpoint · sync`.
+write · perproject · checkpoint · sync`. ⚠️ `sync` is now a NO-OP — see Phase E.
 
 ⚠️ **`--skip gmail --skip phony --skip atc --skip email` are still accepted and are NO-OPS.** Those
 phases were handed to `assistant` on 2026-07-05 and the email was retired; the cron line still
@@ -370,26 +370,34 @@ old, and the surviving checkpoint must absorb its dedup keys first.
 
 ---
 
-## Phase E — Sync check (read-only)
+## Phase E — Sync check: **RETIRED. THERE IS NOTHING TO CHECK.**
 
-```bash
-tail -3 /tmp/memo-v2-to-v1-sync.log
-```
+⛔⛔ **v1 (`:8096`) AND THE HOURLY SYNC WERE SHUT DOWN 2026-08-25 17:55 EDT** — Ben, Slack #memo:
+*"yes retire it"*. This phase used to `tail /tmp/memo-v2-to-v1-sync.log` and judge `failed=N` against
+v1's write ceiling. **Do not do that.** The log is frozen at 2026-08-25T17:47 and `:8096` refuses
+connections (curl rc=7); both are the CORRECT state now.
+⇒ **A cycle that reports either as a problem is MANUFACTURING a finding**, which is the exact defect
+this loop was corrected for three separate times on 2026-08-25.
+✅ The only thing worth asserting, and it is optional: `curl -sS --max-time 5 http://localhost:8096/health`
+should FAIL. Decide on curl's **EXIT CODE** (rc=7 = refused), never on the body of `-w '%{http_code}'` —
+on a refused connection curl prints `000` *and* exits non-zero, so `$(... || echo 000)` yields `"000000"`
+and the `= "000"` test takes the wrong branch. Measured: that bug reported a false "someone restarted it"
+on a correctly-retired v1.
+⚑ If `:8096` ever ANSWERS again, that is unexpected but is not an outage. Say so and move on.
 
-The reverse sync to the v1 standby runs hourly at `:47`, so a line up to ~60 min old is CORRECT.
+⛔⛔ **AND THE 8,192-TOKEN CEILING RETIRED WITH IT. Do not carry it into any advice.** It was v1's
+limit, not memo's. ⛔ Neither is "~12.8k", nor 15,418, nor `MAX_INPUT_TOKENS = 16384` — **there is no
+fixed number.** A document has lived at 15,418 tokens with passages indexed while PATCHes against it
+were refused. Naming a number here is exactly how the last myth spread. Memos `373eaeeb` / `5cd365a0`.
+⇒ **NEVER COMPUTE WHETHER A MEMO FITS. Write it and let the 413 answer.** A REPEATED 413 on one
+document means SPLIT it, never retry.
 
-⚠️ **`failed=N` is almost always the token ceiling.** v1 refuses a write over **8,192 tokens**, and
-**the destination then keeps its stale copy — present, plausible, and undetectable downstream.**
-The guard predicts it before attempting: look for `UPD-WILL-FAIL`. Remedy is to split the memo at a
-semantic seam, never to trim.
-
-⛔ **Count what is over the ceiling NOW, not what has ever tripped the guard.** Grepping every
-`UPD-WILL-FAIL` id out of the log gave **13** on 2026-08-21 when the true answer was **2** — the
-other 11 had been split or deleted. **A log accumulates events; a corpus holds state**, and the
-inflated number was the more alarming one, which is why it went unquestioned.
-
-⛔ v1 is 3-small/1536 via OpenRouter. **Never point it at `:31541` or `:31536`** — 2560-dim vectors
-in a `FLOAT[1536]` store silently mis-rank the whole thing.
+⚠️ **WHY THIS SECTION SURVIVED 16 DAYS AFTER THE THING IT DESCRIBES WAS SHUT OFF** (corrected
+2026-09-10, authorized by Ben): every cycle read it, saw a stale log and a refused port, correctly
+judged both benign, and moved on — so the wrong instruction never produced a wrong outcome and nothing
+forced it to be read again. ⭐ Same shape as this skill's own Step 1 lesson about `office:8000`: the
+written instruction and the actual behaviour diverged in silence. **When you retire a thing, grep for
+every doc that tells someone to check it.**
 
 ---
 
@@ -410,7 +418,7 @@ no `.memo.db` ever existed. Do not restore it.
 CYCLE COMPLETE — <date> (<N>m) · <D> discovered/<R> real/<M> mined
 findings <new>/<patched> · capture-miss <n> real (control PASS/FAIL)
 liveness <gap|none> · per-project <p> projects/<m> mutations
-git <c> commits/<r> repos · sync <status> · checkpoint <id>
+git <c> commits/<r> repos · checkpoint <id>
 ```
 
 Append one line to `~/.memo/minder.log`, then stop.

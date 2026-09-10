@@ -67,12 +67,23 @@ for r in rows:
 ```
 
 Then read in full ONLY the candidates that might be the same fact
-(`GET /documents/<full-uuid>`).
+(`GET /documents/<id>` — full uuid or 8-char short id, both work).
 
-⚠️ **Use full 36-char uuids on this route.** `GET /documents/<short-id>` returns a
-**404**, which reads like "the memo is gone" rather than "you abbreviated the id".
-⛔ Short-id resolution exists on the MCP tool `memo_get`, NOT on this REST route —
-do not generalise one to the other.
+✅ **8-char short ids WORK on this route** — `GET /documents/<short-id>` returns
+**200**, same as a full uuid. Measured 2026-09-10 against the live store.
+⛔⛔ THIS PARAGRAPH USED TO SAY THE OPPOSITE — that short ids 404 here and resolve
+only on the MCP tool `memo_get`. That was true before the 2026-08-21 deploy
+(memo `af9ec624`) and has been FALSE ever since. Do not reinstate it from an older
+copy of this file.
+⚠️ **It cost a real verification on 2026-09-10.** A memo-writer following the old
+text declined to probe three ids, fell back to enumerating one day's creations,
+missed all three because they were CITED that day rather than CREATED then, and
+wrote "these three memos could not be located — do not treat as verified to exist"
+into the corpus. All three were live. ⭐ A false instruction does not merely fail to
+help: it stops you running the one cheap check that would have settled the question,
+and the resulting non-finding gets stored as if it were evidence.
+⇒ **Verify an id by fetching it and READING ITS TITLE.** A 200 alone is not enough —
+a citation can resolve and still name the wrong document.
 
 ⚠️ **Search returns a ranked window, not the corpus.** A miss at `limit 12` is not
 proof of absence — widen, or try different terms, before concluding nothing exists.
