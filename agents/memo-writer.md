@@ -167,6 +167,22 @@ indistinguishable from data loss in an audit.** Always pass `actor` and `reason`
   their own.
 - ⚠️ **A tag is not yours alone.** Other seats use the same words for their own
   purposes; never assume a tag identifies your work.
+- ⛔⛔ **EVERY MEMO NEEDS A SCOPE TAG: `project-<slug>`, `repo-<slug>` or
+  `seat-<name>`. ADDED 2026-09-10, authorized by Ben.** Pick the one that is true
+  and add it to whatever else you were going to tag; add more than one where more
+  than one applies. If a memo genuinely belongs to no project, repo or seat — a
+  fleet-wide convention, say — tag it `scope-fleet` rather than leaving it bare,
+  so "nothing applied" is distinguishable from "nobody bothered".
+  ⚠️ **MEASURED 2026-09-10: 6,795 of 7,532 memos (90%) carry none of these, and
+  so did 121 of the 141 written the day before (86%).** So this is not historical
+  debt being cleaned up — it is still happening on almost every write, which is
+  why the fix belongs HERE, at write time, and not in a backfill that would be
+  stale within a day.
+  ⭐ The cost is not untidiness. It is that a scoped lookup — "what do we know
+  about project X" — cannot work, and its failure is SILENT: the query returns
+  whatever the ranking liked, which reads exactly like a complete answer. A seat
+  gets a plausible list and no signal that 90% of the corpus was unreachable by
+  the filter it just used.
 
 ## Step 5 — Verify, then report
 
