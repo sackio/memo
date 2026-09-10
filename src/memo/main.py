@@ -1,4 +1,5 @@
 import asyncio
+import re
 import sqlite3
 import contextlib
 import hashlib
@@ -16,6 +17,7 @@ from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.routing import Match
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 
@@ -91,6 +93,12 @@ mcp_starlette.router.lifespan_context = lambda app: contextlib.AsyncExitStack()
 
 _LEAK_MARKER = "</content>"
 _LEAK_FRAGMENTS = ("<parameter name=", "<tags>", "</invoke>")
+
+# A full 36-char uuid, used by memo_delete to refuse abbreviations on the one
+# irreversible route. Deliberately strict: 8-4-4-4-12 hex, nothing else.
+_FULL_UUID_RE = re.compile(
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+)
 
 
 async def _store_receipt(db_path: str | None, doc_id: str) -> dict:
@@ -853,9 +861,90 @@ async def memo_delete(id: str, db_path: str | None = None) -> dict:
     """Delete a document by ID.
 
     db_path: ACCEPTED AND IGNORED — one global DB since 2026-06-29.
+
+    ⛔⛔ THIS USED TO LIE BY OMISSION — CORRECTED 2026-09-10. It returned
+    `{"deleted": false}` with no error for an id it could not delete, and the
+    commonest reason was an 8-CHAR SHORT ID, which every other route resolves.
+    A caller reading `deleted: false` concludes "already gone" and moves on;
+    the memo is still there. Memo `e577d82e`.
+
+    ⭐ THE FIX IS DELIBERATELY THE CAUTIOUS ONE. This is the only irreversible
+    path in the API, so it now FAILS LOUDLY rather than silently resolving a
+    prefix and deleting something. An abbreviation is exactly where a wrong
+    guess is least recoverable, and "I refused" is always cheaper than "I
+    deleted the wrong document". If short-id deletion is ever wanted, that is a
+    separate, operator-authorised change — not a side effect of this one.
     """
+    if not _FULL_UUID_RE.match(id):
+        raise ValueError(
+            f"memo_delete requires a FULL 36-char uuid; got {id!r}. "
+            "Deletion is the one irreversible route here, so an abbreviated id is "
+            "refused rather than resolved — resolve it first with memo_get, read "
+            "the TITLE to confirm it is the document you mean, then delete by full id."
+        )
     deleted = await db.delete(db_path=db_path, doc_id=id)
-    return {"deleted": deleted}
+    if not deleted:
+        raise ValueError(
+            f"memo_delete: no document with id {id}. Nothing was deleted. "
+            "(This is raised rather than returned as deleted:false, because a false "
+            "flag reads as 'already gone' and is indistinguishable from success.)"
+        )
+    return {"deleted": True, "id": id}
+
+
+@mcp.tool()
+async def memo_supersede(
+    old_id: str,
+    content: str,
+    actor: str,
+    title: str | None = None,
+    tags: list[str] | None = None,
+    reason: str | None = None,
+    db_path: str | None = None,
+) -> dict:
+    """Close out a memo and write its replacement, atomically. [001/FR-003]
+
+    ⛔⛔ WHY THIS TOOL EXISTS — ADDED 2026-09-10 (authorized by Ben, Slack #memo).
+    There was no MCP supersede, so every seat hand-rolled the fussiest signature
+    in the API over raw REST. Measured: **11 of 21 `POST /supersede` calls 422'd**,
+    across three different client IPs. The server was CORRECT every time — the
+    callers were guessing at required fields. Memo `552e6ce3`.
+    ⭐ The right fix for a route people keep getting wrong is a narrower door, not
+    a more forgiving one. Making /supersede lenient would have let a malformed
+    supersede half-land; this gives the four fields that actually matter and lets
+    the endpoint keep refusing everything else.
+
+    `old_id` may be a full uuid or an 8-char short id — unlike memo_delete, this
+    is safe to resolve, because superseding is reversible (the old memo is closed
+    out, not destroyed) and an ambiguous prefix is refused rather than guessed.
+
+    `actor` is REQUIRED and is not decoration: it is written to the supersede
+    edge, and an unattributed supersede is what an audit cannot reconstruct. Use
+    `operator:<name>`, `auditor:<session-id>`, or `mediator:auto`.
+    """
+    resolved = await _resolve_doc_id_or_404(old_id, db_path)
+    new_memo = {
+        "content": content,
+        "title": title,
+        "tags": tags or [],
+        "metadata": {},
+        "class": "fact",
+    }
+    embedding = await _embed_document_or_413(content)
+    result = await documents_repo.supersede(
+        resolved, new_memo, embedding, actor, reason=reason,
+        operator_directive_ref=None,
+    )
+    if result is None:
+        existing = await documents_repo.get(resolved)
+        if existing is None:
+            raise ValueError(f"memo {old_id} not found")
+        raise ValueError(
+            f"memo {resolved} is already superseded "
+            f"(valid_until={existing.get('valid_until')}); supersede the current "
+            "version instead — follow the lineage forward before retrying."
+        )
+    return result
 
 
 @mcp.tool()
@@ -1168,6 +1257,118 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ⛔⛔ UNKNOWN QUERY PARAMS ARE REFUSED — ADDED 2026-09-10 (authorized by Ben,
+# Slack #memo: "fix all, and correct all issues").
+#
+# THE BUG THIS CLOSES: FastAPI ignores query params it does not declare, so
+# `GET /documents?tag=foo` — singular, the natural typo for `tags` — silently
+# dropped the filter and returned THE WHOLE CORPUS with HTTP 200. The caller
+# gets a plausible list, no error, and no way to tell it was unfiltered.
+# ⭐ That is the reassuring-direction failure: a filter that silently does not
+# filter is worse than one that errors, because the result still looks like an
+# answer to the question asked. Memo `d51a19af`.
+#
+# ⚠️ INERT MARKERS ARE STILL ALLOWED, AND THIS IS LOAD-BEARING. The memo-watch
+# loop probes `GET /documents/<id>?wp=1` so that the 404-classifier can skip its
+# OWN probes when it reads the access log — without that marker the instrument
+# reads its own echo as caller traffic and the 404 count never decays (measured
+# 2026-09-05: 100% of one window's 404s were self-generated). Rejecting `wp`
+# here would break that loop while looking like a correctness improvement.
+_INERT_QUERY_PARAMS = frozenset({
+    "wp",  # memo-watch self-echo marker — see above. Ignored by design.
+})
+
+
+@app.middleware("http")
+async def _reject_unknown_query_params(request, call_next):
+    if request.query_params:
+        route = None
+        for r in app.router.routes:
+            if hasattr(r, "matches"):
+                match, _ = r.matches(request.scope)
+                if match == Match.FULL:
+                    route = r
+                    break
+        declared = None
+        if route is not None and getattr(route, "dependant", None) is not None:
+            # ⚠️ RECURSE INTO SUB-DEPENDENCIES. `dependant.query_params` holds only
+            # the TOP-LEVEL params; anything declared inside a `Depends(...)` lives
+            # on the child dependant. No route uses Depends today (verified
+            # 2026-09-10: zero matches for `Depends(` in this file), so this changes
+            # nothing now — it is here so that the first person to add one does not
+            # discover that their new parameter is rejected as unknown. ⭐ A guard
+            # that rejects VALID input is the same class of bug as one that accepts
+            # invalid input, and it fails on the loud side of a route nobody has
+            # written yet.
+            def _params(dep, seen=None):
+                seen = seen if seen is not None else set()
+                if id(dep) in seen:
+                    return set()
+                seen.add(id(dep))
+                out = {f.alias or f.name for f in dep.query_params}
+                for sub in getattr(dep, "dependencies", ()) or ():
+                    out |= _params(sub, seen)
+                return out
+            declared = _params(route.dependant)
+        # ⛔ If we could not resolve the route or its declared params, ALLOW.
+        # Never reject on an empty declared-set: that would 422 every request on
+        # any route this introspection does not understand — the loud version of
+        # the same silent-wrongness this rule exists to prevent.
+        if declared is not None:
+            unknown = sorted(
+                k for k in request.query_params.keys()
+                if k not in declared and k not in _INERT_QUERY_PARAMS
+            )
+            if unknown:
+                hints = {}
+                for k in unknown:
+                    near = [d for d in declared if d.startswith(k) or k.startswith(d)]
+                    if near:
+                        hints[k] = sorted(near)
+                detail = {
+                    "error": "unknown query parameter",
+                    "unknown": unknown,
+                    "accepted": sorted(declared),
+                    "note": ("This is refused rather than ignored: an ignored filter "
+                             "returns an unfiltered result with HTTP 200, which is "
+                             "indistinguishable from a correct answer."),
+                }
+                if hints:
+                    detail["did_you_mean"] = hints
+                return JSONResponse(status_code=422, content={"detail": detail})
+    return await call_next(request)
+
+
+@app.exception_handler(sqlite3.OperationalError)
+async def _locked_is_503_not_500(request, exc):
+    """A lock the retries could not clear is UNAVAILABLE, not a server bug.
+
+    ⛔ ADDED 2026-09-10. Measured 2026-09-09: a PATCH surfaced a BARE 500 carrying
+    the raw string "database is locked". A 500 tells a caller "this request is
+    broken, do not repeat it" — the opposite of the truth here, where the write
+    cleanly did not land and the very next attempt succeeded. One of the two
+    observed was another seat's write, so mis-signalling this costs the fleet,
+    not just the caller. Memo `75e42a5a`.
+    ⇒ 503 + Retry-After is the honest code: the request was fine, the store was
+    briefly not. Anything that is NOT a lock keeps its 500, because that one
+    really is a server bug and should not be dressed up as transient.
+    """
+    msg = str(exc).lower()
+    if "database is locked" not in msg and "database is busy" not in msg:
+        raise exc
+    logger.warning("write refused after lock retries: %s %s", request.method, request.url.path)
+    return JSONResponse(
+        status_code=503,
+        headers={"Retry-After": "1"},
+        content={"detail": {
+            "error": "store temporarily locked",
+            "note": ("The write did NOT land — this is byte-identical to never having "
+                     "been attempted, so it is safe to retry. memo already retried "
+                     "internally with backoff before returning this."),
+        }},
+    )
+
 
 app.mount("/mcp", mcp_starlette)
 

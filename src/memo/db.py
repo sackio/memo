@@ -867,15 +867,69 @@ async def _index_passages_after_write(path: str, doc_id: str,
             "(docker exec memo-v2 python3 /app/scripts/memo-index-corpus)", doc_id)
 
 
+# ⛔⛔ BOUNDED RETRY ON `database is locked` — ADDED 2026-09-10 (authorized by Ben,
+# Slack #memo: "fix all, and correct all issues"). Memo `75e42a5a`.
+#
+# ⚠️ WHAT THIS IS NOT. The queued proposal said "add busy_timeout" — that was
+# WRONG when written and is corrected here: `PRAGMA busy_timeout=30000` has been
+# set on every connection since 2026-08-03 (see _get_or_create_conn). So the
+# measured failure was NOT a missing timeout, and I have NOT established which
+# path produced it. This is deliberately a fix to the CONSEQUENCE, not a guess at
+# the cause: a speculative change to the live write path serving ~50 seats is
+# worse than an honest retry.
+#
+# WHAT WAS MEASURED (2026-09-09): a PATCH returned a BARE HTTP 500 carrying the
+# raw string "database is locked". The write cleanly did not land — byte-identical
+# to never having been attempted — and the caller's first manual retry succeeded.
+# ⚑ One of the two observed 500s was ANOTHER SEAT'S write, not this seat's, so a
+# fan-out here degrades write availability fleet-wide.
+#
+# ⭐ A write that would have succeeded 40ms later should not reach the caller as a
+# 500. Two extra attempts with a short backoff cost nothing when the disk is
+# healthy and convert the common case into a wait, exactly as busy_timeout does
+# one level down. It stays BOUNDED so a genuinely wedged database still surfaces
+# rather than hanging every request thread behind it.
+_LOCK_RETRY_ATTEMPTS = 3
+_LOCK_RETRY_BACKOFF = (0.05, 0.25)
+
+
+async def _write_with_lock_retry(fn, *args):
+    """Run a sync writer in a thread, retrying only a genuine lock contention.
+
+    ⛔ Retries ONLY `database is locked` / `database is busy`. Every other
+    OperationalError — a schema error, a constraint failure, a corrupt page — is
+    re-raised on the first attempt. Retrying those would turn a deterministic bug
+    into an intermittent one, which is strictly harder to diagnose than the bug.
+    """
+    last: Exception | None = None
+    for attempt in range(_LOCK_RETRY_ATTEMPTS):
+        try:
+            return await asyncio.to_thread(fn, *args)
+        except sqlite3.OperationalError as e:
+            msg = str(e).lower()
+            if "database is locked" not in msg and "database is busy" not in msg:
+                raise
+            last = e
+            if attempt == _LOCK_RETRY_ATTEMPTS - 1:
+                break
+            await asyncio.sleep(_LOCK_RETRY_BACKOFF[attempt])
+            logger.warning(
+                "sqlite lock contention on %s, attempt %d/%d — retrying",
+                getattr(fn, "__name__", fn), attempt + 1, _LOCK_RETRY_ATTEMPTS,
+            )
+    assert last is not None
+    raise last
+
+
 async def store(db_path: str | None, content: str, title: str | None,
                 tags: list[str], metadata: dict, embedding: list[float],
                 doc_id: str | None = None,
                 created_at: float | None = None,
                 updated_at: float | None = None) -> str:
     path = _resolve_path(db_path)
-    stored_id = await asyncio.to_thread(_sync_store, path, content, title, tags,
-                                        metadata, embedding, doc_id, created_at,
-                                        updated_at)
+    stored_id = await _write_with_lock_retry(_sync_store, path, content, title, tags,
+                                             metadata, embedding, doc_id, created_at,
+                                             updated_at)
     await _index_passages_after_write(path, stored_id, content)
     return stored_id
 
@@ -1142,8 +1196,8 @@ async def update(db_path: str | None, doc_id: str, content: str | None, title: s
     is the failure this whole change exists to remove.
     """
     path = _resolve_path(db_path)
-    result = await asyncio.to_thread(_sync_update, path, doc_id, content, title,
-                                     tags, metadata, embedding, expect_content)
+    result = await _write_with_lock_retry(_sync_update, path, doc_id, content, title,
+                                          tags, metadata, embedding, expect_content)
     # ⛔ Only re-index a write that actually landed. `None` is "no such doc" and
     # `{"conflict": True}` is an optimistic-concurrency REFUSAL — in both cases the
     # stored content is unchanged, and re-chunking `content` would install passages
