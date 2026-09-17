@@ -590,7 +590,14 @@ async def memo_update(
             "detail": _too_large_detail(e),
             "requested_id": id,
             "chars": e.chars,
-            "max_input_tokens": embeddings.MAX_INPUT_TOKENS,
+            # ⛔ NO `max_input_tokens` HERE, DELIBERATELY, AND DO NOT ADD IT BACK.
+            # It used to echo `embeddings.MAX_INPUT_TOKENS`, which is a
+            # DOCUMENTATION constant that does not decide anything (see its own
+            # comment) and is counted in `cl100k`, not the provider's tokenizer.
+            # Callers read it as the threshold that fired and recorded documents
+            # as "at the 16,384 ceiling" — eight times since 2026-08-26, memo
+            # `373eaeeb`. ⭐ memo was manufacturing the myth it then corrected.
+            # The provider's own words are in `detail` and they are the authority.
         }
     result = await db.update(
         db_path=db_path,
@@ -1537,8 +1544,9 @@ def _too_large_detail(e: "embeddings.EmbeddingInputTooLarge") -> str:
     """
     return (
         f"Document too large to embed ({e.chars:,} characters). The embedding "
-        f"model's context limit is {embeddings.MAX_INPUT_TOKENS:,} tokens and this "
-        f"content exceeds it. Split it into separate memos — memo does not "
+        f"provider refused it as over its context limit; its own words are below "
+        f"and they are the authority — memo does not count your tokens and must "
+        f"not claim a limit of its own. Split it into separate memos — memo does not "
         f"truncate, because a partial embedding is indistinguishable from a "
         f"correct one. Provider said: {e.provider_message[:300]}"
     )

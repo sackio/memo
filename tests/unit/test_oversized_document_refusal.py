@@ -39,9 +39,20 @@ def _assert_actionable(detail: str):
     assert "too large to embed" in detail
     assert "Split it into separate memos" in detail, \
         "a refusal that names no remedy is a 500 with better manners"
-    assert str(embeddings.MAX_INPUT_TOKENS) in detail.replace(",", ""), \
-        "the caller cannot judge how much to split without the limit"
     assert PROVIDER_MSG[:40] in detail, "the provider's own words must survive"
+    # ⛔ THIS ASSERTION USED TO REQUIRE THE OPPOSITE, AND ENFORCED A DEFECT.
+    # It demanded `embeddings.MAX_INPUT_TOKENS` appear in the wording, on the
+    # reasoning that "the caller cannot judge how much to split without the
+    # limit". That reasoning is wrong twice over: the constant is DOCUMENTATION
+    # and decides nothing (see its comment), and it is counted in `cl100k` while
+    # the provider counts Qwen3 — measured 1.53–4.17 chars/token on this fleet,
+    # so a caller converting it to characters can be off by ~2.7x.
+    # ⭐ Callers did exactly what the wording invited and recorded documents as
+    # "at the 16,384 ceiling" — eight times since 2026-08-26, memo `373eaeeb`.
+    # The provider's message above already carries the real limit in the real
+    # units, so the honest contract is to pass it through and claim nothing.
+    assert "memo does not count your tokens" in detail, \
+        "memo must not assert a limit of its own — the provider is the authority"
 
 
 @pytest.mark.asyncio
