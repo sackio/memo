@@ -94,7 +94,7 @@ Classify against what you read. In order of preference:
 
 | verdict | when | action |
 |---|---|---|
-| **UPDATE** | an existing memo covers this fact and is still broadly right | rewrite that memo whole, merging old + new |
+| **UPDATE** | an existing memo covers this fact and is still broadly right | `PATCH` with `append=` / `prepend=` — memo merges server-side. ⛔ NOT a whole-doc rewrite |
 | **NEW** | genuinely distinct fact | `POST /documents` |
 | **SUPERSEDE** | the new fact CONTRADICTS an existing memo | `POST /supersede` — closes the old and writes the new atomically |
 | **DELETE** | the old memo is purely wrong or fully absorbed, with no historical value | `DELETE` with `actor` + `reason` |
@@ -125,17 +125,47 @@ curl -sS --fail-with-body -X POST http://server4:8000/documents \
   -d '{"title": "...", "content": "...", "tags": ["..."]}'
 ```
 
-**Update — ⛔ READ-MODIFY-WRITE, and `content` REPLACES WHOLESALE:**
+**Update — ⛔ USE `append=` OR `prepend=`. NEVER A WHOLE-DOCUMENT `content=` REPLACE:**
 
 ```bash
 curl -sS --fail-with-body -X PATCH http://server4:8000/documents/<full-uuid> \
   -H 'Content-Type: application/json' \
-  -d '{"content": "<the ENTIRE merged document>", "tags": [...]}'
+  -d '{"prepend": "<just your new text>\n\n", "tags": [...]}'
+```
+
+`append`/`prepend` do the read-modify-write **inside memo, in one transaction**, and
+auto-populate `expect_content` from the read they just did — so every one of them is
+a compare-and-set. If anyone wrote between memo's read and its write you get
+`{"updated": false, "reason": "conflict", ...}` and **nothing is lost**: re-read and
+re-apply. ⛔ Do not pass `expect_content` yourself alongside them — it is full-string
+equality, so a slice 409s every time and reads as phantom contention.
+
+⛔⛔ **MEASURED DATA LOSS, 2026-09-24 — THIS IS WHY.** Two seats wrote memo
+`63e5d806` seconds apart. The second sent a whole-document `content=` replace built
+from a read taken *before* the first one's appends, and silently CLOBBERED them.
+**Both writes returned success.** Nobody learned anything was missing until a re-read,
+and one finding had to be re-derived. The shrink guard cannot catch this: it fires
+only when the new content is under a quarter of the old, so a same-size clobber sails
+straight through.
+
+**Only if you must genuinely REWRITE the document** — restructuring, splitting, cutting
+something now wrong — does `content` apply, and then **guard it**, so a concurrent write
+becomes a 409 instead of silent loss:
+
+```bash
+curl -sS --fail-with-body -X PATCH http://server4:8000/documents/<full-uuid> \
+  -H 'Content-Type: application/json' \
+  -d '{"content": "<the ENTIRE merged document>",
+       "expect_content": "<exactly what your GET returned>", "tags": [...]}'
 ```
 
 ⛔⛔ **There is no version history and no undo on an update.** GET the memo, merge
 in your head, send the whole thing. Sending only your new paragraph DESTROYS the
 rest. ⚠️ Tags replace wholesale too — send the union, not just your additions.
+⚑ `expect_content` is live on BOTH `memo_update` and REST PATCH since 2026-09-06
+(v0.5.1). Before that REST accepted it and silently DISCARDED it — returning 200 and a
+fresh `updated_at`, byte-identical to a guarded write — so an older transcript showing
+it "work" over HTTP proves nothing.
 
 **Supersede** (contradiction — atomic, keeps the lineage):
 
