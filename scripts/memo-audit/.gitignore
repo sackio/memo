@@ -1,0 +1,11 @@
+# ⛔ SNAPSHOTS AND CANDIDATE LISTS HOLD VERBATIM MEMO CONTENT, AND SOME MEMOS
+# HOLD CREDENTIALS. `stage2-before/456582c0.json` captured the Omada admin
+# password in plaintext before the audit redacted it from the corpus. Committing
+# a snapshot would re-publish a secret into git history, where it is far harder
+# to remove than from memo. [2026-10-19]
+#
+# These are also regenerable: `select-all.py` rebuilds the candidate lists and
+# the snapshot step re-reads `GET /documents`. Nothing durable is lost.
+candidates*.json
+*-before/
+runs/
