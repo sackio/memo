@@ -1,11 +1,23 @@
-# ⛔ SNAPSHOTS AND CANDIDATE LISTS HOLD VERBATIM MEMO CONTENT, AND SOME MEMOS
-# HOLD CREDENTIALS. `stage2-before/456582c0.json` captured the Omada admin
-# password in plaintext before the audit redacted it from the corpus. Committing
-# a snapshot would re-publish a secret into git history, where it is far harder
-# to remove than from memo. [2026-10-19]
+# ⛔ DENYLIST WAS THE WRONG SHAPE HERE — THIS IS AN ALLOWLIST ON PURPOSE.
 #
-# These are also regenerable: `select-all.py` rebuilds the candidate lists and
-# the snapshot step re-reads `GET /documents`. Nothing durable is lost.
-candidates*.json
-*-before/
-runs/
+# `run.py` launches workers with `cwd` set to THIS DIRECTORY, so a worker can
+# drop any file it likes here and a later `git add -A` sweeps it in. That is not
+# hypothetical: on 2026-10-19 a worker wrote `all.json`, a 72 MB dump of the
+# whole corpus, and it went into a commit. Nothing was pushed, so it was amended
+# out — but a denylist can only ever name the scratch files someone already saw.
+#
+# Snapshots and candidate dumps are excluded for the same reason plus one more:
+# they hold verbatim memo content, and they regenerate from `GET /documents`.
+#
+# ⇒ Ignore everything; name the source files explicitly. A new source file must
+# be added here, which is the point: it forces a decision per file.
+*
+!.gitignore
+!run.py
+!keyring.py
+!select-all.py
+!diff-stage.py
+!with-grant-key
+!worker-prompt.md
+!credential-prompt.md
+!README.md

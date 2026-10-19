@@ -1,0 +1,41 @@
+#!/usr/bin/env python3
+"""Run a command with ANTHROPIC_API_KEY set from the rotating grant keyring.
+
+⭐ WHY: a cron line can only name a STATIC key file, so every scheduled job that
+wanted a credit-backed account hardcoded one -- and `memo-minder` hardcoded
+`admin.key`, which is the one account with NO credit link (memo 34fa4ebc: admin
+= admin@laurasack.com, org "Admin", holding only `laura-api-key`). That is real
+billing, roughly $5 a run, daily, while ~$790/month of granted credit went
+unspent on the other four accounts.
+
+⛔ THE KEY IS NEVER PRINTED, NEVER IN ARGV, NEVER EXPORTED TO THE SHELL. It is
+read inside this process and passed to exec in the child's environment only.
+
+Usage:  with-grant-key <command> [args...]
+        with-grant-key --which      # print the account it WOULD pick, no key
+"""
+import os
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import keyring  # noqa: E402
+
+
+def main() -> int:
+    if len(sys.argv) < 2:
+        print(__doc__, file=sys.stderr)
+        return 2
+    acct = keyring.next_acct()
+    if sys.argv[1] == "--which":
+        print(acct)
+        return 0
+    env = dict(os.environ)
+    env.update(keyring.key_env(acct))
+    # The account is worth seeing in a cron log; the key is not.
+    print(f"with-grant-key: account={acct}", file=sys.stderr, flush=True)
+    os.execvpe(sys.argv[1], sys.argv[1:], env)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -175,14 +175,26 @@ for l in sys.stdin:
 - ⛔ EVERY write keeps/sets a scope tag (`seat-*`, `repo-*`, `project-*`) plus
   `2026-10-19` and `measured`.
 - ⛔ NEVER write a credential value into a memo. Record where it lives, never what
-  it is. If you find one already in a memo, REDACT it and say so in your report.
+  it is. ⭐ If you find one already in a memo, LEAVE IT -- Ben ruled 2026-10-19
+  12:50 EDT that a plaintext credential in a memo is fine and is not to be
+  redacted. You may ADD the file and variable it also lives in, never replace a
+  value with a location you have not confirmed.
 
 ## ⛔ DO NOT USE query_log TO DECIDE WHETHER A MEMO IS USED
-`query_log` sees MCP traffic only, except for `store`. Measured 2026-10-19: three
-REST `POST /search` calls returning HTTP 200 produced **0** rows, and there are
-**0** non-MCP `search` rows in the table all time; likewise **0** non-MCP
-`update` rows all time, while `store` logs from every client. So "this memo was
-never retrieved" is unknowable from query_log and must never justify a deletion.
+`query_log` has been MCP-only since 2026-09-30, except for `store`. Measured
+2026-10-19 by op x user_agent: `search` 2,392 REST rows (NULL user_agent) whose
+LAST is 2026-09-30T16:59:23Z, plus 930 `mcp:`; `update` 3,194, all `mcp:`;
+`context` 238, all `mcp:`; `store` 3,013 `mcp:` plus 13,114 other. Three REST
+`POST /search` calls on 2026-10-19 returned HTTP 200 and wrote 0 rows.
+
+⛔ An earlier version of this brief said "0 non-MCP search rows all time". That
+was MY error and it is retracted: `user_agent NOT LIKE 'mcp:%'` silently DROPS
+NULL rows, and REST writes NULL. The correct predicate is
+`user_agent IS NULL OR user_agent NOT LIKE 'mcp:%'`. ⇒ If you count anything by
+`user_agent`, write it that way or you will measure a confident zero.
+
+Either way the conclusion holds: "this memo was never retrieved" is unknowable
+from query_log and must never justify a deletion.
 Decide on EVIDENCE about the claim -- is it true? is it duplicated? is it
 superseded? -- never on apparent disuse.
 
@@ -192,6 +204,23 @@ Finish with a JSON block and nothing after it:
 {"audited": [{"id": "...", "verdict": "CURRENT|STALE|SUPERSEDED|DELETE|UNVERIFIABLE",
   "claims_checked": ["..."], "evidence": ["what you actually ran or read"],
   "action": "what you changed, or none", "cites_found": 0}],
+ "route": [{"seat": "cluster|network|models|atc|servers|ha|...",
+            "finding": "one sentence, with the evidence you ran",
+            "from_memo": "<id you found it auditing>"}],
  "notes": "anything the memo seat must know"}
 ```
 ⛔ Do not claim an action you did not verify by reading the memo back.
+
+### ⭐ `route` IS NOT OPTIONAL, AND IT IS WHY THE AUDIT IS WORTH MORE THAN MEMO
+Operator instruction, Ben, Slack #memo 2026-10-19 12:50 EDT: *"when you find
+things like this you should route it to the appropriate agent."* Auditing a memo
+against the live fleet finds things that are wrong with THE FLEET, not with the
+memo -- a firewall rule that drifted, a monitor counting zero, a node on the
+wrong kubelet. Recording that in a memo and telling nobody is the failure mode:
+the memo becomes accurate and the problem stays.
+
+⇒ Put every such finding in `route`, naming the seat you believe owns it. You do
+NOT send it yourself; the memo seat does, so the DM carries one sender and the
+finding is not duplicated. ⚠️ Name a seat as your best guess, not a fact -- the
+first routing of the UFW finding above went to `network` and Ben corrected it to
+`cluster`. An empty `route` is a real answer; do not invent one.
