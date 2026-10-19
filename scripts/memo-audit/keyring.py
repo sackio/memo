@@ -35,6 +35,12 @@ KEY_DIR = Path("/home/ben/.claude/state/api-keys")
 SPEND_LOG = KEY_DIR / "spend.jsonl"          # schema shared with the `agents` seat
 
 # acct -> (grant_usd, renewal day-of-month).  Relayed from `agents` 2026-10-12.
+# ⭐ CONFIRMED BY `agents` 2026-10-19: the "Max API credit" ($200/mo on a 20x
+# account) and the per-account Console grant are THE SAME POOL, not two budgets.
+# Its earlier $1,200/mo figure (6 accounts) was wrong -- agents3 has no offer and
+# admin has no recorded link -- so the real pool is the $800/mo below. The
+# fleet-wide $40/day cap in memo `ee0c98c5` was sized off that wrong $1,200;
+# $800/mo is ~$26/day. ⇒ Spend against THIS table, not against $40/day.
 # ⛔ admin deliberately absent: see the module docstring.
 ACCOUNTS: dict[str, tuple[float, int]] = {
     "ben":       (200.0, 22),
@@ -150,9 +156,27 @@ def key_env(acct: str, base: dict | None = None) -> dict:
 
 
 def log_spend(acct: str, model: str, usd: float) -> None:
-    """Append one call's cost in the schema the `agents` seat already consumes."""
+    """Append one call's cost in the schema the `agents` seat already consumes.
+
+    ⭐ `actor` NAMES THE SEAT, AND WITHOUT IT THE FLEET CAP IS UNENFORCEABLE.
+    Added 2026-10-19 at the `agents` seat's request, matching what its `haiku`
+    wrapper writes as of c605d90 (HAIKU_ACTOR or ATC_SUBSCRIBER_ID). Until both
+    sides wrote it the ledger held only acct/model/usd/ts/day, so spend could not
+    be attributed to a seat: on 2026-10-19 this seat could identify its own
+    $69.47 only by matching Opus-1m amounts against its own batch records, and
+    the $40/day cap could be breached without anyone being able to show who did
+    it. A cap nobody can attribute is advisory.
+
+    ⚠️ Reads ATC_SUBSCRIBER_ID from THIS process, which is correct: `log_spend`
+    runs in the PARENT. `key_env()` strips ATC_* from the CHILD so workers cannot
+    steal the broker registration -- a different problem, same variable, and the
+    two fixes must not be confused into stripping it here too.
+    """
+    actor = (os.environ.get("MEMO_AUDIT_ACTOR")
+             or os.environ.get("ATC_SUBSCRIBER_ID") or "memo")
     rec = {"day": date.today().isoformat(), "ts": int(time.time()),
-           "acct": acct, "model": model, "usd": round(float(usd), 6)}
+           "acct": acct, "model": model, "usd": round(float(usd), 6),
+           "actor": actor}
     with SPEND_LOG.open("a") as fh:
         fh.write(json.dumps(rec) + "\n")
 
