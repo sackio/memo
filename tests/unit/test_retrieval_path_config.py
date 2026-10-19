@@ -106,3 +106,61 @@ def test_explicit_endpoints_ignore_the_config(client, monkeypatch, configured):
     assert [r["document"]["id"]
             for r in client.post("/search-passages", json={"query": "q"}).json()] == [
         "passage-hit"]
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# ⛔⛔ EVERY CONFIGURED PATH MUST WRITE A query_log ROW. [2026-10-19]
+#
+# Everything above this line asserts the RESULTS and the HEADER, and all of it
+# passed throughout the window in which `/search` logged nothing at all. Only
+# `_document_search` carried a `log_query_async` call, so flipping the setting to
+# `passages` -- which is what the live service runs -- silently ended REST search
+# logging. MEASURED: 2,392 rows 2026-08-10 to 2026-09-30T16:59Z, then none.
+#
+# ⇒ A dispatcher test that never looks at the side effect cannot see a branch
+# that forgot it. Parametrized over every path so a FOURTH branch added later
+# fails here rather than going dark for a month.
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.fixture
+def logged(monkeypatch):
+    rows: list[dict] = []
+
+    async def _log(*args, **kwargs):
+        rows.append(kwargs)
+
+    monkeypatch.setattr(db, "log_query_async", _log)
+    return rows
+
+
+@pytest.mark.parametrize("configured", ["document", "passages", "size-routed"])
+def test_every_retrieval_path_logs_the_query(client, monkeypatch, logged, configured):
+    monkeypatch.setattr(settings, "memo_retrieval_path", configured)
+
+    r = client.post("/search", json={"query": "q"})
+
+    assert r.status_code == 200
+    assert len(logged) == 1, (
+        f"path {configured!r} wrote {len(logged)} query_log rows, expected "
+        "exactly 1 -- one row per query, from whichever branch answered")
+    row = logged[0]
+    assert row["query"] == "q"
+    assert row["latency_ms"] is not None and row["latency_ms"] >= 0
+    assert row["result_ids"], "a row with no result_ids cannot be joined to anything"
+
+
+def test_an_unrecognized_path_still_serves_documents(client, monkeypatch, logged):
+    """`memo_retrieval_path` is an unvalidated `str` (config.py:87).
+
+    A typo has always fallen through to the document path, and it must keep
+    doing that rather than landing on whichever branch is written last -- the
+    fallthrough is the only thing standing between a misspelled setting and a
+    silently different retrieval model.
+    """
+    monkeypatch.setattr(settings, "memo_retrieval_path", "passsages")
+
+    r = client.post("/search", json={"query": "q"})
+
+    assert _ids(r) == ["doc-hit"]
+    assert len(logged) == 1

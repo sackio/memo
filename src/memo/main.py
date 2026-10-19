@@ -2663,9 +2663,36 @@ async def search_documents(req: SearchRequest, response: Response,
     _log_phantom_fields(req, "POST /search")
     path = settings.memo_retrieval_path
     response.headers["X-Memo-Retrieval-Path"] = path
+
+    # ⛔⛔ EVERY PATH MUST LOG, AND TWO OF THEM DID NOT. [2026-10-19]
+    #
+    # `_document_search` carries its own `log_query_async` — deliberately, because
+    # `/search-documents` reaches it too and must keep logging. Its docstring says
+    # the logging moved there "so it still covers the document path", and that is
+    # exactly the defect: when this dispatcher routed to `passages` or
+    # `size-routed`, NOTHING logged. Both branches built a response and returned.
+    #
+    # ⚠️ MEASURED, and it is a dated regression rather than a missing feature:
+    # `query_log` holds 2,392 REST `search` rows (NULL user_agent) from
+    # 2026-08-10 to 2026-09-30T16:59Z and NONE after — 2026-09-30 is when the
+    # live path became `passages`. Three REST searches on 2026-10-19 produced
+    # zero rows, and `X-Memo-Retrieval-Path: passages` confirms the branch.
+    # ⇒ So `/search` observability silently died on a config flip, with no error
+    # and no deploy of its own. The header was the only external tell.
+    #
+    # ⇒ `document` returns early and logs itself; the other two share one call
+    # below rather than repeating it per branch, because a third copy is how the
+    # second one came to be missing.
+    # ⚠️ `memo_retrieval_path` is an unvalidated `str` (config.py:87, default
+    # "document"), so a typo must land where it always did -- on the document
+    # path -- not on whichever branch happens to be written last.
+    if path not in ("passages", "size-routed"):
+        return await _document_search(req, request)
+
+    _t0 = _time.time()
     if path == "size-routed":
-        return await _size_routed_search(req)
-    if path == "passages":
+        out = await _size_routed_search(req)
+    else:
         embedding = await embeddings.embed_query(req.query)
         results = await db.search_passages(
             req.db_path, embedding, req.limit, req.min_score, req.tags,
@@ -2675,9 +2702,19 @@ async def search_documents(req: SearchRequest, response: Response,
             # which yields k=0 and zero hits on every query with the supersede
             # test still green.
             include_superseded=req.include_superseded)
-        return [SearchResult(document=Document(**r["document"]), score=r["score"])
-                for r in results]
-    return await _document_search(req, request)
+        out = [SearchResult(document=Document(**r["document"]), score=r["score"])
+               for r in results]
+
+    # ⛔ The log must never delay or fail the query it records — same contract as
+    # `_document_search`. Logged AFTER the response is built.
+    await db.log_query_async(
+        req.db_path, "search", query=req.query, arg_limit=req.limit,
+        tags=req.tags, result_ids=[r.document.id for r in out],
+        result_scores=[r.score for r in out],
+        latency_ms=(_time.time() - _t0) * 1000,
+        user_agent=(request.headers.get("user-agent") if request else None),
+        source_ip=(request.client.host if request and request.client else None))
+    return out
 
 
 async def _size_routed_search(req: SearchRequest) -> list[SearchResult]:
