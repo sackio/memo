@@ -125,6 +125,27 @@ def key_env(acct: str, base: dict | None = None) -> dict:
                          f"to the API as absent auth, not as an error")
     env = dict(base if base is not None else os.environ)
     env["ANTHROPIC_API_KEY"] = val
+
+    # ⛔⛔ STRIP ATC_* OR EVERY WORKER STEALS THIS SEAT'S BROKER IDENTITY.
+    # `atc-session-start.sh` registers with the broker using $ATC_SUBSCRIBER_ID
+    # and exits 0 without registering when ATC_SUBSCRIBER_ID, ATC_ZONES and
+    # ATC_TEAM are all unset (hook lines 14-16). Inheriting os.environ handed
+    # every `claude -p` worker ATC_SUBSCRIBER_ID=memo, so each one re-registered
+    # as `memo`, pointed the registration at itself, and then EXITED.
+    #
+    # MEASURED 2026-10-19: the live `memo` row read
+    #   description: "Claude Code session in .../scripts/memo-audit"
+    # -- a worker's cwd, not the seat's -- and DMs to `memo` stopped arriving at
+    # the real pane from ~12:50. Ben's Slack replies (13:33, 14:24, 15:11) were
+    # never delivered; they were found by reading the channel directly. The seat
+    # looked registered and healthy the whole time, which is why nothing alarmed.
+    # Reported by the `agents` seat.
+    #
+    # ⇒ A child process that inherits an identity variable does not merely read
+    # it, it BECOMES that identity to anything keyed on it. Strip identity from
+    # a child env; pass only capability.
+    for k in [k for k in env if k.startswith("ATC_")]:
+        del env[k]
     return env
 
 

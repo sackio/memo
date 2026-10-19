@@ -87,6 +87,115 @@ with the `find -L` bug the cycle saw **13 of 75 sessions (17%)** and reported cl
 
 ---
 
+## Step 2 — How this cycle is INVOKED: headless, on API credits
+
+⭐ **Since 2026-10-12 this cycle runs as a headless `claude -p` job on server4, paid from API credits,
+not from a seat's Max quota.** Authorized by Ben in #agents: *"perhaps memo can use API credits"*
+(12:49:43) and *"yes"* to ask `a2v` (12:50:40). Rationale: the cycle is a batch job with ~20 phases and
+does not need a live seat; it was measured as the `memo` seat's single largest spend of 2026-10-12.
+
+```bash
+# server4 crontab. ⛔ The cwd is load-bearing — see the self-mining exclude in A.1.
+17 6 * * * mkdir -p /tmp/memo-minder-cycle && cd /tmp/memo-minder-cycle && /usr/bin/flock -n /tmp/memo-minder-cycle/.lock /usr/bin/timeout --foreground -k 30 3600 /mnt/nas/data/code/memo/scripts/memo-audit/with-grant-key /home/ben/.local/bin/claude -p --output-format json --model sonnet --permission-mode bypassPermissions "Run the memo-minder daily cycle now: --days 2" >> /tmp/memo-minder-cycle/run.jsonl 2>&1; L=$(grep "$(date -I)" /home/ben/.memo/minder.log | tail -1); if [ -z "$L" ]; then echo "$(date -Is) memo-minder-cycle DID-NOT-COMPLETE: no minder.log entry for $(date -I)" >> /tmp/cronguard-misses.log; elif echo "$L" | grep -qE "MINING SKIPPED|mining BLOCKED|NO CYCLE RAN|NOT in Agent registry|[1-9][0-9]* real/0 mined"; then echo "$(date -Is) memo-minder-cycle MINED-NOTHING: wrote a minder.log line but Phase A.2 produced no findings -- $L" >> /tmp/cronguard-misses.log; fi
+
+# ⛔⛔ THIS LINE USED TO READ `ANTHROPIC_API_KEY="$(cat .../api-keys/admin.key)"` AND THAT WAS REAL
+# BILLING. MEASURED 2026-10-19: `admin` is admin@laurasack.com, org "Admin", holds only
+# laura-api-key and has NO linked credit grant (unibrowse 2026-10-12, memo `34fa4ebc`) — so ~$5 a
+# run, every day, was charged to Laura's account while ~$790/mo of free per-account grant went
+# unspent. Authorized by Ben, Slack #memo 2026-10-19 14:24 ("yes you can edit it please just
+# proceed"). Crontab fixed the same day; backup `scratchpad/crontab-backup-20261019T130402.txt`.
+#
+# ⭐ WHY A WRAPPER AND NOT A DIFFERENT KEY PATH. A cron line can only name a STATIC file, which is
+# how it rotted the first time — swapping one hardcoded path for another just re-arms the same
+# trap. `with-grant-key` resolves the grant account with the SOONEST renewal at run time and puts
+# the key in the CHILD env only (never argv, never a log). `--which` prints the account without
+# touching a key.
+```
+
+⛔ **TWO CRON TRAPS THIS LINE IS WRITTEN TO AVOID. Both were in my first draft of it, 2026-10-12.**
+1. **`claude` MUST be an absolute path.** It lives at `/home/ben/.local/bin/claude` (a version-managed
+   launcher; today 2.1.296). Cron's PATH is `/usr/bin:/bin`, so a bare `claude` is NOT FOUND — and the
+   failure is a cron mail nobody reads plus an empty log, which is byte-identical to "the cycle ran and
+   found nothing."
+2. ⛔ **NO `%` ANYWHERE IN THE COMMAND FIELD.** crontab treats an unescaped `%` as a newline separator,
+   so a dated log name like `run-$(date +%F).json` TRUNCATES the command at the `%` and silently
+   installs a different job than the one you typed. It is escapable as `\%`, but this line avoids `%`
+   entirely and appends to one `run.jsonl` instead — an escape that one later editor removes is a trap
+   that re-arms itself.
+3. ⛔⛔ **`--permission-mode bypassPermissions` IS NOT OPTIONAL, AND ITS ABSENCE FAILED AS A SUCCESS.**
+   MEASURED on the FIRST headless run, 2026-10-13 06:17: without it, every `Bash` and `Write` call was
+   refused for permission — down to a plain `ls /home/ben/.claude/projects` — so nothing was discovered,
+   mined, written or checkpointed, `~/.memo/minder.log` was never appended, and **the result JSON still
+   reported `"is_error": false, "subtype": "success"`** after 9 turns, 28 s and $0.1892 of API credits.
+   A headless `claude -p` has nobody to approve a prompt, and no exit status can represent that.
+   ⭐⭐ **THE EXIT STATUS OF A HEADLESS AGENT MEASURES THAT IT ANSWERED, NEVER THAT IT ACTED.** Same
+   family as `timeout`'s 124 read as a zero (A.5) and a truncated loop read as a null (A.3): the
+   instrument reports on its own completion, not on the work.
+   ⇒ The line therefore carries a detector that asserts the cycle's OWN OUTPUT, not its rc:
+   `grep -q "$(date -I)" ~/.memo/minder.log || echo ... >> /tmp/cronguard-misses.log`, the same misses
+   file every other guarded job on this crontab writes to. ⛔ Do not replace it with a check on `$?`.
+   ⚠️ `bypassPermissions` here is PARITY, not escalation — the live `memo` seat has always run in bypass,
+   so the cron gains nothing the cycle did not already hold when it ran interactively. The commented
+   `atc-minder` line on this same crontab uses the identical flag.
+4. ⚠️ `flock -n` and `timeout --foreground -k 30 3600` were added the same day: a cycle that hangs on
+   API credits bills until something kills it, and a stacked second copy would spawn a second set of
+   miners and write a second checkpoint.
+⚠️ Keep it on ONE physical line. A backslash continuation inside a crontab command field is not a line
+continuation to cron.
+
+⛔⛔ **NEVER EXPORT THE KEY.** Set it on that ONE command only. **An `ANTHROPIC_API_KEY` present in a
+seat's environment OVERRIDES that seat's OAuth login**, so exporting it in a shell, a profile or
+`settings.json` silently moves an interactive seat's spend onto the credits and off the account it is
+supposed to bill. ⛔ Never write the key's VALUE into a memo, a Slack message, a commit or a transcript
+— record only that it lives at `~/.claude/state/api-keys/<acct>.key`, mode 600, **HOST-LOCAL to
+server4** (memo `0fb9e6f5`). Keys present as of 2026-10-12: `admin`, `agents`, `ben`; `admin` and `ben`
+are the verified-working pair.
+
+**Spend ledger — required, so the fleet's $40/day cap can see this job.** Append the run's
+`total_cost_usd` from the JSON result to `~/.claude/state/api-keys/spend.jsonl` as
+`{"day","ts","acct","model","usd"}`. One-shot judgement calls inside scripts should use
+`agentkit/scripts/haiku`, which logs itself.
+
+⛔⛔ **THE ATC SCHEDULE IS THE OTHER TRIGGER AND IT MUST STAY PAUSED.** `50166663` (`memo-minder`,
+owner memo) is cron `17 6 * * *` America/New_York — **the identical slot to the crontab line above.**
+Left armed, the cycle runs TWICE at 06:17: once headless on credits, once in the live seat on Max
+quota, each spawning its own miners and each writing a checkpoint. PAUSED 2026-10-12 16:56Z, verified
+`paused: true` / `health: paused`, fire_count frozen at 51.
+⇒ **Exactly one of these two triggers may be armed at a time.** Re-arming either means pausing the
+other in the same change. ⚠️ A paused schedule's `next_fire_at` stays frozen and reads as *overdue* in
+a listing — that is cosmetic and is not evidence the pause failed; check `paused`/`health`.
+
+⭐⭐ **PRIOR EVIDENCE ON MODELS, RECOVERED 2026-10-12 FROM THE CRONTAB'S OWN COMMENT, dated 2026-05-03:
+"Pinned to Sonnet 4.6 (Haiku bailed on Sunday cycle, too important to risk)."** ⇒ **Haiku has already
+been tried on this cycle and it failed**, five months before the 2026-10-12 decision to put the miners
+on it. That is not a reason to reverse the miner change — miners rank and cite, which is not what
+bailed — but it IS prior evidence that the A/B gate on the judging steps is load-bearing rather than
+cautious, and whoever runs that A/B should know the experiment has a precedent that went badly.
+⚠️ **And note where that evidence lived: in a crontab comment, on one host, attached to a line that had
+been deleted.** It was not in memo and not in this skill. It survived only because the comment block
+outlived its command.
+
+⛔ **A RELATED TRAP, FOUND IN THE SAME PLACE AND WORTH THE PARAGRAPH:** the 2026-07-05 disable comment
+read *"DISABLED until Sun 2026-07-05 (Ben, token-reduction) — re-enable by uncommenting:"* — and
+**there was no line to uncomment.** The command had been deleted outright, so the instruction pointed
+at nothing; verified 2026-10-12 by grepping the live crontab for any active or commented memo-minder
+command (zero of either). From 2026-07-05 to 2026-10-12 the cycle therefore ran ONLY from the ATC
+schedule into the live seat — which is the whole reason it was billing Max quota. ⭐ The shape: a
+decommission that removes the mechanism but keeps the re-enable instruction leaves a doc that is
+confidently, checkably wrong, and nothing about reading it reveals that. ⇒ When you disable something
+by deletion, say DELETED and name what to restore; "uncomment this" is only true if the line is there.
+
+⚠️ **What the live `memo` seat does afterwards: READ THE CHECKPOINT.** It does not re-run phases, re-read
+the miners, or re-audit the corpus. The checkpoint memo is the cycle's report; the seat's job is to act
+on what it names and otherwise leave it alone.
+
+⚠️ **This moves WHO PAYS, not HOW MUCH WORK HAPPENS.** If the goal is less corpus churn per day rather
+than lower cost, the thing to change is this skill's SCOPE, and that is the operator's call — do not
+quietly trim phases to make a spend number look better. A phase skipped silently is indistinguishable
+from a phase that found nothing.
+
+---
+
 ## Phase A — Gather
 
 ### A.1 · Discover sessions — and check the denominator in BOTH directions
@@ -95,12 +204,28 @@ with the `find -L` bug the cycle saw **13 of 75 sessions (17%)** and reported cl
 CUTOFF=$(date -d "$DAYS days ago" +%Y-%m-%d); touch -d "$CUTOFF" /tmp/bf_cutoff
 for HOST in office server4 server5 server3; do
   CMD="/usr/bin/find -L /home/ben/.claude/projects -maxdepth 2 -name '*.jsonl' \
-       -newer /tmp/bf_cutoff ! -path '*/subagents/*' -printf '%T@ %s %p\n'"
+       -newer /tmp/bf_cutoff ! -path '*/subagents/*' \
+       ! -path '*/-tmp-memo-minder-cycle/*' -printf '%T@ %s %p\n'"
   if [ "$HOST" = "$(hostname)" ]; then eval "$CMD"
   else ssh -o ConnectTimeout=6 -o BatchMode=yes -p 4999 ben@$HOST \
        "touch -d '$CUTOFF' /tmp/bf_cutoff; $CMD" || echo "WARN: ssh $HOST failed"; fi
 done
 ```
+
+⛔⛔ **`! -path '*/-tmp-memo-minder-cycle/*'` IS THE SELF-MINING EXCLUDE. DO NOT DROP IT.** Added
+2026-10-12 with Ben's authorization (#agents ask `a2v`, his "yes" at 12:50:40) when this cycle moved to
+a headless `claude -p` run on API credits. **A `claude -p` run writes its own session transcript into
+`~/.claude/projects/<slug>/`**, so without this exclude the next night's A.1 DISCOVERS THE PREVIOUS
+NIGHT'S CYCLE as an ordinary session and mines it — the cycle's own findings come back as fresh
+evidence, with provenance laundered one generation per day and no error anywhere.
+⚠️ **The line-count filter does NOT save you here.** It drops a ~119 KB / 14-line hook transcript, but a
+full cycle transcript is hundreds of lines and passes cleanly. ⇒ The guard must be the PATH exclude.
+⚠️ The exclude is keyed on the cycle's working directory, so the headless invocation MUST run from
+`/tmp/memo-minder-cycle` (slug `-tmp-memo-minder-cycle`). Change the cwd and you silently disarm this —
+if you move it, change both places in the same commit.
+⭐ Why this population currently looks empty and will not stay that way: `claude -p` hooks have been
+hard-disabled fleet-wide since 2026-08-11, so there are almost no `-p` transcripts to trip over today.
+This cycle is about to start producing one every night.
 
 ⛔ **`-L` IS LOAD-BEARING.** server4's per-project dirs are symlinks into `/fast4`. Bare `find`
 returns **0 there** — measured 25 vs 1917 on 2026-08-21 — and a zero is indistinguishable from a
@@ -142,10 +267,52 @@ Safer still, and what this cycle used: **union the dedup keys of every checkpoin
 before the `@`, not the uuid's first 8 — so every key silently fails to match and you get the same
 **93 NEW / 0 GROWN** reading from a second, independent cause. Use the full form:
 `([0-9a-f]{8})-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}@(\d+)`.
+
+⛔⛔ **AND READ *BOTH* FORMS, UNIONED — THE ANCHORED PATTERN ALONE CANNOT SEE A MONTH OF PAST KEYS.**
+Authorized by Ben, Slack #memo 2026-10-01 ("yes", answering ask `aa`). MEASURED that day across all
+17 surviving checkpoints: **11 of 17 carry short-form keys, 2,519 of them**, written by earlier
+cycles before the write-side bug below was fixed. The anchored reader matches **zero** of those, so
+every session they name is re-mined as NEW or GROWN on every subsequent cycle — spend that reads as
+coverage. Union both, normalising the short form to a uuid-PREFIX match:
+```python
+FULL  = re.compile(r'\b([0-9a-f]{8})-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}@(\d+)\b')
+SHORT = re.compile(r'(?<![0-9a-f-])([0-9a-f]{8})@(\d+)\b')     # legacy, pre-2026-10-01 checkpoints
+seen = {}
+for rx in (FULL, SHORT):
+    for u, n in rx.findall(text):
+        seen[u] = max(seen.get(u, 0), int(n))                   # key on the uuid's FIRST 8 either way
+```
+⚠️ **Both forms key on the uuid's first 8 characters, so the union is safe** — a session's dedup key
+is `basename(path)[:8]`, which both patterns yield. The short form loses the ability to DISAMBIGUATE
+two sessions sharing an 8-hex prefix; at ~10k sessions that collision is remote and the alternative
+is reading nothing at all. ⇒ Accept the prefix for READING history; always WRITE the full form.
+⭐ This recovers the already-written month. It does not make the short form acceptable to emit — see
+the write-side rule immediately below, which stops the set growing.
 ⭐ Two different bugs, one identical and *plausible* symptom. Neither is visible to the standing
 "an empty result is not a null" guard — the result was neither empty nor null. **What caught it
 was a plausibility check against the prior day's number.** Always compare NEW/GROWN to the last
 checkpoint's own figures before believing them.
+
+⛔⛔ **AND WHEN YOU *WRITE* KEYS BACK, EXTRACT WITH THE WHOLE MATCH, NEVER THE CAPTURE GROUPS.**
+Authorized by Ben, Slack #memo 2026-10-01 ("2 yes"). `re.findall` on the anchored pattern above
+returns its GROUPS, and group 1 is only the uuid's first 8 characters — so a writer that uses it
+emits `e9d0935f@7257`, the **short form that the mandated anchored reader matches ZERO of.** Use
+`re.finditer(...)` with `m.group(0)`, or a non-capturing pattern, whenever keys are written:
+```python
+KEY = re.compile(r'\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}@\d+\b')
+keys = sorted(set(KEY.findall(text)))        # no groups -> findall returns whole matches
+```
+⭐ **THIS IS THE SAME DEFECT AS THE READ-SIDE ONE ABOVE, ARRIVING FROM THE OTHER DIRECTION** — keys
+written in a shape only the forbidden reader can match. MEASURED 2026-10-01: it truncated 321 keys
+during a reap absorption, and **the count matched perfectly** (322 extracted, 322 written), so no
+cardinality check could see it. It was caught only because the reap guard re-verified each key with
+the anchored pattern a future cycle would use, and refused the DELETE. ⇒ **An absorb-then-delete
+step must assert the ROUND TRIP, not the count.** Counts survive truncation, case folding,
+prefixing and re-quoting — every one of which destroys the join. Memos `ce0b9833`, `a744cae0`.
+⚠️ **The read side is NOT fixed and was NOT authorized** — 11 of 17 surviving checkpoints still
+carry short-form keys (2,519 of them, measured 2026-10-01), and the anchored reader reads those as
+zero, so their sessions are re-mined every cycle. That recovery is still queued for Ben; this entry
+stops the set growing, it does not shrink it.
 
 ### A.2 · Mine — `transcript-recall`, not your own extractor
 
@@ -154,6 +321,7 @@ Select by growth delta, cap ~16 sessions/cycle. Group by project and delegate:
 ```
 Agent(subagent_type="transcript-recall",
       description="mine <project> for durable facts",
+      model="haiku",
       prompt="""
 Question: What durable facts, decisions, conventions, config values, or hard-won
 pitfalls appeared in this project's sessions that a future seat would need and
@@ -167,6 +335,19 @@ resolution is already captured, ephemeral status, anything obvious from the
 code or README, and routine chatter.
 """)
 ```
+
+⛔⛔ **`model="haiku"` IS FOR THE MINERS ONLY. THE JUDGING STEPS STAY ON SONNET.** Authorized
+2026-10-12 by Ben (#agents `a2v`). Miners rank passages and cite — cheap judgement, verifiable against
+the citation. **Phase B `memo-writer` and Phase C `memo-recall` must NOT be downgraded until one A/B
+run shows a cheaper model still REFUSES.** The refusal behaviour is the control that makes this cycle's
+output trustworthy, and it is the first thing a cheaper judge drops. Measured on the 2026-10-12 cycle,
+both in one run: a Phase C reconciler DECLINED to pick between a "5" and a "7" DRA device count and
+returned both ids — vindicated within the hour by `cluster`'s own measurement, which showed 5 was not
+producible by any DeviceClass; and a Phase B writer REFUSED a figure I had relayed to it ("3 corrupt
+shards, all on server3") and corrected it from the corpus to 7 shards spanning server5.
+⇒ **The A/B is the gate, not a formality**: run one cycle both ways on the SAME inputs and compare
+REFUSAL COUNT and CORRECTION COUNT, not output volume. A cheaper judge that writes more and refuses
+less is the failure mode, and it reads as productivity.
 
 ⛔ **Keep the negative it gives you, and keep it PRECISE.** *"not discussed"* (searched, found
 nothing) · *"nothing was searched"* (zero sessions read) · *"host X not searched"* are three
@@ -386,11 +567,27 @@ on a correctly-retired v1.
 ⚑ If `:8096` ever ANSWERS again, that is unexpected but is not an outage. Say so and move on.
 
 ⛔⛔ **AND THE 8,192-TOKEN CEILING RETIRED WITH IT. Do not carry it into any advice.** It was v1's
-limit, not memo's. ⛔ Neither is "~12.8k", nor 15,418, nor `MAX_INPUT_TOKENS = 16384` — **there is no
-fixed number.** A document has lived at 15,418 tokens with passages indexed while PATCHes against it
-were refused. Naming a number here is exactly how the last myth spread. Memos `373eaeeb` / `5cd365a0`.
-⇒ **NEVER COMPUTE WHETHER A MEMO FITS. Write it and let the 413 answer.** A REPEATED 413 on one
-document means SPLIT it, never retry.
+limit, not memo's. ⚠️⚠️ **CORRECTED 2026-10-09, authorised by Ben, #cluster ask `a97`. THERE *IS* A FIXED NUMBER:
+16,384 QWEN3 TOKENS, MEASURED ON THE WHOLE RESULTING DOCUMENT.** This passage read *"Neither is
+'~12.8k', nor 15,418, nor `MAX_INPUT_TOKENS = 16384` — there is no fixed number"*, and offered a
+document living at 15,418 tokens as the disproof. **That disproof was a UNIT ERROR.** Stored
+`token_count` is cl100k; the gate is the embedder's qwen3 context. 15,418 cl100k is ~16.3k qwen3 — so
+that document was sitting AT the ceiling, not comfortably past it. `MAX_INPUT_TOKENS = 16384` was right
+the whole time and was dismissed here as a myth.
+⛔⛔ **DO NOT CONVERT A cl100k READING INTO qwen3 — NOT EVEN WITH A CONSERVATIVE FACTOR.** Measured
+qwen3/cl100k ratios on four documents: **1.0614 · 1.1151 · 1.1721 · 1.256** — an 18% spread. A ~1.107
+factor reports ~1,755 tokens of headroom that do not exist, and it fails in the direction that LOSES
+THE WRITE. ⛔ Do not use stored `token_count` for this at all.
+⭐ **Tokenize instead:** `POST http://192.168.1.5:31536/tokenize {"prompt": "<content>"}`, which also
+returns `max_model_len`.
+⚠️ A 413 reporting 400 and one reporting 413 about 1.3 ms apart are **ONE event re-surfaced**, not two.
+⇒ **Measure with the real tokenizer before a long write. The 413 is still the backstop, and a REPEATED
+413 on one document means SPLIT it, never retry.** To continue a full document, keep it and
+**retitle + prepend** a pointer to the new part — ⛔ never `content=`.
+⭐ The shape of both errors in this thread: a CHEAP PROXY for an exact measurement, each failing
+*reassuringly*. A short-document tokenizer check reported ~3,900 tokens of headroom on a document with
+98; a ratio conversion reports 1,755 that are not there. A proxy that errs toward "you have room" is
+worse than no proxy. Memos `373eaeeb` / `5cd365a0` / `60c0127d`.
 
 ⚠️ **WHY THIS SECTION SURVIVED 16 DAYS AFTER THE THING IT DESCRIBES WAS SHUT OFF** (corrected
 2026-09-10, authorized by Ben): every cycle read it, saw a stale log and a refused port, correctly
