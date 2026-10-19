@@ -165,6 +165,50 @@ async def embed_query(text: str) -> list[float]:
     return response.data[0].embedding
 
 
+async def embed_document_counted(text: str) -> tuple[list[float], int | None]:
+    """`embed_document`, plus the PROVIDER's own token count for the same text.
+
+    ⭐ THE COUNT IS FREE AND IT IS THE ONLY ONE THAT MATTERS. vLLM returns
+    `usage.prompt_tokens` on an ordinary embeddings response, and it equals
+    `POST /tokenize`'s count exactly (verified 2026-09-28: 10 == 10). So the count
+    in the tokenizer that ENFORCES max_model_len costs no extra request, no extra
+    dependency, and cannot drift from what the limit is applied to — it is measured
+    by the same call that the limit rejected or accepted.
+
+    ⛔ DO NOT substitute `chunking.count_tokens` here. That is cl100k, and it
+    understates Qwen3 by 67-4,279 tokens (n=108, mean 1,110, measured 2026-09-28)
+    with no usable correction factor. Storing a cl100k number in a field that
+    implies the enforced unit is the exact defect this function exists to end.
+
+    ⛔⛔ SINGLE INPUT ONLY, AND THIS IS NOT A STYLE PREFERENCE. On a BATCH,
+    `usage.prompt_tokens` is the SUM over every item and there is NO per-item token
+    field in the response at all — so on a list it cannot answer "does item i fit
+    under 16,384" even in principle, and a caller using it that way gets a number
+    too large by the weight of every other item in the batch. Measured by `models`
+    on :31542, 2026-09-28: a batch of 2 whose items tokenize to 3 and 18 reports
+    `prompt_tokens` 21. ⇒ This function takes a `str` and must keep taking a `str`;
+    `embed_batch` has no equivalent and `POST /tokenize` stays the per-string
+    instrument. (`_embed_raw` is shared with `embed_document`, which is also
+    single-input — do not widen either to accept a list without removing this
+    function's count.)
+
+    Returns `(embedding, prompt_tokens)`. `prompt_tokens` is None if the provider
+    omitted usage — callers must treat None as "unknown", never as 0, because a 0
+    would read as an empty document and rank it as having maximum headroom.
+    """
+    if not isinstance(text, str):
+        # Cheap guard for the batch hazard above: a list would silently return a
+        # SUM that reads exactly like a per-document count.
+        raise TypeError(
+            "embed_document_counted takes a single string; on a batch "
+            "usage.prompt_tokens is the SUM and cannot size any single item"
+        )
+    response = await _embed_raw(text)
+    usage = getattr(response, "usage", None)
+    count = getattr(usage, "prompt_tokens", None) if usage is not None else None
+    return response.data[0].embedding, count
+
+
 async def embed_document(text: str) -> list[float]:
     """Embed CONTENT BEING STORED. Never prefixed.
 
@@ -177,6 +221,12 @@ async def embed_document(text: str) -> list[float]:
     document that was wrongly sent through `embed_query` fails loudly here. Make
     the two agree about the prefix and both halves of that guard go blind at once.
     """
+    return (await _embed_raw(text)).data[0].embedding
+
+
+async def _embed_raw(text: str):
+    """The single document-side request. ⛔ Both public callers go through here so
+    the over-length translation below cannot apply to one and not the other."""
     try:
         response = await _client.embeddings.create(
             model=settings.embedding_model,
@@ -191,7 +241,7 @@ async def embed_document(text: str) -> list[float]:
         if "maximum context length" in msg or "input_tokens" in msg:
             raise EmbeddingInputTooLarge(msg, len(text)) from e
         raise
-    return response.data[0].embedding
+    return response
 
 
 async def embed_batch(texts: list[str]) -> list[list[float]]:

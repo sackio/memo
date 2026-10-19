@@ -264,6 +264,15 @@ def _init_schema(conn: sqlite3.Connection) -> None:
     cols = {row[1] for row in conn.execute("PRAGMA table_info(documents)")}
     if "token_count" not in cols:
         conn.execute("ALTER TABLE documents ADD COLUMN token_count INTEGER NOT NULL DEFAULT 0")
+    # Migration 2026-09-28 (see migrations/012_token_count_units.sql): every
+    # stored count names its tokenizer. Duplicated here so a DB created without
+    # the migrations dir (in-tree tests) still gets the columns — the same reason
+    # token_count is handled above.
+    if "token_count_tokenizer" not in cols:
+        conn.execute("ALTER TABLE documents ADD COLUMN token_count_tokenizer "
+                     "TEXT DEFAULT 'cl100k_base'")
+    if "token_count_qwen3" not in cols:
+        conn.execute("ALTER TABLE documents ADD COLUMN token_count_qwen3 INTEGER")
     # Migration 2026-07-21: add user_agent + source_ip to leak_incidents
     leak_cols = {row[1] for row in conn.execute("PRAGMA table_info(leak_incidents)")}
     if leak_cols and "user_agent" not in leak_cols:
@@ -434,8 +443,16 @@ def _sync_store(db_path: str, content: str, title: str | None, tags: list[str],
                 metadata: dict, embedding: list[float],
                 doc_id: str | None = None,
                 created_at: float | None = None,
-                updated_at: float | None = None) -> str:
+                updated_at: float | None = None,
+                provider_token_count: int | None = None) -> str:
     """`doc_id`/`created_at`/`updated_at` exist for ONE caller: the v1<->v2 mirror.
+
+    ⭐ `provider_token_count` is the count from the EMBEDDING PROVIDER's own
+    tokenizer, taken from the same response whose vector we are storing. It is the
+    unit `max_model_len` is enforced in; `token_count` beside it is cl100k and
+    understates it by 67-4,279 (measured, n=108). ⛔ None means "not measured" and
+    is stored as NULL — never coerce it to 0, which would read as an empty
+    document with maximum headroom.
 
     ⭐ WHY IDS MUST BE PRESERVABLE. memo ids are a public reference format — rewarm
     pins cite them, memos cite other memos by id, agents pass them between seats.
@@ -466,9 +483,11 @@ def _sync_store(db_path: str, content: str, title: str | None, tags: list[str],
     # NEW v1-path write look valid from the epoch and break get_as_of(). (Found
     # 2026-07-29: the first row written to the fresh v2 DB had valid_from=0.)
     conn.execute(
-        "INSERT INTO documents (id, content, title, tags, metadata, token_count, created_at, updated_at, valid_from) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO documents (id, content, title, tags, metadata, token_count, "
+        "token_count_qwen3, token_count_tokenizer, created_at, updated_at, valid_from) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (doc_id, content, title, json.dumps(tags), json.dumps(metadata), token_count,
+         provider_token_count, "cl100k_base",
          created, updated, created),
     )
     conn.execute(
@@ -482,7 +501,8 @@ def _sync_store(db_path: str, content: str, title: str | None, tags: list[str],
 def _sync_update(db_path: str, doc_id: str, content: str | None, title: str | None,
                  tags: list[str] | None, metadata: dict | None,
                  embedding: list[float] | None,
-                 expect_content: str | None = None) -> dict | None:
+                 expect_content: str | None = None,
+                 provider_token_count: int | None = None) -> dict | None:
     conn = _get_or_create_conn(db_path)
     row = conn.execute("SELECT * FROM documents WHERE id = ?", (doc_id,)).fetchone()
     if row is None:
@@ -508,9 +528,19 @@ def _sync_update(db_path: str, doc_id: str, content: str | None, title: str | No
     new_metadata = metadata if metadata is not None else existing["metadata"]
     new_token_count = _count_tokens(new_content) if content is not None else existing["token_count"]
 
+    # ⛔ Only overwrite the provider count when the CONTENT changed and we actually
+    # measured it. A title-only update must leave it alone: titles are never
+    # embedded (main.py embeds `content`), so the document's provider token count
+    # is unchanged and re-deriving it from nothing would blank a good measurement.
+    if content is not None and provider_token_count is not None:
+        new_provider_count = provider_token_count
+    else:
+        new_provider_count = existing.get("token_count_qwen3")
     conn.execute(
-        "UPDATE documents SET content=?, title=?, tags=?, metadata=?, token_count=?, updated_at=? WHERE id=?",
-        (new_content, new_title, json.dumps(new_tags), json.dumps(new_metadata), new_token_count, time(), doc_id),
+        "UPDATE documents SET content=?, title=?, tags=?, metadata=?, token_count=?, "
+        "token_count_qwen3=?, updated_at=? WHERE id=?",
+        (new_content, new_title, json.dumps(new_tags), json.dumps(new_metadata),
+         new_token_count, new_provider_count, time(), doc_id),
     )
     if embedding is not None:
         conn.execute("DELETE FROM document_embeddings WHERE doc_id = ?", (doc_id,))
@@ -925,11 +955,12 @@ async def store(db_path: str | None, content: str, title: str | None,
                 tags: list[str], metadata: dict, embedding: list[float],
                 doc_id: str | None = None,
                 created_at: float | None = None,
-                updated_at: float | None = None) -> str:
+                updated_at: float | None = None,
+                provider_token_count: int | None = None) -> str:
     path = _resolve_path(db_path)
     stored_id = await _write_with_lock_retry(_sync_store, path, content, title, tags,
                                              metadata, embedding, doc_id, created_at,
-                                             updated_at)
+                                             updated_at, provider_token_count)
     await _index_passages_after_write(path, stored_id, content)
     return stored_id
 
@@ -1168,6 +1199,97 @@ def _sync_resolve_id(db_path: str, doc_id: str) -> dict:
             "candidate_count": len(rows)}
 
 
+def _sync_link_supersession(db_path: str, old_id: str, new_id: str, actor: str,
+                            reason: str | None = None,
+                            operator_directive_ref: dict | None = None) -> dict:
+    """Record that an EXISTING document supersedes another EXISTING document.
+
+    ⭐⭐ WHY THIS EXISTS, MEASURED 2026-09-28. `supersede()` above does
+    `new_id = str(uuid.uuid4())` and `SupersedeRequest` requires `content`: the only
+    supersession path in memo MINTS A NEW DOCUMENT. So a seat holding two documents
+    that already exist had NO WAY, on any surface, to say "B supersedes A".
+    ⇒ That is why supersession is recorded in TITLE PROSE across this corpus: 137
+    titles assert a redirect while only 117 edges exist. The prose is not laziness,
+    it is the only expressive option a caller had. A `memo_supersede` MCP tool
+    wrapping the minting call would have inherited the same limitation and fixed
+    nothing.
+
+    ⛔ THIS SETS `valid_until` ON `old_id`, WHICH REMOVES IT FROM DEFAULT SEARCH
+    (FR-115). That is what supersession means and it is not a de-rank. It is
+    reachable again only via `include_superseded=true` or `/documents/{id}/as-of`.
+    ⇒ Do NOT call this for a PARTIAL CORRECTION. A title reading "CORRECTION to X"
+    usually narrows one claim in X; retiring X would hide a mostly-correct document.
+    Measured on the 2026-09-28 backfill candidates: of 119 single-id directive
+    titles, 91 were true supersessions and 28 were partial corrections, including
+    one whose mechanical application would have retired an entire NFSv4 root-cause
+    document because a single claim in it had been narrowed.
+
+    Refuses rather than guessing, and returns a `reason` for each refusal:
+      · either document missing
+      · old already superseded (same guard as `supersede()`)
+      · old and new are the same document
+      · new is itself superseded — pointing a reader at a retired successor
+      · the edge already exists
+      · the link would close a cycle (new already reaches old going forward)
+    """
+    conn = _get_or_create_conn(db_path)
+    if old_id == new_id:
+        return {"linked": False, "reason": "old and new are the same document"}
+    rows = {r["id"]: r for r in conn.execute(
+        "SELECT id, valid_until FROM documents WHERE id IN (?, ?)", (old_id, new_id))}
+    if old_id not in rows:
+        return {"linked": False, "reason": f"old document {old_id} does not exist"}
+    if new_id not in rows:
+        return {"linked": False, "reason": f"new document {new_id} does not exist"}
+    if rows[old_id]["valid_until"] is not None:
+        return {"linked": False, "reason": f"{old_id} is already superseded"}
+    if rows[new_id]["valid_until"] is not None:
+        return {"linked": False,
+                "reason": f"successor {new_id} is itself superseded — link to the "
+                          "current version instead; follow its lineage forward"}
+    if conn.execute("SELECT 1 FROM supersede_edges WHERE old_id = ? AND new_id = ?",
+                    (old_id, new_id)).fetchone():
+        return {"linked": False, "reason": "edge already exists"}
+    # Cycle guard: walk FORWARD from new; if we reach old, this link closes a loop
+    # and `get_current`'s lineage walk would not terminate on a fixed point.
+    seen, frontier = {new_id}, [new_id]
+    while frontier:
+        cur = frontier.pop()
+        if cur == old_id:
+            return {"linked": False,
+                    "reason": "would create a supersession cycle "
+                              f"({new_id} already leads to {old_id})"}
+        for r in conn.execute("SELECT new_id FROM supersede_edges WHERE old_id = ?", (cur,)):
+            if r["new_id"] not in seen:
+                seen.add(r["new_id"]); frontier.append(r["new_id"])
+
+    now = time()
+    try:
+        conn.execute("UPDATE documents SET valid_until = ?, updated_at = ? WHERE id = ?",
+                     (now, now, old_id))
+        conn.execute(
+            "INSERT INTO supersede_edges "
+            "(old_id, new_id, superseded_at, actor, reason, operator_directive_ref) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (old_id, new_id, now, actor, reason,
+             json.dumps(operator_directive_ref) if operator_directive_ref else None),
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    return {"linked": True, "old_id": old_id, "new_id": new_id,
+            "superseded_at": now, "actor": actor}
+
+
+async def link_supersession(db_path: str | None, old_id: str, new_id: str, actor: str,
+                            reason: str | None = None,
+                            operator_directive_ref: dict | None = None) -> dict:
+    path = _resolve_path(db_path)
+    return await _write_with_lock_retry(_sync_link_supersession, path, old_id, new_id,
+                                        actor, reason, operator_directive_ref)
+
+
 async def resolve_id(db_path: str | None, doc_id: str) -> dict:
     path = _resolve_path(db_path)
     return await asyncio.to_thread(_sync_resolve_id, path, doc_id)
@@ -1187,7 +1309,8 @@ async def count_docs(db_path: str | None) -> int:
 async def update(db_path: str | None, doc_id: str, content: str | None, title: str | None,
                  tags: list[str] | None, metadata: dict | None,
                  embedding: list[float] | None,
-                 expect_content: str | None = None) -> dict | None:
+                 expect_content: str | None = None,
+                 provider_token_count: int | None = None) -> dict | None:
     """`expect_content` is an optimistic-concurrency guard for append. [v0.4.0]
 
     An append is read-modify-write, so two concurrent appends can silently drop
@@ -1197,7 +1320,8 @@ async def update(db_path: str | None, doc_id: str, content: str | None, title: s
     """
     path = _resolve_path(db_path)
     result = await _write_with_lock_retry(_sync_update, path, doc_id, content, title,
-                                          tags, metadata, embedding, expect_content)
+                                          tags, metadata, embedding, expect_content,
+                                          provider_token_count)
     # ⛔ Only re-index a write that actually landed. `None` is "no such doc" and
     # `{"conflict": True}` is an optimistic-concurrency REFUSAL — in both cases the
     # stored content is unchanged, and re-chunking `content` would install passages

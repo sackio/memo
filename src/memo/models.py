@@ -46,6 +46,28 @@ class Document(BaseModel):
     tags: list[str] = []
     metadata: dict[str, Any] = {}
     token_count: int = 0
+    # ⭐ 2026-09-28 — BEN'S CONDITION: A STORED COUNT MUST NAME ITS TOKENIZER.
+    # (#atc ts 1790613818, confirmed at source.)
+    #
+    # ⛔ `token_count` above is cl100k. The embedder enforces max_model_len = 16,384
+    # in Qwen3. Measured over the 108 documents with cl100k >= 11,000: cl100k
+    # understates Qwen3 by 67-4,279 tokens, mean 1,110, a 64x spread — so there is
+    # no correction factor, and the stored column does not even ORDER correctly
+    # (the cl100k top-5 and the Qwen3 top-5 nearest the ceiling share ONE member).
+    # Six wrong numbers were published across the fleet the day this shipped, every
+    # one a quantity read in one unit against a limit enforced in another.
+    #
+    # ⛔⛔ THESE TWO FIELDS ARE ON THE ENVELOPE AND NOT ONLY IN THE SCHEMA, AND THAT
+    # IS THE POINT. The same day, `include_superseded` was found threaded through
+    # every layer of db.py and settable by NOBODY, because it was missing from
+    # `SearchRequest` — a capability that exists and no caller can reach is
+    # indistinguishable from one that was never built. A unit label no reader
+    # receives would have repeated that defect in the same commit that fixed it.
+    #
+    # `token_count_qwen3` is None when not measured — ⛔ NEVER 0, which would read
+    # as an empty document with maximum headroom.
+    token_count_tokenizer: str | None = "cl100k_base"
+    token_count_qwen3: int | None = None
     created_at: float
     updated_at: float
 
@@ -114,6 +136,28 @@ class SearchRequest(PermissiveRequest):
     min_tokens: int | None = None
     max_tokens: int | None = None
     db_path: str | None = None
+    # ⭐ 2026-09-28 — MAKE THE EXISTING OPT-IN REACHABLE. [FR-115 follow-up]
+    #
+    # `include_superseded` has been threaded through every layer of db.py since
+    # 2026-08-03 and was settable by NOBODY: it was absent from this model, so the
+    # only caller that ever set it True was the recall mediator, and only under
+    # `as_of`. So the FR-115 exclusion was UNCONDITIONAL for every ordinary
+    # `/search` caller, with no way to ask past it.
+    #
+    # ⛔ THE DEFAULT DOES NOT CHANGE, AND MUST NOT. FR-115 exists because a
+    # superseded memo was measured being served at rank 3 on the query after its
+    # supersession, and 655 self-declared-stale memos could all have been correctly
+    # superseded and still returned. Excluding by default is the correct behaviour
+    # and a de-rank was explicitly rejected — a memo the corpus has been told is no
+    # longer true is not "less relevant", and returning it ranked lower still
+    # returns it.
+    #
+    # ⇒ What this adds is only the ESCAPE HATCH the design already assumed existed:
+    # a caller tracing a supersession chain, or auditing what was retired, can ask
+    # for it explicitly instead of being unable to see it from this surface at all.
+    # Found 2026-09-28 by `atc` checking the deployed OpenAPI against a claim of
+    # mine that the opt-in was already exposed. It was not.
+    include_superseded: bool = False
 
 
 class SearchResult(BaseModel):
@@ -432,6 +476,28 @@ class InjectionSet(BaseModel):
 
 
 # Supersede envelopes (FR-003)
+class SupersedeLinkRequest(BaseModel):
+    """Link TWO EXISTING documents: `new_id` supersedes `old_id`.
+
+    ⭐ The gap this closes, measured 2026-09-28: `SupersedeRequest` below requires
+    `content`, so the only supersession path MINTS a new document. A caller holding
+    two documents that already exist could not record the relation at all — which is
+    why 137 titles in this corpus assert a redirect in PROSE while only 117 edges
+    exist. Prose was the only option available.
+
+    ⛔ This retires `old_id` from default search (FR-115). Use it for a genuine
+    replacement, NOT for a partial correction — a title reading "CORRECTION to X"
+    usually narrows one claim in X, and retiring X would hide a mostly-correct
+    document.
+    """
+    old_id: str
+    new_id: str
+    actor: str
+    reason: str | None = None
+    operator_directive_ref: dict[str, Any] | None = None
+    db_path: str | None = None
+
+
 class SupersedeRequest(BaseModel):
     """Request shape for POST /supersede. See FR-003.
 

@@ -46,7 +46,7 @@ from memo.models import (
     RecallResponse,
     StoreRequest,
     StoreResponse,
-    SupersedeRequest,
+    SupersedeRequest, SupersedeLinkRequest,
     SupersedeResponse,
     UpdateRequest,
 )
@@ -900,6 +900,52 @@ async def memo_delete(id: str, db_path: str | None = None) -> dict:
 
 
 @mcp.tool()
+async def memo_supersede_link(
+    old_id: str,
+    new_id: str,
+    actor: str,
+    reason: str | None = None,
+    db_path: str | None = None,
+) -> dict:
+    """Record that an EXISTING memo supersedes another EXISTING memo. [2026-09-28]
+
+    ⭐⭐ WHY THIS IS SEPARATE FROM `memo_supersede`, and why the corpus needed it.
+    `memo_supersede` below MINTS the replacement from `content` you supply — it is
+    for "close this out and here is the new text". It cannot express "these two
+    memos already exist and B replaces A", because `db.supersede()` generates a
+    fresh uuid for the successor.
+    ⇒ Measured 2026-09-28: 137 titles in this corpus assert a redirect in PROSE
+    ("Successor = X", "continues X", "Predecessor: X CLOSED") while only 117
+    supersede edges exist. Seats were not forgetting to call the API — for two
+    existing documents there was no call to make. This is that call.
+
+    ⛔ THIS RETIRES `old_id` FROM DEFAULT SEARCH (FR-115). It is reachable again
+    only with `include_superseded=true` or `/documents/{id}/as-of`.
+    ⛔⛔ DO NOT USE IT FOR A PARTIAL CORRECTION. A memo titled "CORRECTION to X"
+    normally narrows ONE claim in X; retiring X would hide a document that is mostly
+    still true. Measured on the backfill candidates: 91 of 119 single-id directive
+    titles were genuine supersessions and 28 were partial corrections — one of which,
+    applied mechanically, would have retired an entire NFSv4 root-cause document
+    because a single claim in it had been narrowed. If in doubt, prepend a banner to
+    the older memo instead; that costs nothing and hides nothing.
+
+    Both ids may be full uuids or 8-char short ids. `actor` is REQUIRED and is
+    written to the edge — an unattributed supersede is what an audit cannot
+    reconstruct. Use `operator:<name>`, `auditor:<session-id>`, or `mediator:auto`.
+
+    Refuses with a stated reason rather than guessing: either memo missing, `old_id`
+    already superseded, self-link, a successor that is itself superseded, a duplicate
+    edge, or a link that would close a supersession cycle.
+    """
+    old = await _resolve_doc_id_or_404(old_id, db_path)
+    new = await _resolve_doc_id_or_404(new_id, db_path)
+    result = await db.link_supersession(db_path, old, new, actor, reason=reason)
+    if not result.get("linked"):
+        raise ValueError(result.get("reason", "supersede link refused"))
+    return result
+
+
+@mcp.tool()
 async def memo_supersede(
     old_id: str,
     content: str,
@@ -1033,6 +1079,7 @@ async def memo_context(
     before: float | None = None,
     db_path: str | None = None,
     scope: str = "local",
+    include_superseded: bool = False,
 ) -> dict:
     """Search memo with one or more query angles in parallel, deduplicate results,
     and return content formatted to fit within a token budget.
@@ -1062,6 +1109,7 @@ async def memo_context(
     search_kwargs = dict(
         limit=limit_per_query, min_score=min_score, tags=tags or [],
         after=after, before=before, min_tokens=None, max_tokens=None,
+        include_superseded=include_superseded,
     )
 
     # Embed all queries concurrently
@@ -1116,7 +1164,9 @@ async def memo_context(
                 min_score=search_kwargs["min_score"],
                 tags=search_kwargs["tags"],
                 after=search_kwargs["after"], before=search_kwargs["before"],
-                min_tokens=None, max_tokens=None)
+                min_tokens=None, max_tokens=None,
+                # ⛔ KEYWORD, per the note above — positional lands in `overfetch`.
+                include_superseded=search_kwargs["include_superseded"])
     elif scope == "global" or db_path is None:
         async def _search(emb):
             return await db.search(db_path=None, embedding=emb, **search_kwargs)
@@ -1364,15 +1414,45 @@ async def _locked_is_503_not_500(request, exc):
     msg = str(exc).lower()
     if "database is locked" not in msg and "database is busy" not in msg:
         raise exc
-    logger.warning("write refused after lock retries: %s %s", request.method, request.url.path)
+    # ⛔ `logger` IS NOT DEFINED IN THIS MODULE. main.py uses inline
+    # `logging.getLogger(__name__)` everywhere else; this line raised
+    # `NameError` the FIRST time it ever ran — 2026-09-28 19:29Z, under real
+    # lock contention — so the handler that exists to turn a lock into a
+    # RETRYABLE 503 instead produced a NON-RETRYABLE 500, 34 times in 15
+    # minutes, telling ~50 seats their write had failed permanently when it
+    # was safe to retry.
+    # ⭐ A HANDLER THAT ONLY RUNS ON THE RARE PATH IS UNTESTED BY DEFINITION.
+    # Nothing exercised it because nothing had contended before; the suite was
+    # green through the whole latent period. Error paths need a test that
+    # FORCES the error, not one that waits for it.
+    logging.getLogger(__name__).warning(
+        "write refused after lock retries: %s %s", request.method, request.url.path)
     return JSONResponse(
         status_code=503,
         headers={"Retry-After": "1"},
         content={"detail": {
             "error": "store temporarily locked",
-            "note": ("The write did NOT land — this is byte-identical to never having "
-                     "been attempted, so it is safe to retry. memo already retried "
-                     "internally with backoff before returning this."),
+            # ⛔⛔ CORRECTED 2026-09-28. This note used to say "The write did NOT
+            # land — byte-identical to never having been attempted, so it is safe
+            # to retry." THAT CLAIM IS NOT SUPPORTED AND IS DANGEROUS FOR APPEND.
+            # `finance` measured a duplicated section on 2026-09-28 after retrying
+            # a contended `append`. Whatever the ordering of commit vs error,
+            # append/prepend is READ-MODIFY-WRITE: memo re-reads the stored content
+            # and concatenates, so a retry after an AMBIGUOUS outcome appends to
+            # content that may already contain the first attempt. The result is a
+            # silent duplicate that only a read-back reveals.
+            # ⇒ Tell the caller what is actually true: the outcome is UNKNOWN.
+            "outcome": "unknown",
+            "note": ("memo already retried internally with backoff. ⛔ Do NOT blindly "
+                     "retry: the outcome of this write is UNKNOWN, not known-failed. "
+                     "For append/prepend a retry can DUPLICATE, because memo re-reads "
+                     "the stored content and concatenates — a duplicate is silent and "
+                     "only a read-back reveals it."),
+            "how_to_retry_safely": (
+                "1. GET the document and check whether your text is already there. "
+                "2. If it is not, retry the SAME append with `expect_content` set to "
+                "the content you just read — that turns a lost race into a 409 "
+                "instead of a duplicate. 3. Always read back after a retry."),
         }},
     )
 
@@ -1560,6 +1640,23 @@ async def _embed_document_or_413(text: str) -> list[float]:
         raise HTTPException(status_code=413, detail=_too_large_detail(e)) from e
 
 
+async def _embed_document_counted_or_413(text: str) -> tuple[list[float], int | None]:
+    """As above, and also returns the PROVIDER's own token count for `text`.
+
+    ⛔ WHY THIS EXISTS RATHER THAN A SECOND CALL: the count comes from the SAME
+    response whose vector is stored, so it cannot disagree with what the limit was
+    applied to, and it costs no extra request (vLLM returns `usage.prompt_tokens`).
+    ⛔ Added because shipping `token_count_qwen3` WITHOUT wiring it here left the
+    column NULL on every write — a field that exists and nothing populates, which
+    is the same defect as a parameter no caller can set (`include_superseded`,
+    fixed the same day). Verified on the live write path, not inferred.
+    """
+    try:
+        return await embeddings.embed_document_counted(text)
+    except embeddings.EmbeddingInputTooLarge as e:
+        raise HTTPException(status_code=413, detail=_too_large_detail(e)) from e
+
+
 @app.post("/documents", response_model=StoreResponse)
 async def store_document(req: StoreRequest, request: Request):
     _log_phantom_fields(req, "POST /documents",
@@ -1573,8 +1670,9 @@ async def store_document(req: StoreRequest, request: Request):
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
     _t0 = _time.time()
+    provider_token_count = None
     try:
-        embedding = await embeddings.embed_document(req.content)
+        embedding, provider_token_count = await embeddings.embed_document_counted(req.content)
     except embeddings.EmbeddingInputTooLarge as e:
         # ⭐ 413, not 500. This previously escaped as a bare "Internal Server
         # Error", which tells the caller their memo was lost but not that it was
@@ -1595,6 +1693,7 @@ async def store_document(req: StoreRequest, request: Request):
             doc_id=req.id,
             created_at=req.created_at,
             updated_at=req.updated_at,
+            provider_token_count=provider_token_count,
         )
     except sqlite3.IntegrityError as e:
         # An explicit `id` that already exists. 409, NOT a silent overwrite —
@@ -2110,6 +2209,32 @@ async def recall_endpoint(req: RecallRequest):
     return await recall_mediator.recall(req)
 
 
+@app.post("/supersede-link")
+async def supersede_link(req: SupersedeLinkRequest):
+    """Record that one EXISTING document supersedes another. [2026-09-28]
+
+    The counterpart to `/supersede`, which mints the replacement. See
+    `db._sync_link_supersession` for why a caller could not express this before and
+    why that produced 137 prose redirects in the corpus.
+
+    ⛔ Returns 409 with a stated reason rather than guessing: missing document,
+    already superseded, self-link, a successor that is itself superseded, a
+    duplicate edge, or a link that would close a cycle.
+    """
+    old = await db.resolve_id(req.db_path, req.old_id)
+    new = await db.resolve_id(req.db_path, req.new_id)
+    if not old.get("id"):
+        raise HTTPException(status_code=404, detail=f"old_id {req.old_id} not found")
+    if not new.get("id"):
+        raise HTTPException(status_code=404, detail=f"new_id {req.new_id} not found")
+    result = await db.link_supersession(
+        req.db_path, old["id"], new["id"], req.actor,
+        reason=req.reason, operator_directive_ref=req.operator_directive_ref)
+    if not result.get("linked"):
+        raise HTTPException(status_code=409, detail=result.get("reason", "refused"))
+    return result
+
+
 @app.post("/supersede", response_model=SupersedeResponse)
 async def supersede_document(req: SupersedeRequest, request: Request):
     """Atomically close out a memo and write its replacement. [001/FR-003]
@@ -2357,7 +2482,10 @@ async def update_document(doc_id: str, req: UpdateRequest, request: Request,
         new_content = (base + req.append) if req.append is not None \
             else (req.prepend + base)
 
-    embedding = await _embed_document_or_413(new_content) if new_content is not None else None
+    if new_content is not None:
+        embedding, provider_token_count = await _embed_document_counted_or_413(new_content)
+    else:
+        embedding, provider_token_count = None, None
     result = await db.update(
         db_path=req.db_path,
         doc_id=doc_id,
@@ -2367,6 +2495,7 @@ async def update_document(doc_id: str, req: UpdateRequest, request: Request,
         metadata=req.metadata,
         embedding=embedding,
         expect_content=expect_content,
+        provider_token_count=provider_token_count,
     )
     if isinstance(result, dict) and result.get("conflict"):
         # 409, not a silent overwrite. The bug this accompanies was a no-op that
@@ -2454,6 +2583,7 @@ async def _document_search(req: SearchRequest,
         before=req.before,
         min_tokens=req.min_tokens,
         max_tokens=req.max_tokens,
+        include_superseded=req.include_superseded,
     )
     out = [SearchResult(document=Document(**r["document"]), score=r["score"]) for r in results]
     await db.log_query_async(
@@ -2504,7 +2634,12 @@ async def search_documents(req: SearchRequest, response: Response,
         embedding = await embeddings.embed_query(req.query)
         results = await db.search_passages(
             req.db_path, embedding, req.limit, req.min_score, req.tags,
-            req.after, req.before, req.min_tokens, req.max_tokens)
+            req.after, req.before, req.min_tokens, req.max_tokens,
+            # ⛔ KEYWORD — `_sync_search_passages` takes `overfetch: int = 8`
+            # before this one, and positionally it lands in the overfetch slot,
+            # which yields k=0 and zero hits on every query with the supersede
+            # test still green.
+            include_superseded=req.include_superseded)
         return [SearchResult(document=Document(**r["document"]), score=r["score"])
                 for r in results]
     return await _document_search(req, request)

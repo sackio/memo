@@ -156,7 +156,177 @@ services:
       # Rollback is this line only, back to http://192.168.1.5:31536/v1.
       EMBEDDING_MODEL: qwen3-embedding-4b
       EMBEDDING_DIMENSIONS: 2560
-      EMBEDDING_BASE_URL: http://192.168.1.49:31541/v1
+      # ⭐ 2026-10-08: BASE URL ONLY moved BACK to the shared pool at :31536.
+      # Ben approved in #models 11:13 ET (ask `a19`, his "yes" at ts
+      # 1791472433.273449), to free gpu3's embedding card for the signal
+      # searchers. `models` relayed it and asked for memo's agreement too.
+      # Model name and width UNCHANGED — the safe shape of this edit per the
+      # warnings above.
+      # ✅ RE-MEASURED BEFORE THE SWITCH, as the 08-19 block requires whenever
+      # either pod may have been redeployed (the finding is about WEIGHTS, not
+      # URLs). Measured by `memo` 2026-10-08, 4 texts, 2560-d both sides:
+      #   noise floor :31541 vs itself   worst cos 0.999909  max|d| 2.062e-03
+      #   noise floor :31536 vs itself   worst cos 0.999914  max|d| 2.062e-03
+      #   CROSS :31541 vs :31536         worst cos 0.999935  max|d| 1.084e-03
+      # Cross came in BETTER than either same-pod floor, reproducing the 08-19
+      # result. Orthogonality control: two DIFFERENT texts across endpoints give
+      # cos 0.3464, so the comparison is live and not degenerate.
+      # ⚠️ `models` reported this as "cosine 1.000000". It is NOT 1.0 — there is
+      # a real noise floor because GPU kernels are not bit-deterministic. The
+      # gate is cos >= 0.9999 against a measured floor, never equality; an
+      # equality test would fail on identical weights and teach the wrong lesson.
+      # ⛔ THE CONTENTION THAT CAUSED THIS ENDPOINT TO BE ABANDONED IS NOT FIXED,
+      # IT IS ONLY ABSENT. :31536 is the SHARED pool whose 550-775 sequence
+      # backlog from another client's bulk batches put fleet /recall at 54-115s
+      # (incident `7e80ccb4`) — that is why :31541 existed. Measured at cutover:
+      # both endpoints num_requests_running=0, num_requests_waiting=0, latency
+      # 0.09-0.11s. `models`'s case is 70-700 req/h with no backlog, which
+      # describes the STEADY STATE; the incident was an EPISODIC bulk batch, so
+      # request rate is the wrong instrument. ⇒ The discriminator is
+      # `num_requests_waiting` on :31536, not req/h. If /recall slows, read that
+      # first and tell `models`.
+      # ⚠️ memo now has NO separate dedicated embedder. FAILOVER POSTURE, settled
+      # with `models` 2026-10-08 15:22Z and VERIFIED here:
+      #   ⛔ :31541  HAS NO BOUNDED RESTORE, because the restore is gated on an
+      #              OPERATOR DECISION, not on a start-up time. `models`
+      #              2026-10-09 16:39Z, stated correctly WITH its precondition:
+      #              "possible, PROVIDED Ben agrees to take the card from the lab.
+      #              Once he does, the restore takes <=~1h."
+      #              ⛔⛔ DO NOT RECORD WHO CURRENTLY HOLDS THE CARD. This block
+      #              said "a restore now needs Ben to displace `scout`" and that
+      #              was FALSE WITHIN THREE HOURS: the card went embedder ->
+      #              gpusearch (10-08 15:24Z) -> scout (10-09 09:42 ET, Ben in
+      #              #scout-avatar) -> back to gpusearch (10-09 12:36 ET, Ben in
+      #              #quantum-lab-search: "you can take that card back from scout
+      #              Avatar ... it can pause"). THREE holders in two days.
+      #              ⇒ Tenancy is as volatile as the runway figure this same file
+      #              forbids caching, and for the identical reason: it is a fact
+      #              about OTHER tenants' moment, not about memo. Record the
+      #              STRUCTURE — the card is NOT memo's, a restore needs Ben, and
+      #              `models` is the seat that knows who has it. ASK, never cache.
+      #              ✅ THE CARD IS SETTLED BY UUID, NOT BY NAME — and the name is
+      #              genuinely ambiguous, so ALWAYS USE THE UUID:
+      #                :31541's card = **GPU-b969e81d-616a-383d-1ff2-e9cbeb412870**
+      #                (RTX 3060 12GB). `models` calls it gpu3/gpu-1;
+      #                `quantum-lab` calls it gpu3b. SAME CARD.
+      #                `quantum-lab`'s "gpu3" is a DIFFERENT card,
+      #                GPU-a7cb94e8-6970-5b0d-88e5-ffc280954f90 (the old
+      #                ollama-gate card), busy on their sweep.
+      #              ⭐ VERIFIED BY ME 2026-10-09 12:46 ET in server_admin, not
+      #              taken from the relay (⛔ note the repo is `server_admin` with
+      #              an UNDERSCORE; /mnt/nas/data/code/server-admin does not
+      #              exist and looking there returns a misleading "no such file"):
+      #                k8s/embeddings/embeddings-gpu3.yaml:63  "= GPU-b969e81d... <- ours"
+      #                k8s/embeddings/embeddings-gpu3.yaml:104 device claim pins that UUID
+      #                k8s/embeddings/embeddings-gpu3.yaml:143 CUDA_VISIBLE_DEVICES same UUID
+      #                k8s/embeddings/embeddings-gpu3-dev2.yaml:43 pins GPU-a7cb94e8 (the OTHER card)
+      #                k8s/ollm/ollama-gate-gpu3.yaml:99         pins GPU-a7cb94e8 (the OTHER card)
+      #              ⛔ THE FILENAME IS THE TRAP: "embeddings-gpu3.yaml" holds
+      #              gpu3b's UUID while "embeddings-gpu3-dev2.yaml" holds a
+      #              different card's. The file name is not the card.
+      #              ⭐⭐ AND THE ONE WORTH CARRYING: that same manifest, at
+      #              :113, ALREADY STATED THE PRECONDITION — "Restore: replicas 1
+      #              AFTER LAB FREES THE CARD (~1h worst)". The owning seat wrote
+      #              the condition and the number together. By the time it reached
+      #              THIS file it had become a bare "<=~1 h ... the one to plan
+      #              on". ⇒ A PRECONDITION IS THE FIRST THING LOST IN TRANSIT,
+      #              because the NUMBER is what the reader came for. When you copy
+      #              a figure out of someone else's artifact, copy the clause that
+      #              qualifies it or do not copy the figure. Memo `fa10becb`.
+      #   ⛔⛔ THE PREVIOUS THREE LINES SAID "<=~1 h ... this is the one to plan
+      #              on" WHILE THE LINE BELOW THEM ALREADY SAID "card lent to
+      #              gpusearch". I wrote both on 10-08 and the promise outlived
+      #              the fact that voided it, because the promise was the one
+      #              carrying a NUMBER and came from another seat's SLA, while the
+      #              refutation was an observation of my own one line down.
+      #              ⇒ A QUOTED SLA IS NOT EVIDENCE ABOUT THE WORLD. When you
+      #              record a recovery time, record WHAT MUST STILL BE TRUE for it
+      #              to hold; a bare duration cannot be falsified by a later fact
+      #              sitting next to it, so it never is. Memo `c8c22268`.
+      #   ⚠️ vast1   http://192.168.1.199:11500/v1 — still AUTHORIZED for
+      #              unilateral reroute (`models`: "reroute without asking me")
+      #              and still gate-verified, so USE IT IF IT ANSWERS. With
+      #              :31541 now indefinite, vast1 is the ONLY fallback — `models`
+      #              2026-10-09 09:43 ET: "vast1 is still your first fallback".
+      #              ⛔ Its absence is still NOT an incident: check it answers,
+      #              and if it does not, memo stays single-homed until Ben frees
+      #              a card. ⛔⛔ NO RUNWAY NUMBER HERE — this very block carried
+      #              "~13 h of prepaid credit" written 2026-10-09 02:30, in
+      #              contradiction of the ⛔ rule 50 lines below it, and it was
+      #              stale within hours. ASK `cloud`.
+      # ⭐⭐ WHY THIS IS TOLERABLE: memo's PRIMARY :31536 is on barn hardware and
+      # costs no credit. Only the FAILOVER ever sat on prepaid billing, so losing
+      # vast1 degrades RECOVERY (immediate -> <=1 h), never availability.
+      # ⚠️ Stated plainly, REVISED 2026-10-09 09:43 ET: memo is SINGLE-HOMED with
+      # NO bounded restore and no second credit-free endpoint. vast1 (prepaid,
+      # rented) is the only fallback and it is not planned capacity. Accepted, not
+      # solved. ⛔ Ben has now assigned gpu3's card away from embedding TWICE —
+      # 10-08 to the searchers, 10-09 to scout's avatar — so this is his settled
+      # preference, not an oversight. DO NOT REOPEN IT OR ASK FOR A CARD.
+      # ⭐ What degraded is RECOVERY, not availability: PRIMARY :31536 is on barn
+      # hardware, costs no credit, and is untouched by any of this.
+      # ✅ THE vast1 GATE IS MEASURED, NOT RELAYED — done 2026-10-08 while nothing
+      # was broken, because a failover gate first checked during an incident is a
+      # gate that gets skipped. 4 texts, both 2560-d, both report model
+      # qwen3-embedding-4b:
+      #   noise floor :31536 vs itself  worst cos 0.999911  max|d| 1.507e-03
+      #   noise floor vast1  vs itself  worst cos 1.000000  max|d| 0.000e+00
+      #   CROSS :31536 vs vast1         worst cos 0.999907  max|d| 1.863e-03
+      # GATE cos >= 0.9999: PASS. Orthogonality control (two DIFFERENT texts
+      # across endpoints) cos 0.3450, so the comparison is live.
+      # ⚠️ Two things to carry, both from those numbers:
+      #   1. vast1 is BIT-DETERMINISTIC (its own floor is exactly 1.000000,
+      #      max|d| 0) while the barn pods are NOT (~0.99991). Different hardware
+      #      and kernels. ⇒ The noise floor is a property of the ENDPOINT, not of
+      #      the model, so always measure the floor on the endpoint under test.
+      #      A "must equal the floor" rule would pass on vast1 and fail on a barn
+      #      pod for reasons that have nothing to do with the vectors.
+      #   2. Cross (0.999907) is a HAIR BELOW :31536's own floor (0.999911) —
+      #      unlike the :31541/:31536 pair, where cross beat both floors. It
+      #      clears the gate with little margin. Same space, thinner evidence.
+      # ⭐ vast1's max_model_len IS 16384 — IDENTICAL TO THE BARN CONTRACT, so
+      # failing over does NOT move the 413 merge boundary: a document that fits
+      # today still fits after a reroute. (`cloud` 2026-10-08 11:26 EDT: Vast
+      # instance 54528970, RTX A4000, Qwen/Qwen3-Embedding-4B served as
+      # `qwen3-embedding-4b`, OpenAI-compatible, no API key.) A fallback with a
+      # SMALLER max_model_len would have silently begun refusing writes that
+      # previously succeeded, and the refusal would have looked like memo's own
+      # boundary rather than the fallback's. The A4000 is also why vast1 is
+      # bit-deterministic and the barn 3060s are not.
+      # ⚠️ vast1 is a RENTED box on PREPAID credit, so confirm it ANSWERS before
+      # rerouting; if it does not, ask `models` for the :31541 restore (<=~1 h).
+      # ⛔⛔ NO RUNWAY NUMBER IS WRITTEN HERE ON PURPOSE. ASK `cloud` WHEN YOU NEED
+      # ONE. The figure was revised FOUR times in 11 hours on 2026-10-08
+      # (~2 days -> ~3 -> ~8-11 -> ~3), and vast1's OWN burn was $0.142/h in every
+      # one of those readings. What moved was quantum-lab's V100 search fleet on
+      # the same prepaid account: torn down at 17:28, a second run started 23:29.
+      # ⇒ On a SHARED PREPAID account the runway is a function of OTHER tenants'
+      # behaviour, so it is not a fact about this service and cannot be cached.
+      # ⚠️ This file carried "~8 days" for six hours and it was already false.
+      # Writing the derived number here is the error; correcting it faster is not
+      # the fix. Record the structure, never the quotient. Memo `c8c22268`.
+      # STRUCTURE (stable): vast1 $0.142/h. The account also funds quantum-lab's
+      # V100 fleet — episodic, unannounced, ~7x vast1's burn when running.
+      # quantum-lab's floor kills only ITS boxes at $6 and leaves vast1 up, but
+      # `cloud` says that depends on a script it cannot verify, so it is not a
+      # guarantee. `memo` is on cloud's $15 and $5 alerts.
+      # ⛔ Only Ben can add credit (console.vast.ai -> Billing; no API, no card).
+      # POSTURE 2026-10-09 02:40 EDT: vast1 DROPPED from the plan. Fifth runway
+      # revision in 13 h put it at ~13 h of life, after a THIRD unannounced tenant
+      # (instance 54966927 `avatar-infinitetalk`, A100, $1.2624/h) took nearly
+      # half the account's burn. ✅ OWNER IDENTIFIED 2026-10-09 from #scout-avatar:
+      # it is `scout`'s avatar render. scout reported run-07 as "62 min of GPU
+      # time, about $1.20" and now caps itself at a $15 credit floor. `cloud`
+      # raised this box with Ben as UNATTRIBUTED; it is attributable. It is NOT
+      # quantum-lab's $6 floor. ⇒ No top-up was requested: the loss costs <=1 h of
+      # recovery, the account also funds mind's EDGAR drain so the spend is not
+      # memo's to frame, and `cloud` has already raised the unattributed box with
+      # Ben in #cloud. Memo `c8c22268` carries the full reasoning.
+      # ⚠️ Do NOT read the lab's runway figure as vast1's: `memo` did exactly that
+      # on 2026-10-08 and called a ~3-day fallback "hours from expiry". The ~$2/h
+      # runway in #models describes quantum-lab's V100s, not this $0.142/h box.
+      # A quoted figure carries its own denominator. Memo `c8c22268`.
+      EMBEDDING_BASE_URL: http://192.168.1.5:31536/v1
       EMBEDDING_API_KEY: not-required-lan-service
       # ⭐ RANK BY PASSAGE, DELIVER THE DOCUMENT. [002/FR-117, research.md R-20]
       # Measured on the pinned sample, 256 questions with a unique-literal answer:

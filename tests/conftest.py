@@ -91,8 +91,30 @@ def _no_network_embeddings(monkeypatch):
     async def fake_embed_batch(texts: list[str]) -> list[list[float]]:
         return [await fake_embed(t) for t in texts]
 
+    # ⚠️ `embed_document_counted` MUST be stubbed here too, as of 2026-09-28.
+    # `POST /documents` and `PATCH /documents/{id}` use it instead of
+    # `embed_document` so the PROVIDER's own token count can be stored beside the
+    # cl100k one (migration 012 — a stored count must name its tokenizer).
+    #
+    # ⛔ WHY THIS COMMENT EXISTS: shipping that change without this line punched a
+    # SILENT HOLE IN THIS VERY FIXTURE. The fixture is named
+    # `_no_network_embeddings`, and the two REST write paths went straight past it
+    # to the real endpoint — surfacing as exactly 2 red tests in
+    # test_rest_expect_content.py, nowhere near the cause, while every other write
+    # test still passed because it calls `db.store` directly and never touches the
+    # HTTP handler. ⇒ A partial stub does not fail where it was weakened.
+    # It is the same "patch both or neither" hazard already documented above, one
+    # function later.
+    #
+    # Returns a plausible provider count rather than None, so a test CAN assert the
+    # value is populated; the number is deliberately not the real Qwen3 count,
+    # because no offline stub can know it.
+    async def fake_embed_counted(text: str) -> tuple[list[float], int]:
+        return await fake_embed(text), max(1, len(text or "") // 4)
+
     monkeypatch.setattr(embeddings, "embed_query", fake_embed)
     monkeypatch.setattr(embeddings, "embed_document", fake_embed)
+    monkeypatch.setattr(embeddings, "embed_document_counted", fake_embed_counted)
     # ⚠️ `embed_batch` MUST be stubbed here too, as of the 2026-08-19 inline
     # passage index. `db.store()`/`db.update()` now chunk and embed on every
     # write via `passages.index_document`, which calls `embed_batch` — so
