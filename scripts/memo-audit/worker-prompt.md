@@ -91,6 +91,18 @@ for l in sys.stdin:
    ⛔ Never copy a credential, an account number or PHI out of an email.
 
 ## VERDICTS, and what each one obliges you to do
+
+⚠️ **IF YOU CHANGED THE DOCUMENT, THE VERDICT IS NOT `CURRENT`.** Measured
+2026-10-19: two workers returned `CURRENT` -- correctly, in that the substance
+held -- while also correcting one detail and prepending a dated status block.
+Both described the edit honestly in `action`, so nothing was lost; but a reader
+tallying verdicts counts them as "no change needed", and the verdict column
+stops matching the corpus.
+⇒ `CURRENT` means **you wrote nothing**. If the memo was substantially right and
+you fixed a detail, that is `STALE` with a note in `action` saying the substance
+held. Reserve `CURRENT` for a genuine no-op -- it is a valuable answer and a
+third of memos deserve it, so do not inflate it and do not avoid it.
+
 - **CURRENT** -- claim checked and true. Change nothing. Say what you checked.
 - **STALE** -- some claim is false now. ⛔ AMEND IN PLACE. If the FALSE claim is
   in the TITLE, the title must change too. ⛔ A correction appended at the BOTTOM
