@@ -17,6 +17,30 @@ not need to ask. You DO need evidence.
 
 Read each with: curl -sS "http://127.0.0.1:8000/documents/<id>"
 
+### ⛔⛔ STAY INSIDE THIS LIST WHEN YOU WRITE CONTENT
+
+Other auditors are running RIGHT NOW against other memos, and the only thing
+keeping two of them off one document is that each id appears in exactly one
+assignment list. A `PATCH` to a memo that is not yours above can therefore land
+on top of another worker mid-audit: `expect_content` then fails for a reason
+nobody can reproduce, or an `append` retry duplicates text.
+
+⚠️ MEASURED 2026-10-19: in the first 4-way run, one worker superseded into a
+successor that another worker was rewriting at that moment. It was harmless
+only because `/supersede-link` writes `valid_until` on the OLD document and
+leaves the successor untouched -- which is exactly why that one is safe.
+
+So:
+- ✅ `/supersede-link` onto a successor outside your list -- ALLOWED. It does
+  not write to the successor.
+- ✅ Redacting a **credential value** you find in a memo outside your list --
+  ALLOWED, and required. A live secret outranks the collision risk. Say so in
+  your report, and name the file and variable it now points at, never a value.
+- ⛔ Any OTHER content `PATCH`, retitle, tag change or delete on a memo outside
+  your list -- DO NOT. Report it in `notes` with the id and what is wrong, and
+  the next pass will pick it up. An accurate report of someone else's broken
+  memo is worth more than a write that collides.
+
 ## AUDIT THE CLAIM, DO NOT REREAD THE MEMO
 A memo that is internally coherent can still be false. For each checkable claim,
 go and look. Evidence sources, in descending order of trust:
@@ -34,8 +58,31 @@ go and look. Evidence sources, in descending order of trust:
    2026-06-13. Live transcripts are at `~/.claude/projects/<slug>/<id>.jsonl`
    where slug = the project's absolute path with BOTH `/` and `_` replaced by `-`.
    ⚠️ Live ones are pruned at 30 days; the archive is the durable copy.
-4. **The Slack archive** under `/mnt/nas/data/code/memo/scripts/slack-archive/`.
-5. **Files and email** only if the claim is about them.
+4. **The Slack archive** -- the DATA is at `/mnt/nas/data/slack-archive/`, one
+   directory per channel, one `YYYY-MM.ndjson` per month, ~120 channels.
+   (`scripts/slack-archive/` holds the archiver, not the archive. Looking there
+   and finding two `.py` files is NOT a finding that Slack is unarchived.)
+   ```bash
+   ls /mnt/nas/data/slack-archive/                      # which channels exist
+   grep -h -i 'omada' /mnt/nas/data/slack-archive/{nginx,network}/2026-*.ndjson \
+     | python3 -c 'import sys,json,datetime
+for l in sys.stdin:
+    m=json.loads(l)
+    print(datetime.datetime.fromtimestamp(float(m["ts"])).isoformat()[:16],
+          m.get("user") or m.get("username"), (m.get("text") or "")[:200])'
+   ```
+   ⛔ **A channel absent from the archive is NOT SEARCHED, not empty** -- the bot
+   token only sees channels it was invited to. Say which you searched.
+   ⚠️ Check the freshness before citing silence: `ls -la` the month file. The
+   archive is only as current as its last run.
+   ⭐ Ben's own rulings are here. `memo`, `agents`, `nginx`, `cluster`, `models`
+   and `system` carry most operator decisions. A memo that contradicts a dated
+   Ben message in Slack is wrong, and the Slack message is the citation.
+5. **Files and email.** Email is reachable through the `google-gmail` MCP tools
+   (`gmail_search`, `gmail_read`) and Drive through `drive_search`. Use them when
+   a claim is about an order, an invoice, a vendor, an appointment or anything
+   that arrived from outside the fleet, and cite the message subject and date.
+   ⛔ Never copy a credential, an account number or PHI out of an email.
 
 ## VERDICTS, and what each one obliges you to do
 - **CURRENT** -- claim checked and true. Change nothing. Say what you checked.
