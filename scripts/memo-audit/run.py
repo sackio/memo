@@ -45,13 +45,26 @@ def parse_result(raw: str) -> dict:
         return {"is_error": True, "result": raw[i:i + 2000], "_parse": str(e)}
 
 
+def _assignment_line(m: dict) -> str:
+    """One assignment, for either shape of candidate.
+
+    A single memo has `id`; a consolidation SET has `ids` + `chars` as a list.
+    The set form must print every full uuid, because `/supersede-link` does not
+    resolve an 8-char prefix the way `GET /documents/<prefix>` does, and a
+    worker handed a prefix will fabricate the suffix and get a 404.
+    """
+    if m.get("ids"):
+        bodies = ", ".join(f"{c} chars" for c in m.get("chars", []))
+        ids = "\n".join(f"    - `{i}`" for i in m["ids"])
+        return f"- SET, shared title: {m['title'][:110]}  ({bodies})\n{ids}"
+    return (f"- `{m['id']}` — {m['title'][:110]} ({m['chars']} chars, last updated "
+            f"{datetime.fromtimestamp(m['updated_at'], timezone.utc).date()})")
+
+
 def run_batch(batch: list[dict], idx: int, outdir: Path, timeout: int,
               prompt_path: Path = PROMPT) -> dict:
     acct = keyring.next_acct()
-    assignments = "\n".join(
-        f"- `{m['id']}` — {m['title'][:110]} ({m['chars']} chars, last updated "
-        f"{datetime.fromtimestamp(m['updated_at'], timezone.utc).date()})"
-        for m in batch)
+    assignments = "\n".join(_assignment_line(m) for m in batch)
     prompt = prompt_path.read_text().replace("{{ASSIGNMENTS}}", assignments)
 
     t0 = time.time()
@@ -106,7 +119,9 @@ def main() -> int:
           f"(remaining ~${keyring.remaining(keyring.next_acct()):.2f}, local ledger)")
     if a.dry_run:
         for i, b in enumerate(batches):
-            print(f"  batch {i}: " + ", ".join(m["id"][:8] for m in b))
+            print(f"  batch {i}: " + ", ".join(
+                "+".join(x[:8] for x in m["ids"]) if m.get("ids") else m["id"][:8]
+                for m in b))
         return 0
 
     outdir.mkdir(parents=True, exist_ok=True)
