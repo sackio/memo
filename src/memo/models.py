@@ -71,6 +71,49 @@ class Document(BaseModel):
     created_at: float
     updated_at: float
 
+    # ⛔⛔ 2026-10-19 — THE ELEVEN FIELDS BELOW EXIST SO THE TWO DOORS AGREE.
+    #
+    # Measured 2026-09-15 and again 2026-10-19: the `documents` table has 21
+    # columns, `db._row_to_memo` decodes and returns ALL of them, and this model
+    # then silently dropped eleven on the way out — so `GET /documents/<id>`
+    # answered with 10 fields while MCP `memo_get` answered with 21 FOR THE SAME
+    # ROW. Nothing errored; the REST caller simply could not see that a document
+    # had a class, a scope, a validity window or a provenance record.
+    #
+    # ⛔ THAT IS WHY THE FIX IS HERE AND NOT IN db.py. The data was never missing
+    # from the store — only from the envelope — and absence in an envelope reads
+    # exactly like absence on the object. A seat checking "is this memo
+    # superseded?" over REST got `valid_until` = not-present and concluded no.
+    # Memo `d7b36ca8`.
+    #
+    # ⚠️ Most of these are CONSTANT across the corpus and carry no signal:
+    # 11,388/11,388 rows have `injection_mode='on-recall'` and `scope=['global']`,
+    # and `expires_at` / `time_scope` / `reopenability` / `constitution_meta` are
+    # null on every row. They are returned anyway, because a reader cannot tell a
+    # field that is universally defaulted from one the envelope omits — and it was
+    # that exact ambiguity that produced a false "this memo is force-injected"
+    # alarm. A visible default is a fact; an absent field is a question.
+    #
+    # `class` is a Python keyword, so the attribute is `memo_class` and the alias
+    # puts `class` on the wire — the name MCP already uses. FastAPI serialises
+    # response models by alias, so the two surfaces now match byte for byte.
+    memo_class: str | None = Field(default=None, alias="class")
+    injection_mode: str | None = None
+    scope: list[str] | None = None
+    provenance: dict[str, Any] | None = None
+    valid_from: float | None = None
+    valid_until: float | None = None
+    expires_at: float | None = None
+    time_scope: Any | None = None
+    reopenability: Any | None = None
+    derived_from: list[str] | None = None
+    constitution_meta: dict[str, Any] | None = None
+
+    # populate_by_name so the handler can build this from `_row_to_memo`'s dict
+    # (which keys on the COLUMN name `class`) and so existing code that sets
+    # `memo_class=` keeps working. Without it one of those two paths breaks.
+    model_config = ConfigDict(populate_by_name=True)
+
 
 class StoreRequest(PermissiveRequest):
     content: str
