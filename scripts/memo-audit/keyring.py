@@ -34,30 +34,69 @@ from pathlib import Path
 KEY_DIR = Path("/home/ben/.claude/state/api-keys")
 SPEND_LOG = KEY_DIR / "spend.jsonl"          # schema shared with the `agents` seat
 
-# acct -> (grant_usd, renewal day-of-month).  Relayed from `agents` 2026-10-12.
+# ⭐ SINGLE SOURCE OF TRUTH, shared with the `agents` seat (its 8990793, this
+# file 2026-10-19): /home/ben/.claude/state/api-keys/grants.json, shape
+#   {"<acct>": {"monthly": 200, "renews": "YYYY-MM-DD" | null}}
+# `renews` null means the renewal date is genuinely UNKNOWN -- treated as a
+# rolling 30-day window, never as "no limit". admin is absent from the file and
+# is additionally refused below; see the module docstring.
+#
 # ⭐ CONFIRMED BY `agents` 2026-10-19: the "Max API credit" ($200/mo on a 20x
 # account) and the per-account Console grant are THE SAME POOL, not two budgets.
 # Its earlier $1,200/mo figure (6 accounts) was wrong -- agents3 has no offer and
-# admin has no recorded link -- so the real pool is the $800/mo below. The
-# fleet-wide $40/day cap in memo `ee0c98c5` was sized off that wrong $1,200;
-# $800/mo is ~$26/day. ⇒ Spend against THIS table, not against $40/day.
-# ⛔ admin deliberately absent: see the module docstring.
-ACCOUNTS: dict[str, tuple[float, int]] = {
-    "ben":       (200.0, 22),
-    "agents":    (200.0, 24),
-    "pushbuild": (200.0, 22),   # ⚠️ renewal day UNCONFIRMED; 22 is a placeholder
-    "agents2":   (200.0, 18),
-}
+# admin has no recorded link -- so the real pool is $800/mo ~ $26/day. The
+# fleet-wide $40/day cap in memo `ee0c98c5` was sized off that wrong $1,200.
+#
+# ⛔ A HARDCODED TABLE LIVED HERE UNTIL 2026-10-19 AND IT CARRIED A WRONG DATE
+# (pushbuild "22", commented as a placeholder) THAT WAS ABOUT TO BE SPENT
+# AGAINST. Two seats keeping private copies of the same budget is how one of
+# them acts on a number the other has already corrected.
+GRANTS_PATH = KEY_DIR / "grants.json"
+ROLLING_DAYS = 30
+NEVER = {"admin"}            # no linked grant => real billing. See docstring.
 
 
-def _period_start(renewal_day: int, now: datetime) -> float:
-    """Epoch of the most recent renewal, so spend is counted per grant period."""
-    y, m = now.year, now.month
-    if now.day < renewal_day:
-        m -= 1
-        if m == 0:
-            m, y = 12, y - 1
-    return datetime(y, m, renewal_day, tzinfo=timezone.utc).timestamp()
+def _add_months(d: date, k: int) -> date:
+    m = d.month + k
+    y = d.year + (m - 1) // 12
+    m = (m - 1) % 12 + 1
+    # clamp for short months: a grant that renews on the 31st renews on the 30th
+    # in a 30-day month, and date() raises rather than clamping on its own.
+    for day in range(d.day, 0, -1):
+        try:
+            return date(y, m, day)
+        except ValueError:
+            continue
+    raise ValueError("unreachable")
+
+
+def load_grants() -> dict[str, dict]:
+    """Read the shared grants file. ⛔ Never falls back to a baked-in table.
+
+    A missing or corrupt file is an ERROR, not an empty budget: defaulting here
+    would spend real money against an imagined grant, which is the exact failure
+    `admin.key` already caused once (memo `34fa4ebc`).
+    """
+    try:
+        g = json.loads(GRANTS_PATH.read_text())
+    except FileNotFoundError:
+        raise FileNotFoundError(
+            f"{GRANTS_PATH} is missing -- it is the shared source of truth for "
+            f"grant sizes and renewal dates (owned with the `agents` seat). "
+            f"Refusing to guess a budget.") from None
+    return {a: v for a, v in g.items() if a not in NEVER}
+
+
+def _period_start(renews: str | None, now: datetime) -> float:
+    """Epoch of the most recent renewal, so spend is counted per grant PERIOD."""
+    if not renews:
+        return now.timestamp() - ROLLING_DAYS * 86400     # unknown => rolling
+    nxt = date.fromisoformat(renews)
+    today = now.date()
+    while nxt <= today:                   # a stale file must not freeze the window
+        nxt = _add_months(nxt, 1)
+    prev = _add_months(nxt, -1)
+    return datetime(prev.year, prev.month, prev.day, tzinfo=timezone.utc).timestamp()
 
 
 def spent(acct: str, now: datetime | None = None) -> float:
@@ -68,10 +107,79 @@ def spent(acct: str, now: datetime | None = None) -> float:
     host's /tmp and calling it the fleet.
     """
     now = now or datetime.now(timezone.utc)
-    if acct not in ACCOUNTS:
-        raise KeyError(f"unknown account {acct!r}")
-    since = _period_start(ACCOUNTS[acct][1], now)
+    grants = load_grants()
+    if acct not in grants:
+        raise KeyError(f"unknown account {acct!r} (not in {GRANTS_PATH})")
+    since = _period_start(grants[acct].get("renews"), now)
+    return _sum_spend(now, acct=acct, since=since)
+
+
+def _sum_spend(now: datetime, acct: str | None = None, since: float = 0.0,
+               actor: str | None = None, day: str | None = None) -> float:
     total = 0.0
+    if not SPEND_LOG.exists():
+        return total
+    for line in SPEND_LOG.read_text().splitlines():
+        if not line.strip():
+            continue
+        try:
+            r = json.loads(line)
+        except ValueError:
+            continue                      # a torn line is not a zero; skip it
+        if acct is not None and r.get("acct") != acct:
+            continue
+        if day is not None and r.get("day") != day:
+            continue
+        if actor is not None and r.get("actor") != actor:
+            continue
+        if (r.get("ts") or 0) < since:
+            continue
+        total += float(r.get("usd") or 0.0)
+    return total
+
+
+def remaining(acct: str) -> float:
+    return max(0.0, float(load_grants()[acct].get("monthly") or 0.0) - spent(acct))
+
+
+# ── my own runaway guard ────────────────────────────────────────────────────
+# Agreed with `agents` 2026-10-19 after this seat spent $69.47 in a day against
+# a fleet cap of $40 and darkened fleet haiku for everyone: $60/day through
+# Oct 22 (ben's remainder needs ~$55/day to land before it lapses), $40/day
+# after. ⚠️ This is MY actor's guard, not the fleet's -- `agents` enforces the
+# fleet side per-actor as of its 8990793.
+BURST_UNTIL = date(2026, 10, 22)
+BURST_DAILY, STEADY_DAILY = 60.0, 40.0
+
+
+def daily_cap(now: datetime | None = None) -> float:
+    now = now or datetime.now(timezone.utc)
+    return BURST_DAILY if now.date() <= BURST_UNTIL else STEADY_DAILY
+
+
+def this_actor() -> str:
+    return (os.environ.get("MEMO_AUDIT_ACTOR")
+            or os.environ.get("ATC_SUBSCRIBER_ID") or "memo")
+
+
+def spent_today(actor: str | None = None, now: datetime | None = None) -> tuple[float, float]:
+    """(mine, unattributed) USD logged today.
+
+    ⛔ THE SECOND NUMBER EXISTS BECAUSE `actor` WAS ONLY ADDED 2026-10-19. Every
+    row written before that has no actor at all, so a guard that counted only
+    `actor == me` read $0.00 on the very day this seat spent $69.47 -- it would
+    have cheerfully authorised another full day's budget on top of a breach.
+    ⇒ An attribution field makes history MORE ambiguous, not less, until the
+    backlog ages out: rows that predate it are not "someone else's", they are
+    unknown. Count unknown against yourself while any remain in the window; it
+    is the only direction that cannot under-report.
+    """
+    now = now or datetime.now(timezone.utc)
+    actor = actor or this_actor()
+    today = date.today().isoformat()
+    mine = _sum_spend(now, actor=actor, day=today)
+    total = _sum_spend(now, day=today)
+    attributed = 0.0
     if SPEND_LOG.exists():
         for line in SPEND_LOG.read_text().splitlines():
             if not line.strip():
@@ -79,27 +187,46 @@ def spent(acct: str, now: datetime | None = None) -> float:
             try:
                 r = json.loads(line)
             except ValueError:
-                continue                      # a torn line is not a zero; skip it
-            if r.get("acct") == acct and (r.get("ts") or 0) >= since:
-                total += float(r.get("usd") or 0.0)
-    return total
+                continue
+            if r.get("day") == today and r.get("actor"):
+                attributed += float(r.get("usd") or 0.0)
+    return mine, max(0.0, total - attributed)
 
 
-def remaining(acct: str) -> float:
-    return max(0.0, ACCOUNTS[acct][0] - spent(acct))
+def guard_ok(now: datetime | None = None) -> tuple[bool, str]:
+    """(may_spend, human reason). Checked BEFORE each batch, not at kickoff.
+
+    ⭐ The 2026-10-19 breach happened because the cap was checked at the start of
+    a 6-memo pilot and never again as the work scaled to 85 sets. A guard that is
+    only consulted once is a guard on the smallest thing you ever did.
+    """
+    now = now or datetime.now(timezone.utc)
+    cap = daily_cap(now)
+    mine, unattributed = spent_today(now=now)
+    used = mine + unattributed
+    detail = f"${mine:.2f} mine + ${unattributed:.2f} unattributed = ${used:.2f} of ${cap:.2f}"
+    if used >= cap:
+        return False, (f"daily guard TRIPPED: {detail} today -- stopping. Wait for "
+                       f"midnight or raise BURST_DAILY deliberately; do not edit it "
+                       f"mid-run to get past a batch.")
+    return True, f"daily guard: {detail} used today"
 
 
 def next_acct(now: datetime | None = None) -> str:
     """The account to spend next: soonest renewal first, among those with budget.
 
-    ⭐ SOONEST-RENEWAL-FIRST IS THE WHOLE POINT, not round-robin. `agents` says to
-    assume unused grant does NOT roll over, so the grant closest to resetting is
-    the one whose balance is about to be destroyed. Round-robin would spread spend
-    evenly and let the nearest deadline expire with money on it.
+    ⭐ SOONEST-RENEWAL-FIRST IS THE WHOLE POINT, not round-robin. Unused grant does
+    NOT roll over, so the grant closest to resetting is the one whose balance is
+    about to be destroyed. Round-robin spreads spend evenly and lets the nearest
+    deadline expire with money on it.
+
+    ⚠️ An account whose `renews` is null sorts LAST, not first: an unknown date
+    cannot be argued to be urgent, and acting on a placeholder is how the old
+    hardcoded table nearly doubled a burst on a guessed pushbuild date.
     """
     now = now or datetime.now(timezone.utc)
-    live = [(a, remaining(a)) for a in ACCOUNTS]
-    usable = [(a, r) for a, r in live if r > 1.0]
+    grants = load_grants()
+    usable = [(a, remaining(a)) for a in grants if remaining(a) > 1.0]
     if not usable:
         raise RuntimeError(
             "every tracked grant looks exhausted by the local ledger. That ledger "
@@ -107,13 +234,36 @@ def next_acct(now: datetime | None = None) -> str:
             "before concluding there is no credit left."
         )
 
-    def days_to_renewal(acct: str) -> int:
-        day = ACCOUNTS[acct][1]
-        d = now.day
-        return (day - d) if d < day else (day - d + 30)
+    def sort_key(ar: tuple[str, float]):
+        renews = grants[ar[0]].get("renews")
+        if not renews:
+            return (1, 10**6, -ar[1])              # unknown date => last
+        return (0, (date.fromisoformat(renews) - now.date()).days, -ar[1])
 
-    usable.sort(key=lambda ar: (days_to_renewal(ar[0]), -ar[1]))
+    usable.sort(key=sort_key)
     return usable[0][0]
+
+
+def log_unmeasured(acct: str, reason: str, est_usd: float) -> None:
+    """Record that spend HAPPENED but its cost was never reported back.
+
+    ⛔ WHY THIS EXISTS. `log_spend` runs only after `subprocess.run` RETURNS, so a
+    worker killed by `--timeout` or by a signal burns real tokens and writes NO
+    ledger row at all. Measured 2026-10-19: an aborted run left a complete, good
+    memo in the corpus and $0.00 in the ledger. Every timed-out batch in this
+    tool's history is therefore unaccounted, and a daily guard that sums `usd`
+    cannot see any of it.
+
+    ⇒ The row is written with `estimated: true` so a reader can tell a measured
+    cost from a stand-in. ⚠️ An estimate in the ledger is a compromise: it is
+    wrong by construction. It is still strictly better than a zero, because a
+    zero is also wrong AND claims to be measured.
+    """
+    rec = {"day": date.today().isoformat(), "ts": int(time.time()),
+           "acct": acct, "model": "unknown", "usd": round(float(est_usd), 6),
+           "actor": this_actor(), "estimated": True, "reason": reason}
+    with SPEND_LOG.open("a") as fh:
+        fh.write(json.dumps(rec) + "\n")
 
 
 def key_env(acct: str, base: dict | None = None) -> dict:

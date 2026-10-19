@@ -61,9 +61,52 @@ def _assignment_line(m: dict) -> str:
             f"{datetime.fromtimestamp(m['updated_at'], timezone.utc).date()})")
 
 
+# batch index -> account, filled in BEFORE the subprocess runs. The timeout
+# handler in main() needs it, and by then run_batch has raised and returned
+# nothing -- so the account cannot be read from its result.
+ACCT_FOR_BATCH: dict[int, str] = {}
+
+
+def mean_batch_cost(default: float = 1.00) -> float:
+    """Mean cost of a COMPLETED batch, for standing in when one is killed.
+
+    ⛔ READ THE BATCH RECORDS, NOT THE SPEND LEDGER. A first version averaged
+    ledger rows for this actor and returned $0.0000 -- the ledger mixes a
+    $0.000004 haiku probe in with $1.80 audit batches, and one trivial row drags
+    the mean to zero. An estimator that silently returns zero is worse than no
+    estimator: it writes a confident "nothing was spent" into the budget.
+    ⇒ Average the thing you are actually estimating (one batch), from the records
+    that only ever contain that thing.
+    """
+    vals = []
+    for f in sorted(Path("runs").glob("*/batch-*.json"))[-60:]:
+        if ".raw." in f.name:
+            continue
+        try:
+            v = float(json.loads(f.read_text()).get("cost_usd") or 0.0)
+        except (ValueError, OSError):
+            continue
+        if v > 0:
+            vals.append(v)
+    return round(sum(vals) / len(vals), 4) if vals else default
+
+
 def run_batch(batch: list[dict], idx: int, outdir: Path, timeout: int,
               prompt_path: Path = PROMPT) -> dict:
+    # ⛔ CHECK THE BUDGET HERE, PER BATCH -- NOT ONCE AT KICKOFF. On 2026-10-19
+    # this seat went 1.7x over a fleet cap because the budget was checked when
+    # the job was a 6-memo pilot and never again as it scaled to 85 sets. No
+    # single step felt like a budget decision. A guard consulted once is a guard
+    # on the smallest thing you ever did.
+    ok, why = keyring.guard_ok()
+    if not ok:
+        print(f"  batch {idx}: ⛔ SKIPPED — {why}")
+        return {"batch": idx, "acct": None, "n": len(batch), "ids": [],
+                "cost_usd": 0.0, "wall_s": 0.0, "is_error": False,
+                "num_turns": 0, "result": "", "skipped": why}
+
     acct = keyring.next_acct()
+    ACCT_FOR_BATCH[idx] = acct
     assignments = "\n".join(_assignment_line(m) for m in batch)
     prompt = prompt_path.read_text().replace("{{ASSIGNMENTS}}", assignments)
 
@@ -127,6 +170,12 @@ def main() -> int:
     print(f"brief: {a.prompt}")
     print(f"next account: {keyring.next_acct()} "
           f"(remaining ~${keyring.remaining(keyring.next_acct()):.2f}, local ledger)")
+    _ok, _why = keyring.guard_ok()
+    print(("⛔ " if not _ok else "") + _why)
+    if not _ok and not a.dry_run:
+        print("⛔ refusing to start: the daily guard is already spent. "
+              "This is the check that was missing on 2026-10-19.")
+        return 2
     if a.dry_run:
         for i, b in enumerate(batches):
             print(f"  batch {i}: " + ", ".join(
@@ -145,8 +194,17 @@ def main() -> int:
             try:
                 r = f.result()
             except subprocess.TimeoutExpired:
+                # ⛔ A KILLED WORKER STILL SPENT THE MONEY. `log_spend` only runs
+                # after the subprocess returns, so without this the cost of every
+                # timed-out batch is invisible to the ledger and to the daily
+                # guard -- measured 2026-10-19, an aborted run left a finished
+                # memo in the corpus and $0.00 recorded.
+                est = mean_batch_cost()
+                keyring.log_unmeasured(ACCT_FOR_BATCH.get(i, "unknown"),
+                                       f"timeout after {a.timeout}s", est)
                 print(f"  batch {i}: ⛔ TIMEOUT after {a.timeout}s "
-                      f"— INCONCLUSIVE, not a clean audit")
+                      f"— INCONCLUSIVE, not a clean audit. Logged ~${est:.2f} as "
+                      f"ESTIMATED spend (real cost unknown, never reported back).")
                 continue
             except Exception as e:                      # noqa: BLE001
                 print(f"  batch {i}: ⛔ FAILED {type(e).__name__}: {e}")
