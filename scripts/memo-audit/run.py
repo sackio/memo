@@ -84,8 +84,18 @@ def run_batch(batch: list[dict], idx: int, outdir: Path, timeout: int,
     elif cost:
         keyring.log_spend(acct, "unknown", cost)
 
-    rec = {"batch": idx, "acct": acct, "n": len(batch),
-           "ids": [m["id"][:8] for m in batch],
+    # ⛔ LAND THE REPORT BEFORE ANYTHING THAT CAN RAISE. Measured 2026-10-19: a
+    # KeyError while BUILDING this record discarded four finished batches --
+    # $3.85 of completed audit whose findings existed only in the lost stdout.
+    # The writes had already landed in the corpus, so the run printed "0/4
+    # completed · $0.0000" over twelve documents it had just rewritten.
+    (outdir / f"batch-{idx:04d}.raw.json").write_text(json.dumps(d, indent=1))
+
+    # ⚠️ A consolidation candidate carries `ids` (a set); an audit candidate
+    # carries `id`. Anything reading a batch must accept both shapes.
+    ids = [x[:8] for m in batch for x in (m.get("ids") or [m["id"]])]
+
+    rec = {"batch": idx, "acct": acct, "n": len(batch), "ids": ids,
            "cost_usd": cost, "wall_s": round(time.time() - t0, 1),
            "is_error": bool(d.get("is_error")), "num_turns": d.get("num_turns"),
            "result": d.get("result") or "", "parse_error": d.get("_parse")}
