@@ -16,6 +16,7 @@
 !run.py
 !keyring.py
 !select-all.py
+!select-stratified.py
 !diff-stage.py
 !with-grant-key
 !worker-prompt.md
