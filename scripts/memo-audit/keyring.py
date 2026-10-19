@@ -143,21 +143,36 @@ def remaining(acct: str) -> float:
 
 
 # ── my own runaway guard ────────────────────────────────────────────────────
-# Agreed with `agents` 2026-10-19 after this seat spent $69.47 in a day against
-# a fleet cap of $40 and darkened fleet haiku for everyone: $60/day through
-# Oct 22 (ben's remainder needs ~$55/day to land before it lapses), $40/day
-# after. ⚠️ This is MY actor's guard, not the fleet's -- `agents` enforces the
-# fleet side per-actor as of its 8990793.
-BURST_UNTIL = date(2026, 10, 22)
-BURST_DAILY, STEADY_DAILY = 60.0, 40.0
+# $40/day, flat. Agreed with `agents` 2026-10-19 after this seat spent $69.47 in
+# a day and darkened fleet haiku for every other seat.
+#
+# ⛔ A $60/day BURST "through Oct 22" LIVED HERE FOR ABOUT 40 MINUTES AND WAS
+# BUILT ON A MISREADING OF WHAT `renews` MEANS. `agents` had unibrowse read
+# pushbuild's Console directly (measured 2026-10-19 16:37): the grant was
+# GRANTED 10/12 and EXPIRES 11/11, with $162.78 of $200 left. Each monthly grant
+# is its own line with its own 30-day expiry, so "Next credit Oct 22" is the date
+# ben's NEXT grant ARRIVES -- not the date the current one dies. There was never
+# an Oct 22 cliff and nothing was about to lapse.
+#
+# ⭐ THE SHAPE OF THE ERROR: a field named for the next arrival was read as a
+# deadline for the current balance, and that invented a use-it-or-lose-it
+# urgency that justified spending 50% faster. ⇒ When a date is about to be used
+# as a DEADLINE, confirm what the date is OF. "Renews", "expires", "resets" and
+# "next credit" are four different events, and only one of them destroys money.
+#
+# Pace is now even to the real expiries: ~$650 across the four accounts over
+# ~23 days ~ $28/day, plus each new grant as it lands -- comfortably inside $40.
+DAILY_CAP = 40.0
 
 
 def daily_cap(now: datetime | None = None) -> float:
-    now = now or datetime.now(timezone.utc)
-    return BURST_DAILY if now.date() <= BURST_UNTIL else STEADY_DAILY
+    return DAILY_CAP
 
 
 def this_actor() -> str:
+    """The seat this process bills as. ⚠️ Read from the PARENT env on purpose --
+    `key_env()` strips ATC_* from CHILDREN so workers cannot steal the broker
+    registration. Same variable, opposite requirements."""
     return (os.environ.get("MEMO_AUDIT_ACTOR")
             or os.environ.get("ATC_SUBSCRIBER_ID") or "memo")
 
@@ -207,7 +222,7 @@ def guard_ok(now: datetime | None = None) -> tuple[bool, str]:
     detail = f"${mine:.2f} mine + ${unattributed:.2f} unattributed = ${used:.2f} of ${cap:.2f}"
     if used >= cap:
         return False, (f"daily guard TRIPPED: {detail} today -- stopping. Wait for "
-                       f"midnight or raise BURST_DAILY deliberately; do not edit it "
+                       f"midnight or raise DAILY_CAP deliberately; do not edit it "
                        f"mid-run to get past a batch.")
     return True, f"daily guard: {detail} used today"
 
@@ -223,6 +238,16 @@ def next_acct(now: datetime | None = None) -> str:
     ⚠️ An account whose `renews` is null sorts LAST, not first: an unknown date
     cannot be argued to be urgent, and acting on a placeholder is how the old
     hardcoded table nearly doubled a burst on a guessed pushbuild date.
+
+    ⛔ THE SORT KEY SHOULD BE THE GRANT'S EXPIRY, NOT ITS RENEWAL DATE, and it is
+    not yet -- grants.json carries only `renews`. `agents` established 2026-10-19
+    (unibrowse, Console) that each grant is a separate line expiring 30 days
+    after it was GRANTED, so "renews" is when the NEXT grant arrives, which is a
+    different event from when the current balance dies. They currently differ by
+    about a day (pushbuild: expires 11/11, renews 11/12) so the ordering is the
+    same either way, and the per-grant expiries for ben/agents/agents2 are due
+    from unibrowse. ⇒ When they land, add `expires` to grants.json and sort on
+    THAT; do not keep inferring a deadline from an arrival date.
     """
     now = now or datetime.now(timezone.utc)
     grants = load_grants()
