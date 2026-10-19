@@ -470,6 +470,7 @@ async def memo_update(
     is gone.
     """
     await _reject_leaked_tool_call(content, tags, "memo_update")
+    _t0 = _time.time()
 
     # ⭐ RESOLVE A SHORT ID, exactly as `memo_get` does. The 8-char id is what
     # actually circulates — seat guides, pins, commit messages, agent DMs — and
@@ -636,9 +637,22 @@ async def memo_update(
                 "detail": "the memo changed between read and write; re-read and "
                           "re-apply your append",
                 "current_updated_at": result.get("current_updated_at")}
+    # ⛔ latency_ms WAS MISSING HERE, AND IT IS THE ONE FIELD THAT COULD DIAGNOSE
+    #    `5d42b0ea` (the apply-without-return bug). Measured 2026-10-19: 0 of 3,189
+    #    `update` rows and 0 of 238 `context` rows carried a latency, while 3,318
+    #    search and 16,114 store rows all did — because only those functions set
+    #    `_t0`. ⚠️ So for the 09-17 12:54:38Z incident the row exists (proving the
+    #    handler reached THIS line) but its DURATION does not, and the row is
+    #    written BEFORE the response is built. That cannot distinguish "handler
+    #    finished fast, response lost in transport" from "handler took ~300s, the
+    #    caller aborted, the handler completed afterwards" — which is exactly the
+    #    question `5d42b0ea` claims to have settled in favour of the former. It did
+    #    not have the evidence to. ⇒ The next occurrence is now diagnosable: a
+    #    latency well under the caller's timeout means the response was lost.
     await db.log_query_async(
         db_path, "update", query=title or id, tags=tags or [],
-        result_ids=[id] if result is not None else [], user_agent="mcp:memo_update")
+        result_ids=[id] if result is not None else [],
+        latency_ms=(_time.time() - _t0) * 1000, user_agent="mcp:memo_update")
     if result is None:
         # 2026-07-30: was a bare null, which collapsed "bad id", "memo absent"
         # and (from the caller's seat) "applied, nothing returned" into one
@@ -1124,6 +1138,7 @@ async def memo_context(
                      single memo — NOT that the corpus has nothing on the topic.
       truncated: true if any match was left out or excerpted
     """
+    _t0 = _time.time()
     all_queries = [query] + (queries or [])
     search_kwargs = dict(
         limit=limit_per_query, min_score=min_score, tags=tags or [],
@@ -1293,6 +1308,7 @@ async def memo_context(
         tags=tags or [],
         result_ids=[r["document"]["id"] for r in ranked],
         result_scores=[r["score"] for r in ranked],
+        latency_ms=(_time.time() - _t0) * 1000,
         user_agent="mcp:memo_context")
     return {
         "content": content,
