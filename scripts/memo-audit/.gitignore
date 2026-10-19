@@ -17,6 +17,7 @@
 !keyring.py
 !select-all.py
 !select-stratified.py
+!select-dup-titles.py
 !diff-stage.py
 !with-grant-key
 !worker-prompt.md
