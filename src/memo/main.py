@@ -581,8 +581,26 @@ async def memo_update(
     # transport error, so the refusal takes the same distinguishable-failure shape
     # as shrink_guard above and as memo_get's not_found/ambiguous — the caller can
     # branch on `reason` instead of parsing prose. See `_too_large_detail`.
+    # ⛔ `embed_document_counted`, NOT `embed_document` — the counted variant, so
+    # `token_count_qwen3` is refreshed when the content changes. This path used
+    # the uncounted call and passed no `provider_token_count` to `db.update`,
+    # which (db.py:550) then KEEPS THE OLD COUNT whenever content changed. The
+    # column therefore went stale on every MCP content update — 3,184 of them —
+    # and always in the UNDERSTATING direction, because memos grow.
+    # ⛔ Understating is the dangerous direction: `token_count_qwen3` is what
+    # answers "which documents are near the 16,384 ceiling", so a stale row
+    # reports headroom it does not have and the append 413s by surprise.
+    # Measured 2026-10-19: 3 of a random 120 rows carrying a count were stale by
+    # +482, +491 and +644 tokens.
+    # ⭐ Exactly the defect the comment on `_embed_document_counted_or_413` warns
+    # about — a column shipped without being wired into every write path — fixed
+    # for POST /documents and REST PATCH at the time and missed here.
     try:
-        embedding = await embeddings.embed_document(content) if content is not None else None
+        if content is not None:
+            embedding, provider_token_count = \
+                await embeddings.embed_document_counted(content)
+        else:
+            embedding, provider_token_count = None, None
     except embeddings.EmbeddingInputTooLarge as e:
         return {
             "updated": False,
@@ -608,6 +626,7 @@ async def memo_update(
         metadata=metadata,
         embedding=embedding,
         expect_content=expect_content,
+        provider_token_count=provider_token_count,
     )
     if isinstance(result, dict) and result.get("conflict"):
         # ⚠️ A LOUD refusal. The bug this replaces was a silent no-op reporting

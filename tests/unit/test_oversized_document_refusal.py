@@ -31,7 +31,25 @@ def refusing_embedder(monkeypatch):
     """The provider is the authority on its own limit; here it says no."""
     async def _raise(text):
         raise embeddings.EmbeddingInputTooLarge(PROVIDER_MSG, len(text))
+    # ⛔ BOTH PUBLIC WRAPPERS, AND IT MUST STAY BOTH.
+    # `embed_document` alone was enough until 2026-10-19, when `memo_update`
+    # moved to the counted variant so `token_count_qwen3` stops going stale.
+    # This fixture then intercepted nothing on that path: `memo_update` returned
+    # `updated: True` and STORED the oversized content.
+    # ⚠️ UNDER TEST ONLY — production was never exposed. Both wrappers funnel
+    # through `_embed_raw`, which raises `EmbeddingInputTooLarge` for either one,
+    # so the real refusal held throughout. What broke was the GUARD: the test
+    # went green-by-vacuum, asserting a contract it had stopped exercising.
+    # ⭐ That is the worse direction. A failing test is a message; a test that
+    # quietly stops testing is a contract nobody is checking any more.
+    # ⛔ Patching `_embed_raw` instead does NOT work here, though it is the real
+    # chokepoint in production: conftest's AUTOUSE `_no_network_embeddings`
+    # replaces these wrappers wholesale with network-free stubs, so `_embed_raw`
+    # is never reached under test and a patch on it is silently inert.
+    # ⇒ Whenever a new write path picks a different embed wrapper, it must be
+    # added here, exactly as conftest.py:94 already says for the same reason.
     monkeypatch.setattr(embeddings, "embed_document", _raise)
+    monkeypatch.setattr(embeddings, "embed_document_counted", _raise)
 
 
 def _assert_actionable(detail: str):
