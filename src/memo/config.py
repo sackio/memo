@@ -52,7 +52,21 @@ class Settings(BaseSettings):
     # deployment that drops the env var quietly rejoins the contended queue and
     # nothing anywhere would say so. Moved 2026-08-12 with compose; see the long
     # note there for why a matching model NAME does not prove matching weights.
-    embedding_base_url: str = "http://192.168.1.49:31541/v1"
+    # ⛔ DEFAULT CORRECTED 2026-10-19. This said `http://192.168.1.49:31541/v1`,
+    # which is DEAD: `:31541` is the NodePort of `embeddings-gpu3-lan`, whose
+    # deployment `qwen3-embedding-gpu3` is scaled to 0/0 — measured today,
+    # connection-refused. memo moved back to the shared pool on 2026-10-08 and
+    # production has carried `EMBEDDING_BASE_URL` in the container env ever
+    # since, so the stale default was invisible: it is never exercised where it
+    # would be noticed.
+    #
+    # ⭐ Which is exactly the trap .env already documents about `MEMO_V2_PORT`:
+    # a default that is never exercised is not a fallback, it is a plausible
+    # wrong number waiting for the one deploy that forgets the override. That
+    # deploy would start cleanly and fail every embed — and memo is dense-only,
+    # so /search AND writes would 500 fleet-wide with a healthy-looking
+    # container.
+    embedding_base_url: str = "http://192.168.1.5:31536/v1"
     embedding_api_key: str = Field(default="not-required-lan-service", repr=False)
     default_db_path: str = "~/.memo/memo.db"
 
