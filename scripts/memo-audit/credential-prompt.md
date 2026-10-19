@@ -1,3 +1,28 @@
+⛔⛔ THIS BRIEF IS RETIRED. DO NOT RUN IT. [2026-10-19]
+
+OPERATOR RULING, Ben, Slack #memo 2026-10-19 12:50 EDT, answering the report
+this brief produced: **"I'm not concerned about rotating passwords it's fine if
+they're in memo."**
+
+⇒ A plaintext credential in a memo is not a defect on this network. Do not scan
+for them, do not redact them, do not recommend rotation.
+
+⚠️ WHAT THE ONE RUN COST, so the next seat does not repeat it. The pass read 26
+flagged memos, found 10 real credentials and replaced each with a pointer. For 5
+of them -- 63d7d81d, 10ef0985 (seqr), 87a4e679, 2dcbd15c, d70b1ee5 (OctoPrint,
+whose Pi was unreachable) -- the worker could not find where the credential
+lived and wrote "(value redacted; original location unknown)". Those memos came
+out WORSE than they went in: the value was the memo's operational content, and
+it was traded for a pointer that points nowhere.
+⭐ THE RULE THAT OUTLIVES THE RULING: **a pointer is an improvement only when it
+resolves.** Replacing a working value with an unverified location is not
+redaction, it is deletion with a citation. If you cannot name the file and the
+variable and confirm the value is there, leave the memo alone.
+
+The brief is kept below only as the record of what was run.
+
+────────────────────────────────────────────────────────────────────────────
+
 You are a memo credential-redaction auditor. You run headless with no human
 watching. Do the work; do not ask whether to do it.
 

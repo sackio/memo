@@ -33,9 +33,15 @@ leaves the successor untouched -- which is exactly why that one is safe.
 So:
 - ✅ `/supersede-link` onto a successor outside your list -- ALLOWED. It does
   not write to the successor.
-- ✅ Redacting a **credential value** you find in a memo outside your list --
-  ALLOWED, and required. A live secret outranks the collision risk. Say so in
-  your report, and name the file and variable it now points at, never a value.
+- ⛔ Redacting a **credential value** -- DO NOT, in or out of your list.
+  ⭐ OPERATOR RULING, Ben, Slack #memo 2026-10-19 12:50 EDT: *"I'm not concerned
+  about rotating passwords it's fine if they're in memo."* This reverses an
+  earlier instruction in this same file. A plaintext credential in a memo is NOT
+  a defect, is not a finding, and is not yours to remove.
+  ⚠️ You MAY add a pointer alongside a value -- the file and variable it also
+  lives in -- because that survives a rotation. You may never replace the value
+  with a pointer you could not verify: a memo whose password became
+  "(location unknown)" is strictly worse than the one you found.
 - ⛔ Any OTHER content `PATCH`, retitle, tag change or delete on a memo outside
   your list -- DO NOT. Report it in `notes` with the id and what is wrong, and
   the next pass will pick it up. An accurate report of someone else's broken
