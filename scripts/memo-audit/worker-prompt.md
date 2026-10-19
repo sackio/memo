@@ -180,6 +180,19 @@ for l in sys.stdin:
   redacted. You may ADD the file and variable it also lives in, never replace a
   value with a location you have not confirmed.
 
+⭐⭐ THE EIGHT FIELDS `PATCH /documents/<id>` ACTUALLY HONOURS, read from the
+deployed source (`memo-v2/src/memo/models.py`, class `UpdateRequest`) on
+2026-10-19: `content` · `title` · `tags` · `metadata` · `append` · `prepend` ·
+`expect_content` · `db_path`.
+⛔ **ANYTHING ELSE IS ACCEPTED, RETURNS 200, AND IS SILENTLY DISCARDED** --
+`add_tags`, `append_tags`, `valid_until`, and any typo of a real one. The
+request model tolerates unknown fields BY DESIGN, so there is no error to see.
+⚠️ `tags` REPLACES the list wholesale -- to add one, GET first and send the
+union. `content`/`append`/`prepend` are mutually exclusive. `expect_content` is
+FULL-STRING equality and guards ANY update, so a slice 409s.
+⇒ READ BACK FIELD BY FIELD. A partial success (title lands, tags do not)
+passes both "did it 200?" and "did the document change?". Memo `04972021`.
+
 ## ⛔ DO NOT USE query_log TO DECIDE WHETHER A MEMO IS USED
 `query_log` has been MCP-only since 2026-09-30, except for `store`. Measured
 2026-10-19 by op x user_agent: `search` 2,392 REST rows (NULL user_agent) whose
