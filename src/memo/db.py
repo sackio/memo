@@ -273,6 +273,21 @@ def _init_schema(conn: sqlite3.Connection) -> None:
                      "TEXT DEFAULT 'cl100k_base'")
     if "token_count_qwen3" not in cols:
         conn.execute("ALTER TABLE documents ADD COLUMN token_count_qwen3 INTEGER")
+    # ⛔ THE INDEX IS CREATED HERE, NOT ONLY IN 012 — AND 012'S COPY NEVER RAN.
+    # `_apply_migrations` runs each file with `conn.executescript(sql)`, which
+    # aborts at the FIRST failing statement. On every DB that already had the two
+    # columns (which is every DB that mattered, because _init_schema above adds
+    # them), 012's opening `ALTER TABLE ... ADD COLUMN` raises "duplicate column
+    # name"; the runner catches that, marks the file APPLIED, and the second
+    # ALTER and the CREATE INDEX below it never execute. Verified on the live
+    # store 2026-10-19: `migrations_applied` holds 012, and
+    # `documents_token_count_qwen3_idx` does not exist and never would have.
+    # ⭐ A migration runner that records a file as applied when only its first
+    # statement ran turns a partial apply into a permanent, silent gap — the log
+    # says done, so nothing ever retries it. Idempotent DDL in `_init_schema`,
+    # which runs before the migrations on every start, is the durable place.
+    conn.execute("CREATE INDEX IF NOT EXISTS documents_token_count_qwen3_idx "
+                 "ON documents(token_count_qwen3)")
     # Migration 2026-07-21: add user_agent + source_ip to leak_incidents
     leak_cols = {row[1] for row in conn.execute("PRAGMA table_info(leak_incidents)")}
     if leak_cols and "user_agent" not in leak_cols:
