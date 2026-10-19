@@ -551,7 +551,17 @@ def _sync_update(db_path: str, doc_id: str, content: str | None, title: str | No
     conn.commit()
     _bump_access(conn, doc_id, "patch")
     updated = conn.execute("SELECT * FROM documents WHERE id = ?", (doc_id,)).fetchone()
-    return _row_to_dict(updated)
+    # ⛔ `_row_to_memo`, NOT `_row_to_dict` — this is a READ-BACK that becomes the
+    # PATCH response, so it must decode the v2 JSON columns exactly as every other
+    # read path does (`_sync_get` :695, `_sync_list` :843, both search paths :648
+    # and :1060). It was the ONE read returning raw column strings, and the
+    # divergence was invisible for as long as the `Document` response model
+    # happened to drop those fields: `scope` came back as the STRING '["global"]'
+    # and nothing looked at it. The moment the envelope carried them (2026-10-19,
+    # memo `d7b36ca8`), every guarded PATCH 500'd on validation.
+    # ⭐ Two functions reading the same table through different deserialisers is
+    # the defect; widening the model only revealed it.
+    return _row_to_memo(updated)
 
 
 def _sync_search(db_path: str, embedding: list[float], limit: int, min_score: float | None,
