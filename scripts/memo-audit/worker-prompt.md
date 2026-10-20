@@ -17,6 +17,20 @@ not need to ask. You DO need evidence.
 
 Read each with: curl -sS "http://127.0.0.1:8000/documents/<id>"
 
+⛔ THERE IS NO `/lineage` ROUTE, AND ITS 404 LIES TO YOU. Measured 2026-10-20: a
+worker on this pipeline called `GET /documents/<id>/lineage` on a LIVE document
+and got a 404 -- not because the memo was missing (the plain GET returned 200 in
+the same run) but because that route does not exist. FastAPI answers an unknown
+path and a deleted document with the SAME 404, so an invented endpoint reads
+exactly like "this memo is gone". You hold DELETE authority; do not let a guessed
+URL tell you a document does not exist.
+⇒ The only two sub-routes under `/documents/<id>/` are:
+  - `GET /documents/<id>/current`  -- newest valid version of this lineage
+  - `GET /documents/<id>/as-of?t=` -- the version that was true at time t
+Supersession is otherwise visible as `valid_until` on the plain GET. If you want
+a route that is not in this brief, it almost certainly does not exist: check with
+the plain GET before concluding anything from a 404.
+
 ### ⛔⛔ STAY INSIDE THIS LIST WHEN YOU WRITE CONTENT
 
 Other auditors are running RIGHT NOW against other memos, and the only thing
