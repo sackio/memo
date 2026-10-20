@@ -17,13 +17,19 @@ not need to ask. You DO need evidence.
 
 Read each with: curl -sS "http://127.0.0.1:8000/documents/<id>"
 
-⛔ THERE IS NO `/lineage` ROUTE, AND ITS 404 LIES TO YOU. Measured 2026-10-20: a
-worker on this pipeline called `GET /documents/<id>/lineage` on a LIVE document
-and got a 404 -- not because the memo was missing (the plain GET returned 200 in
-the same run) but because that route does not exist. FastAPI answers an unknown
-path and a deleted document with the SAME 404, so an invented endpoint reads
-exactly like "this memo is gone". You hold DELETE authority; do not let a guessed
-URL tell you a document does not exist.
+⛔ A SUPERSEDED MEMO DOES NOT TELL YOU WHERE ITS SUCCESSOR IS, AND THE URL YOU
+WILL INVENT DOES NOT EXIST. Measured 2026-10-20: `GET /documents/<id>/lineage`
+was called on `766b4f5c` and 404'd. That memo is RETIRED (`valid_until` set) and
+the plain GET still returns 200 -- so the 404 was the ROUTE missing, not the memo.
+⭐ TWO INDEPENDENT CALLERS INVENTED THE SAME URL within ten minutes, from
+different hosts (127.0.0.1 and agent.pushbuild.com). That is not improvisation,
+it is a GAP: a retired memo answers 200 with `valid_until` set and NOTHING that
+points at its successor, so anyone who needs the current version guesses, and
+`/lineage` is the obvious guess. The real route is undiscoverable from the
+response.
+⛔ FastAPI answers an unknown path and a deleted document with the SAME bare 404,
+so a guessed endpoint reads exactly like "this memo is gone". You hold DELETE
+authority; never let a guessed URL tell you a document does not exist.
 ⇒ The only two sub-routes under `/documents/<id>/` are:
   - `GET /documents/<id>/current`  -- newest valid version of this lineage
   - `GET /documents/<id>/as-of?t=` -- the version that was true at time t
