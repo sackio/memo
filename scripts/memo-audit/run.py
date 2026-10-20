@@ -17,7 +17,7 @@ starts failing for reasons nobody can reproduce.
 """
 from __future__ import annotations
 
-import argparse, json, re, subprocess, sys, time
+import argparse, json, re, subprocess, sys, threading, time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
@@ -66,6 +66,15 @@ def _assignment_line(m: dict) -> str:
 # nothing -- so the account cannot be read from its result.
 ACCT_FOR_BATCH: dict[int, str] = {}
 
+# ⛔⛔ MONEY COMMITTED BUT NOT YET BILLED. `log_spend` runs only when a subprocess
+# RETURNS, so with --concurrency N there are up to N charges the ledger cannot
+# see, and every in-flight batch reads the same stale total. Measured 2026-10-20:
+# 12 batches at concurrency 4 spent $50.21 against the $40 cap -- each one was
+# legitimately under the cap at the moment it asked. ⇒ Reserve the estimate
+# BEFORE spawning and release it after, so the guard sees the committed total.
+_INFLIGHT = 0.0
+_INFLIGHT_LOCK = threading.Lock()
+
 
 def mean_batch_cost(default: float = 1.00) -> float:
     """Mean cost of a COMPLETED batch, for standing in when one is killed.
@@ -79,7 +88,14 @@ def mean_batch_cost(default: float = 1.00) -> float:
     that only ever contain that thing.
     """
     vals = []
-    for f in sorted(Path("runs").glob("*/batch-*.json"))[-60:]:
+    # ⚠️ TRAILING WINDOW, DELIBERATELY SHORT. Cost per memo is not constant
+    # across the queue: the read-weighted ordering puts the largest, most
+    # cross-referenced memos first, and the 2026-10-20 head cost $4.18/batch
+    # against a $1.75 projection from an older stratified sample. A 60-batch
+    # mean dilutes the region actually being worked with runs priced for a
+    # different one. Track the recent past, which is what the next batch
+    # resembles.
+    for f in sorted((HERE / "runs").glob("*/batch-*.json"))[-12:]:
         if ".raw." in f.name:
             continue
         try:
@@ -98,12 +114,23 @@ def run_batch(batch: list[dict], idx: int, outdir: Path, timeout: int,
     # the job was a 6-memo pilot and never again as it scaled to 85 sets. No
     # single step felt like a budget decision. A guard consulted once is a guard
     # on the smallest thing you ever did.
-    ok, why = keyring.guard_ok()
+    global _INFLIGHT
+    est = mean_batch_cost()
+    with _INFLIGHT_LOCK:
+        ok, why = keyring.guard_ok(reserve=_INFLIGHT + est)
+        if ok:
+            _INFLIGHT += est
     if not ok:
         print(f"  batch {idx}: ⛔ SKIPPED — {why}")
-        return {"batch": idx, "acct": None, "n": len(batch), "ids": [],
-                "cost_usd": 0.0, "wall_s": 0.0, "is_error": False,
-                "num_turns": 0, "result": "", "skipped": why}
+        rec = {"batch": idx, "acct": None, "n": len(batch), "ids": [],
+               "cost_usd": 0.0, "wall_s": 0.0, "is_error": False,
+               "num_turns": 0, "result": "", "skipped": why}
+        # ⛔ A SKIP MUST LEAVE A RECORD ON DISK. Until 2026-10-20 it returned this
+        # dict and wrote nothing, so a run that skipped 8 of 20 batches left 12
+        # files and no trace of the other 8 -- indistinguishable from a run that
+        # was only ever asked for 12.
+        (outdir / f"batch-{idx:04d}.json").write_text(json.dumps(rec, indent=1))
+        return rec
 
     acct = keyring.next_acct()
     ACCT_FOR_BATCH[idx] = acct
@@ -111,11 +138,17 @@ def run_batch(batch: list[dict], idx: int, outdir: Path, timeout: int,
     prompt = prompt_path.read_text().replace("{{ASSIGNMENTS}}", assignments)
 
     t0 = time.time()
-    proc = subprocess.run(
-        [CLAUDE, "-p", prompt, "--output-format", "json",
-         "--permission-mode", "bypassPermissions"],
-        env=keyring.key_env(acct),            # ⛔ key lives only in this env dict
-        capture_output=True, text=True, timeout=timeout, cwd=str(HERE))
+    try:
+        proc = subprocess.run(
+            [CLAUDE, "-p", prompt, "--output-format", "json",
+             "--permission-mode", "bypassPermissions"],
+            env=keyring.key_env(acct),        # ⛔ key lives only in this env dict
+            capture_output=True, text=True, timeout=timeout, cwd=str(HERE))
+    finally:
+        # Released on timeout and on crash too: a reservation that leaks would
+        # shrink the day's budget for every later batch with money never spent.
+        with _INFLIGHT_LOCK:
+            _INFLIGHT -= est
     d = parse_result(proc.stdout or proc.stderr or "")
     cost = float(d.get("total_cost_usd") or 0.0)
 

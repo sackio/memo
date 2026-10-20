@@ -208,18 +208,31 @@ def spent_today(actor: str | None = None, now: datetime | None = None) -> tuple[
     return mine, max(0.0, total - attributed)
 
 
-def guard_ok(now: datetime | None = None) -> tuple[bool, str]:
+def guard_ok(now: datetime | None = None, reserve: float = 0.0) -> tuple[bool, str]:
     """(may_spend, human reason). Checked BEFORE each batch, not at kickoff.
 
     ⭐ The 2026-10-19 breach happened because the cap was checked at the start of
     a 6-memo pilot and never again as the work scaled to 85 sets. A guard that is
     only consulted once is a guard on the smallest thing you ever did.
+
+    ⛔⛔ `reserve` IS MONEY ALREADY COMMITTED AND NOT YET BILLED, AND OMITTING IT
+    BREACHED THE CAP A SECOND TIME. Measured 2026-10-20: 12 batches at
+    concurrency 4 spent $50.21 against a $40 cap. Nothing was wrong with the
+    per-batch check -- every batch that started was under the cap WHEN IT ASKED.
+    But `log_spend` only runs when a subprocess RETURNS, so four batches in
+    flight are four unbilled charges the ledger cannot see, and each one reads
+    the same stale total. ⇒ A GUARD THAT READS ONLY SETTLED SPEND IS BLIND BY
+    EXACTLY ITS OWN CONCURRENCY. Callers running work in parallel must pass the
+    estimated cost of everything in flight, including the batch being asked
+    about. See run.py's `_INFLIGHT`.
     """
     now = now or datetime.now(timezone.utc)
     cap = daily_cap(now)
     mine, unattributed = spent_today(now=now)
-    used = mine + unattributed
-    detail = f"${mine:.2f} mine + ${unattributed:.2f} unattributed = ${used:.2f} of ${cap:.2f}"
+    used = mine + unattributed + reserve
+    detail = (f"${mine:.2f} mine + ${unattributed:.2f} unattributed"
+              + (f" + ${reserve:.2f} in flight" if reserve else "")
+              + f" = ${used:.2f} of ${cap:.2f}")
     if used >= cap:
         return False, (f"daily guard TRIPPED: {detail} today -- stopping. Wait for "
                        f"midnight or raise DAILY_CAP deliberately; do not edit it "
