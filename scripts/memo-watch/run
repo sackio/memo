@@ -1,0 +1,459 @@
+#!/usr/bin/env bash
+# memo v2 post-cutover watch — IMPL, run from HOST CRON (server4, 11,41 * * * *).
+#
+# ⛔ AUTHORISATION: Ben, Slack #agents 2026-09-30 22:14 EDT, "yes definitely", answering
+#    `agents`' ask to move this watch off a 30-min broker prompt-fire (which cost ~48 LLM
+#    turns/day just to READ a green result) onto host cron that messages the seat only on a
+#    finding, with a missed-run alarm so it cannot go blind silently. Verified at source by
+#    reading #agents (C0B83Q85FPW) directly, not from the relay.
+#
+# THE SPEC — the knowledge behind every check below — is the broker schedule body
+# memo/memo-watch (7f9571bd-c2f1-43c9-8e9b-7a7c1a421d86). ⛔ DO NOT DELETE THAT SCHEDULE
+# WHEN IT IS PAUSED: it is the only written record of WHY each check exists, and this file
+# is rebuilt from it. Pause it, keep it.
+#
+# EXIT CONTRACT (declared in /mnt/nas/data/code/scripts/cronguard-digest.conf):
+#   0 = ran, verified quiet   -> silent. No DM, nothing in the miss log.
+#   1 = ran, HAS A FINDING    -> DMs `memo` with the full run output. rc1 = findings.
+#   2 = ran, COULD NOT READ   -> DMs `memo` loudly. rc2 = unknown. NOT clean, NOT failed.
+# ⛔ `agents` specified 0=finding / 3=quiet / 2=unreadable. That numbering is INVERTED for
+#    this host: cronguard logs every non-zero as DID-NOT-COMPLETE, so 3-on-quiet would write
+#    48 fake failures a day into /tmp/cronguard-misses.log, and 0-on-finding would make a
+#    real finding invisible to cronguard-digest. The fleet convention — and the digest's own
+#    hard-won rule — is 0=clean, non-zero carries the verdict. Followed that instead, and
+#    told `agents`. ⛔ Do not "fix" this by exiting 0 on a finding.
+#
+# ⛔ A SKIPPED CHECK IS NEVER A PASS. Every check that cannot read its input calls unknown()
+#    and the run exits 2, which DMs. That is the reassuring-direction failure this loop
+#    exists to catch, and it is the whole reason rc2 is distinct from rc0.
+set -u
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin
+
+SELF=$(cd "$(dirname "$0")" && pwd)
+STATE=${MEMO_WATCH_STATE:-/home/ben/.memo-watch}          # host-local, durable (NOT /tmp)
+HB=${MEMO_WATCH_HEARTBEAT:-/mnt/nas/data/memo-watch/heartbeat}  # on NFS so another HOST can read it
+D=$STATE                                                   # scratch lives with state
+MEMO=http://192.168.1.168:8000
+BROKER=http://192.168.1.168:3030
+DM_TO=${MEMO_WATCH_DM_TO:-memo}
+mkdir -p "$STATE" "$(dirname "$HB")" 2>/dev/null || true
+
+# Re-exec once with stdout captured, so a DM can carry the FULL run without the cron line
+# having to tee it. The child writes $STATE/run.out; the parent echoes it and preserves rc.
+if [ -z "${MEMO_WATCH_TEE:-}" ]; then
+  export MEMO_WATCH_TEE=1
+  "$0" "$@" > "$STATE/run.out" 2>&1; rc=$?
+  cat "$STATE/run.out"
+  exit $rc
+fi
+
+VERDICT=$STATE/verdict.txt
+: > "$VERDICT"
+finding() { echo "FINDING: $*" >> "$VERDICT"; echo "⛔ $*"; }
+unknown() { echo "UNKNOWN: $*" >> "$VERDICT"; echo "⛔ $*"; }
+
+DK=/snap/bin/docker
+# ⛔ PROBE WITH `version`, NEVER `ps` — MEASURED 2026-09-28 09:12-09:22Z (fire 1765).
+#    server4 load hit 293 with 22+ D-state procs (squashfs_cache_get / rwsem_down_write_slowpath).
+#    `docker ps` (67 containers) took 547.50 s; in the SAME minutes `docker version`,
+#    `docker inspect memo-v2` and `docker logs --tail` all returned promptly.
+#    ⛔ Do NOT 'improve' this to `inspect memo-v2` — that needs a container to EXIST, so a
+#    removed container would read as an unreachable daemon.
+pick_socket() {
+  for s in "" "unix:///run/snap.docker/tmp.sock"; do
+    if [ -z "$s" ]; then unset DOCKER_HOST; else export DOCKER_HOST="$s"; fi
+    if timeout 45 $DK version --format '{{.Server.Version}}' >/dev/null 2>&1; then
+      echo "  docker socket: ${DOCKER_HOST:-default}"; return 0
+    fi
+  done
+  unset DOCKER_HOST; return 1
+}
+
+echo "=== memo-watch $(date -Is) host $(hostname) ==="
+
+echo "=== 0. run-gap (did this watch miss any windows?) ==="
+# ⛔ THIS REPLACES THE BROKER fire_count DELTA, AND IT ANSWERS THE SAME QUESTION A DIFFERENT WAY.
+#    The old instrument compared the broker's fire counter against the last delivered fire, so it
+#    detected windows where the SEAT was unreachable. With no prompt-fire there is no counter, so
+#    the equivalent is the age of this job's own heartbeat: a gap that has ENDED is visible here on
+#    the next run. ⚠️ A gap that is STILL OPEN is structurally invisible from inside — a job that is
+#    not running cannot report that it is not running. That half is `heartbeat-check` on server3,
+#    which is a DIFFERENT host's crond reading this heartbeat over NFS. Both halves are required:
+#    this one names the gap afterwards, that one alarms while it is happening.
+NOW=$(date +%s)
+if [ ! -f "$STATE/last-run" ]; then
+  echo "  runs: (no baseline) -> $NOW | establishing baseline, NOT a finding."
+else
+  PREV=$(cat "$STATE/last-run" 2>/dev/null || echo 0)
+  GAPS=$((NOW - PREV))
+  if [ "$GAPS" -le 2400 ]; then
+    echo "  runs: last ran $((GAPS / 60))m ago | no missed windows."
+  else
+    MISSED=$(( (GAPS + 900) / 1800 - 1 ))
+    # ⛔⛔ A GAP CRONGUARD CHOSE IS NOT A GAP THAT HAPPENED TO IT (added 2026-10-01 after a false positive).
+    #    MEASURED: the 17:11 window on 2026-10-01 did not run, and this check called it a FINDING. It was
+    #    not a fault — cronguard DEFERRED it on purpose to shed load:
+    #      /tmp/cronguard-misses.log: "memo-watch DEFERRED (io=77.35>40) consecutive=1/3 held=0s/1800s"
+    #    ⇒ So consult the guard's OWN decision log before alarming. A deferral is a bounded, deliberate
+    #    skip: cronguard caps the streak (MAX_DEFERS / MAX_DEFER_SECONDS=1800) and then RUNS ANYWAY, so a
+    #    deferral cannot blind this watch indefinitely. Reporting it as "the watch was not running" is
+    #    true but useless, and it spends the one signal a silent-by-design watch has.
+    #    ⚠️ THE DISCRIMINATOR IS THE EXPLANATION, NOT THE GAP. An UNEXPLAINED gap stays a finding — that
+    #    is the whole point of this check and must not be softened. Explained => say so and move on.
+    DLOG="${CRONGUARD_DECISION_LOG:-/tmp/cronguard-decisions.log}"
+    DEFERS=0
+    if [ -r "$DLOG" ]; then
+      # count memo-watch deferrals whose epoch falls inside the gap
+      DEFERS=$(awk -v lo="$PREV" -v hi="$NOW" '
+        /memo-watch/ && /verdict=deferred-/ {
+          ts=$1; gsub(/T/," ",ts); sub(/[-+][0-9][0-9]:[0-9][0-9]$/,"",ts)
+          cmd="date -d \"" ts "\" +%s 2>/dev/null"; cmd | getline e; close(cmd)
+          if (e+0 > lo && e+0 <= hi) n++
+        } END{print n+0}' "$DLOG")
+    fi
+    # ⛔⛔ COUNT, DO NOT JUST CHECK PRESENCE. A deferral explains ONE window (~30 min), not an
+    #    unbounded span. First cut of this fix tested `DEFERS -gt 0` and declared a 2,322-minute gap
+    #    "EXPLAINED" on the strength of a single deferral -- caught by the negative control, which is
+    #    the only reason it did not ship. ⇒ Compare the deferrals against the windows actually missed.
+    if [ "$DEFERS" -ge "$MISSED" ] && [ "$DEFERS" -gt 0 ]; then
+      echo "  ⚠️ gap of $((GAPS / 60)) min FULLY EXPLAINED: ~$MISSED window(s) missed, cronguard deferred this job $DEFERS time(s) inside the gap (host IO pressure). Deliberate, bounded, and it runs anyway at the ceiling -- NOT a finding."
+      grep 'memo-watch' "${CRONGUARD_MISS_LOG:-/tmp/cronguard-misses.log}" 2>/dev/null | grep DEFERRED | tail -2 | sed 's/^/     /'
+    else
+      finding "MISSED ~$MISSED WINDOW(S), of which $((MISSED - DEFERS)) are UNEXPLAINED: last run was $((GAPS / 60)) min ago, cadence is 30 min, and cronguard's decision log accounts for only $DEFERS of them as deliberate deferrals. The WATCH was not running; this says NOTHING about memo. Read the log for what happened while nobody was looking."
+    fi
+  fi
+fi
+
+echo "=== 1. /ready ==="
+R=$(curl -sS --max-time 10 "$MEMO/ready" 2>/dev/null)
+echo "$R" | python3 -c "import json,sys; print(json.load(sys.stdin))" 2>/dev/null \
+  || unknown "/ready UNPARSEABLE: $R"
+DOCS=$(echo "$R" | python3 -c "import json,sys; print(json.load(sys.stdin).get('documents',''))" 2>/dev/null)
+GAP=$(echo "$R" | python3 -c "import json,sys; print(json.load(sys.stdin).get('passage_index_gap',''))" 2>/dev/null)
+if [ -n "$DOCS" ]; then
+  # ⛔ THERE IS NO ABSOLUTE FLOOR. The only count criterion is the previous reading: a floor
+  #    cannot see a shrink (missed 393 deleted docs on 09-06) and MANUFACTURES a finding once
+  #    an authorised shrink takes the real count past it (09-07).
+  if [ ! -f "$D/last-doc-count" ]; then
+    echo "documents: (no baseline) -> $DOCS | establishing baseline, NOT a finding."
+  else
+    P=$(cat "$D/last-doc-count")
+    if [ "$DOCS" -lt "$P" ]; then
+      # ⛔⛔ ATTRIBUTE THE SHRINK HERE, IN THE SCRIPT. Added 2026-10-05 after two LLM turns on one
+      #    authorised purge answered a question with exactly one correct output given its input:
+      #    read deletion_log for the window and print who deleted what and why. Memo 0c20c7dd.
+      #    ⛔ `docker exec` WRITES 0 BYTES TO A REDIRECT -- the `| cat` below is load-bearing, and
+      #       omitting it produced a VACUOUS PASS on this very question (memo 8b6bc8d5, instance 17).
+      SHORT=$((P - DOCS))
+      DELSUM=$(docker exec memo-v2 python3 -c "
+import sqlite3,time,collections,json
+cut=time.time()-3600
+c=sqlite3.connect('file:/data/memo.db?mode=ro',uri=True)
+rows=[r for r in c.execute('select actor,reason,deleted_at from deletion_log order by deleted_at desc limit 400') if float(r[2])>=cut]
+anon=sum(1 for r in rows if (r[0] or 'unknown') in ('unknown','') or (r[1] or 'unspecified') in ('unspecified',''))
+print(json.dumps({'n':len(rows),'anon':anon,'by':collections.Counter((r[0] or 'unknown') for r in rows).most_common(6),
+                  'reasons':sorted({(r[1] or 'unspecified')[:110] for r in rows})[:4]}))
+" 2>/dev/null | cat)
+      if [ -z "$DELSUM" ]; then
+        unknown "documents SHRANK: $P -> $DOCS ($((DOCS - P))) and deletion_log was UNREADABLE -- NOT a pass. Read it by hand: docker exec memo-v2 python3 -c '...deletion_log...' | cat"
+      else
+        echo "  deletion_log, last 60 min: $DELSUM"
+        DN=$(echo "$DELSUM" | python3 -c "import json,sys; print(json.load(sys.stdin)['n'])" 2>/dev/null || echo "")
+        DA=$(echo "$DELSUM" | python3 -c "import json,sys; print(json.load(sys.stdin)['anon'])" 2>/dev/null || echo "")
+        if [ -z "$DN" ] || [ -z "$DA" ]; then
+          unknown "documents SHRANK: $P -> $DOCS ($((DOCS - P))); deletion_log summary UNPARSEABLE: $DELSUM"
+        elif [ "$DA" -gt 0 ]; then
+          finding "documents SHRANK: $P -> $DOCS ($((DOCS - P))). $DA of $DN deletions in the last hour are ANONYMOUS (actor=unknown or reason=unspecified) -- that is the MCP delete path and it records neither. Name the client IP from the access log and check whether it was authorised. A shrink is NOT automatically a fault and is NOT grounds to page Ben."
+        elif [ "$DN" -ge "$SHORT" ]; then
+          echo "  ✅ shrink ACCOUNTED FOR and ATTRIBUTED: $DN deletion_log rows in the last hour, 0 anonymous, covering a shortfall of $SHORT. Not a finding. ⚠️ Attribution is not authorisation -- the reasons above are the actor's own words, and a reason that cites a channel still has to be read there if anything looks off."
+        else
+          finding "documents SHRANK: $P -> $DOCS ($((DOCS - P))) but deletion_log explains only $DN of $SHORT in the last hour. The remainder is UNACCOUNTED -- do not assume a longer window explains it, check."
+        fi
+      fi
+    else
+      echo "documents: $P -> $DOCS (+$((DOCS - P)))"
+    fi
+  fi
+  echo "$DOCS" > "$D/last-doc-count"
+fi
+if [ -n "$GAP" ] && [ "$GAP" != "0" ]; then
+  # ⛔ RE-READ BEFORE ALARMING: the fleet writes ~100 memos/day and a single sample can catch
+  #    one between its row landing and its passages landing.
+  echo "  passage_index_gap nonzero ($GAP) -- waiting 20s and re-reading before alarming"
+  sleep 20
+  G2=$(curl -sS --max-time 10 "$MEMO/ready" 2>/dev/null \
+       | python3 -c "import json,sys; print(json.load(sys.stdin).get('passage_index_gap',''))" 2>/dev/null)
+  if [ "$G2" = "0" ]; then echo "  passage_index_gap: $GAP -> $G2 -- cleared on re-read, the write path working."
+  else finding "passage_index_gap STILL NONZERO on the SECOND read: $GAP -> $G2 (report the PAIR). Remedy: docker exec memo-v2 python3 /app/scripts/memo-index-corpus"; fi
+fi
+
+echo "=== 1b. end-to-end search (proves the embedder, not just readiness) ==="
+# ⛔ /ready CANNOT SEE THE EMBEDDER and will report healthy through a total outage: measured
+#    2026-08-17, it answered in 13 ms while every /search and every write in the fleet 500'd.
+#    memo v2 retrieval is DENSE-ONLY (no FTS5, memo f41ce99f), so a 200 with ZERO HITS means
+#    the embedder is gone and search is TOTALLY down — not degraded.
+#    ⚠️ The embedder is 192.168.1.5:31536. This line said :31541 until 2026-10-20; that is
+#    gpu3, which has been 0/0 and connection-refused since 10-19, so the named port could
+#    not have served a single one of these probes. A port written into a diagnostic is a
+#    claim that ages, and nothing fails when it goes stale — it just sends the reader
+#    somewhere that answers neither yes nor no.
+# ⛔ ?wp=1 MARKS THIS AS OUR OWN PROBE so step 3+4 does not count it as a caller-visible 5xx.
+#    Added 2026-10-06 after the embedder outage: at fire 13:11 BOTH 5xx in the window were probes
+#    (mine + this one) and the verdict read "2 5xx in the window", which reads as caller impact
+#    when no caller had failed yet. classify.py:104 already skips any wp=1 path for EVERY
+#    classifier -- the marker was simply never put on this probe.
+#    ⚠️ The distortion only matters when real traffic is ~zero, i.e. the FIRST minutes of an
+#    outage. At volume it was 1-in-26 (fire 13:41). Do NOT conclude the 5xx finding is spurious.
+#    ✅ Verified 2026-10-06: POST /search?wp=1 -> 200 with hits (the marker does not break the
+#    probe), and on a fixture a wp=1 500 is excluded WHILE a real 500 still fires (both branches).
+rm -f "$D/search.json"
+CODE=$(curl -sS --max-time 25 -o "$D/search.json" -w '%{http_code}' \
+       -X POST "$MEMO/search?wp=1" -H 'Content-Type: application/json' \
+       -d '{"query":"barn gpu allocation","limit":2}' 2>/dev/null)
+# ⛔ TEST FOR THE FILE FIRST. `wc -c < missing` fails in the SHELL, before wc runs, so
+# wc's own 2>/dev/null cannot suppress it: the script leaks
+#   run: line NNN: .../search.json: No such file or directory
+# and a REAL 25s timeout then reads as a broken output path. Measured 2026-10-20: it
+# cost a turn of misdiagnosis -- the finding was correct and was disbelieved.
+if [ -f "$D/search.json" ]; then BYTES=$(wc -c < "$D/search.json"); else BYTES=0; fi
+echo "code=$CODE bytes=$BYTES"
+if [ "$BYTES" -eq 0 ]; then
+  # ⛔ A timeout makes curl write NOTHING. That is exactly as severe as zero hits.
+  finding "/search wrote NO BYTES (code=$CODE) -- the search did not COMPLETE within 25s. Discriminators, in order: (1) the EMBEDDER is 192.168.1.5:31536 -- grep memo-v2 logs for 'embeddings' 200s during the gap; embeds succeeding RULES THE EMBEDDER OUT. (2) uvicorn logs on COMPLETION, so count POST /search access lines in the gap: zero completions while embeds succeed = a stall AFTER the embed stage. (3) the DB is a LOCAL docker volume (memo-v2_memo_v2_data), NOT /mnt/nas -- an NFS symptom in the same run is a SEPARATE fault, do not merge them. ⛔ Do NOT check :31541: that is gpu3, connection-refused since 2026-10-19."
+else
+  python3 - "$D/search.json" <<'PY' || true
+import json,sys
+d=json.load(open(sys.argv[1]))
+r=d if isinstance(d,list) else d.get("results",[])
+if not r:
+    print("ZEROHITS")
+else:
+    t=(r[0].get("document") or {}).get("title","")
+    print("hits: %d | top: %s" % (len(r), t[:56]))
+PY
+  if python3 -c "
+import json,sys
+d=json.load(open('$D/search.json'))
+r=d if isinstance(d,list) else d.get('results',[])
+sys.exit(0 if not r else 1)" 2>/dev/null; then
+    finding "/search returned ZERO HITS on code=$CODE. On a dense-only store that means the embedder is gone and search is TOTALLY down."
+  fi
+  [ "$CODE" = "200" ] || finding "/search returned code=$CODE"
+fi
+
+echo "=== 2. remote probes + local control ==="
+# ⛔ THE FAILURE CLASS IS INVISIBLE FROM server4 (2026-08-10: IPv4 broke, local calls kept
+#    working while all three remotes were refused). Three outcomes, never collapsed:
+#    ssh fails = HOST problem, not a memo finding · curl rc=7/rc=6 = REAL memo finding · 200 = fine.
+# ⛔⛔ RETRY ONCE BEFORE DECLARING UNKNOWN, AND DO NOT USE A TIGHT ConnectTimeout (fixed 2026-10-01).
+#    MEASURED: the 6s timeout here produced an rc2 DM for a HEALTHY server5 at 13:11 on 2026-10-01.
+#    Cause: server5 was at load average 72.65 on 48 cores with 45 logged-in sessions, so the SSH
+#    handshake did not complete in 6s. ssh then worked immediately at both 6s and 20s once the
+#    probe was repeated by hand, from server4 AND from server3, and server5's own :8000 answered 200.
+#    ⇒ A LOADED HOST IS NOT AN UNREACHABLE HOST, and conflating them makes a silent-by-design watch
+#    emit noise on a host that is fine. Alarm noise is how a watch stops being read.
+#    ⚠️ The retry does NOT weaken the real check: the 2026-08-10 IPv4 failure this step exists for was
+#    persistent, so it survives two attempts. A transient handshake stall does not. The retry is the
+#    discriminator between them, which a single attempt cannot provide at any timeout value.
+for H in office server5 server3; do
+  OUT=""; SRC=1
+  for ATTEMPT in 1 2; do
+    OUT=$(ssh -o ConnectTimeout=25 -o BatchMode=yes -p 4999 ben@$H \
+          "curl -sS -o /dev/null -w 'code=%{http_code}' --max-time 10 http://server4:8000/health; echo \" rc=\$?\"" 2>/dev/null)
+    SRC=$?
+    { [ $SRC -eq 0 ] && [ -n "$OUT" ]; } && break
+    [ "$ATTEMPT" = 1 ] && echo "  ⚠️ $H: ssh attempt 1 failed (rc=$SRC) -- retrying once before calling it unreadable"
+  done
+  if [ $SRC -ne 0 ] || [ -z "$OUT" ]; then
+    unknown "$H: ssh FAILED TWICE (25s timeout each) -- HOST problem, NOT a memo finding. memo was NOT probed from $H. ⚠️ Check that host's load before treating it as down: a load-stalled handshake looks identical to an unreachable host."
+  else
+    echo "  $H: $OUT"
+    case "$OUT" in
+      *"rc=7"*|*"rc=6"*) finding "$H: $OUT -- connection refused / DNS. This is the IPv4-bind signature. ⛔ If remotes fail but the local control passes, do NOT restart the container: it will look healthy.";;
+    esac
+  fi
+done
+LOCAL=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 http://localhost:8000/health 2>/dev/null)
+echo "  local control: code=$LOCAL"
+
+echo "=== container start (a recreate truncates docker logs) ==="
+if pick_socket; then
+  timeout 20 $DK inspect memo-v2 2>/dev/null \
+    | python3 -c "import json,sys; d=json.load(sys.stdin)[0]; print(' ',d['State']['StartedAt'],'restarts',d['RestartCount'])" 2>/dev/null \
+    || unknown "could not read container start"
+else
+  unknown "docker daemon did not answer within 45s on either socket -- CONTAINER-START check SKIPPED, which is NOT a pass (a recreate would be invisible). Steps 3+4 re-probe independently: read what they actually print."
+fi
+
+echo "=== 3+4. codes, client IPs, per-IP 4xx recovery ==="
+if pick_socket >/dev/null; then
+  # ⛔ ROOT CAUSE, measured 2026-09-22: on this daemon every NON-TAIL read of memo-v2's log
+  #    returns the ROTATED (older) file and never the current one, and the boundary MOVES as
+  #    the file grows. ⇒ probe DOWNWARD for the largest tail whose newest line is near NOW,
+  #    then apply the time window in the parser. `--since` is not broken; docker reads the
+  #    WRONG FILE. Not memo-specific (nginx, pantry-web too). Reported to `system`.
+  # ⛔ THE CEILING WAS 4000 AND THAT IS A COVERAGE ASSUMPTION, NOT A CONSTANT. Raised 2026-10-06.
+  #    At fire 13:41, during the embedder outage, --tail 4000 spanned only 29.9 min and the parser
+  #    correctly declared "PARTIAL COVERAGE" against its 32-min window -- elevated traffic (85
+  #    access-log entries incl. 26 5xx) had pushed the older lines out. Measured the same day at
+  #    normal traffic: 4000 spans 36.8 min, i.e. it was ALWAYS marginal and only failed under the
+  #    load an incident produces. 8000/12000 span many hours and are still accepted as current.
+  #    ⭐ Adding LARGER candidates is safe by construction: the age check below rejects any tail
+  #    whose newest line is >300s old, which is exactly how a read that crossed into the ROTATED
+  #    file is detected. The probe still walks DOWNWARD and takes the largest current one.
+  #    ⚠️ Keep the PARTIAL COVERAGE declaration regardless -- it is the net that caught this.
+  rm -f "$D/dockerlog.txt"
+  CHOSEN=0
+  for N in 12000 8000 6000 4000 3000 2400 1800 1500 1200 1000 700 400 200 50; do
+    timeout 60 $DK logs --timestamps --tail $N memo-v2 2>&1 | cat > "$D/cand.txt"
+    [ -s "$D/cand.txt" ] || continue
+    if python3 - "$D/cand.txt" <<'PYCHK'
+import sys, datetime, re
+line = None
+for line in open(sys.argv[1], errors="replace"):
+    pass
+if not line: sys.exit(1)
+m = re.match(r'^(\S+)', line)
+if not m: sys.exit(1)
+v = re.sub(r"\.(\d{6})\d+", r".\1", m.group(1).replace("Z", "+00:00"))
+try: t = datetime.datetime.fromisoformat(v)
+except ValueError: sys.exit(1)
+age = (datetime.datetime.now(datetime.timezone.utc) - t).total_seconds()
+sys.exit(0 if age < 300 else 1)
+PYCHK
+    then
+      mv "$D/cand.txt" "$D/dockerlog.txt"; CHOSEN=$N; break
+    fi
+  done
+  rm -f "$D/cand.txt"
+  if [ "$CHOSEN" -eq 0 ]; then
+    unknown "NO tail size returned a CURRENT log -- steps 3+4 SKIPPED, which is not a pass."
+  else
+    echo "  log read via --tail $CHOSEN (non-tail reads return the STALE ROTATED file)"
+    python3 "$SELF/classify.py" 32 < "$D/dockerlog.txt" > "$D/classify.out" 2>&1 || true
+    cat "$D/classify.out"
+    # ⇒ The finding is a 4xx with NO subsequent 200 from that IP, or any 5xx. Everything in
+    #   documented-benign stays COUNTED and NAMED but is not a finding.
+    python3 - "$D/classify.out" <<'PYV' >> "$VERDICT" || true
+import re,sys
+t=open(sys.argv[1],errors="replace").read()
+def num(pat):
+    m=re.search(pat,t)
+    return int(m.group(1)) if m else 0
+unrec=num(r'UNRECOVERED:\s*(\d+)')
+x5=num(r'5xx:\s*(\d+)')
+unexp=num(r'UNEXPLAINED-and-UNRECOVERED:\s*(\d+)')
+if x5:    print("FINDING: %d 5xx in the window -- see the classify output above." % x5)
+if unrec: print("FINDING: %d UNRECOVERED 4xx (a 4xx with no subsequent 200 from that IP)." % unrec)
+if unexp: print("FINDING: %d UNEXPLAINED-and-UNRECOVERED -- not matched by any documented-benign class." % unexp)
+if re.search(r'openapi.*SKIP|SKIPPED', t, re.I):
+    print("UNKNOWN: the 404 classifier reported a SKIPPED rule -- never apply it against an empty served-set.")
+PYV
+    # distinct remote IPs: ZERO across two consecutive windows is the finding; one quiet window is not.
+    IPS=$(grep -oE 'distinct remote IPs: [0-9]+' "$D/classify.out" | grep -oE '[0-9]+$' || echo "")
+    if [ "${IPS:-1}" = "0" ]; then
+      if [ -f "$STATE/zero-ip-window" ]; then
+        finding "ZERO distinct remote client IPs for TWO consecutive windows. Prove the server rather than trusting the count: a fresh MCP handshake from a remote host distinguishes 'nobody called' from 'nobody can'."
+      else
+        echo "  zero remote IPs this window -- one quiet window is NOT a finding; arming the second-window check."
+        : > "$STATE/zero-ip-window"
+      fi
+    else
+      rm -f "$STATE/zero-ip-window"
+    fi
+  fi
+else
+  unknown "steps 3+4 SKIPPED -- no docker daemon reachable. A skipped check is never a pass."
+fi
+
+echo "=== 5. v1 standby — RETIRED 2026-08-25 ==="
+# ⛔ There is no standby to check. :8096 refusing connections is the CORRECT state.
+#    Decide on curl's EXIT CODE, never on the body of -w '%{http_code}'.
+curl -sS --max-time 5 http://localhost:8096/health >/dev/null 2>&1
+V1RC=$?
+if [ $V1RC -ne 0 ]; then
+  echo "v1 :8096 closed (curl rc=$V1RC) -- CORRECT, retired 2026-08-25"
+else
+  echo "⚠️ :8096 ANSWERED -- unexpected, but NOT an outage. Say so and move on."
+fi
+
+# ---- heartbeat + verdict ------------------------------------------------------------
+echo "$NOW" > "$STATE/last-run"
+# NFS write, bounded: a hung mount must not wedge the run. The heartbeat is what the
+# OTHER host's staleness check reads, so it is written LAST — a killed run correctly
+# leaves a stale heartbeat rather than a fresh lie.
+timeout 20 bash -c "echo \"$NOW $(hostname) $(date -Is)\" > '$HB'" 2>/dev/null \
+  || echo "  ⚠️ could not write heartbeat $HB (NFS?) -- server3's staleness check will alarm; that is the correct direction."
+
+NF=$(grep -c '^FINDING:' "$VERDICT" 2>/dev/null); NF=${NF:-0}
+NU=$(grep -c '^UNKNOWN:'  "$VERDICT" 2>/dev/null); NU=${NU:-0}
+echo "=== verdict: $NF finding(s), $NU unreadable ==="
+[ "$NF" -gt 0 ] || [ "$NU" -gt 0 ] && cat "$VERDICT"
+
+if [ "$NF" -gt 0 ] || [ "$NU" -gt 0 ]; then
+  if [ "$NF" -gt 0 ]; then SUBJ="memo-watch: $NF finding(s)"; PRIO=warning; else SUBJ="memo-watch: could not read ($NU)"; PRIO=warning; fi
+  python3 - "$VERDICT" "$STATE/run.out" "$SUBJ" "$DM_TO" "$PRIO" > "$D/dm.json" <<'PYDM'
+import json,sys
+verdict=open(sys.argv[1],errors="replace").read()
+try: full=open(sys.argv[2],errors="replace").read()[-6000:]
+except Exception: full="(run output not captured)"
+print(json.dumps({"to":sys.argv[4],"from":"memo","durable":True,"priority":sys.argv[5],"subject":sys.argv[3],
+ "content":("memo-watch (host cron, server4) has something to report. Verdict lines first, then the full run.\n\n"
+            "⛔ A FINDING IS NOT AUTOMATICALLY memo BEING DOWN -- read which check produced it.\n\n"
+            "%s\n---- full run ----\n%s") % (verdict, full)}))
+PYDM
+  # ⛔⛔ MEMO_WATCH_NO_DM=1 FOR ANY CONTROL RUN. Added 2026-10-01 after a test fired the real alarm.
+  #    MEASURED: forcing the gap branch to validate the deferral fix sent a genuine DM claiming
+  #    "MISSED ~76 WINDOW(S), 75 UNEXPLAINED" at 17:43. Redirecting MEMO_WATCH_STATE and
+  #    MEMO_WATCH_HEARTBEAT isolates the state FILES but not the DM, so a negative control is
+  #    indistinguishable from a real outage at the receiving end.
+  #    ⚠️ This watch is SILENT BY DESIGN, so its DM is its entire signal. A test that forges that
+  #    signal is worse than a test that fails: it degrades the one channel the alarm has, and a
+  #    successor running a control at 03:00 would wake the loop with a fabricated outage.
+  #    ⇒ Default is unchanged (post the DM). The guard is opt-in, so forgetting it fails LOUD.
+  # ⛔⛔ A DEAD ROUTE IS A 404 AND curl EXITS 0, SO `|| echo FAILED` CANNOT SEE IT.
+  #    Measured 2026-10-02 against this broker: POST /messages with a bad body -> 400
+  #    {"error":"to, from, and content required"}; POST /send (a route that never existed) -> 404
+  #    {"error":"no_such_route"}. Both leave curl's exit status 0. The previous form here printed
+  #    "DM HTTP=404" and fell through as if the alarm had been delivered.
+  #    ⇒ Decide on the HTTP CODE, never on curl's exit status alone. This is the defect that
+  #    silently killed scripts/atc-say-ben for a day (it POSTed to /send, which does not exist).
+  if [ -n "${MEMO_WATCH_NO_DM:-}" ]; then
+    echo "  ⚠️ MEMO_WATCH_NO_DM set -- DM SUPPRESSED (control run). Payload that would have been sent:"
+    sed 's/^/     /' "$D/dm.json" | head -4
+    # ⭐ A CONTROL RUN MUST STILL EXERCISE THE SEND PATH, or it is a dry-run/real-send split that
+    #    masks a dead route -- exactly how atc-say-ben looked healthy while sending nothing.
+    #    This proves the ROUTE RESOLVES without delivering anything: an empty body is rejected by
+    #    the handler (400) only if the route exists; a missing route answers 404 no_such_route.
+    RC_PROBE=$(curl -sS --max-time 15 -X POST "$BROKER/messages" -H 'Content-Type: application/json' \
+                    -d '{}' -o "$D/route-probe.json" -w '%{http_code}' 2>/dev/null)
+    if [ "$RC_PROBE" = "400" ] && grep -q 'required' "$D/route-probe.json" 2>/dev/null; then
+      echo "  ✅ send path VERIFIED: POST $BROKER/messages resolves (400 from the handler, not 404)"
+    else
+      echo "  ⛔ SEND PATH IS DEAD OR CHANGED: POST $BROKER/messages -> HTTP ${RC_PROBE:-<none>}"
+      echo "     $(head -c 200 "$D/route-probe.json" 2>/dev/null)"
+      echo "     ⇒ A REAL finding would NOT have reached the seat. Fix the route before trusting silence."
+    fi
+  else
+    DM_CODE=$(curl -sS --max-time 15 -X POST "$BROKER/messages" -H 'Content-Type: application/json' \
+                   --data-binary @"$D/dm.json" -o "$D/dm-resp.json" -w '%{http_code}' 2>/dev/null)
+    CURL_RC=$?
+    echo "  DM HTTP=${DM_CODE:-<none>} (curl rc=$CURL_RC)"
+    case "${DM_CODE:-}" in
+      2*) if grep -q '"sent":0' "$D/dm-resp.json" 2>/dev/null; then
+            echo "  ⛔ DM ACCEPTED BUT NOT ROUTED (sent:0) -- the finding stands and reached nobody."
+            head -c 300 "$D/dm-resp.json"
+          else
+            echo "  ✅ DM accepted: $(head -c 200 "$D/dm-resp.json" 2>/dev/null)"
+          fi ;;
+      *)  echo "  ⛔ DM SEND FAILED (HTTP ${DM_CODE:-<none>}) -- the finding stands; it did not reach the seat."
+          head -c 300 "$D/dm-resp.json" 2>/dev/null
+          grep -q 'no_such_route' "$D/dm-resp.json" 2>/dev/null \
+            && echo "  ⛔⛔ no_such_route: THE ALARM PATH ITSELF IS BROKEN, not this one message." ;;
+    esac
+  fi
+fi
+
+if   [ "$NF" -gt 0 ]; then exit 1
+elif [ "$NU" -gt 0 ]; then exit 2
+else exit 0; fi
