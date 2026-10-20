@@ -357,10 +357,40 @@ def log_spend(acct: str, model: str, usd: float) -> None:
 
 
 if __name__ == "__main__":
+    # ⛔ THIS BLOCK READ A MODULE-LEVEL `ACCOUNTS` TABLE UNTIL 2026-10-19 AND
+    # DIED WITH A NameError THE MOMENT e72e5bf MADE grants.json THE SOURCE OF
+    # TRUTH. The table was deleted; the only thing that REPORTED it was not.
+    # So `python3 keyring.py` -- the status view this seat and `agents` share
+    # for a budget we both spend against -- was dead for hours, and nobody saw
+    # it because the one invocation of it piped stderr to /dev/null and read
+    # the surviving header row as "no accounts".
+    # ⇒ WHEN YOU RETIRE A DATA SOURCE, GREP FOR ITS READERS. A migration that
+    # updates every writer and no reporter fails only where someone is looking
+    # for reassurance, which is the worst place to put a silent failure.
+    # (Same shape as memo-minder's `office:8000`, which survived 11 days in the
+    # commands beside the table documenting that office was dead.)
     now = datetime.now(timezone.utc)
+    grants = load_grants()
+
     print(f"{'acct':<10} {'grant':>8} {'spent':>9} {'remaining':>10}  renews")
-    for a in ACCOUNTS:
-        print(f"{a:<10} {ACCOUNTS[a][0]:>8.2f} {spent(a, now):>9.4f} "
-              f"{remaining(a):>10.2f}  day {ACCOUNTS[a][1]}")
+    for a in sorted(grants):
+        print(f"{a:<10} {float(grants[a].get('monthly') or 0.0):>8.2f} "
+              f"{spent(a, now):>9.4f} {remaining(a):>10.2f}  "
+              f"{grants[a].get('renews') or '(unknown -- sorts LAST)'}")
+        if grants[a].get("_note"):
+            print(f"{'':<10} ↳ {grants[a]['_note']}")
+
+    # ⚠️ A KEY FILE WITH NO GRANT ENTRY BILLS REAL MONEY. admin.key is Laura's
+    # and has no linked grant; surface it here rather than letting it be found
+    # by a charge. `NEVER` is the refusal list, not documentation.
+    untracked = sorted(k.stem for k in KEY_DIR.glob("*.key") if k.stem not in grants)
+    if untracked:
+        print(f"\nkeys with NO grant (REAL BILLING; {'refused' if NEVER else 'allowed'}"
+              f" for {sorted(NEVER)}): {', '.join(untracked)}")
+
     print(f"\nnext account to spend: {next_acct(now)}")
-    print("⚠️ 'spent' counts only wrapper-logged calls. Console is authoritative.")
+    ok, why = guard_ok(now)
+    print(("⛔ " if not ok else "✅ ") + why)
+    print("⚠️ 'spent' counts only wrapper-logged calls. Console is authoritative: "
+          "measured 2026-10-19, this ledger under-reported pushbuild's Console "
+          "balance by $2.44 (1.2%), so any cap enforced here runs ~1% permissive.")
