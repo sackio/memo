@@ -1,4 +1,5 @@
 from pathlib import Path
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -6,7 +7,15 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     port: int = 8000
-    openrouter_api_key: str
+    # ⛔ `repr=False` ON EVERY SECRET-SHAPED FIELD. Pydantic renders a model by
+    # listing its fields, and pytest renders a failed assertion by repr-ing
+    # whatever the expression touched — so on 2026-10-15 an unrelated assertion
+    # on `settings.embedding_dimensions` printed the LIVE OpenRouter key, in
+    # full, into the test output and from there into a session transcript, which
+    # is rsynced to /mnt/backup/claude-logs and readable fleet-wide. Nobody read
+    # a secret or logged one; the leak path is the repr, and it fires from any
+    # assertion, log line or traceback that names the settings object.
+    openrouter_api_key: str = Field(repr=False)
     # Operator directive 2026-08-01: the SELF-HOSTED model, at its native 2560.
     # (Supersedes the 2026-07-31 T203 directive for `3-large` @3072, which held
     # for one day and whose measurements are preserved in research.md R-09 as the
@@ -38,7 +47,7 @@ class Settings(BaseSettings):
     # calls still use — the two providers moved apart on 2026-08-01 and folding
     # them back into one setting would re-couple them.
     embedding_base_url: str = "http://192.168.1.5:31536/v1"
-    embedding_api_key: str = "not-required-lan-service"
+    embedding_api_key: str = Field(default="not-required-lan-service", repr=False)
     default_db_path: str = "~/.memo/memo.db"
 
     # Which path `/search` serves. [002/FR-113]
