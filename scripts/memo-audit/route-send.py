@@ -36,6 +36,29 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 LEDGER = HERE / "routes-sent-ledger.json"
 BROKER = "http://192.168.1.168:3030/messages"
+SUBSCRIBERS = "http://192.168.1.168:3030/subscribers"
+# Workers name the seat they BELIEVE owns a finding, and they guess. Ben's
+# routing instruction says to name a best guess, so a wrong name is expected
+# and must be caught here rather than sent.
+SEAT_ALIASES = {
+    # mcp_polygon lives in the mcp_massive fork; `polygon` is not a seat.
+    "polygon": "massive",
+}
+
+
+def known_seats() -> set[str]:
+    """⛔⛔ A DM TO AN ALMOST-RIGHT ADDRESS IS ACCEPTED, STORED, AND NEVER
+    DELIVERED — there is no error to notice. Measured 2026-10-21: a worker
+    routed a finding to `polygon`, which is not among the 193 registered
+    subscribers; the send would have reported success and reached nobody.
+    ⚠️ Presence here is not reachability either, but absence IS undeliverability,
+    and that is the half worth refusing on."""
+    with urllib.request.urlopen(SUBSCRIBERS, timeout=30) as r:
+        d = json.load(r)
+    rows = d if isinstance(d, list) else (d.get("subscribers") or d.get("sessions") or [])
+    if rows and isinstance(rows[0], dict):
+        return {(x.get("id") or x.get("subscriber_id") or x.get("name")) for x in rows}
+    return set(rows)
 
 
 def fingerprint(seat: str, finding: str) -> str:
@@ -85,6 +108,19 @@ def main() -> int:
 
     ledger = json.loads(LEDGER.read_text()) if LEDGER.exists() else {}
     routes = harvest(Path(a.rundir))
+
+    seats = known_seats()
+    for bad, good in SEAT_ALIASES.items():
+        if bad in routes and good in seats:
+            routes.setdefault(good, []).extend(routes.pop(bad))
+            print(f"  ↪ remapped {bad} → {good} (alias)")
+    unknown = {s_ for s_ in routes if s_ not in seats}
+    for s_ in sorted(unknown):
+        print(f"  ⛔ UNKNOWN SEAT {s_!r} — {len(routes[s_])} finding(s) NOT sent, "
+              f"no such subscriber. Reroute by hand or add an alias:")
+        for e in routes[s_]:
+            print(f"      {(e.get('finding') or '')[:110]}")
+        routes.pop(s_)
 
     sent, skipped = {}, 0
     for seat, entries in sorted(routes.items()):

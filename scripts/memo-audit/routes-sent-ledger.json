@@ -243,5 +243,47 @@
   "from_memo": "096da65e-a66a-470b-a5f2-cf02398f2d47",
   "finding": "server4 ~/.claude/skills/vbt-container/SKILL.md line 37 still says to work in the vbt namespace, but fork commit 6a1a007d (2026-09-26) moved jobs to vbt-jobs because vbt is tradedesk's fw-batch quota lane.",
   "note": "backfilled \u2014 sent by hand 2026-10-21 00:46 before route-send.py existed"
+ },
+ "caec474b3dbb5a83": {
+  "seat": "cluster",
+  "at": 1792558760.0605159,
+  "from_memo": "2a95782d-2085-449d-ba53-a8af5dba8457",
+  "finding": "worker31 is retired but its node object still carries pool labels (workload-tier=batch-cpu, node-mem-gi=15). It has been NotReady since 2026-10-06T16:13Z and gets a NoExecute unreachable taint. Per #cluster 09-30, cluster offered to delete the node / strip labels on Ben's word. That is still pending"
+ },
+ "b4b8e3c5e50b620c": {
+  "seat": "cluster",
+  "at": 1792558760.0605202,
+  "from_memo": "d39d373f-6ca5-4b50-949e-8e8dfb39bf83",
+  "finding": "17 batch-cpu nodes carry qf-shard=reserved:NoSchedule (272 cpu), leaving 22 untainted batch-cpu nodes, but `qf-shard` does not appear anywhere in the cluster-capacity SKILL.md (grep, server_admin/skills/cluster-capacity, 400KB, last modified Oct 9), so seats sizing from it may count reserved nodes a"
+ },
+ "1a792525e5b14fc1": {
+  "seat": "cluster",
+  "at": 1792558760.0605218,
+  "from_memo": "099d0f44-8791-4bea-8c47-8c4b79aa6c31",
+  "finding": "server_admin/barn_cluster/bin/docker-uncapped-audit carries +414/-19 lines of uncommitted work. The .prev retention, ODD-ONE-OUT check and per-container inspect timeout all ran in production tonight (sets.txt.prev mtime 2026-10-21 00:18), but git log shows only be40ca4 (2026-10-06) for the file."
+ },
+ "2f7059dd92c89d0d": {
+  "seat": "ha",
+  "at": 1792558760.465536,
+  "from_memo": "ec077b1f-5b01-4503-b023-2eead000bc96",
+  "finding": "custom_components.solark is logging DEBUG again after the 2026-10-10 18:38 HA restart, despite Ben's authorization to turn it down. home-assistant.log is 686 MB in 10 days and the last 5 MB has 4,260 solark lines, all DEBUG. The runtime logger.set_level was not persisted, and configuration.yaml has "
+ },
+ "40ea117473593761": {
+  "seat": "ha",
+  "at": 1792558760.4655397,
+  "from_memo": "ec077b1f-5b01-4503-b023-2eead000bc96",
+  "finding": "The tombstone comment at the top of /mnt/db/ha/config/automations.yaml still says browser_mod 'IS NOT INSTALLED', but custom_components/browser_mod exists (2026-10-08) with an active config entry. The kiosk auto-refresh it describes could now be restored, if that was the point of installing it."
+ },
+ "b5b54640ad73f98c": {
+  "seat": "massive",
+  "at": 1792558760.8710883,
+  "from_memo": "bb972aaf-b0cd-48b0-a11b-45837b5d3a82",
+  "finding": "In forks/mcp_polygon, src/mcp_massive/corpus.py:154 and the resolve_raw_path docstring (server.py:2466) still say the us_options_opra RAW lanes 'stopped 2026-06-02'. The fork's own CLAUDE.md:91 says they RESUMED, and day_aggs_v1 has files through 2026-10-19 (ls measured), so the tool docstring tells"
+ },
+ "e6b16cabb7da9524": {
+  "seat": "ui-eye",
+  "at": 1792558761.27622,
+  "from_memo": "98bd540b-de42-4620-a638-a6146332d6c6",
+  "finding": "ui-eye-client on office hit the 1024MB leak ceiling (exit 71) six times about 2.5h apart on 2026-10-15/16 (journalctl --user -u ui-eye-client; 74 lifetime in client.log); the current pid is at 115MB, so the leak rate is load-dependent and still unfixed, only bounded."
  }
 }
