@@ -496,7 +496,14 @@ Per-repo memos are small by construction and never reach the ceiling.
 ⚠️ **THE 164 EXISTING ONES STAY.** Ben authorised changing what this phase WRITES. He did not
 authorise deleting what is already there, and ⛔ AGE IS NEVER SUPERSESSION. Leave them.
 
-⚠️ `timeout 8` per repo is load-bearing — these live on NFS and an unbounded loop hangs the cycle.
+⚠️ **A PER-REPO `timeout` IS LOAD-BEARING** — these live on NFS and an unbounded loop hangs the
+cycle. ⛔ **THE VALUE IS 120, NOT 8.** This line read "`timeout 8` is load-bearing" until
+2026-10-20 while the block above it used `timeout 120` — and 8 is the value whose silent-zero
+failure the same section documents three paragraphs up. Corrected with Ben's authorization,
+Slack #memo 2026-10-20 23:12 EDT (ask `a0o`).
+⭐ A NUMBER IN PROSE BESIDE THE CODE IT DESCRIBES IS A SECOND COPY THAT NOTHING KEEPS IN SYNC,
+and this one survived its own correction: the cycle that raised the timeout fixed the command
+and left the sentence. Read the block, not the sentence.
 
 ---
 
