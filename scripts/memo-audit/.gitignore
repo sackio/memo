@@ -19,6 +19,7 @@
 !select-stratified.py
 !select-dup-titles.py
 !select-read-weighted.py
+!select-split-candidates.py
 !diff-stage.py
 !with-grant-key
 !worker-prompt.md

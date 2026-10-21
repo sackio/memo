@@ -190,6 +190,87 @@ third of memos deserve it, so do not inflate it and do not avoid it.
 - **UNVERIFIABLE** -- you could not reach the evidence. Say so plainly and change
   NOTHING. ⛔ "I could not check" and "it is false" are different findings, and an
   unreachable source is NOT disproof.
+- **SPLIT** -- one memo is carrying several independent claims, and a reader who
+  needs one of them has to load all of it. Operator instruction, Ben, Slack #memo
+  2026-10-20 19:35 EDT: *"the memo maintainer or whatever should be doing is
+  splitting up big memos into smaller more precise memos."*
+
+  ⛔⛔ **SIZE IS THE TRIGGER TO LOOK, NEVER THE REASON TO CUT.** A 16,000-token
+  memo that makes ONE argument is correct as it stands, and cutting it produces
+  fragments that each assert something they can no longer support. The test is
+  not length, it is: **do the parts stand alone as separate claims?** If answering
+  that needs the other part, it is one memo. Leave it and say so -- "big and
+  correctly whole" is a real verdict, reported as CURRENT.
+
+  ⛔ **SPLIT ONLY ON AN EXISTING SECTION BOUNDARY.** If the memo has no internal
+  structure, you are not splitting it, you are rewriting it, and that loses
+  provenance you cannot restore. Report it and move on.
+
+  ### The original id STAYS ALIVE as an index. Do not retire it.
+  Write each part as a NEW memo, then PATCH the original to a short index that
+  names the parts and says in one line what each holds. Do NOT `/supersede-link`
+  the original to a part.
+  ⭐ Two reasons, both structural. (1) Every existing citation -- pins, commit
+  messages, agent DMs, other memos -- still resolves to something that routes the
+  reader onward. (2) A split is **one->many**, and the lineage model cannot
+  express that: `supersede_edges` is strictly `old_id -> new_id`, and `/current`
+  would resolve a split memo to whichever single part happened to be linked.
+  ⇒ An index memo is the only shape that survives both.
+
+  ### ⛔⛔ THREE POPULATIONS OF BIG MEMO. ONLY ONE OF THEM SHOULD BE SPLIT.
+  Measured 2026-10-20 over all 93 live memos at >=14,000 qwen3 tokens:
+
+  | population | n | lifetime reads | what to do |
+  |---|---|---|---|
+  | **generated digest** -- title starts `Git pulse index` or `Backfill checkpoint` | 9 | **21 total** | ⛔ DO NOT SPLIT, DO NOT AUDIT. Route to the generator's owner. |
+  | **append chain** -- `PART n`, `ARCHIVE n`, `continues <id>`, `FULL since ...` | 33 | 2,048 | ⛔ DO NOT SPLIT. Already partitioned, by time. |
+  | **everything else** | 51 | 3,184 | the real candidates |
+
+  ⭐ **A LEDGER IS NOT AN ARGUMENT, AND SPLITTING IT LIKE ONE MAKES IT WORSE.** The
+  33 chain memos are dated running logs their owning seats already cut by hand at
+  each 413. Their entries are events, not claims; "more precise" is meaningless
+  for them, and re-cutting by topic destroys the one ordering that matters.
+  ⚠️ The chain memos spend TITLE space on routing -- "FULL since 2026-10-03, new
+  resets go in 07948566 (part 3)". That is a real defect and it is NOT yours to
+  fix by splitting. Report it in `notes`.
+  ⚠️ The 9 generated digests average **2.3 reads each, ever**, against 62 for the
+  chain memos. They are write-only. Auditing them is the pipeline paying to read
+  what nothing else reads.
+
+  ⛔⛔ **THE CANDIDATE LIST IS NOT FILTERED FOR THIS -- YOU ARE THE FILTER.** The
+  selector only excludes memos whose TITLE declares the role ("PART 3",
+  "continues <id>", "DO NOT APPEND"). A ledger that never says so -- a weigh-in
+  log, a fee history, an outage occurrence list -- will reach you looking like a
+  split candidate.
+  ⭐ A content-based detector was tried and FAILED, measured 2026-10-20: dated-
+  entry density over section headings put hand-labelled ledgers at 0.42-0.83 and
+  hand-labelled arguments at 0.31-0.67, with one of each landing on 0.67. There
+  is no threshold, because this corpus dates every claim for provenance, so the
+  dates say nothing about whether the memo is a log. ⇒ It is a judgement, and it
+  is yours. **"This is a running log, not an argument -- not splitting it" is a
+  correct, cheap, expected answer.** Report it as CURRENT and say why.
+
+  ### Sizing
+  The hard ceiling is **16,384 qwen3 tokens**; a write over it is refused 413.
+  ⭐ Rank cap-proximity on the stored `token_count_qwen3` field. Verified against
+  the live tokenizer 2026-10-20, 10 of 10 exact across 3 -> 16,358 tokens.
+  ⛔ NOT the stored `token_count` -- that is cl100k and cannot rank this.
+  ⚠️ 413 can also fire BELOW the cap at a chunk merge boundary, so a refusal is
+  not proof you were over it.
+
+  ### Procedure
+  1. Read the whole memo. Identify the section boundaries that already exist.
+  2. Decide, per boundary, whether both sides stand alone. If any do not, stop.
+  3. `POST /documents` each part, with its own title and the parent's tags plus
+     the subject tags that are now specific enough to state. A part needs scope
+     tags like any other write.
+  4. Read every part back and confirm its content.
+  5. ⛔ ONLY THEN, PATCH the original with `{"content": ...}` plus
+     `expect_content` set to the exact full string you read in step 1, replacing
+     it with the index. If that 409s, a concurrent write landed -- re-read and
+     start again. Never write the index before the parts exist: a 500 between the
+     two leaves an index pointing at nothing.
+  6. Report `verdict: "SPLIT"`, with `parts` listing the new ids.
 
 ## How to write
 - `curl -X PATCH http://127.0.0.1:8000/documents/<id>` with JSON.
@@ -246,9 +327,10 @@ superseded? -- never on apparent disuse.
 ## Report
 Finish with a JSON block and nothing after it:
 ```json
-{"audited": [{"id": "...", "verdict": "CURRENT|STALE|SUPERSEDED|DELETE|UNVERIFIABLE",
+{"audited": [{"id": "...", "verdict": "CURRENT|STALE|SUPERSEDED|SPLIT|DELETE|UNVERIFIABLE",
   "claims_checked": ["..."], "evidence": ["what you actually ran or read"],
-  "action": "what you changed, or none", "cites_found": 0}],
+  "action": "what you changed, or none", "cites_found": 0,
+  "parts": ["<new id>", "..."]}],
  "route": [{"seat": "cluster|network|models|atc|servers|ha|...",
             "finding": "one sentence, with the evidence you ran",
             "from_memo": "<id you found it auditing>"}],
