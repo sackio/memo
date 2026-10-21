@@ -2881,6 +2881,15 @@ async def access_stats(
     Returns docs that have not been fetched in `stale_days` days AND have no
     writes in that same window — reap candidates for Phase F.
     Also returns a hot-list (most-fetched) + no-fetch-ever docs.
+
+    `limit` bounds BOTH lists. It used to bound only `reap_candidates` while the
+    hot list carried a hardcoded 20 that the response never mentioned, so a caller
+    ranking by read count saw a truncation it had no way to detect. The applied
+    bound now comes back as `hot_limit`: a cap you can read is a different thing
+    from a cap you cannot.
+
+    `coverage_pct` is over LIVE docs on both sides. Reads recorded against docs
+    that have since been deleted are reported separately as `reads_on_deleted_docs`.
     """
     result = await db.access_stats(stale_days=stale_days, limit=limit)
     return result

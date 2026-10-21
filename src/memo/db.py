@@ -1573,7 +1573,23 @@ def _sync_access_stats(db_path: str, stale_days: int, limit: int) -> dict:
 
     # Totals
     total_docs = conn.execute("SELECT COUNT(*) FROM documents").fetchone()[0]
-    total_with_access = conn.execute("SELECT COUNT(*) FROM doc_access WHERE get_count > 0").fetchone()[0]
+    # ⛔ JOIN TO documents. doc_access rows SURVIVE deletion by design (they are the
+    # read history of a doc that no longer exists), so counting the table alone put
+    # deleted docs in the numerator and live docs in the denominator: coverage_pct
+    # read 141.7% on 2026-10-20, from 16,442 access rows over 11,599 live docs, all
+    # 4,846 of the excess being rows whose doc_id is in deletion_log. A percentage
+    # over 100 is at least loud; the same mismatch at 95% would have been believed.
+    total_with_access = conn.execute(
+        """SELECT COUNT(*) FROM doc_access a JOIN documents d ON d.id = a.doc_id
+            WHERE a.get_count > 0"""
+    ).fetchone()[0]
+    # Kept rather than dropped: reads against since-deleted docs are real traffic,
+    # and silently discarding them trades a wrong number for a missing one.
+    reads_on_deleted = conn.execute(
+        """SELECT COUNT(*) FROM doc_access a
+            LEFT JOIN documents d ON d.id = a.doc_id
+            WHERE d.id IS NULL AND a.get_count > 0"""
+    ).fetchone()[0]
 
     # Reap candidates: docs OLDER than stale_days with no access in that window.
     reap_candidates = conn.execute(
@@ -1599,8 +1615,8 @@ def _sync_access_stats(db_path: str, stale_days: int, limit: int) -> dict:
              JOIN documents d ON d.id = a.doc_id
             WHERE a.last_fetched_at >= ?
             ORDER BY a.get_count DESC
-            LIMIT 20""",
-        (hot_cutoff,),
+            LIMIT ?""",
+        (hot_cutoff, limit),
     ).fetchall()
 
     return {
@@ -1608,7 +1624,9 @@ def _sync_access_stats(db_path: str, stale_days: int, limit: int) -> dict:
         "total_docs": total_docs,
         "total_with_any_get": total_with_access,
         "coverage_pct": round(100.0 * total_with_access / max(total_docs, 1), 1),
+        "reads_on_deleted_docs": reads_on_deleted,
         "stale_days_threshold": stale_days,
+        "hot_limit": limit,
         "reap_candidates": [
             {
                 "id": r["id"],
