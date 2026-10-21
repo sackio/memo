@@ -137,3 +137,131 @@ async def test_multi_hop_chain_reports_next_hop_and_tip_separately(client, store
     # three-link chain is how a caller ends up quoting the MIDDLE version.
     assert body["superseded_by"] == b
     assert body["lineage_tip"] == c
+
+
+@pytest.mark.asyncio
+async def test_the_list_route_reports_the_same_successor_as_the_single_get(client, stored):
+    """⛔ A DEFECT SHIPPED 2026-10-20 AND CAUGHT THE SAME NIGHT.
+
+    `GET /documents/<id>` computed `superseded_by`; `GET /documents` did not,
+    and `Document` defaults it to None. So the list answered `superseded_by:
+    null` for all 11,599 live memos, including the 402 with a real successor
+    edge — right one at a time, wrong in bulk.
+
+    ⭐⭐ A FIELD THAT IS PRESENT AND ALWAYS EMPTY IS WORSE THAN AN ABSENT ONE.
+    Absent, a caller has to go and ask. Present-and-null, it has its answer,
+    and the answer is false. Scanning `/documents` is the mandated way to make
+    an existence claim about this corpus, so the bulk reader is the common one.
+    """
+    old = await stored(title="the earlier finding")
+    new = await stored(title="the finding that replaces it")
+    assert client.post("/supersede-link", json={
+        "old_id": old, "new_id": new, "actor": "memo"}).status_code == 200
+
+    single = client.get(f"/documents/{old}").json()
+    assert single["superseded_by"] == new
+
+    listed = client.get("/documents", params={"limit": 20000}).json()
+    row = next(d for d in listed if d["id"] == old)
+    assert row["superseded_by"] == new, \
+        "the list must not report null where the single GET reports a successor"
+    assert row["lineage_tip"] == new
+
+    survivor = next(d for d in listed if d["id"] == new)
+    assert survivor["superseded_by"] is None, "the tip has no successor, truthfully"
+
+
+@pytest.mark.asyncio
+async def test_a_forked_lineage_resolves_identically_in_bulk_and_one_at_a_time(client, stored):
+    """One memo, two recorded successors — and both surfaces must pick the same one.
+
+    ⛔ THE CORPUS HAS ONE, so this is not hypothetical: `c2ae186a` was continued
+    by TWO memos that each declared it in their own title, and a 2026-09-28
+    backfill recorded both edges 5ms apart. Neither is "the" successor; a
+    continuation is one->many and `supersede_edges` is old->new.
+
+    `_lineage_chain` breaks the tie with `ORDER BY superseded_at LIMIT 1`. The
+    bulk map must use the identical rule. Without an ORDER BY, SQLite's row
+    order is unspecified, so the list could contradict the single GET
+    intermittently — a disagreement that would not reproduce on demand.
+    """
+    root = await stored(title="the memo that was continued twice")
+    first = await stored(title="continuation a")
+    second = await stored(title="continuation b")
+
+    # ⛔ THE ROUTE CANNOT MAKE THIS SHAPE, AND THAT IS ITSELF THE FINDING.
+    # `/supersede-link` 409s on an already-superseded doc, so the second edge
+    # is refused. The fork in the live corpus was written by the 2026-09-28
+    # backfill, which INSERTed rows directly from each memo's prose. ⇒ The
+    # guard on the write path is not a guarantee about the data, because the
+    # data predates it and arrived another way. Build it the way it really
+    # arose, or the test asserts against a shape the corpus actually holds
+    # and the suite cannot reach.
+    assert client.post("/supersede-link", json={
+        "old_id": root, "new_id": first, "actor": "memo"}).status_code == 200
+    assert client.post("/supersede-link", json={
+        "old_id": root, "new_id": second, "actor": "memo"}).status_code == 409, \
+        "the route refuses a second successor; the backfill did not"
+
+    conn = db._get_or_create_conn(db._resolve_path(None))
+    conn.execute(
+        "INSERT INTO supersede_edges (old_id, new_id, superseded_at, actor, reason) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (root, second, 9_999_999_999.0, "test:backfill", "second continuation"))
+    conn.commit()
+
+    single = client.get(f"/documents/{root}").json()["superseded_by"]
+    listed = client.get("/documents", params={"limit": 20000}).json()
+    bulk = next(d for d in listed if d["id"] == root)["superseded_by"]
+
+    assert single is not None, "a forked lineage still has a successor to name"
+    assert bulk == single, \
+        "the list and the single GET must break the tie the same way"
+    assert single == first, \
+        "earliest edge wins, which is what `_lineage_chain` ORDER BY does"
+
+
+@pytest.mark.asyncio
+async def test_every_route_that_returns_a_document_fills_its_lineage(client, stored):
+    """⛔ FIVE ROUTES RETURN `Document`. A FIX AT TWO OF THEM IS NOT A FIX.
+
+    `superseded_by` was added to `GET /documents/<id>` and then found missing
+    from `/documents` (list+search), `/current`, `/as-of` and the PATCH
+    response — four surfaces answering null for a memo that has a successor.
+
+    ⭐ This repo has paid for this exact shape before: the short-id fix landed
+    on MCP and not REST, and the 413 fix landed at one call site and not six.
+    The defect is never "the logic is wrong", it is "the logic is in one
+    place". So this test enumerates the surfaces rather than sampling them.
+    """
+    old = await stored(title="v1")
+    new = await stored(title="v2")
+    assert client.post("/supersede-link", json={
+        "old_id": old, "new_id": new, "actor": "memo"}).status_code == 200
+
+    # 1. single GET — the one that already worked
+    assert client.get(f"/documents/{old}").json()["superseded_by"] == new
+
+    # 2. list
+    listed = client.get("/documents", params={"limit": 20000}).json()
+    assert next(d for d in listed if d["id"] == old)["superseded_by"] == new
+
+    # 3. PATCH response — a writer gets the same answer a reader does
+    patched = client.patch(f"/documents/{old}", json={"append": "\nmore"})
+    assert patched.status_code == 200, patched.text
+    assert patched.json()["superseded_by"] == new, \
+        "the write path must not report a different lineage from the read path"
+
+    # 4. /current resolves FORWARD, so it returns the tip — and the tip
+    #    truthfully has no successor. Asserted so a later change cannot make
+    #    this null for the wrong reason.
+    cur = client.get(f"/documents/{old}/current").json()
+    assert cur["id"] == new
+    assert cur["superseded_by"] is None
+
+    # 5. /as-of — `t` is EPOCH SECONDS, not ISO-8601 (an ISO string 422s).
+    import time as _t
+    asof = client.get(f"/documents/{old}/as-of", params={"t": _t.time()})
+    assert asof.status_code == 200, asof.text
+    assert "superseded_by" in asof.json(), \
+        "the field must be computed here too, not left to the model default"

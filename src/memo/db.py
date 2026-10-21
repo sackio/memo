@@ -1496,6 +1496,61 @@ async def successor(db_path: str | None, doc_id: str) -> dict:
     return await asyncio.to_thread(_sync_successor, _resolve_path(db_path), doc_id)
 
 
+def _sync_successor_map(db_path: str, doc_ids: list[str]) -> dict[str, dict]:
+    """`{superseded_by, lineage_tip}` for MANY ids, in one pass over the edges.
+
+    ⛔⛔ WHY THIS EXISTS, AND IT IS A DEFECT I SHIPPED. `GET /documents/<id>`
+    computed these two fields; the LIST route did not, and `Document` defaults
+    them to None. So the list answered `superseded_by: null` for all 11,599
+    documents, including the 402 that have a real successor edge — correct one
+    at a time, false in bulk.
+
+    ⭐ THAT IS WORSE THAN OMITTING THE FIELD. A null here is indistinguishable
+    from "no successor", and scanning `/documents` is the mandated way to make
+    an existence claim about this corpus, precisely because `/search` can be
+    silent for other reasons. A field that is present and always empty converts
+    every bulk reader into a confident wrong answer, with nothing to notice.
+
+    One SELECT over the whole edge table (402 rows) rather than a walk per
+    document: the per-id helper is O(chain) per call and the list can ask for
+    20,000 ids.
+    """
+    conn = _get_or_create_conn(db_path)
+    nxt: dict[str, str] = {}
+    # ⛔ ORDER BY superseded_at IS LOAD-BEARING, NOT TIDINESS. `_lineage_chain`
+    # resolves a fork with `ORDER BY superseded_at LIMIT 1`, so the bulk pass
+    # must apply the identical rule or the two surfaces disagree about exactly
+    # the ids where it matters. Without it, SQLite's row order is unspecified
+    # and the list could contradict the single GET intermittently — the worst
+    # version of this bug, because it would not reproduce.
+    for old, new in conn.execute(
+            "SELECT old_id, new_id FROM supersede_edges ORDER BY superseded_at"):
+        # An append-only log with no FK constraints can hold more than one edge
+        # out of a node, and the corpus has one: c2ae186a was continued by TWO
+        # memos, both of which said so in their own titles, and a 2026-09-28
+        # backfill recorded both 5ms apart. Neither is "the" successor -- that
+        # is a one->many continuation, which this edge table cannot express.
+        # Taking the earliest is arbitrary but it is the SAME arbitrary choice
+        # the per-id walk makes.
+        nxt.setdefault(old, new)
+
+    out: dict[str, dict] = {}
+    for doc_id in doc_ids:
+        tip, seen = doc_id, {doc_id}
+        while tip in nxt and nxt[tip] not in seen:
+            tip = nxt[tip]
+            seen.add(tip)
+        out[doc_id] = {
+            "superseded_by": nxt.get(doc_id),
+            "lineage_tip": tip if tip != doc_id else None,
+        }
+    return out
+
+
+async def successor_map(db_path: str | None, doc_ids: list[str]) -> dict[str, dict]:
+    return await asyncio.to_thread(_sync_successor_map, _resolve_path(db_path), doc_ids)
+
+
 async def restore_snapshot(db_path: str | None, doc_id: str) -> dict | None:
     """The most recent deletion snapshot for a memo, or None. [001/FR-028a]"""
     path = _resolve_path(db_path)

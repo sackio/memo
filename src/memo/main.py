@@ -2404,7 +2404,7 @@ async def get_document_current(doc_id: str, response: Response,
     doc = await documents_repo.get_current(doc_id, db_path=db_path)
     if doc is None:
         raise HTTPException(status_code=404, detail=f"no current version for {doc_id}")
-    return doc
+    return await _one_with_lineage(doc, db_path)
 
 
 @app.get("/documents/{doc_id}/as-of", response_model=Document)
@@ -2421,7 +2421,40 @@ async def get_document_as_of(
         raise HTTPException(
             status_code=404, detail=f"no version of {doc_id} was valid at {t}"
         )
-    return doc
+    return await _one_with_lineage(doc, db_path)
+
+
+async def _one_with_lineage(doc: dict, db_path: str | None) -> Document:
+    """`Document` for ONE dict, with its lineage fields filled.
+
+    ⛔ Compute from the RETURNED doc's own id, never the requested one.
+    `/current` and `/as-of` resolve to a DIFFERENT version in the lineage, and
+    asking about the id the caller typed would describe the wrong document.
+    """
+    lin = await db.successor(db_path=db_path, doc_id=doc["id"])
+    row = dict(doc)
+    row.update(lin)
+    return Document(**row)
+
+
+async def _with_lineage(docs: list[dict], db_path: str | None) -> list[Document]:
+    """Attach `superseded_by`/`lineage_tip` to a LIST of documents.
+
+    ⛔ Every surface that returns a `Document` must fill these, or it reports
+    `null` for the 402 memos that have a successor — and a null is read as "no
+    successor", not as "this route did not look". The single-doc GET already
+    did; list and search did not. One edge-table pass covers the whole page.
+    """
+    lin = await db.successor_map(db_path=db_path, doc_ids=[d["id"] for d in docs])
+    out = []
+    for d in docs:
+        # Copy-then-update rather than `Document(**d, **lin[...])`: the kwargs
+        # form raises TypeError the day either name becomes a real column, and
+        # it would do so at request time on the busiest route in the service.
+        row = dict(d)
+        row.update(lin[d["id"]])
+        out.append(Document(**row))
+    return out
 
 
 @app.get("/documents", response_model=list[Document])
@@ -2442,12 +2475,12 @@ async def list_documents(
             db_path=db_path, embedding=embedding, limit=limit, min_score=min_score,
             tags=tags, after=after, before=before, min_tokens=min_tokens, max_tokens=max_tokens,
         )
-        return [Document(**r["document"]) for r in results]
+        return await _with_lineage([r["document"] for r in results], db_path)
     docs = await db.list_docs(
         db_path=db_path, tags=tags, limit=limit,
         after=after, before=before, min_tokens=min_tokens, max_tokens=max_tokens,
     )
-    return [Document(**d) for d in docs]
+    return await _with_lineage(docs, db_path)
 
 
 async def _raise_tombstone_if_deleted(doc_id: str, db_path: str | None) -> None:
@@ -2591,7 +2624,7 @@ async def update_document(doc_id: str, req: UpdateRequest, request: Request,
             detail="memo changed between read and write; re-read and re-apply")
     if result is None:
         raise HTTPException(status_code=404, detail="Memo not found")
-    return Document(**result)
+    return await _one_with_lineage(result, req.db_path)
 
 
 @app.delete("/documents/{doc_id}", response_model=DeleteResponse)
