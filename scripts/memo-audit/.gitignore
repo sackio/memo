@@ -21,6 +21,8 @@
 !select-read-weighted.py
 !select-split-candidates.py
 !snapshot-targets.py
+!route-send.py
+!routes-sent-ledger.json
 !diff-stage.py
 !with-grant-key
 !worker-prompt.md

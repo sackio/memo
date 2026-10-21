@@ -1,0 +1,247 @@
+{
+ "148bbdb6f4476bd2": {
+  "seat": "atc",
+  "at": 1792558351.9833775,
+  "from_memo": "dcd70de4-9d29-429f-864b-1e162b84ce29",
+  "finding": "The comment above CONVERSATION_ID in slack/src/channels.mjs (~line 125) still says a conversation must never get its own channel, which has been contradicted by ensureThreadChannel since 62f81b3 (2026-09-01).",
+  "note": "backfilled \u2014 sent by hand 2026-10-21 00:46 before route-send.py existed"
+ },
+ "62ab72e2f83241cd": {
+  "seat": "atc",
+  "at": 1792558351.9833899,
+  "from_memo": "dcd70de4-9d29-429f-864b-1e162b84ce29",
+  "finding": "The three project-level copies of the conversations skill (test-agent, genomics, assistant) have drifted from each other (different md5s) and may override the canonical atc/skills/conversations copy.",
+  "note": "backfilled \u2014 sent by hand 2026-10-21 00:46 before route-send.py existed"
+ },
+ "63438183bd282a02": {
+  "seat": "atc",
+  "at": 1792558351.9834032,
+  "from_memo": "0edb0ef7-9465-470a-9956-e0e327416aa7",
+  "finding": "GET /inbound/health shows schedule health-cpap-return-window (5b024ca5) as \"as\":\"dm\", but GET /schedules?owner=health shows the same job as as=push, repeat_seconds=3600. The /inbound 'what will reach me' view misreports push jobs.",
+  "note": "backfilled \u2014 sent by hand 2026-10-21 00:46 before route-send.py existed"
+ },
+ "6ef354807a588a04": {
+  "seat": "atc",
+  "at": 1792558351.9834127,
+  "from_memo": "a12f9e8f-5741-47fa-8d3c-c23a3048036d",
+  "finding": "POST /reminders silently drops `replace` and `name` (only owner-aliases are refused), so callers who copy the /schedules idiom `replace:true` get a duplicate pin and a 201; tradedesk hit it twice on 2026-09-22. Read from atc/server/src/reminders.ts POST handler @ed8b525.",
+  "note": "backfilled \u2014 sent by hand 2026-10-21 00:46 before route-send.py existed"
+ },
+ "d0db9d007e9db454": {
+  "seat": "cluster",
+  "at": 1792558351.983437,
+  "from_memo": "84116e2d-df81-4158-a6f9-de469f3691ec",
+  "finding": "server5 dqlite logged two more vfs.c:1508 aborts not recorded in 84116e2d \u2014 2026-10-19 09:40:26 and 2026-10-20 09:30:49 (journalctl -u snap.microk8s.daemon-k8s-dqlite; NRestarts=4; kubelite untouched since 10-16 05:55:35). The memo is ~15.2k tokens of the 16,384 cap, so the next entry needs a contin",
+  "note": "backfilled \u2014 sent by hand 2026-10-21 00:46 before route-send.py existed"
+ },
+ "6269b183660fc0b0": {
+  "seat": "cluster",
+  "at": 1792558351.9834464,
+  "from_memo": "84116e2d-df81-4158-a6f9-de469f3691ec",
+  "finding": "server_admin/barn_cluster/bin/dqlite-abrt-triage (18 KB, the escalation logic the dqlite memo relies on) is still untracked in git ('??' in git status, last modified 2026-10-20 09:49), as it was on 10-13, alongside ~30 modified/untracked bin/ entries.",
+  "note": "backfilled \u2014 sent by hand 2026-10-21 00:46 before route-send.py existed"
+ },
+ "d141babf3b07100f": {
+  "seat": "cluster",
+  "at": 1792558351.9834545,
+  "from_memo": "ff965a82-8ed3-4f6c-ae7f-df5dd18cddd4",
+  "finding": "server6 pool fast6b is ONLINE but `zpool status -x` still reports 'One or more devices has experienced an unrecoverable error' (ssh server6, 2026-10-21 00:15 EDT); this is the pool mind's Postgres lives on.",
+  "note": "backfilled \u2014 sent by hand 2026-10-21 00:46 before route-send.py existed"
+ },
+ "37344014b24ab3a3": {
+  "seat": "cluster",
+  "at": 1792558351.9834623,
+  "from_memo": "e63af973-c8bd-47c5-9a86-52cebbeb5a86",
+  "finding": "The barn audit policy (server5 /var/snap/microk8s/current/args/audit-policy.yaml) logs the admin X.509 user at level None, and every agent's kubectl authenticates as admin/system:masters (kubectl auth whoami, 2026-10-21), so agent-run deletes are still unattributable.",
+  "note": "backfilled \u2014 sent by hand 2026-10-21 00:46 before route-send.py existed"
+ },
+ "a8fcd714bfa53520": {
+  "seat": "cluster",
+  "at": 1792558351.9834697,
+  "from_memo": "e63af973-c8bd-47c5-9a86-52cebbeb5a86",
+  "finding": "managedFields exist on barn objects but kubectl v1.35 hides them without --show-managed-fields (worker15: 0 entries without the flag, 4 with it); any tooling that concluded 'no managedFields' read empty output.",
+  "note": "backfilled \u2014 sent by hand 2026-10-21 00:46 before route-send.py existed"
+ },
+ "a65bbc961f72fb6a": {
+  "seat": "cluster",
+  "at": 1792558351.9834769,
+  "from_memo": "5be4f081-797e-4586-a8c3-7b40b3b4e024",
+  "finding": "server_admin/scripts/validate-preemptor-scope has the 2026-10-16 NotIn and OR-term tightening only in the working tree (git status shows it modified, +59/-11; git log ends at a93f16d), so it is uncommitted on shared NFS.",
+  "note": "backfilled \u2014 sent by hand 2026-10-21 00:46 before route-send.py existed"
+ },
+ "75c184074dcf0a65": {
+  "seat": "cluster",
+  "at": 1792558351.9834843,
+  "from_memo": "50d6ded7-aae7-403a-a04c-6a81274ae961",
+  "finding": "worker17 is labelled qf-bench=engine but has 12 allocatable cpu, so batch-day-k8s's default 13-cpu shard can never fit it; the engine-small label exists for exactly this class (kubectl get nodes, 2026-10-21).",
+  "note": "backfilled \u2014 sent by hand 2026-10-21 00:46 before route-send.py existed"
+ },
+ "f399305517a33237": {
+  "seat": "cluster",
+  "at": 1792558351.9834914,
+  "from_memo": "8e194fcb-5087-473e-9c9e-c3c6e5d45c1e",
+  "finding": "worker24 carries the qf-shard=reserved:NoSchedule taint but not the qf-shard label (16 labelled vs 17 tainted), so the label/taint audits disagree again after cluster reconciled them on 10-17.",
+  "note": "backfilled \u2014 sent by hand 2026-10-21 00:46 before route-send.py existed"
+ },
+ "978c6235df9700eb": {
+  "seat": "cluster",
+  "at": 1792558351.9835064,
+  "from_memo": "509a8a23-f919-4bc8-9039-1e3772c160df",
+  "finding": "Kubelet versions span 3 minor releases: control plane, server1/server5 and gpu1-4 are on v1.34.9, server3/4/6 on v1.32.13, and all workers on v1.31.14 (kubectl get nodes -o wide, 2026-10-21). That is the maximum supported skew, so any control-plane upgrade would strand the workers. Worker31 is still",
+  "note": "backfilled \u2014 sent by hand 2026-10-21 00:46 before route-send.py existed"
+ },
+ "c85dadb587f1a634": {
+  "seat": "cluster",
+  "at": 1792558351.9835176,
+  "from_memo": "98ec5993-8195-4243-ae73-13f2e3af3e47",
+  "finding": "The VmHWM section of the cluster-capacity skill (SKILL.md ~L228-236) still has no cgroup anon+slab method for multi-process containers and no 'does it fork?' check, both measured in 98ec5993. Checked by grepping the skill. Skill edits need Ben's authorization.",
+  "note": "backfilled \u2014 sent by hand 2026-10-21 00:46 before route-send.py existed"
+ },
+ "084ef0694fdf873a": {
+  "seat": "finance",
+  "at": 1792558351.983534,
+  "from_memo": "844e6ae8-2b94-4567-b7fb-726b27f7f2e5",
+  "finding": "All three BofA plaid_items (688766af, 8e05e55d, a0a6b86c) are still requires_update as of 2026-10-21 02:22Z, 6 days after the 10-15 reconnect, and the newest transaction on Joint \u00b7\u00b7\u00b79439 is 2026-10-14. So job bofa-closing-balances-did-they-land-in-9439 (2026-11-13) will take its dead-feed branch unl",
+  "note": "backfilled \u2014 sent by hand 2026-10-21 00:46 before route-send.py existed"
+ },
+ "b1a5894915b5f9a1": {
+  "seat": "finance",
+  "at": 1792558351.983542,
+  "from_memo": "844e6ae8-2b94-4567-b7fb-726b27f7f2e5",
+  "finding": "finance/CLAUDE.md lines 41-42 still say Sure and the finance crons run on office, but they run on server4 and office has no finance containers (docker ps on both). Editing CLAUDE.md needs Ben's authorization.",
+  "note": "backfilled \u2014 sent by hand 2026-10-21 00:46 before route-send.py existed"
+ },
+ "bc8f38c0aa01ed22": {
+  "seat": "health",
+  "at": 1792558351.983559,
+  "from_memo": "0edb0ef7-9465-470a-9956-e0e327416aa7",
+  "finding": "The atc-notifier re-sends mail arriving at health@sack.io to family@ 'for visibility', and myAir/ResMed CPAP therapy mails were forwarded that way (gmail 1a0dd4b86f326862, 1a0b9113aec75695, 1a09fd627bc9b71f, 1a0906c3029ce41c, Sep 11\u201326). By the CPAP memo's own rule the device identity is PHI by impl",
+  "note": "backfilled \u2014 sent by hand 2026-10-21 00:46 before route-send.py existed"
+ },
+ "8734ac973043320b": {
+  "seat": "hvac",
+  "at": 1792558351.983567,
+  "from_memo": "3dd26786-5b99-47e6-a60a-2759b7d6146d",
+  "finding": "3dd26786 is now relabelled history + lessons and points at 5172e00e / e0f6d829 / e94d68c2 to match pin 31f014ae v71. ha/CLAUDE.md was already fixed on 2026-09-26 (line 63).",
+  "note": "backfilled \u2014 sent by hand 2026-10-21 00:46 before route-send.py existed"
+ },
+ "8a055557ebc0a59b": {
+  "seat": "massive",
+  "at": 1792558351.983581,
+  "from_memo": "ef2b7719-88aa-43f7-8913-45bad990dce2",
+  "finding": "The polygon MCP's futures tools still call the outdated /futures/vX path and 404 (list_futures_products 404 on 2026-10-21), while /futures/v1/products and /futures/v1/aggs/{ESZ6,CLZ6} return real data with the quantum-feed key \u2014 so futures, including equity-index ES, are reachable via REST but not v",
+  "note": "backfilled \u2014 sent by hand 2026-10-21 00:46 before route-send.py existed"
+ },
+ "914011bd71ef33bb": {
+  "seat": "massive",
+  "at": 1792558351.9835901,
+  "from_memo": "ef2b7719-88aa-43f7-8913-45bad990dce2",
+  "finding": "Memo 64e3a227 says the account has NO equity-index futures, and 6203b3c1 records 'no futures subscription'; on 2026-10-21 /futures/v1/products?product_code=ES returned ES (XCME) and /futures/v1/aggs/ESZ6 returned a daily bar, so both look outdated and the owning seat should re-measure the entitlemen",
+  "note": "backfilled \u2014 sent by hand 2026-10-21 00:46 before route-send.py existed"
+ },
+ "457d4f4c3be6ccce": {
+  "seat": "mind",
+  "at": 1792558351.9835994,
+  "from_memo": "ff965a82-8ed3-4f6c-ae7f-df5dd18cddd4",
+  "finding": "EDGAR still has no vector index (only pkey, 2026-10-21 psql) at ~40.9M rows, and there is no recorded resolution of the server6 platform decision that paused the rebuild; news IVFFlat lists=1440 was sized for ~1.30M rows and the table is now ~2.98M (reltuples), so probes/recall may need re-measuring",
+  "note": "backfilled \u2014 sent by hand 2026-10-21 00:46 before route-send.py existed"
+ },
+ "6196042d0ea3be5e": {
+  "seat": "network",
+  "at": 1792558351.9836109,
+  "from_memo": "faef4ee2-301d-4958-8787-f3aefb93c7db",
+  "finding": "Gateway-ARP pins are not in the state memo 689ccac9 describes: server4 has 192.168.1.1 REACHABLE, not PERMANENT (gw-arp-pin.service active/exited, never re-pins after the check valve releases); server6 gw-arp-pin.service is FAILED with the entry STALE; server5 has no pin and a SECOND 192.168.1.1 nei",
+  "note": "backfilled \u2014 sent by hand 2026-10-21 00:46 before route-send.py existed"
+ },
+ "c184ec91f457b13e": {
+  "seat": "quantum-engine",
+  "at": 1792558351.9836252,
+  "from_memo": "efb141d5-d60c-45bb-8e17-b1a482c503d1",
+  "finding": "efb141d5's 10-01 'engine_latency_sum is nanoseconds' contradicts source at HEAD and at 82983434d (egress.rs feeds elapsed_us_to, i.e. ns/1000, into LatencyHistogram whose sum() is documented \u00b5s), while open2-20261001.tsv magnitudes look like ns; qe-long-analyse.py's header asserts ns. Needs a live s",
+  "note": "backfilled \u2014 sent by hand 2026-10-21 00:46 before route-send.py existed"
+ },
+ "d5e1018e565c81cb": {
+  "seat": "quantum-engine",
+  "at": 1792558351.983637,
+  "from_memo": "279b1b9d-e2e8-453f-84a7-f9ead95ee13d",
+  "finding": "Memo 279b1b9d's deferred 'windowed is_healthy()' fix targets a function that never existed; xsect.rs has is_reproducible(), a digest predicate for which the lifetime counter is correct. Do not implement the windowed change there (git show 82983434d:crates/qf-engine/src/xsect.rs).",
+  "note": "backfilled \u2014 sent by hand 2026-10-21 00:46 before route-send.py existed"
+ },
+ "1b13ab3ddf90e005": {
+  "seat": "quantum-library",
+  "at": 1792558351.9836447,
+  "from_memo": "d02d0ada-f66d-482e-ae42-269d1c1f061a",
+  "finding": "server3 crontab still carries a commented-out line for tools/rdv-reemit-lane.sh, which was deleted in 4cd260405 (2026-09-14); harmless, but it names a file that no longer exists.",
+  "note": "backfilled \u2014 sent by hand 2026-10-21 00:46 before route-send.py existed"
+ },
+ "4bfd6e78b60ec300": {
+  "seat": "servers",
+  "at": 1792558351.9836516,
+  "from_memo": "89372f53-0ad5-4dcf-8fd8-fd9f8ce8704b",
+  "finding": "server3 SEL has new entries 1e2/1e3, CMOS Battery Low asserted 10/15/2026 16:41:32 UTC and deasserted 17:14:42; not recorded anywhere (ssh server3 sudo ipmitool sel elist, 2026-10-21).",
+  "note": "backfilled \u2014 sent by hand 2026-10-21 00:46 before route-send.py existed"
+ },
+ "fdf5f0d2bae12bef": {
+  "seat": "shopping",
+  "at": 1792558351.9836597,
+  "from_memo": "9d3044a9-dcfe-438b-8f26-033a11a6f77b",
+  "finding": "On office, ~/.claude/skills/retail-order-intake/SKILL.md (mtime 2026-09-11) still lacks the 'Your Coupon Savings' and 'Gift Card Amount:' funder lines, the Order Summary balance check, and the settled gift-card shipped-Total row recorded in 9d3044a9. A skill edit needs Ben's explicit authorization.",
+  "note": "backfilled \u2014 sent by hand 2026-10-21 00:46 before route-send.py existed"
+ },
+ "1cc17a1bf9cf45a3": {
+  "seat": "super-agent",
+  "at": 1792558351.9836671,
+  "from_memo": "b66595a3-9641-4897-96d2-c6a9d115da10",
+  "finding": "super-agent/CLAUDE.md lines 38 and 222 still call the phone a Galaxy Z Fold 5; it has been a Fold8 since 2026-09-15 (#super-agent 09-15 00:15). docs/watch-bridge.md and docs/meta-support-ticket.md disagree on the Android version.",
+  "note": "backfilled \u2014 sent by hand 2026-10-21 00:46 before route-send.py existed"
+ },
+ "a21a6370990bfebd": {
+  "seat": "super-agent",
+  "at": 1792558351.9836738,
+  "from_memo": "b66595a3-9641-4897-96d2-c6a9d115da10",
+  "finding": "build.gradle.kts is committed at 1.9.93/139 (40c89b2, 2026-10-06), but ota/android/latest.json and the phone's app_health are both 1.9.92/138, so 1.9.93 was never published. Confirm that is intended.",
+  "note": "backfilled \u2014 sent by hand 2026-10-21 00:46 before route-send.py existed"
+ },
+ "0c3e641d9f288e2a": {
+  "seat": "system",
+  "at": 1792558351.9836833,
+  "from_memo": "bebc669f-f040-4239-9757-c2c1de73632b",
+  "finding": "check-nas-hyperbackup reads only the uncompressed synobackupd.service.log, so since the 2026-10-15 rotation task-20 job 2 (running since 2026-10-02) has vanished from its summary with no long-job alert; before that it reported phantom job 189 as running, and job ids reset after a NAS reboot and can ",
+  "note": "backfilled \u2014 sent by hand 2026-10-21 00:46 before route-send.py existed"
+ },
+ "b7308f03b8858668": {
+  "seat": "system",
+  "at": 1792558351.9836915,
+  "from_memo": "bebc669f-f040-4239-9757-c2c1de73632b",
+  "finding": "Archive task 18 has had no restore point since about 2026-10-02 and task 20's newest is 835h old, because job 2 holds the only job slot (nightly 'job unique conflict' since 10-03), while the stale-version alert has been suppressed as unchanged for 87h.",
+  "note": "backfilled \u2014 sent by hand 2026-10-21 00:46 before route-send.py existed"
+ },
+ "f63f63ccb7507237": {
+  "seat": "system",
+  "at": 1792558351.9836986,
+  "from_memo": "4393030d-c20f-4ba1-8043-779dab3c8c6f",
+  "finding": "Ben's 2026-09-13 decision to apply DSM hotfix smallfix 4 at the next NAS reboot was not carried out: NAS uptime 19d6h51m at 2026-10-21 00:25 means it rebooted ~2026-10-01, and /etc.defaults/VERSION still reads smallfixnumber=3.",
+  "note": "backfilled \u2014 sent by hand 2026-10-21 00:46 before route-send.py existed"
+ },
+ "37bd19d7e2cecd8b": {
+  "seat": "tradedesk",
+  "at": 1792558351.9837067,
+  "from_memo": "a12f9e8f-5741-47fa-8d3c-c23a3048036d",
+  "finding": "projects/tradingview-ideas/src/install_pin.py and NOTES.md (~L2917, L2959) say replace:true keys on a None `name`; the real cause is that POST /reminders has no replace/name field at all. The post-list-delete-assert procedure is right, but the explanation is not.",
+  "note": "backfilled \u2014 sent by hand 2026-10-21 00:46 before route-send.py existed"
+ },
+ "c30076987509a83e": {
+  "seat": "unibrowse",
+  "at": 1792558351.983714,
+  "from_memo": "52ab66c1-e8b2-4c94-9b1a-abe37f5ad4cd",
+  "finding": "In /extensions on 192.168.1.199:9010, ext_939e7aec drops with close code 1006 about every 15 minutes (5 consecutive rows with connectedMs ~885-892s), which looks like a socket fault rather than MV3 eviction.",
+  "note": "backfilled \u2014 sent by hand 2026-10-21 00:46 before route-send.py existed"
+ },
+ "bc74fa4ec336ba11": {
+  "seat": "vbt",
+  "at": 1792558351.9837213,
+  "from_memo": "096da65e-a66a-470b-a5f2-cf02398f2d47",
+  "finding": "server4 ~/.claude/skills/vbt-container/SKILL.md line 37 still says to work in the vbt namespace, but fork commit 6a1a007d (2026-09-26) moved jobs to vbt-jobs because vbt is tradedesk's fw-batch quota lane.",
+  "note": "backfilled \u2014 sent by hand 2026-10-21 00:46 before route-send.py existed"
+ }
+}
