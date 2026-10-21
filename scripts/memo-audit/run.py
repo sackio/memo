@@ -115,6 +115,58 @@ def mean_batch_cost(default: float = 1.00) -> float:
     return round(sum(vals) / len(vals), 4) if vals else default
 
 
+def _report_from_session(session_id: str | None, cwd: Path) -> dict | None:
+    """Pull the JSON report out of the worker's session transcript.
+
+    ⛔⛔ `result` IS ONLY THE LAST ASSISTANT TURN, AND THE REPORT IS OFTEN NOT IN
+    IT. Measured 2026-10-21, batch 0 of the 00:07 run: the worker emitted a
+    correct report, then added one more turn saying "The report above is
+    final". `result` captured the 136-character afterword and nothing else, so
+    the batch record held no verdicts and **six route findings for `finance`,
+    `super-agent`, `cluster` and `hvac` were lost** — while the memo edits
+    themselves had already landed in the corpus.
+
+    ⭐ THAT IS THE WORST SHAPE AVAILABLE: the work happened, the record of WHY
+    did not, and the batch looks merely chatty rather than broken. The prompt
+    does say "finish with a JSON block and nothing after it", but an
+    instruction is not a mechanism, and a lost finding is not recoverable from
+    the corpus — an edit shows WHAT changed and never what the worker noticed
+    about the fleet while making it.
+
+    The transcript path is deterministic: `~/.claude/projects/<slug>/<id>.jsonl`
+    with slug = the cwd's absolute path, '/' and '_' both replaced by '-'.
+    """
+    if not session_id:
+        return None
+    slug = str(cwd).replace("/", "-").replace("_", "-")
+    t = Path.home() / ".claude" / "projects" / slug / f"{session_id}.jsonl"
+    if not t.exists():
+        return None
+    texts: list[str] = []
+    for line in t.read_text(errors="replace").splitlines():
+        try:
+            r = json.loads(line)
+        except ValueError:
+            continue                      # a torn line is not an empty file
+        if r.get("type") != "assistant":
+            continue
+        c = (r.get("message") or {}).get("content")
+        if isinstance(c, list):
+            texts += [b["text"] for b in c
+                      if isinstance(b, dict) and b.get("type") == "text"]
+        elif isinstance(c, str):
+            texts.append(c)
+    for text in reversed(texts):
+        for blob in reversed(re.findall(r"```json\s*(.*?)```", text, re.S)):
+            try:
+                cand = json.loads(blob)
+            except ValueError:
+                continue
+            if isinstance(cand, dict) and "audited" in cand:
+                return cand
+    return None
+
+
 def run_batch(batch: list[dict], idx: int, outdir: Path, timeout: int,
               prompt_path: Path = PROMPT) -> dict:
     # ⛔ CHECK THE BUDGET HERE, PER BATCH -- NOT ONCE AT KICKOFF. On 2026-10-19
@@ -183,6 +235,29 @@ def run_batch(batch: list[dict], idx: int, outdir: Path, timeout: int,
            "cost_usd": cost, "wall_s": round(time.time() - t0, 1),
            "is_error": bool(d.get("is_error")), "num_turns": d.get("num_turns"),
            "result": d.get("result") or "", "parse_error": d.get("_parse")}
+
+    # Always store the parsed report as its own field, recovering it from the
+    # session transcript when the final turn did not carry it. `report: null`
+    # then means "the worker never emitted one", which is a real finding;
+    # before this, it was indistinguishable from "it emitted one and then said
+    # something else afterwards".
+    report = None
+    for blob in reversed(re.findall(r"```json\s*(.*?)```", rec["result"], re.S)):
+        try:
+            cand = json.loads(blob)
+        except ValueError:
+            continue
+        if isinstance(cand, dict) and "audited" in cand:
+            report = cand
+            break
+    if report is None:
+        report = _report_from_session(d.get("session_id"), HERE)
+        if report is not None:
+            rec["report_recovered_from"] = "session_transcript"
+    rec["report"] = report
+    if report is None:
+        print(f"  batch {idx}: ⚠️ NO PARSEABLE REPORT — verdicts and any route "
+              f"findings are unrecorded; the corpus edits may still have landed")
     (outdir / f"batch-{idx:04d}.json").write_text(json.dumps(rec, indent=1))
     return rec
 
