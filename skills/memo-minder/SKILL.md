@@ -468,11 +468,33 @@ finish in **60 s**, while `ha` returned instantly. `agentkit` reported the same 
 driving sustained ~90% IO pressure on the NAS. ⇒ Any timeout tuned on a quiet moment starves under
 load; report the starvation rather than absorbing it.
 
-⛔ **PER-COMMIT MEMOS ARE OFF — Ben, 2026-08-11: *"leave in git for now."*** Write ONE index memo
-per window (repo, count, verbatim subjects) and stop. Model: `8ffd0a3b`. **Do not re-raise this**;
-it was deferred three times before being decided. The numbers: 469 substantive commits in a 2-day
-window would have doubled a 9,100-doc corpus in ~6 weeks with exactly the low-value bulk that
+⛔ **PER-COMMIT MEMOS ARE OFF — Ben, 2026-08-11: *"leave in git for now."*** **Do not re-raise
+this**; it was deferred three times before being decided. The numbers: 469 substantive commits in a
+2-day window would have doubled a 9,100-doc corpus in ~6 weeks with exactly the low-value bulk that
 degrades retrieval.
+
+⛔⛔ **AND THE VERBATIM SUBJECT LIST IS OFF TOO — Ben, Slack #memo 2026-10-20 23:06 EDT, answering
+ask `gp` with "yes".** This phase used to write ONE index memo per WINDOW carrying every commit
+subject. Write **one SHORT index memo PER REPO per window** instead: repo, commit count, the window,
+`rc` per repo, and **the `git log` command that reproduces the subjects**. No subject list.
+
+⭐ **MEASURED 2026-10-20, AND THIS IS WHY.** The index memos were **164 documents, 903,549 qwen3
+tokens — 5.0% of the entire corpus by volume — drawing 350 reads, 0.56% of all reads.** A 9x
+over-representation in bulk against consultation. They average **2.1 reads each, ever**, where a
+comparable big memo averages 62. They are write-only.
+⇒ **THE SUBJECTS WERE NEVER THE SCARCE THING. GIT HAS THEM, AUTHORITATIVELY, FOREVER.** Copying
+them into memo bought a second copy that cannot be corrected at its source, and spent 5% of the
+corpus to do it. A command that regenerates the list is strictly better than a stale transcription
+of it, and it is two lines instead of sixteen thousand tokens.
+
+⚠️ **PER REPO, NOT PER WINDOW — that is the other half of the fix.** The single-window index hit the
+16,384-token ceiling and got cut blindly into `[a]` and `[b]` parts at a byte boundary (see
+`d2b8a190` / `bf8052ca`, which say so in their own text: *"Split across parts because the single
+index was refused 413"*). A split chosen by the write path rather than by meaning is not a split.
+Per-repo memos are small by construction and never reach the ceiling.
+
+⚠️ **THE 164 EXISTING ONES STAY.** Ben authorised changing what this phase WRITES. He did not
+authorise deleting what is already there, and ⛔ AGE IS NEVER SUPERSESSION. Leave them.
 
 ⚠️ `timeout 8` per repo is load-bearing — these live on NFS and an unbounded loop hangs the cycle.
 
