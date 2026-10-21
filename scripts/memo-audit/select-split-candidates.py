@@ -144,6 +144,12 @@ def main() -> int:
             "id": d["id"],
             "title": d.get("title"),
             "tags": d.get("tags") or [],
+            # ⛔ `chars` and `updated_at` are REQUIRED by run.py's
+            # `_assignment_line`, which reads them unguarded. A candidate file
+            # missing either crashes the run with a KeyError before any worker
+            # starts. Every selector must emit the same contract.
+            "chars": len(d.get("content") or ""),
+            "updated_at": d.get("updated_at"),
             "tokens_qwen3": d["token_count_qwen3"],
             "headroom": QWEN3_CAP - d["token_count_qwen3"],
             "get_count": g,

@@ -57,7 +57,15 @@ def _assignment_line(m: dict) -> str:
         bodies = ", ".join(f"{c} chars" for c in m.get("chars", []))
         ids = "\n".join(f"    - `{i}`" for i in m["ids"])
         return f"- SET, shared title: {m['title'][:110]}  ({bodies})\n{ids}"
-    return (f"- `{m['id']}` — {m['title'][:110]} ({m['chars']} chars, last updated "
+    # Size in qwen3 tokens when the selector measured it. ⛔ `chars` cannot
+    # stand in: the 16,384-token ceiling is counted by the embedder's
+    # tokenizer, and chars-per-token varies enough across these memos that a
+    # char count says nothing about how close one is to a refused write.
+    size = ""
+    if m.get("tokens_qwen3"):
+        size = f", {m['tokens_qwen3']} qwen3 tok, {m.get('headroom')} to the cap"
+    return (f"- `{m['id']}` — {m['title'][:110]} ({m['chars']} chars{size}, "
+            f"last updated "
             f"{datetime.fromtimestamp(m['updated_at'], timezone.utc).date()})")
 
 
