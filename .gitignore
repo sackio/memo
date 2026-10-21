@@ -12,3 +12,6 @@ ui/dist/
 # Single-global migration export artifacts (kept on NAS only)
 migration-*/
 scratchpad/
+
+# pre-rebuild safety artifacts (image logs); operational, never committed
+.rollback/

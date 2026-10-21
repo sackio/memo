@@ -1423,6 +1423,79 @@ async def injection_log(since: float | None = None, limit: int = 500) -> list[di
     return await asyncio.to_thread(_sync_injection_log, global_path(), since, limit)
 
 
+def _sync_tombstone(db_path: str, doc_id: str) -> dict | None:
+    """What a DELETED memo can still tell a caller. [Ben 2026-10-20, Slack #memo 19:36]
+
+    ⛔ WHY A DELETED MEMO MUST SAY MORE THAN 404. FastAPI answers an UNKNOWN PATH
+    and a DELETED DOCUMENT with the same bare 404, so a caller holding a dead id
+    cannot tell "this never existed" from "this is gone", and when it IS gone
+    nothing says where the replacement is. Measured 2026-10-20: two independent
+    hosts invented `GET /documents/<id>/lineage` rather than find `/current`,
+    because a retired memo answered 200 and named no successor (memo f93eba87).
+
+    ⭐ TWO OUTCOMES, KEPT DISTINCT, because Ben named them as two cases: a
+    deletion that IS a supersession carries `replaced_by`; a dead or wrong memo
+    carries none and says so. "Deleted and not replaced" is a real answer and
+    must not read as "the pointer was lost". Measured on the live corpus the day
+    this shipped: 4,846 deletion-log rows, 21 with a successor and 4,825 without
+    — so the no-successor branch is the COMMON one, not the edge case.
+
+    ⚠️ Prefix-tolerant on purpose: an 8-char id is what actually circulates, and
+    a deleted memo's id is exactly the kind that arrives abbreviated in a pin or
+    a DM. Ambiguity returns None rather than guessing — the caller then gets the
+    ordinary 404, which is honest, instead of a tombstone for the wrong memo.
+    """
+    conn = _get_or_create_conn(db_path)
+    cols = ("doc_id, deleted_at, title, actor, reason, replaced_by")
+    row = conn.execute(
+        f"SELECT {cols} FROM deletion_log WHERE doc_id = ? "
+        "ORDER BY deleted_at DESC LIMIT 1", (doc_id,)).fetchone()
+    if row is None and len(doc_id) < 36 and doc_id:
+        ids = [r[0] for r in conn.execute(
+            "SELECT DISTINCT doc_id FROM deletion_log WHERE doc_id LIKE ? LIMIT 2",
+            (doc_id + "%",))]
+        if len(ids) != 1:
+            return None
+        row = conn.execute(
+            f"SELECT {cols} FROM deletion_log WHERE doc_id = ? "
+            "ORDER BY deleted_at DESC LIMIT 1", (ids[0],)).fetchone()
+    if row is None:
+        return None
+    d = dict(row)
+    d["replaced"] = d.get("replaced_by") is not None
+    return d
+
+
+def _sync_successor(db_path: str, doc_id: str) -> dict:
+    """The next version of this memo, and the newest, from `supersede_edges`.
+
+    ⭐ `superseded_by` is the DIRECT successor; `lineage_tip` is the end of the
+    chain. They differ whenever a memo has been replaced more than once, and the
+    tip is what a reader actually wants — following one hop at a time through a
+    three-link chain is how a caller ends up quoting the middle version.
+    `lineage_tip` is None on a live tip so the field never says "go here" about
+    the document you are already reading.
+    """
+    conn = _get_or_create_conn(db_path)
+    chain = _lineage_chain(conn, doc_id)
+    if doc_id not in chain:
+        return {"superseded_by": None, "lineage_tip": None}
+    i = chain.index(doc_id)
+    nxt = chain[i + 1] if i + 1 < len(chain) else None
+    tip = chain[-1] if chain[-1] != doc_id else None
+    return {"superseded_by": nxt, "lineage_tip": tip}
+
+
+async def tombstone(db_path: str | None, doc_id: str) -> dict | None:
+    """Deletion record for a dead id, or None if nothing was ever deleted under it."""
+    return await asyncio.to_thread(_sync_tombstone, _resolve_path(db_path), doc_id)
+
+
+async def successor(db_path: str | None, doc_id: str) -> dict:
+    """`{superseded_by, lineage_tip}` for a live memo."""
+    return await asyncio.to_thread(_sync_successor, _resolve_path(db_path), doc_id)
+
+
 async def restore_snapshot(db_path: str | None, doc_id: str) -> dict | None:
     """The most recent deletion snapshot for a memo, or None. [001/FR-028a]"""
     path = _resolve_path(db_path)

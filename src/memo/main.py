@@ -2450,15 +2450,66 @@ async def list_documents(
     return [Document(**d) for d in docs]
 
 
+async def _raise_tombstone_if_deleted(doc_id: str, db_path: str | None) -> None:
+    """Answer a dead id with WHERE TO GO, or return and let the plain 404 stand.
+
+    ⛔ BEN DIRECTED THIS, Slack #memo 2026-10-20 19:36 and 19:42 EDT: a memo that
+    was replaced must point at its replacement, and one that was simply dead or
+    wrong must SAY it was deleted and not replaced. Those are two answers, not
+    one, and neither of them is a bare 404.
+
+    ⭐ 410 GONE, not 404. The whole defect is that "no such path", "no such memo"
+    and "this memo is gone" were one status code, so a caller could not tell a
+    typo from a deletion — and a memo-audit worker holding DELETE authority is
+    exactly the caller who must not confuse them. 410 means "it existed and it
+    is gone"; 404 keeps its honest meaning of "nothing here, and nothing ever
+    was, as far as this service knows".
+
+    ⚠️ Returns silently when there is no deletion record. An unknown id must
+    still 404 — inventing a tombstone for an id we never saw would replace one
+    ambiguous answer with a confident wrong one.
+    """
+    t = await db.tombstone(db_path=db_path, doc_id=doc_id)
+    if t is None:
+        return
+    if t["replaced_by"]:
+        msg = (f"This memo was DELETED and REPLACED. Read {t['replaced_by']} instead; "
+               "it is the successor recorded at deletion time.")
+    else:
+        msg = ("This memo was DELETED and NOT replaced — removed as dead or wrong, "
+               "not superseded. There is no successor to read, and that is the "
+               "answer, not a missing pointer.")
+    raise HTTPException(status_code=410, detail={
+        "reason": "deleted",
+        "requested_id": doc_id,
+        "doc_id": t["doc_id"],
+        "deleted_at": t["deleted_at"],
+        "title": t["title"],
+        "deleted_by": t["actor"],
+        "delete_reason": t["reason"],
+        "replaced": bool(t["replaced_by"]),
+        "replaced_by": t["replaced_by"],
+        "message": msg,
+    })
+
+
 @app.get("/documents/{doc_id}", response_model=Document)
 async def get_document(doc_id: str, response: Response,
                        db_path: str | None = Query(default=None)):
-    doc_id = await _resolve_doc_id_or_404(doc_id, db_path, response)
+    try:
+        doc_id = await _resolve_doc_id_or_404(doc_id, db_path, response)
+    except HTTPException as e:
+        # ⛔ A deleted memo does not resolve, so the tombstone check has to run
+        # on the 404 path — not after resolution, which it never reaches.
+        if e.status_code == 404:
+            await _raise_tombstone_if_deleted(doc_id, db_path)
+        raise
     doc = await db.get(db_path=db_path, doc_id=doc_id)
     if doc is None:
         # Resolved a moment ago and gone now — a real deletion, not a typo.
+        await _raise_tombstone_if_deleted(doc_id, db_path)
         raise HTTPException(status_code=404, detail="Document not found")
-    return Document(**doc)
+    return Document(**doc, **await db.successor(db_path=db_path, doc_id=doc_id))
 
 
 @app.patch("/documents/{doc_id}", response_model=Document)

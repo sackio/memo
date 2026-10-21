@@ -68,6 +68,24 @@ class Document(BaseModel):
     # as an empty document with maximum headroom.
     token_count_tokenizer: str | None = "cl100k_base"
     token_count_qwen3: int | None = None
+
+    # ⭐ BEN 2026-10-20 (Slack #memo 19:36): a replaced memo must name its
+    # successor ON THE ENVELOPE. Until now a superseded memo answered 200 with
+    # `valid_until` set and nothing else, so a caller had no reason to know
+    # `/documents/<id>/current` exists — and two independent hosts invented a
+    # `/lineage` route that does not exist rather than find it (memo f93eba87).
+    #
+    # ⛔ THIS HAS TO BE A MODEL FIELD, NOT AN EXTRA DICT KEY. `Document` is
+    # strict, so `response_model` SILENTLY STRIPS unknown keys: a dict-only
+    # addition would vanish with no error and no log line. Exactly the trap
+    # recorded at `_resolve_doc_id_or_404`, which is why the short-id expansion
+    # is reported as the `X-Resolved-From` header instead.
+    #
+    # ⚠️ None means "no successor recorded", NEVER "not checked". A live tip
+    # carries `lineage_tip: None` deliberately, so the field never points a
+    # reader at the document they are already holding.
+    superseded_by: str | None = None
+    lineage_tip: str | None = None
     created_at: float
     updated_at: float
 
