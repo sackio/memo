@@ -24,11 +24,18 @@ better prior than uniform order -- but it must never be reported as "what the
 fleet cares about", and already-audited ids are excluded below so the pass
 cannot keep re-ranking its own footprints to the top.
 
-⛔ SERVER4-ONLY. `GET /admin/access-stats` caps `hot_last_30d` at 20 rows
-regardless of `limit`, so it cannot rank a corpus; the counts come from the
-sqlite file inside the memo-v2 container instead. (That endpoint also reports
-coverage_pct 142.2 because it divides a doc_access row count that retains
-deleted documents by the live total -- separate minor bug, not fixed here.)
+⛔ SERVER4-ONLY. The counts come from the sqlite file inside the memo-v2
+container.
+
+✅ BOTH ENDPOINT BUGS THIS NOTE USED TO DESCRIBE ARE FIXED AND DEPLOYED
+2026-10-20 (memo-v2 `5bd5e2f`), so the sqlite read is now a CHOICE, not a
+workaround: `GET /admin/access-stats` honours `limit` on `hot_last_30d` and
+returns the applied bound as `hot_limit`, and `coverage_pct` counts live docs on
+both sides (verified 100.0 post-deploy, was 141.7), with reads against deleted
+memos reported separately as `reads_on_deleted_docs`. Reading sqlite directly is
+still preferred here -- it is one query for the whole corpus with no HTTP page
+size to reason about -- but a future maintainer should know the endpoint is no
+longer the reason.
 """
 from __future__ import annotations
 
