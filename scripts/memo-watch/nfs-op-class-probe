@@ -21,27 +21,44 @@ BOUND=60        # seconds. ⚠️ A FLOOR: SIGTERM cannot interrupt uninterrupti
 CADENCE=2       # seconds between samples, serial, so each op is sampled every 6s.
 SHARED=/mnt/nas/data/memo-watch/opclass-shared   # ⭐ every host writes HERE -- the contention arm
 OWN=/mnt/nas/data/memo-watch/opclass-$(hostname) # per-host dir -- the uncontended arm
+POOL_N=180      # ⛔⛔ SEE setattr_cold BELOW -- this is a control, not a tuning knob.
 LABEL="${1:?label, e.g. 20261022-pm}"
 END_EPOCH="${2:?end time as epoch seconds}"
 LOG="$HOME/.memo-watch/nfs-latency/$(hostname).opclass-$LABEL.log"   # ⛔ host-local on purpose
-mkdir -p "$(dirname "$LOG")" "$SHARED" "$OWN"
-STABLE="$OWN/.stable"
-: > "$STABLE"            # the SETATTR and datawrite target: exists for the whole run
+mkdir -p "$(dirname "$LOG")" "$SHARED" "$OWN" "$OWN/pool"
+HOT="$OWN/.hot"          # touched every round -- ONE inode, kept hot on purpose
+DW="$OWN/.dw"            # ⛔ NOT $HOT. See below.
+: > "$HOT"; : > "$DW"
+# ⛔⛔ setattr_cold AND POOL_N EXIST BECAUSE THE FIRST VERSION OF THIS PROBE WAS CONFOUNDED,
+#    AND IT SHOWED WITHIN TWO MINUTES: setattr read p50 17,286 ms against create_own's 69 ms,
+#    the OPPOSITE of the directory-mutation hypothesis and far too large to believe. Cause:
+#    setattr and datawrite both targeted ONE file that the probe itself was rewriting every
+#    few seconds, while the create ops got a fresh inode every time. That is the same effect
+#    measured on the memo-watch heartbeat earlier the same day -- `stat` on the actively
+#    rewritten heartbeat took 9,160 ms while a sibling path in the same mount took 92 ms.
+#    So the first run was comparing HOT-INODE vs COLD-INODE and calling it SETATTR vs CREATE.
+#    ⇒ Three separate targets now: $HOT (deliberately hot), the pool (deliberately cold --
+#      $POOL_N files visited round-robin, so each is revisited about every POOL_N rounds),
+#      and $DW for the data write. ⭐ Keep setattr_hot: it is nfs-latency-probe's actual op
+#      and arm A cannot be interpreted without it.
+i=0; while [ "$i" -lt "$POOL_N" ]; do : > "$OWN/pool/f$i"; i=$(( i + 1 )); done
 printf '# opclass label=%s host=%s bound=%s cadence=%s shared=%s own=%s start=%s end_epoch=%s\n' \
   "$LABEL" "$(hostname)" "$BOUND" "$CADENCE" "$SHARED" "$OWN" "$(date -Is)" "$END_EPOCH" >> "$LOG"
 i=0
 while [ "$(date +%s)" -lt "$END_EPOCH" ]; do
-  case $(( i % 4 )) in
-    0) OP=setattr ;;
-    1) OP=create_own ;;
-    2) OP=create_shared ;;
-    3) OP=datawrite ;;
+  case $(( i % 5 )) in
+    0) OP=setattr_hot ;;
+    1) OP=setattr_cold ;;
+    2) OP=create_own ;;
+    3) OP=create_shared ;;
+    4) OP=datawrite ;;
   esac
   i=$(( i + 1 ))
   s=$(date +%s%N)
   case "$OP" in
-    setattr)       timeout "$BOUND" touch "$STABLE" 2>/dev/null; rc=$? ;;
-    datawrite)     timeout "$BOUND" dd if=/dev/zero of="$STABLE" bs=4096 count=1 \
+    setattr_hot)   timeout "$BOUND" touch "$HOT" 2>/dev/null; rc=$? ;;
+    setattr_cold)  timeout "$BOUND" touch "$OWN/pool/f$(( (i / 5) % POOL_N ))" 2>/dev/null; rc=$? ;;
+    datawrite)     timeout "$BOUND" dd if=/dev/zero of="$DW" bs=4096 count=1 \
                      conv=notrunc,fsync 2>/dev/null; rc=$? ;;
     create_own)    N="$OWN/.c.$$.$i"
                    timeout "$BOUND" touch "$N" 2>/dev/null; rc=$?
@@ -57,5 +74,6 @@ while [ "$(date +%s)" -lt "$END_EPOCH" ]; do
   printf '%s %s %s %s %s\n' "$(date -Is)" "$(hostname)" "$OP" "$rc" "$(( (e-s)/1000000 ))" >> "$LOG"
   sleep "$CADENCE"
 done
-rm -f -- "$STABLE" 2>/dev/null
+rm -f -- "$HOT" "$DW" 2>/dev/null
+find "$OWN/pool" -mindepth 1 -delete 2>/dev/null
 printf '# opclass label=%s host=%s ENDED %s\n' "$LABEL" "$(hostname)" "$(date -Is)" >> "$LOG"
