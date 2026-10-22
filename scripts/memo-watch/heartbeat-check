@@ -124,15 +124,49 @@ mount_control() {   # echoes "<ms> <rc>" for a static path in the same mount
 # /mnt/nas/data/memo-watch/heartbeat -> /mnt/nas : the mount $HB actually lives on.
 hb_mount_root() { printf '/%s/%s' "$(echo "$HB" | cut -d/ -f2)" "$(echo "$HB" | cut -d/ -f3)"; }
 
+# ⛔⛔ A DIRECTORY IS NOT A STATIC FILE, AND UNTIL 2026-10-22 17:30 THIS CHECK PROBED THE
+#    DIRECTORY WHILE ITS OWN COMMENT CLAIMED "a static file in the SAME MOUNT". The anchor
+#    measurement it cites (92ms) was taken on a static FILE, /mnt/nas/data/code/memo/README.md.
+#    The two cannot answer the same question: a slow heartbeat beside a fast DIRECTORY says
+#    the mount is up, but a slow heartbeat beside a fast static FILE IN THE SAME DIRECTORY is
+#    what isolates the fault to that one file. Both are now probed, and they give different
+#    verdicts -- see hb_static_control.
+# ⭐ WHY THE DISTINCTION EARNS ITS KEEP, measured the same day by nfs-op-class-probe:
+#    directory-mutating operations are the expensive class on this mount (CREATE+UNLINK p50
+#    28,470ms against SETATTR 472ms), and `run` replaces the heartbeat by atomic rename every
+#    cadence -- which IS a directory mutation. So "this directory is being churned" is a live
+#    rival to "this file is hot", and only a static sibling can tell them apart.
+# ⚠️ The directory-slow threshold is a VARIABLE so the control harness can force that branch.
+#    A verdict no test can reach is a verdict nobody has read.
+HB_DIR_SLOW_MS=${HB_DIR_SLOW_MS:-3000}
+hb_static_control() {   # a file in $HB's directory that NOTHING rewrites
+  local f; f="$(dirname "$HB")/.hb-static-control"
+  if ! timeout 10 test -e "$f" 2>/dev/null; then
+    : > "$f" 2>/dev/null || { echo "- -"; return; }
+    # ⚠️ A FILE CREATED THIS RUN HAS NO CACHED ATTRIBUTES, so its first reading is not
+    #    comparable to the heartbeat's. Report it as unusable rather than as a fast control.
+    echo "new new"; return
+  fi
+  mount_control "$f"
+}
+
 if ! timeout 25 test -f "$HB"; then
   read -r CTL_MS CTL_RC <<<"$(mount_control "$(dirname "$HB")")"
   read -r ROOT_MS ROOT_RC <<<"$(mount_control "$(hb_mount_root)")"
-  echo "UNREADABLE: $HB did not answer in 25s (control: its own directory ${CTL_MS}ms rc=${CTL_RC}, mount root $(hb_mount_root) ${ROOT_MS}ms rc=${ROOT_RC})"
-  if [ "$CTL_RC" = "0" ] && [ "$ROOT_RC" = "0" ]; then
-    VERDICT="⇒ THE MOUNT IS HEALTHY. Its own directory answered in ${CTL_MS}ms and the mount root $(hb_mount_root) in ${ROOT_MS}ms, while $HB did not answer in 25s. That is contention on THIS FILE -- it is rewritten every cadence -- not an NFS outage, and not evidence the watch is dead. Measured 2026-10-22: the same pattern showed 9,160ms on the heartbeat against 92ms on a sibling.
-⇒ NOT ACTIONABLE BY THE NAS OWNER, AND NOT A PARTIAL-WRITE PROBLEM: `run` already writes the heartbeat to a temp name and `mv`s it into place atomically (scripts/memo-watch/run:397), so a reader never sees a half-written file. The likely cause is attribute-cache revalidation -- this mount is nfs4 with acregmin=acregmax=600, so a STATIC file is answered from cache in milliseconds while a file whose mtime keeps changing forces a round trip to the server. That is inferred from the 100x gap between the two probes, not measured directly; the discriminator is whether the gap persists on a mount with the caching options removed."
+  read -r STAT_MS STAT_RC <<<"$(hb_static_control)"
+  echo "UNREADABLE: $HB did not answer in 25s (controls: static sibling ${STAT_MS}ms rc=${STAT_RC}, its own directory ${CTL_MS}ms rc=${CTL_RC}, mount root $(hb_mount_root) ${ROOT_MS}ms rc=${ROOT_RC})"
+  if [ "$CTL_RC" != "0" ] || [ "$ROOT_RC" != "0" ]; then
+    VERDICT="=> THE MOUNT ITSELF IS NOT ANSWERING from $(hostname): its directory rc=${CTL_RC} in ${CTL_MS}ms, mount root $(hb_mount_root) rc=${ROOT_RC} in ${ROOT_MS}ms. This is an NFS/NAS problem, not a memo problem. Route it to the NAS owner, and do NOT read it as evidence about whether memo-watch is running -- nothing here can see that."
+  elif [ "$STAT_RC" = "new" ]; then
+    VERDICT="=> THE MOUNT IS HEALTHY (its directory ${CTL_MS}ms, mount root ${ROOT_MS}ms) but THE FILE-VS-DIRECTORY QUESTION IS UNSETTLED THIS RUN: the static sibling control did not exist and was created just now, so it has no cached attributes and its reading would not be comparable. The next firing will settle it. Not an NFS outage, and not evidence the watch is dead."
+  elif [ "$STAT_RC" = "-" ]; then
+    VERDICT="=> THE MOUNT IS HEALTHY (its directory ${CTL_MS}ms, mount root ${ROOT_MS}ms) but the static sibling control COULD NOT BE CREATED in $(dirname "$HB") from $(hostname), so file-vs-directory is unsettled. Check write permission on that directory. Not an NFS outage, and not evidence the watch is dead."
+  elif [ "$STAT_RC" = "0" ] && [ "$STAT_MS" -ge "$HB_DIR_SLOW_MS" ]; then
+    VERDICT="=> THE MOUNT IS HEALTHY BUT THIS DIRECTORY IS SLOW, NOT JUST THIS FILE. A static sibling that nothing rewrites took ${STAT_MS}ms in the same directory, while the mount root answered in ${ROOT_MS}ms. That points at churn on the directory rather than on the heartbeat inode: run replaces the heartbeat by an atomic rename every cadence, and a rename is a directory mutation, which is the expensive operation class on this mount (measured 2026-10-22: CREATE+UNLINK p50 28,470ms against SETATTR 472ms). Still not an NFS outage and still not evidence the watch is dead."
   else
-    VERDICT="⇒ THE MOUNT ITSELF IS NOT ANSWERING from $(hostname): its directory rc=${CTL_RC} in ${CTL_MS}ms, mount root $(hb_mount_root) rc=${ROOT_RC} in ${ROOT_MS}ms. This is an NFS/NAS problem, not a memo problem. Route it to the NAS owner, and do NOT read it as evidence about whether memo-watch is running -- nothing here can see that."
+    VERDICT="=> THE MOUNT IS HEALTHY AND SO IS THE DIRECTORY. A static sibling in the SAME directory answered in ${STAT_MS}ms and the mount root $(hb_mount_root) in ${ROOT_MS}ms, while $HB did not answer in 25s. The contention is on THIS ONE FILE, which is rewritten every cadence. Not an NFS outage, and not evidence the watch is dead. Measured 2026-10-22: the same pattern showed 9,160ms on the heartbeat against 92ms on a static file.
+=> NOT ACTIONABLE BY THE NAS OWNER, AND NOT A PARTIAL-WRITE PROBLEM: run already writes the heartbeat to a temp name and renames it into place atomically (scripts/memo-watch/run:397), so a reader never sees a half-written file.
+=> CAUSE NOT SETTLED, and the standing guess is weaker than it was. The guess is attribute-cache revalidation: this mount is nfs4 with acregmin=acregmax=600, so a static file answers from cache in milliseconds while a file whose mtime keeps changing forces a round trip. AGAINST IT, measured 2026-10-22 by nfs-op-class-probe across six hosts: touching a constantly-rewritten inode and touching a cold one were indistinguishable across six hosts, in two independent runs. That measures SETATTR where this is GETATTR, so it narrows the guess rather than killing it; figures in scripts/memo-watch/nfs-op-class-results.md. DISCRIMINATOR: whether the gap persists on a mount with the caching options removed."
   fi
   dm "⛔ memo-watch heartbeat UNREADABLE" \
      "heartbeat-check on $(hostname) could not read $HB within 25s.

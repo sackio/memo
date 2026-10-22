@@ -46,7 +46,15 @@ printf '# opclass label=%s host=%s bound=%s cadence=%s shared=%s own=%s start=%s
   "$LABEL" "$(hostname)" "$BOUND" "$CADENCE" "$SHARED" "$OWN" "$(date -Is)" "$END_EPOCH" >> "$LOG"
 i=0
 while [ "$(date +%s)" -lt "$END_EPOCH" ]; do
-  case $(( i % 5 )) in
+  # ⛔⛔ THE ORDER ROTATES BY ROUND, AND THAT IS A CONTROL, NOT A FLOURISH. With a FIXED
+  #    order the 17:10 run of 2026-10-22 read create_own at p50 28,470 ms against
+  #    create_shared's 1,178 ms -- backwards from the contention hypothesis, and create_own
+  #    sits immediately before create_shared. An op that runs into the ONSET of an episode
+  #    absorbs it and makes whatever follows look cheap, so in a fixed order "which op is
+  #    slow" and "which position is slow" are the same measurement. Rotating by round gives
+  #    every op every position an equal number of times and separates them.
+  r=$(( i / 5 )); p=$(( i % 5 ))
+  case $(( (p + r) % 5 )) in
     0) OP=setattr_hot ;;
     1) OP=setattr_cold ;;
     2) OP=create_own ;;
@@ -57,7 +65,7 @@ while [ "$(date +%s)" -lt "$END_EPOCH" ]; do
   s=$(date +%s%N)
   case "$OP" in
     setattr_hot)   timeout "$BOUND" touch "$HOT" 2>/dev/null; rc=$? ;;
-    setattr_cold)  timeout "$BOUND" touch "$OWN/pool/f$(( (i / 5) % POOL_N ))" 2>/dev/null; rc=$? ;;
+    setattr_cold)  timeout "$BOUND" touch "$OWN/pool/f$(( r % POOL_N ))" 2>/dev/null; rc=$? ;;
     datawrite)     timeout "$BOUND" dd if=/dev/zero of="$DW" bs=4096 count=1 \
                      conv=notrunc,fsync 2>/dev/null; rc=$? ;;
     create_own)    N="$OWN/.c.$$.$i"

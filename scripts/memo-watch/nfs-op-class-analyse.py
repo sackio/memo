@@ -103,6 +103,35 @@ def main(paths):
         # upper tail of chi2 with 1 df == 2*(1-Phi(sqrt(chi2)))
         p = math.erfc(math.sqrt(chi2 / 2.0))
         print("%-32s %8d %8d %8d %9.2f %8.4f" % (f"{a} vs {b}", n, n10, n01, chi2, p))
+    # ⛔⛔ POSITION IS A RIVAL EXPLANATION FOR ANY OP-TO-OP DIFFERENCE IN A FIXED-ORDER
+    #    ROUND-ROBIN. The run of 2026-10-22 17:10 read create_own far SLOWER than
+    #    create_shared -- backwards from the directory-contention hypothesis -- and
+    #    create_own sits immediately before create_shared in the round. If an op that runs
+    #    into the onset of an episode ABSORBS it, whatever follows it looks cheap, and the
+    #    effect is an artifact of the running order rather than of the operation.
+    #    ⇒ This block is the cheap check; rotating the order in the probe is the real fix.
+    print("\nORDER CHECK -- stall rate of each op conditioned on the PREVIOUS sample:")
+    print("%-16s %10s %12s %12s %10s" % ("op", "n", "prev stalled", "prev fast", "lift"))
+    prev = {}
+    cond = defaultdict(lambda: [0, 0, 0, 0])   # stalled|prevstalled, n|prevstalled, stalled|prevfast, n|prevfast
+    for _, host, op, _, ms in rows:
+        pv = prev.get(host)
+        if pv is not None:
+            c = cond[op]
+            if pv > THRESH_MS:
+                c[1] += 1; c[0] += 1 if ms > THRESH_MS else 0
+            else:
+                c[3] += 1; c[2] += 1 if ms > THRESH_MS else 0
+        prev[host] = ms
+    for op in OPS:
+        c = cond.get(op)
+        if not c or not c[1] or not c[3]:
+            continue
+        a, b = c[0] / c[1], c[2] / c[3]
+        print("%-16s %10d %11.1f%% %11.1f%% %9.2fx" % (
+            op, c[1] + c[3], 100 * a, 100 * b, a / b if b else float("inf")))
+    print("⚠️ A large spread here means the fixed round order is doing work and the op")
+    print("   comparison above is not clean. Re-run with the rotating-order probe.")
     print("\n⚠️ Magnitudes are FLOORS: timeout cannot interrupt uninterruptible sleep.")
     return 0
 
