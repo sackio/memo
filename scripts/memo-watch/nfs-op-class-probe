@@ -56,9 +56,23 @@ DW="$OWN/.dw"            # ⛔ NOT $HOT. See below.
 #      $POOL_N files visited round-robin, so each is revisited about every POOL_N rounds),
 #      and $DW for the data write. ⭐ Keep setattr_hot: it is nfs-latency-probe's actual op
 #      and arm A cannot be interpreted without it.
+# ⛔⛔ THE HEADER GOES FIRST, BEFORE THE SETUP, AND THE SETUP IS TIMED.
+#    It used to come AFTER the 180-file pool creation, so for the whole of setup the log
+#    FILE DID NOT EXIST -- and on a degraded mount that is not a moment, it is minutes.
+#    MEASURED 2026-10-22 18:37 on the v4idle launch: two minutes in, the six hosts had
+#    created 13-59 of 180 pool files and not one log existed. "0 samples" from a probe
+#    that is still setting up and "0 samples" from a probe that died are byte-identical,
+#    and the only thing that told them apart was counting files in the pool directory by
+#    hand. ⇒ Write the header first so the log's existence proves the probe started, and
+#      log the setup as its own timed row so its cost is visible instead of being an
+#      unexplained gap between the header's start= and the first sample.
+printf '# opclass label=%s host=%s bound=%s cadence=%s shared=%s own=%s idle=%s start=%s end_epoch=%s\n' \
+  "$LABEL" "$(hostname)" "$BOUND" "$CADENCE" "$SHARED" "$OWN" "$IDLE" "$(date -Is)" "$END_EPOCH" >> "$LOG"
+_s0=$(date +%s%N)
 i=0; while [ "$i" -lt "$POOL_N" ]; do : > "$OWN/pool/f$i"; i=$(( i + 1 )); done
-printf '# opclass label=%s host=%s bound=%s cadence=%s shared=%s own=%s start=%s end_epoch=%s\n' \
-  "$LABEL" "$(hostname)" "$BOUND" "$CADENCE" "$SHARED" "$OWN" "$(date -Is)" "$END_EPOCH" >> "$LOG"
+_s1=$(date +%s%N)
+printf '# setup pool_n=%s elapsed_ms=%s done=%s\n' \
+  "$POOL_N" "$(( (_s1-_s0)/1000000 ))" "$(date -Is)" >> "$LOG"
 i=0
 while [ "$(date +%s)" -lt "$END_EPOCH" ]; do
   # ⛔⛔ THE ORDER ROTATES BY ROUND, AND THAT IS A CONTROL, NOT A FLOURISH. With a FIXED
