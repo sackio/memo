@@ -200,9 +200,15 @@ def run_batch(batch: list[dict], idx: int, outdir: Path, timeout: int,
     t0 = time.time()
     try:
         proc = subprocess.run(
-            [CLAUDE, "-p", prompt, "--output-format", "json",
+            # ⛔ PROMPT ON STDIN — a single argv element is capped at 128 KiB
+            # (MAX_ARG_STRLEN), and the exec fails before the model is reached,
+            # so an oversized batch produces no output, no cost and no log line.
+            # It killed 3 of 10 Slack-mining groups on 2026-10-22; this brief is
+            # smaller but grows with every lesson added to it.
+            [CLAUDE, "-p", "--output-format", "json",
              "--permission-mode", "bypassPermissions"]
             + (["--model", model] if model else []),
+            input=prompt,
             env=keyring.key_env(acct),        # ⛔ key lives only in this env dict
             capture_output=True, text=True, timeout=timeout, cwd=str(HERE))
     finally:

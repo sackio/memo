@@ -50,10 +50,17 @@ def run_group(group: list[Path], idx: int, outdir: Path, timeout: int, est: floa
     prompt = PROMPT.read_text().replace("%%DIGESTS%%", body)
     t0 = datetime.now()
     try:
+        # ⛔⛔ THE PROMPT GOES ON STDIN, NOT IN argv. Linux caps a SINGLE argument
+        # at MAX_ARG_STRLEN = 128 KiB, independently of the total ARG_MAX, and a
+        # group of four busy channels clears that easily. Measured 2026-10-22:
+        # 3 of 10 groups died with `OSError: [Errno 7] Argument list too long`
+        # before the model was ever reached — the exec fails, so there is no
+        # output, no cost and no sign in any log that those channels were not
+        # mined. The 7 that fit looked like a complete run.
         proc = subprocess.run(
-            [CLAUDE, "-p", prompt, "--output-format", "json",
+            [CLAUDE, "-p", "--output-format", "json",
              "--permission-mode", "bypassPermissions"],
-            capture_output=True, text=True, timeout=timeout,
+            input=prompt, capture_output=True, text=True, timeout=timeout,
             env=keyring.key_env(acct), cwd=str(HERE))
         raw = proc.stdout
     except subprocess.TimeoutExpired:
