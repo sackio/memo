@@ -75,15 +75,24 @@ BROKER_TOTALS_URL = BROKER_SPEND_URL + "/totals"
 #    the overspend direction and exactly what the grant guard exists to stop.
 #    ⇒ Dual-WRITE, single-READ. The local append survives only as a forensic trail.
 #
-# ⛔⛔ `?since=` IS MILLISECONDS AND A SECONDS VALUE FAILS SILENTLY IN THE WORST
-#    DIRECTION. Measured 2026-10-22: `?since=<10-digit seconds>` returns ALL 260
-#    rows and echoes the value back, so the response looks filtered when it is not
-#    -- every stored ms timestamp exceeds any 10-digit seconds value. The same
-#    value * 1000 filters correctly and monotonically (ben: 112 rows all-time, 102
-#    since 10-18, 69 since 10-20, 33 since 10-22).
-#    ⚠️ ONE ENDPOINT, TWO UNIT CONVENTIONS, ONLY ONE OF THEM SELF-DESCRIBING: POST
-#    `ts` takes seconds OR ms and tells you which it read via ts_units; GET `since`
-#    takes ms only and tells you nothing. Reported to `atc`.
+# ⛔⛔ `?since=` ONCE TOOK MILLISECONDS ONLY, AND A SECONDS VALUE FAILED SILENTLY.
+#    Measured 2026-10-22 17:45: `?since=<10-digit seconds>` returned ALL 260 rows
+#    and echoed the value back, so the response looked filtered when it was not --
+#    every stored ms timestamp exceeds any 10-digit seconds value. Reported, and
+#    `atc` fixed it the same hour (3f1a64c): `since` now takes seconds OR ms and
+#    every /totals response echoes `since_units` in {seconds, ms, iso, none}.
+# ⭐ THIS CLIENT SENDS SECONDS EVERYWHERE -- `ts` on POST and `since` on GET -- and
+#    ASSERTS THE ECHO ON BOTH. One unit in one client is the only version of this
+#    that stays right; the bug above existed because the two sides of one endpoint
+#    disagreed and only one of them said so.
+# ⛔ A WRONG `since_units` IS THE OVERSPEND DIRECTION, which is why it is asserted
+#    rather than trusted: a seconds value read as ms resolves to the year 58000,
+#    matches NOTHING, and returns "$0.00 spent since your balance read" -- a clean,
+#    plausible, catastrophic answer.
+# ⛔ DO NOT COUNT SPEND FROM THE NAS MIRROR at
+#    /mnt/nas/data/code/atc/var/api-spend/api-spend.jsonl. `atc` 2026-10-22: it is
+#    AT-LEAST-ONCE and a reader must dedupe by `id` -- its first write duplicated
+#    every row when a slow NFS append outlived the flush lock. /totals is the reader.
 # ⛔ WE SEND SECONDS. An "ms" echo is a FAILURE, not a shrug: a 10-digit epoch
 #    read as milliseconds lands in January 1970 and the row drops out of every
 #    window the budget asks about.
@@ -196,12 +205,21 @@ def _broker_totals(since: float = 0.0) -> dict:
     import urllib.request
     url = BROKER_TOTALS_URL
     if since:
-        url += f"?since={int(float(since) * 1000)}"      # ⛔ MILLISECONDS. See above.
+        url += f"?since={int(float(since))}"             # SECONDS, asserted below
     try:
         with urllib.request.urlopen(url, timeout=15) as r:
             if r.status != 200:
                 raise LedgerUnreadable(f"{url} -> HTTP {r.status}")
-            return json.loads(r.read() or b"{}").get("accts") or {}
+            doc = json.loads(r.read() or b"{}")
+        want = "seconds" if since else "none"
+        got = str(doc.get("since_units") or "").strip().lower()
+        if got != want:
+            raise LedgerUnreadable(
+                f"sent since={'(none)' if not since else int(since)} in SECONDS but "
+                f"the broker echoed since_units={doc.get('since_units')!r}; a seconds "
+                f"value read as ms resolves past every row and would report $0.00 "
+                f"spent")
+        return doc.get("accts") or {}
     except LedgerUnreadable:
         raise
     except Exception as e:                               # noqa: BLE001
