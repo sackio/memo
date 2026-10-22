@@ -33,6 +33,8 @@ import refute                                           # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 QUEUE = HERE / "refute-queue.json"
+STREAKS = HERE / "refute-streaks.json"
+STUCK_AT = 3                      # consecutive refutations before we stop paying
 
 
 def corpus(api: str, limit: int = 20000) -> list[dict]:
@@ -82,9 +84,42 @@ def main() -> int:
             print(f"                {row['detail'][:150]}")
 
     if a.queue:
-        ids = [r["id"] for r in rows if r["verdict"] == "refuted"]
-        QUEUE.write_text(json.dumps({"at": report["at"], "ids": ids}, indent=1))
+        # ⛔⛔ A WRONG PROBE WOULD BILL AN AUDIT EVERY DAY, FOREVER. The queue is
+        # self-clearing only when the audit FIXES the memo. When the fault is in
+        # the probe -- a dated record given a present-tense test, an expectation
+        # that encodes our own API -- the audit changes nothing, the probe
+        # refutes again tomorrow, and the memo re-queues for ~$0.41 a day with
+        # nobody noticing, because every individual day looks like the system
+        # working. Measured 2026-10-22: 2 of the first 30 real probes were wrong
+        # in exactly these two ways.
+        # ⇒ Count consecutive refutations. After STUCK_AT, stop paying and say
+        # so: at that point the evidence points at the probe, not the corpus,
+        # and the cheap fix is a human reading one line.
+        streaks = {}
+        if STREAKS.exists():
+            try:
+                streaks = json.loads(STREAKS.read_text())
+            except ValueError:
+                streaks = {}
+        refuted = {r["id"]: r for r in rows if r["verdict"] == "refuted"}
+        for r in rows:
+            if r["verdict"] == "holds":
+                streaks.pop(r["id"], None)          # the memo came back; forget it
+            elif r["verdict"] == "refuted":
+                streaks[r["id"]] = int(streaks.get(r["id"]) or 0) + 1
+        STREAKS.write_text(json.dumps(streaks, indent=1))
+
+        ids = [i for i in refuted if streaks.get(i, 1) <= STUCK_AT]
+        stuck = [i for i in refuted if streaks.get(i, 1) > STUCK_AT]
+        QUEUE.write_text(json.dumps({"at": report["at"], "ids": ids,
+                                     "stuck": stuck}, indent=1))
         print(f"queued {len(ids)} refuted memo(s) for the next paid audit → {QUEUE}")
+        for i in stuck:
+            print(f"  ⛔ STUCK after {streaks[i]} refutations, NOT queued — "
+                  f"suspect the PROBE: {i[:8]} {refuted[i]['title'][:60]}")
+        if stuck:
+            print("   ⇒ a memo the audit keeps failing to fix is evidence about "
+                  "the probe. Read it before spending again.")
 
     # ⚠️ exit 0 even with refutations: a refuted memo is the system WORKING.
     # Only a probe set that cannot run is an operational failure.
