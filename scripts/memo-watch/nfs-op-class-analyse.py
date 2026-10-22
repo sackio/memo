@@ -19,7 +19,24 @@ from collections import defaultdict
 from datetime import datetime
 
 THRESH_MS = 1000
-OPS = ["setattr_hot", "setattr_cold", "create_own", "create_shared", "datawrite"]
+# ⛔⛔ THE OP SET AND THE ROUND LENGTH ARE DERIVED FROM THE LOG, NEVER ASSUMED. This was a
+#    hardcoded list of five, and the probe grew a sixth op (create_idle) to settle the
+#    own-vs-shared cause. A hardcoded five would have silently chopped every six-op round
+#    into misaligned blocks and reported the result with the same confidence.
+#    KNOWN_ORDER only fixes the PRINT order of ops it recognises; an op not in it is still
+#    read, still paired, and printed after them. Nothing here may depend on this list.
+KNOWN_ORDER = ["setattr_hot", "setattr_cold", "create_own", "create_shared",
+               "create_idle", "datawrite"]
+# Pairs to test. A pair naming an op the log does not contain is SKIPPED AND NAMED, never
+# silently dropped -- "the comparison is absent" and "the comparison found nothing" are
+# different results.
+PAIRS = [("setattr_cold", "create_own"),    # inode mutation vs directory mutation
+         ("create_own", "create_shared"),   # this host's busy dir vs the six-host dir
+         ("create_idle", "create_shared"),  # ~equal => the term is self-inflicted heat
+         ("create_idle", "create_own"),     # ~equal => the term is visit frequency
+         ("setattr_hot", "setattr_cold"),   # hot inode vs cold inode
+         ("setattr_cold", "datawrite"),     # is there a data-write term at all
+         ("create_own", "datawrite")]
 
 
 def quantile(v, q):
@@ -50,7 +67,11 @@ def main(paths):
         return 1
     rows.sort()
     hosts = sorted({r[1] for r in rows})
-    print("samples=%d hosts=%d (%s)\n" % (len(rows), len(hosts), " ".join(hosts)))
+    seen = {r[2] for r in rows}
+    OPS = [o for o in KNOWN_ORDER if o in seen] + sorted(seen - set(KNOWN_ORDER))
+    RLEN = len(OPS)
+    print("samples=%d hosts=%d (%s)" % (len(rows), len(hosts), " ".join(hosts)))
+    print("ops=%d from the log: %s\n" % (RLEN, " ".join(OPS)))
 
     print("%-14s %7s %8s %8s %8s %9s %9s %9s" % (
         "op", "n", "p50ms", "p95ms", "maxms", "%>1s", "%ofwall", "rc!=0"))
@@ -92,27 +113,27 @@ def main(paths):
     dropped = 0
     starts = defaultdict(int)
     for host, seqrows in per_host.items():
-        for k in range(0, len(seqrows) - 4, 5):
-            blk = seqrows[k:k + 5]
-            if len({o for o, _ in blk}) != 5:
+        for k in range(0, len(seqrows) - (RLEN - 1), RLEN):
+            blk = seqrows[k:k + RLEN]
+            if len({o for o, _ in blk}) != RLEN:
                 dropped += 1
                 continue
             starts[blk[0][0]] += 1
-            rounds[(host, k // 5)] = {o: ms for o, ms in blk}
+            rounds[(host, k // RLEN)] = {o: ms for o, ms in blk}
     if dropped:
-        print("⛔ %d block(s) of 5 did not hold 5 distinct ops -- misaligned, EXCLUDED "
-              "(not counted as agreement)" % dropped)
+        print("⛔ %d block(s) of %d did not hold %d distinct ops -- misaligned, EXCLUDED "
+              "(not counted as agreement)" % (dropped, RLEN, RLEN))
     rotated = len(starts) > 1
     print("round alignment: %d rounds, order is %s (%s)" % (
         len(rounds), "ROTATING" if rotated else "FIXED",
         " ".join("%s=%d" % (o, starts[o]) for o in OPS if starts.get(o))))
     print("\nPAIRED, within a round (McNemar on discordant rounds, stall = >%dms):" % THRESH_MS)
     print("%-32s %8s %8s %8s %9s %8s" % ("A vs B", "rounds", "A only", "B only", "chi2", "p"))
-    for a, b in (("setattr_cold", "create_own"),      # the restated discriminator
-                 ("create_own", "create_shared"),      # directory contention across hosts
-                 ("setattr_hot", "setattr_cold"),      # hot inode vs cold inode
-                 ("setattr_cold", "datawrite"),        # is there a data-write term at all
-                 ("create_own", "datawrite")):
+    for a, b in PAIRS:
+        if a not in seen or b not in seen:
+            print("%-32s %8s -- NOT IN THIS LOG, comparison ABSENT (not a null)"
+                  % (f"{a} vs {b}", "-"))
+            continue
         n01 = n10 = n = 0
         for v in rounds.values():
             if a in v and b in v:

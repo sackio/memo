@@ -18,14 +18,29 @@
 # ⛔ DO NOT CHANGE BOUND. A changed bound looks exactly like a changed tail (see
 #    nfs-latency-probe). This one is NOT an arm of that A/B and must not be pooled with it.
 BOUND=60        # seconds. ⚠️ A FLOOR: SIGTERM cannot interrupt uninterruptible sleep.
-CADENCE=2       # seconds between samples, serial, so each op is sampled every 6s.
+CADENCE=2       # seconds between samples, serial, so each op is sampled every 12s with 6 ops.
+# ⚠ ADDING AN OP CHANGED THE PER-OP CADENCE (10s -> 12s). That is harmless HERE because every
+#    conclusion this probe supports is a PAIRED comparison within one round, where the ops are
+#    2s apart whatever the round length. ⛔ It is NOT harmless for anything pooled across runs:
+#    a per-op stall RATE is ceilinged by its cadence. Do not compare a v4 marginal to a v3 one.
 SHARED=/mnt/nas/data/memo-watch/opclass-shared   # ⭐ every host writes HERE -- the contention arm
-OWN=/mnt/nas/data/memo-watch/opclass-$(hostname) # per-host dir -- the uncontended arm
+OWN=/mnt/nas/data/memo-watch/opclass-$(hostname) # per-host dir -- but this probe BUSIES it
+# ⛔⛔ $IDLE IS THE DISCRIMINATOR THE v3rot RUN ASKED FOR, AND IT IS THE WHOLE POINT OF v4.
+#    v3rot measured create_own stalling MORE than create_shared, p<0.0001, twice, under two
+#    orders -- backwards from "six hosts contending on one parent directory is dearer". So
+#    the direction is settled and the CAUSE is not. $OWN is not a clean "uncontended" arm:
+#    this probe also keeps $HOT, $DW and pool/ under it, so it is the directory THIS host
+#    hammers. $SHARED is visited six times as often and may simply stay warm in the server's
+#    cache. $IDLE is a per-host directory with NOTHING else in it and nothing else touching
+#    it -- creates only.
+#    ⇒ create_idle ~ create_shared  => the term is SELF-INFLICTED HEAT on $OWN.
+#      create_idle ~ create_own     => the term is VISIT FREQUENCY, i.e. warmth beats contention.
+IDLE=/mnt/nas/data/memo-watch/opclass-idle-$(hostname)
 POOL_N=180      # ⛔⛔ SEE setattr_cold BELOW -- this is a control, not a tuning knob.
 LABEL="${1:?label, e.g. 20261022-pm}"
 END_EPOCH="${2:?end time as epoch seconds}"
 LOG="$HOME/.memo-watch/nfs-latency/$(hostname).opclass-$LABEL.log"   # ⛔ host-local on purpose
-mkdir -p "$(dirname "$LOG")" "$SHARED" "$OWN" "$OWN/pool"
+mkdir -p "$(dirname "$LOG")" "$SHARED" "$OWN" "$OWN/pool" "$IDLE"
 HOT="$OWN/.hot"          # touched every round -- ONE inode, kept hot on purpose
 DW="$OWN/.dw"            # ⛔ NOT $HOT. See below.
 : > "$HOT"; : > "$DW"
@@ -53,13 +68,14 @@ while [ "$(date +%s)" -lt "$END_EPOCH" ]; do
   #    absorbs it and makes whatever follows look cheap, so in a fixed order "which op is
   #    slow" and "which position is slow" are the same measurement. Rotating by round gives
   #    every op every position an equal number of times and separates them.
-  r=$(( i / 5 )); p=$(( i % 5 ))
-  case $(( (p + r) % 5 )) in
+  r=$(( i / 6 )); p=$(( i % 6 ))
+  case $(( (p + r) % 6 )) in
     0) OP=setattr_hot ;;
     1) OP=setattr_cold ;;
     2) OP=create_own ;;
     3) OP=create_shared ;;
-    4) OP=datawrite ;;
+    4) OP=create_idle ;;
+    5) OP=datawrite ;;
   esac
   i=$(( i + 1 ))
   s=$(date +%s%N)
@@ -74,6 +90,9 @@ while [ "$(date +%s)" -lt "$END_EPOCH" ]; do
     create_shared) N="$SHARED/.c.$(hostname).$$.$i"
                    timeout "$BOUND" touch "$N" 2>/dev/null; rc=$?
                    rm -f -- "$N" 2>/dev/null ;;
+    create_idle)   N="$IDLE/.c.$$.$i"
+                   timeout "$BOUND" touch "$N" 2>/dev/null; rc=$?
+                   rm -f -- "$N" 2>/dev/null ;;
   esac
   e=$(date +%s%N)
   # ⛔ The UNLINK is deliberately OUTSIDE the timed region. Timing create+unlink together
@@ -84,4 +103,5 @@ while [ "$(date +%s)" -lt "$END_EPOCH" ]; do
 done
 rm -f -- "$HOT" "$DW" 2>/dev/null
 find "$OWN/pool" -mindepth 1 -delete 2>/dev/null
+find "$IDLE" -mindepth 1 -delete 2>/dev/null
 printf '# opclass label=%s host=%s ENDED %s\n' "$LABEL" "$(hostname)" "$(date -Is)" >> "$LOG"
