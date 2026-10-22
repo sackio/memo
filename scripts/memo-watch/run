@@ -380,10 +380,30 @@ fi
 # ---- heartbeat + verdict ------------------------------------------------------------
 echo "$NOW" > "$STATE/last-run"
 # NFS write, bounded: a hung mount must not wedge the run. The heartbeat is what the
-# OTHER host's staleness check reads, so it is written LAST — a killed run correctly
-# leaves a stale heartbeat rather than a fresh lie.
-timeout 20 bash -c "echo \"$NOW $(hostname) $(date -Is)\" > '$HB'" 2>/dev/null \
-  || echo "  ⚠️ could not write heartbeat $HB (NFS?) -- server3's staleness check will alarm; that is the correct direction."
+# OTHER host's staleness check reads, so it is written LAST.
+#
+# ⛔⛔ WRITE TO A TEMP FILE AND RENAME. `> "$HB"` TRUNCATES BEFORE THE WRITE, AND THAT
+#    BROKE THE GUARANTEE THIS COMMENT USED TO CLAIM. The old form was
+#    `timeout 20 bash -c "echo ... > '$HB'"`, whose redirect empties $HB the instant
+#    bash starts; if the NFS write then hangs and `timeout` kills it, what is left is a
+#    ZERO-BYTE file with a BRAND-NEW mtime. server3's heartbeat-check falls back to
+#    mtime when the file has no parseable content, so it reads that as FRESH —
+#    the exact "fresh lie" the old comment promised could not happen, in the
+#    reassuring direction, with the alarm silenced.
+#    MEASURED 2026-10-22: 11 such failures 10-18..10-22 in ~/.memo-watch/cron.log, and
+#    $HB was sitting at 0 bytes with mtime 00:11 when this was found — i.e. the
+#    instrument was lying at the moment of discovery. Found by the corpus audit while
+#    checking memo e0d63a10, not by the watch itself.
+# ⭐ `mv` within one filesystem is atomic, so a reader sees either the OLD heartbeat or
+#    the complete new one, never a half-written or empty one. The temp file must live
+#    in the SAME directory as $HB for that to hold.
+HB_TMP="$HB.tmp.$$"
+if timeout 20 bash -c "echo \"$NOW $(hostname) $(date -Is)\" > '$HB_TMP' && mv -f '$HB_TMP' '$HB'" 2>/dev/null; then
+  :
+else
+  rm -f -- "${HB_TMP:?}" 2>/dev/null
+  echo "  ⚠️ could not write heartbeat $HB (NFS?) -- the PREVIOUS heartbeat is intact and will go stale; server3's staleness check will alarm, which is the correct direction."
+fi
 
 NF=$(grep -c '^FINDING:' "$VERDICT" 2>/dev/null); NF=${NF:-0}
 NU=$(grep -c '^UNKNOWN:'  "$VERDICT" 2>/dev/null); NU=${NU:-0}
