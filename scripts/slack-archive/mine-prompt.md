@@ -51,6 +51,12 @@ worded differently. An update or a supersession beats a second memo every time.
 curl -sS -X POST http://server4:8000/search -H 'Content-Type: application/json' \
   -d '{"query":"<the claim in plain words>","limit":8}'
 ```
+⚠️ **Shapes, so you do not spend turns discovering them** (measured 2026-10-22
+by the first worker to run this brief): `/search` returns a list of
+`{document, score}`, and `tags` sits at the TOP LEVEL of each document, not
+under `metadata`. `GET /documents` takes `after=` as EPOCH SECONDS; a date
+string returns 422.
+
 ⛔ **EXISTENCE is decided by scanning `/documents`, never `/search`** — ranking
 by relevance means silence is not absence.
 ⛔ **`content=` on PATCH is a DESTRUCTIVE FULL REPLACE** — use `prepend=`.
