@@ -168,7 +168,7 @@ def _report_from_session(session_id: str | None, cwd: Path) -> dict | None:
 
 
 def run_batch(batch: list[dict], idx: int, outdir: Path, timeout: int,
-              prompt_path: Path = PROMPT) -> dict:
+              prompt_path: Path = PROMPT, model: str | None = None) -> dict:
     # ⛔ CHECK THE BUDGET HERE, PER BATCH -- NOT ONCE AT KICKOFF. On 2026-10-19
     # this seat went 1.7x over a fleet cap because the budget was checked when
     # the job was a 6-memo pilot and never again as it scaled to 85 sets. No
@@ -201,7 +201,8 @@ def run_batch(batch: list[dict], idx: int, outdir: Path, timeout: int,
     try:
         proc = subprocess.run(
             [CLAUDE, "-p", prompt, "--output-format", "json",
-             "--permission-mode", "bypassPermissions"],
+             "--permission-mode", "bypassPermissions"]
+            + (["--model", model] if model else []),
             env=keyring.key_env(acct),        # ⛔ key lives only in this env dict
             capture_output=True, text=True, timeout=timeout, cwd=str(HERE))
     finally:
@@ -273,6 +274,9 @@ def main() -> int:
     ap.add_argument("--outdir", default="runs")
     ap.add_argument("--prompt", default=str(PROMPT),
                     help="worker brief; defaults to the general truth audit")
+    ap.add_argument("--model", default=None,
+                    help="pass through to claude -p; a probe-only pass does not "
+                         "need the model a truth audit needs")
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
 
@@ -312,7 +316,8 @@ def main() -> int:
     print(f"writing to {outdir}")
     done, spend = 0, 0.0
     with ThreadPoolExecutor(max_workers=a.concurrency) as ex:
-        futs = {ex.submit(run_batch, b, i, outdir, a.timeout, Path(a.prompt)): i
+        futs = {ex.submit(run_batch, b, i, outdir, a.timeout, Path(a.prompt),
+                          a.model): i
                 for i, b in enumerate(batches)}
         for f in as_completed(futs):
             i = futs[f]
