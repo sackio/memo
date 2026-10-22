@@ -285,5 +285,251 @@
   "at": 1792558761.27622,
   "from_memo": "98bd540b-de42-4620-a638-a6146332d6c6",
   "finding": "ui-eye-client on office hit the 1024MB leak ceiling (exit 71) six times about 2.5h apart on 2026-10-15/16 (journalctl --user -u ui-eye-client; 74 lifetime in client.log); the current pid is at 115MB, so the leak rate is load-dependent and still unfixed, only bounded."
+ },
+ "0a36dbd8dc75a408": {
+  "seat": "agents",
+  "at": 1792643930.659439,
+  "from_memo": "4a9f1b2a-5b28-4a27-9089-000f83af7959",
+  "finding": "On server4, 24 claude processes still execute 2.1.293 (readlink /proc/<pid>/exe) against a 2.1.307 symlink, so any fix shipped after 2.1.293 is absent from most long-running seats there; cycling is Ben's call per the memo."
+ },
+ "004b2a00809b2ba7": {
+  "seat": "assistant",
+  "at": 1792643931.0655215,
+  "from_memo": "c74e9844-a0b6-461e-9e12-f67444a7b6f8",
+  "finding": "Five pane pointer reminders are still active: 7f073cff, dc05bf1b, 0209c1cf, 5abb7a5e, 5583e030 on thread-assistant-1..5. They are as:inline, until forever, last injected 2026-10-07. Their own retire_when (session-start resolves a pane to its seat) has been met since atc 67e3b8d. Under owner-deletes-"
+ },
+ "fd5cfcb3a96e9ee1": {
+  "seat": "cluster",
+  "at": 1792643931.4713454,
+  "from_memo": "04cb7a02-6ad9-49b4-ad37-d91875fa26c0",
+  "finding": "server5 store_pool is at 87% capacity with 6.51T available (zpool list / zfs list 2026-10-22), down from 48% / 28.1T on 2026-09-09."
+ },
+ "0a33cafedff63e98": {
+  "seat": "cluster",
+  "at": 1792643931.4713488,
+  "from_memo": "8a8686d6-054e-45e7-a8d6-524f5dad5384",
+  "finding": "server4's microk8s snap tracks 1.32/stable and is HELD, while the other held hosts are on 1.34 and server3/server6 are unheld on 1.32 \u2014 the hold no longer marks the upgraded set (snap list microk8s over SSH, 2026-10-22); worker31 is still NotReady,SchedulingDisabled."
+ },
+ "09caab7a08eaf3dc": {
+  "seat": "cluster",
+  "at": 1792643931.47135,
+  "from_memo": "8a8686d6-054e-45e7-a8d6-524f5dad5384",
+  "finding": "server4's container-registry on :32000 still answers /v2/ 200 but no running pod pulls from it (all image refs are 192.168.1.207:5050), and 192.168.1.42:32000 refuses connections \u2014 a leftover service."
+ },
+ "c8cb6ed65f2be698": {
+  "seat": "cluster",
+  "at": 1792643931.4713511,
+  "from_memo": "89cbab1b-281a-4111-8d1c-b53177773f10",
+  "finding": "server5 k8s-dqlite is still writing full snapshots continuously and each is now ~90 MB (90,423,775 and 90,525,117 bytes, both stamped 00:21 2026-10-22, read-only ls of /var/snap/microk8s/current/var/kubernetes/backend/) vs ~71 MB recorded 2026-09-07; the 'underlying condition' in 89cbab1b is still o"
+ },
+ "0438f90487a16fcc": {
+  "seat": "finance",
+  "at": 1792643931.8769882,
+  "from_memo": "8a856f4d-de08-4493-a222-6396e9e373fd",
+  "finding": "WF 8040's 2026-10-15 statement alert (gmail 1a1433954b57a260) shows balance $32,080.00, minimum $1,397.52, due 11/09/2026 \u2014 the minimum is unchanged after the $1,460 drop, which corroborates reading (a) (24 x $1,397.50). The 11/09 draw will be the first real test of the Fidelity 5532 funding link, a"
+ },
+ "da10261746a4f72e": {
+  "seat": "guide",
+  "at": 1792643932.2823017,
+  "from_memo": "4a9f1b2a-5b28-4a27-9089-000f83af7959",
+  "finding": "server5 has autoUpdates:false in ~/.claude.json and sits on Claude Code 2.1.303 while npm latest is 2.1.307; version-history.json shows server5 frozen at 2.1.303 across the 10-19/20/21 runs (ssh server5 'claude --version; grep autoUpdates ~/.claude.json'). Confirm whether that is intended."
+ },
+ "0fc1b46bebd7799b": {
+  "seat": "ha",
+  "at": 1792643932.6876721,
+  "from_memo": "9a6bf8fa-c476-4a7a-8692-5af6df5fd1ba",
+  "finding": "All 7 fridge/freezer Tuya sensors are still unavailable on 2026-10-22, while 13 of the 14 appliance temp automations found by entity search remain 'on' against sensors that cannot report. The keep-or-retire ask to Ben from 2026-10-07 shows no answer in the Slack archive up to 10-19."
+ },
+ "6c01544b0fef93ec": {
+  "seat": "ha",
+  "at": 1792643932.6876767,
+  "from_memo": "a2050027-6383-42b1-8601-34132fb4c263",
+  "finding": "automation.hvac_upstairs_hold_watchdog (automations.yaml ~line 11446) only stands down when state_attr('climate.upstairs_ecobee','hold_is_manual') is true. That attribute reads false for Ben's own app/panel edits (retracted 2026-09-10, memo 52afcba8), so the watchdog can override a person's change. "
+ },
+ "27fd770d410a8fa7": {
+  "seat": "maker",
+  "at": 1792643933.0929618,
+  "from_memo": "a4772c53-a485-45cf-983a-c975e2fcda95",
+  "finding": "uploader-publisher-1 on server4 has published nothing since 2026-10-18 10:04 EDT. state/HALT reads '3 consecutive failures' and docker logs show 'HALT present' hourly through 2026-10-22; no #maker mention found (archive fresh to 10-19 12:51)."
+ },
+ "54e53dcd34b0f522": {
+  "seat": "memo",
+  "at": 1792643933.4996698,
+  "from_memo": "e0d63a10-5e3e-4cd0-800d-1d88110f4686",
+  "finding": "memo-watch's heartbeat write fails intermittently: 'could not write heartbeat' on 11 runs 10-18..10-22 in ~/.memo-watch/cron.log. Each failure leaves /mnt/nas/data/memo-watch/heartbeat at 0 bytes with a fresh mtime, because the '>' truncates before the 20s-timed write fails. heartbeat-check then fal"
+ },
+ "14fa22126142e9ef": {
+  "seat": "mind",
+  "at": 1792643933.9046805,
+  "from_memo": "0c47e651-01e0-4d10-afe1-77af68fab6db",
+  "finding": "memo f586f76d (mind backup current-state) still says in its title and body that staging is on the faulting fast6b pool. The script stages both modes on /mnt/fast6c/mind-backup-staging since commit 1b48599d (2026-10-04), confirmed in server6 /tmp/mind-db-backup.log 2026-10-21. Sizes are now core 41.9"
+ },
+ "3e855e4f6d32687e": {
+  "seat": "models",
+  "at": 1792643934.3103664,
+  "from_memo": "4c6782bc-6abf-4ebb-b5f9-9c7791f0ed27",
+  "finding": "ollm/ollama-gpu1 is now replicas=0 with claim template ollama-hot-small pinned to gpu1, while gpu1/gpu-0 is allocated to qf-lab-mono pod qlab1-corpus-sweep1-gpu1b-40. If ollama-gpu1 is expected to wake, its card is occupied (free-capacity shows gpu1 claim:2 but no card-level WAKE-SHORT). May be deli"
+ },
+ "9886b773440d30b1": {
+  "seat": "network",
+  "at": 1792643934.7154202,
+  "from_memo": "879a09cb-241c-4da8-8c1d-c29707dc2482",
+  "finding": "server_admin/scripts/wifi-roam-watch (the memo's 'source of truth', deployed md5 c47dc938) is not tracked in git: git ls-files --error-unmatch fails, so it has no version history."
+ },
+ "25faebffaa97e370": {
+  "seat": "nginx",
+  "at": 1792643935.1205263,
+  "from_memo": "e05495ce-9aac-4aaf-aa8a-0c9820ae0eab",
+  "finding": "nginx repo master is 74 commits ahead of origin/master (git rev-list --count origin/master..master = 74 on 2026-10-22), including 40fcc7a alert-poller, 53a1f9d/97a8866 Search Console tooling and ec4f052 buffetbuster 301; the only copy is the NAS checkout."
+ },
+ "3c4ea11a4808253f": {
+  "seat": "pantry",
+  "at": 1792643935.5258765,
+  "from_memo": "d72e111f-0e7b-47ad-a8c3-61978605b85c",
+  "finding": "Live Plantry budgets.ben.fiber = 10 (GET :8790/state/household rev 12951), but goals.ben.rationale still tells the in-app AI the fiber target is a 15->20->25 ramp; either the budget or the rationale is stale."
+ },
+ "812cc64dd0f6cb72": {
+  "seat": "quantum-dashboard",
+  "at": 1792643935.9303503,
+  "from_memo": "14e3af7a-b301-456e-86b5-35fa506472af",
+  "finding": "The /api/data/snapshot speed fix b1480f8b1 was never merged: it exists only on branch dash/snapshot-latency, origin/master sources.py:100 still runs the full $group/$max scan and :773 the unfiltered `get jobs`, and curl :8731/api/data/snapshot on server5 took 19.6 s on 2026-10-22."
+ },
+ "c228115236d0b7ba": {
+  "seat": "servers",
+  "at": 1792643936.3355572,
+  "from_memo": "1888ef54-1288-49c0-985c-3782760e6d72",
+  "finding": "office /etc/fstab mounts 192.168.1.207:/volume2/archive at /mnt/archive with noauto,hard,timeo=600; it is the only hard NFS line on server4, server5, server6 or office and breaks the soft-only policy. Separately, ansible group_vars still lists 192.168.1.236:/mnt/zfs/sdq_pool/media, which server6 no "
+ },
+ "35dd43f8c00829ab": {
+  "seat": "shopping",
+  "at": 1792643936.7412775,
+  "from_memo": "9290d5f0-889e-4af2-8059-541aea508c10",
+  "finding": "The ebay-search macro 9a0c959a v1.0.8 computes delivered as (price+shipping)*(1+taxPct), but memo point 31 measured MA tax on the item only, so deliveredEstUSD overstates by shipping*6.25%. Its bot guard /unusual traffic|verify you are a human/ also misses the measured captcha text 'Please verify yo"
+ },
+ "cbf5c283cc7391a3": {
+  "seat": "system",
+  "at": 1792643937.1461992,
+  "from_memo": "f43854ca-4803-47fd-b198-fbc59a4f0c16",
+  "finding": "nfs-tcp-sampler (deployed 2026-09-22 on server4/server5) is not running on either host and has no cron/supervisor: pgrep empty, log ends 2026-09-22 13:28 on s4 and 2026-10-02 12:15 on s5, minutes before server5's 12:22:46 reboot (uptime -s). Restart under supervision or formally retire it."
+ },
+ "4d600dff66240b22": {
+  "seat": "taxes",
+  "at": 1792643937.5512009,
+  "from_memo": "b534b8cf-ca90-4e6f-9828-deda3e378b99",
+  "finding": "Memo 8a959d46 (finance's companion memo) is still titled 'Life Sciences LLC 2026 MA report unfiled', but the report was filed 10/14/2026 as filing no. 202653264460, measured on the SOC record and recorded in b534b8cf and 5e8d749e."
+ },
+ "09d35cf3823e8db7": {
+  "seat": "unibrowse",
+  "at": 1792643937.9562418,
+  "from_memo": "952288b5-29c8-4b38-ba16-1fcd71bf61ff",
+  "finding": "unibrowse-mongodb on server4 (created 2026-10-16) writes about 100 MB of json log every ~3.75 h (rotations at 19:22 and 23:08 on 2026-10-21, ~62k lines/h), dominated by STORAGE 'Drop-pending ident is still in use' and 'Completing drop for ident' (~7/s each in a 10-min `docker logs` sample). That poi"
+ },
+ "b900dbbe78325855": {
+  "seat": "agents",
+  "at": 1792646141.6671972,
+  "from_memo": "891f07e5-2c75-4c05-8ec9-a6426b8a1a1c",
+  "finding": "curator MCP is configured globally on server4 (~/.claude.json: sse http://office:8001/mcp/sse) but office:8001 still refuses connections on 2026-10-22, nine days after the 2026-10-13 report, so every server4 session starts with a failed MCP server."
+ },
+ "2b3ec452f6cd9e65": {
+  "seat": "atc",
+  "at": 1792646142.0723233,
+  "from_memo": "e7f9bac9-3a6c-4fdc-96a9-0b65e27624f4",
+  "finding": "GET :3030/inbound-routes-fetch on 2026-10-22 reports unreachable: 2. Rules 0e5742b2 (Town of Groton -> groton) and b89a76d1 (tryfi.com -> brooke) were created 2026-09-26 as mode:regex with no `fetch`, so they can only see mail fetched for other reasons. Same Trap 3 as the 2026-09-03 Stripe/Onity cas"
+ },
+ "7c66fb995d06fd95": {
+  "seat": "cluster",
+  "at": 1792646142.477823,
+  "from_memo": "8e10e95c-080b-4c92-91b1-777ca5ad734e",
+  "finding": "server5 `fast` now holds four datasets created after the 2026-09-27 'no new scratch/build tenants' policy (containerd-vol 10-05, kubelet 10-08, docker-vol 10-10, k8s-hostpath/qf-surface-cold-q 10-13 \u2014 `zfs get creation -r fast`), so memo 8e10e95c's policy no longer matches the pool; please state whe"
+ },
+ "c153405806b50615": {
+  "seat": "cluster",
+  "at": 1792646142.4778304,
+  "from_memo": "8e10e95c-080b-4c92-91b1-777ca5ad734e",
+  "finding": "server5 `fast` mirror-0 (dedicated KIOXIA pair) is 89.3% full (50.7G free) and took 62-74% of writes at ~60 M/s in `zpool iostat -v fast 10 6` on 2026-10-22, against 248G free on the dqlite-shared mirror-1 \u2014 the 89%-full mirror is taking most of the writes."
+ },
+ "db98828862a11334": {
+  "seat": "cluster",
+  "at": 1792646142.477832,
+  "from_memo": "4cee166a-1166-498c-af27-f229976bd624",
+  "finding": "NAS /volume1 is out of unallocated space: `btrfs fi usage` at 2026-10-22 00:57 shows Device unallocated 1.00 MiB of 76.37 TiB and df 97% (Data 71.66/69.01 TiB, Metadata DUP 2.35 TiB/471 GiB, used nearly tripled since 10-04), with subvolumes 19052+ queued for deletion. No new chunk of any type can be"
+ },
+ "c71ef4ef80a0c278": {
+  "seat": "cluster",
+  "at": 1792646142.4778342,
+  "from_memo": "81ad2936-3394-47d6-9611-3873cdc94678",
+  "finding": "22 of 53 labelled nodes now over-advertise node-mem-gi by 1 (e.g. 14.55 Gi nodes labelled 15, worker28/45 10.61 labelled 11, worker17 30.27 labelled 31) because the 2026-10-16 a6w reservation roll lowered allocatable without relabelling. Any node-mem-gi Gt/Gte selector now over-places. Measured: kub"
+ },
+ "5200e4fad5dec3b5": {
+  "seat": "cluster",
+  "at": 1792646142.4778445,
+  "from_memo": "81ad2936-3394-47d6-9611-3873cdc94678",
+  "finding": "worker31 is retired and unreachable but still carries node-role=worker/node-tier=worker/workload-tier=batch-cpu/node-mem-gi=15, so label-based tier counts (45 workers) include a node that contributes nothing. Measured: kubectl taints unschedulable 2026-09-29, unreachable 2026-10-06."
+ },
+ "813e56ac882b2cfe": {
+  "seat": "cluster",
+  "at": 1792646142.4778457,
+  "from_memo": "9610818c-e428-4a5d-9fc0-ace5d31cebed",
+  "finding": "The server4 crontab rebuild-guard comment says 'PD 32:8 forced back and rebuilding since 2026-10-03', but perccli on 2026-10-22 shows 32:8 UBad and 32:5 rebuilding at 24% (DG1 Dgrd, no hot spare). The perc-rebuild-watch signature reads 'takeover-s5-UBad'. The comment is stale, and the drive the rebu"
+ },
+ "2befbc1d0d0d548e": {
+  "seat": "ha",
+  "at": 1792646143.03333,
+  "from_memo": "189cb796-6cf3-4a20-b4c8-4bd845b65171",
+  "finding": "Walkway WLED def is {ps:0,on:false} at /json/cfg on 192.168.0.226. Memo 189cb796 calls on:false the boot-dark bug (latched garbage after a 12V cycle) and on:true the fix, so either the fix was never applied or it was reverted on purpose. Worth confirming against cd32e16c's power-on-select."
+ },
+ "7aa48c7c8c5570db": {
+  "seat": "ha",
+  "at": 1792646143.0333333,
+  "from_memo": "2b8bfb40-9608-4816-a97f-50cab1a946ee",
+  "finding": "Live /json/cfg on 192.168.0.226 (2026-10-22) shows per-bus ledma 17 and maxpwr 5000 (global maxpwr 20000, ledma 0), so ABL is probably active. scripts.yaml ~l.3883-3906 still says 'ledma IS 0' and the brightness description says 'ABL is off', and memo 548ba766 records ledma 0. The PSU-protection con"
+ },
+ "f0fa5f8735a311e2": {
+  "seat": "ha",
+  "at": 1792646143.0333347,
+  "from_memo": "2b8bfb40-9608-4816-a97f-50cab1a946ee",
+  "finding": "The comment in automations.yaml walkway_ambient_brightness (~l.14164) says walkway_night_dim 'IS NOW DISABLED', but HA reports automation.walkway_wind_down_at_band_boundaries state on since 2026-10-10 and lux-gated since 2026-10-05. The code comment is stale."
+ },
+ "89a058c8869e8c11": {
+  "seat": "quantum-lab",
+  "at": 1792646143.4396799,
+  "from_memo": "ae87e6b8-dd21-4cbc-b28c-444f2a60de2b",
+  "finding": "GET /schedules-health lists window-d-score-thread (fires 2026-12-10) and window-e-score-thread (fires 2027-08-16) as unroutable: target thread-quantum-lab-7 is not a registered subscriber, so both will drop with no_resolution. Retarget to the seat or a conv id."
+ },
+ "23142f67f7aa8b32": {
+  "seat": "shopping",
+  "at": 1792646143.845398,
+  "from_memo": "619a6c7c-9784-492c-a9b5-2475cd9c5efa",
+  "finding": "Memo 619a6c7c (v15 parked state) is now a historical snapshot: the named schedules are gone and Laura's chair/blanket asks are absent from /asks/shopping while the seat's 10-21 pin lists chairs only as a nudge-ban. The seat should confirm whether those two asks are still open, without re-asking Laur"
+ },
+ "0522b38db4087d31": {
+  "seat": "system",
+  "at": 1792646144.2518454,
+  "from_memo": "390cfdea-8565-4d04-9691-4849ebaf993b",
+  "finding": "NAS /volume1 is at df 97% / sample 95.38% (2026-10-22T04:17Z) with `btrfs fi usage` unallocated 1.00 MiB and metadata used up from 182 GiB (10-01) to 471 GiB; Slack shows system/cluster are managing the fill, so this is a check that the chunk-exhaustion risk is in view, not a new alarm."
+ },
+ "55877be3e9c2ad01": {
+  "seat": "system",
+  "at": 1792646144.251849,
+  "from_memo": "364a9f0b-81b3-4bf8-8548-8358f0e4ed92",
+  "finding": "nas-breaker in log-only mode logged 13-14 TRIPs per host on s3/s4/s5/office since 2026-10-11, most at ~03:00 nightly and three on 10-20 13:50-14:04, and server3's trip set now includes /mnt/overflow and kubelet pod NFS volumes. Re-arming without a writeback guard would repeat the 10-08/10-10 data lo"
+ },
+ "429ecb7a9f399b50": {
+  "seat": "system",
+  "at": 1792646144.2518506,
+  "from_memo": "5afd0c5c-ea06-4012-ae5e-90da3bae954d",
+  "finding": "server4 NFS negative-lookup stalls (host-health.csv field 30 at the 10000ms ceiling) are recurring again: 0/day 2026-09-23..09-30, then 11 and 35 on 10-01/10-02, and 9, 2, 2, 8, 9, 19, 19, 3 on 10-14..10-21 (awk per-day count over /home/ben/logs/host-health.csv). Worth confirming whoever owns the NA"
+ },
+ "cc34814a5c7c7b53": {
+  "seat": "tradedesk",
+  "at": 1792646144.657245,
+  "from_memo": "ae87e6b8-dd21-4cbc-b28c-444f2a60de2b",
+  "finding": "Most of the 13 schedules targeting tradedesk.earnings are still OWNED by pane thread-tradedesk-12 rather than the seat (GET /schedules?target=tradedesk.earnings), the pane-owner pattern this memo says breaks replace=true after a re-pool."
+ },
+ "866c00439066ca10": {
+  "seat": "travel",
+  "at": 1792646145.0639358,
+  "from_memo": "ae87e6b8-dd21-4cbc-b28c-444f2a60de2b",
+  "finding": "Schedule thread-travel-3/anz-globus-nov7-deadline (fires 2026-11-02 15:00Z) targets travel.oz, which has no bound pane, so /schedules-health says it will drop with no_resolution. Retarget to the parent seat."
  }
 }
