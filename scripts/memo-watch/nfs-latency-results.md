@@ -62,7 +62,7 @@ opposite directions with cadence, so averaging them across two samplers is meani
 This corrects the standing instruction to pool episodes "because they are defined on the
 latency series, not on the cadence" — measured here, they are not.
 
-### Residual against `cluster`'s independent sampler — NOT reconciled
+### Residual against `cluster`'s independent sampler — ✅ RECONCILED 2026-10-22
 
 `cluster`'s `bin/nas-write-tail-sample` reported 87.3% of minutes stalled (union over 4
 hosts, 1/min, same window). Matching its cadence and its definition on this dataset gives
@@ -90,7 +90,22 @@ directory lock and that contention is part of the 87.3%. That number is an upper
 the shared-directory case, not a clean per-client reading.
 
 ⭐ DISCRIMINATOR, restated: **SETATTR-on-existing vs CREATE+UNLINK-of-a-new-name**, same
-directory, same host, same window — not touch-vs-touch-plus-write. Only if the gap survives
-that is there a data-write term to look for. `cluster` removed its sampler's cron at 16:03,
-so this instrument is the one that can run it at 2s cadence. Until it runs, do not merge the
-two series or quote one figure for the other.
+directory, same host, same window — not touch-vs-touch-plus-write. `cluster` removed its
+sampler's cron at 16:03, so this instrument is the one that could run it at 2s cadence.
+
+✅ **IT RAN, AND THE RESIDUAL IS THE OPERATION.** `nfs-op-class-probe`, six hosts, 2,211
+samples, 17:26–18:15 the same day, five ops interleaved in a **rotating** order so that no op
+owns a position. Paired within a round, CREATE stalled where the SETATTR two seconds beside
+it did not in **165 rounds against 41** (McNemar p<0.0001); it took **35.8% of the window's
+wall clock against 2.5%**. The 22-point gap needs no second cause.
+Figures, the controls, and what is still open: **`nfs-op-class-results.md`**.
+
+⛔ **Two things in the section above did not survive that run.** (1) The shared-directory
+contention `cluster` names as inflating its own 87.3% runs the **wrong way** on this mount —
+the shared directory is the *cheaper* one, p<0.0001, in two runs under two different orders;
+whatever inflates their figure, it is not that. (2) A `datawrite` term was carried as the
+obvious next question and is **closed**: a 4 KiB fsync'd write is the cheapest op measured.
+
+⛔ **Still do not merge the two series or quote one figure for the other** — that was never
+about the residual. It is the cadence result above: a probe-level stall rate is ceilinged by
+cadence and the minute-indicator moves the other way. Only the DURATION RATIO pools.

@@ -74,13 +74,38 @@ def main(paths):
             100 * len(st) / len(v), 100 * sum(st) / 1000.0 / span_s,
             sum(1 for rc, _ in v if rc != 0)))
 
-    # pair ops by (host, round): a round is one pass of the round-robin
-    rounds = defaultdict(dict)
-    seq = defaultdict(int)
+    # ⛔⛔ A ROUND IS FIVE CONSECUTIVE SAMPLES, NOT "EVERYTHING UNTIL setattr_hot COMES
+    #    ROUND AGAIN". This used to increment the round counter whenever it saw OPS[0],
+    #    which is a round boundary ONLY in the fixed-order probe. Under the rotating order
+    #    setattr_hot sits at position (5-r)%5, so the gap between two of its appearances
+    #    is 9 samples then 4 then 4 ... -- the "rounds" it built held some ops twice (the
+    #    second silently overwriting the first) and others not at all. MEASURED on the
+    #    20261022-v3rot logs: it paired 262-354 rounds out of 440 and compared ops from
+    #    DIFFERENT rounds, which is exactly the confound McNemar is here to avoid.
+    #    ⇒ Chunk each host's samples into consecutive blocks of five and REQUIRE each block
+    #      to hold all five ops. That is correct for both probes and it validates itself:
+    #      a misaligned log cannot produce five distinct ops and is reported, not absorbed.
+    per_host = defaultdict(list)
     for t, host, op, rc, ms in rows:
-        if op == OPS[0]:
-            seq[host] += 1
-        rounds[(host, seq[host])][op] = ms
+        per_host[host].append((op, ms))
+    rounds = {}
+    dropped = 0
+    starts = defaultdict(int)
+    for host, seqrows in per_host.items():
+        for k in range(0, len(seqrows) - 4, 5):
+            blk = seqrows[k:k + 5]
+            if len({o for o, _ in blk}) != 5:
+                dropped += 1
+                continue
+            starts[blk[0][0]] += 1
+            rounds[(host, k // 5)] = {o: ms for o, ms in blk}
+    if dropped:
+        print("⛔ %d block(s) of 5 did not hold 5 distinct ops -- misaligned, EXCLUDED "
+              "(not counted as agreement)" % dropped)
+    rotated = len(starts) > 1
+    print("round alignment: %d rounds, order is %s (%s)" % (
+        len(rounds), "ROTATING" if rotated else "FIXED",
+        " ".join("%s=%d" % (o, starts[o]) for o in OPS if starts.get(o))))
     print("\nPAIRED, within a round (McNemar on discordant rounds, stall = >%dms):" % THRESH_MS)
     print("%-32s %8s %8s %8s %9s %8s" % ("A vs B", "rounds", "A only", "B only", "chi2", "p"))
     for a, b in (("setattr_cold", "create_own"),      # the restated discriminator
@@ -130,8 +155,18 @@ def main(paths):
         a, b = c[0] / c[1], c[2] / c[3]
         print("%-16s %10d %11.1f%% %11.1f%% %9.2fx" % (
             op, c[1] + c[3], 100 * a, 100 * b, a / b if b else float("inf")))
-    print("⚠️ A large spread here means the fixed round order is doing work and the op")
-    print("   comparison above is not clean. Re-run with the rotating-order probe.")
+    # ⛔ WHAT THIS BLOCK MEANS DEPENDS ON WHICH PROBE WROTE THE LOG, AND IT USED TO PRINT
+    #    THE FIXED-ORDER READING UNCONDITIONALLY -- telling a reader of a rotated run to
+    #    go and do the thing that had already been done.
+    if rotated:
+        print("⚠️ ROTATING order: every op held every position an equal number of times, so")
+        print("   this is NOT position. A lift >1 here is episode clustering in time -- the")
+        print("   stalls arrive in episodes and a sample next to a stalled one is inside one.")
+        print("   What is readable is the SPREAD: an op whose lift is near 1.0 is not being")
+        print("   carried by whatever the mount is doing to its neighbours.")
+    else:
+        print("⚠️ FIXED order: a large spread here means the round order is doing work and the")
+        print("   op comparison above is not clean. Re-run with the rotating-order probe.")
     print("\n⚠️ Magnitudes are FLOORS: timeout cannot interrupt uninterruptible sleep.")
     return 0
 
