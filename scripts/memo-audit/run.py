@@ -28,6 +28,14 @@ HERE = Path(__file__).resolve().parent
 PROMPT = HERE / "worker-prompt.md"
 CLAUDE = "/home/ben/.local/bin/claude"
 
+# ⛔ WRAP EVERY WORKER, DO NOT RENICE THE PARENT. A batch worker is background
+# work competing with interactive seats and, on server4, with the root disk that
+# holds every session transcript. Renicing the parent looks like it covers the
+# children and does not: measured 2026-10-22 by `system`, workers spawned after
+# the parent was set to nice 19 / ionice idle came up at nice 0 and ionice none,
+# because the CLI re-execs. The priority has to be on the exec itself.
+NICE = ["/usr/bin/ionice", "-c3", "/usr/bin/nice", "-n19"]
+
 
 # Top-level keys that identify a worker report, one per brief this runner drives.
 REPORT_KEYS = {"audited", "probed", "stored"}
@@ -209,7 +217,7 @@ def run_batch(batch: list[dict], idx: int, outdir: Path, timeout: int,
             # so an oversized batch produces no output, no cost and no log line.
             # It killed 3 of 10 Slack-mining groups on 2026-10-22; this brief is
             # smaller but grows with every lesson added to it.
-            [CLAUDE, "-p", "--output-format", "json",
+            NICE + [CLAUDE, "-p", "--output-format", "json",
              "--permission-mode", "bypassPermissions"]
             + (["--model", model] if model else []),
             input=prompt,

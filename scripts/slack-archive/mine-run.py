@@ -26,6 +26,14 @@ sys.path.insert(0, str(HERE.parent / "memo-audit"))
 import keyring                                              # noqa: E402
 
 CLAUDE = "/home/ben/.local/bin/claude"
+
+# ⛔ WRAP EVERY WORKER, DO NOT RENICE THE PARENT. A batch worker is background
+# work competing with interactive seats and, on server4, with the root disk that
+# holds every session transcript. Renicing the parent looks like it covers the
+# children and does not: measured 2026-10-22 by `system`, workers spawned after
+# the parent was set to nice 19 / ionice idle came up at nice 0 and ionice none,
+# because the CLI re-execs. The priority has to be on the exec itself.
+NICE = ["/usr/bin/ionice", "-c3", "/usr/bin/nice", "-n19"]
 PROMPT = HERE / "mine-prompt.md"
 DIGESTS = HERE / "digests"
 
@@ -58,7 +66,7 @@ def run_group(group: list[Path], idx: int, outdir: Path, timeout: int, est: floa
         # output, no cost and no sign in any log that those channels were not
         # mined. The 7 that fit looked like a complete run.
         proc = subprocess.run(
-            [CLAUDE, "-p", "--output-format", "json",
+            NICE + [CLAUDE, "-p", "--output-format", "json",
              "--permission-mode", "bypassPermissions"],
             input=prompt, capture_output=True, text=True, timeout=timeout,
             env=keyring.key_env(acct), cwd=str(HERE))
