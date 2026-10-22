@@ -86,6 +86,16 @@ class Document(BaseModel):
     # reader at the document they are already holding.
     superseded_by: str | None = None
     lineage_tip: str | None = None
+    # ⭐ WHICH SEAT WROTE THIS. Ben, #memo 2026-10-22 11:47 (ask a0r, open since
+    # 09-20): "I think it should record who wrote each memo".
+    # ⛔ NULL ON ~9,900 EXISTING MEMOS AND THAT IS THE HONEST VALUE — the writer
+    # was never recorded, and inferring one from transcripts would be a guess
+    # stamped as provenance. A NULL can be corrected without first being
+    # disbelieved; a wrong name cannot.
+    # ⚠️ It is the SEAT, not the human. Every memo here is written by an agent on
+    # Ben's behalf, so this answers "whose judgement is this", which is what
+    # makes a claim checkable against the seat that made it.
+    authored_by: str | None = None
     created_at: float
     updated_at: float
 
@@ -139,6 +149,13 @@ class StoreRequest(PermissiveRequest):
     tags: list[str] = []
     metadata: dict[str, Any] = {}
     db_path: str | None = None
+    # The writing seat. Named `actor` to match /supersede-link, which has
+    # required one since the tombstone work and writes it to the edge — one
+    # word for one concept beats a second spelling of the same idea.
+    # ⚠️ OPTIONAL, UNLIKE /supersede-link's. Making it required would 422 every
+    # existing client on the first deploy, and a write refused for want of a
+    # label loses the memo, which is strictly worse than an unlabelled memo.
+    actor: str | None = None
     # Mirror-only fields — see db._sync_store for why they exist. A mirror that
     # mints fresh ids passes every count and diff, then 404s every cited id the
     # moment it is promoted to serve :8000. Supplying an id that already exists
@@ -227,6 +244,10 @@ class SearchResult(BaseModel):
 
 
 class UpdateRequest(PermissiveRequest):
+    # The seat making THIS edit. ⚠️ It does not overwrite the original
+    # `authored_by` — an editor is not the author, and collapsing the two would
+    # silently reassign authorship of every memo the audit touches.
+    actor: str | None = None
     content: str | None = None
     title: str | None = None
     tags: list[str] | None = None

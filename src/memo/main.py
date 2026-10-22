@@ -1728,6 +1728,7 @@ async def store_document(req: StoreRequest, request: Request):
             doc_id=req.id,
             created_at=req.created_at,
             updated_at=req.updated_at,
+            authored_by=req.actor,
             provider_token_count=provider_token_count,
         )
     except sqlite3.IntegrityError as e:

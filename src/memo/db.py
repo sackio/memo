@@ -459,7 +459,8 @@ def _sync_store(db_path: str, content: str, title: str | None, tags: list[str],
                 doc_id: str | None = None,
                 created_at: float | None = None,
                 updated_at: float | None = None,
-                provider_token_count: int | None = None) -> str:
+                provider_token_count: int | None = None,
+                authored_by: str | None = None) -> str:
     """`doc_id`/`created_at`/`updated_at` exist for ONE caller: the v1<->v2 mirror.
 
     ⭐ `provider_token_count` is the count from the EMBEDDING PROVIDER's own
@@ -499,11 +500,12 @@ def _sync_store(db_path: str, content: str, title: str | None, tags: list[str],
     # 2026-07-29: the first row written to the fresh v2 DB had valid_from=0.)
     conn.execute(
         "INSERT INTO documents (id, content, title, tags, metadata, token_count, "
-        "token_count_qwen3, token_count_tokenizer, created_at, updated_at, valid_from) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "token_count_qwen3, token_count_tokenizer, created_at, updated_at, valid_from, "
+        "authored_by) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (doc_id, content, title, json.dumps(tags), json.dumps(metadata), token_count,
          provider_token_count, "cl100k_base",
-         created, updated, created),
+         created, updated, created, authored_by),
     )
     conn.execute(
         "INSERT INTO document_embeddings (doc_id, embedding) VALUES (?, ?)",
@@ -981,11 +983,13 @@ async def store(db_path: str | None, content: str, title: str | None,
                 doc_id: str | None = None,
                 created_at: float | None = None,
                 updated_at: float | None = None,
-                provider_token_count: int | None = None) -> str:
+                provider_token_count: int | None = None,
+                authored_by: str | None = None) -> str:
     path = _resolve_path(db_path)
     stored_id = await _write_with_lock_retry(_sync_store, path, content, title, tags,
                                              metadata, embedding, doc_id, created_at,
-                                             updated_at, provider_token_count)
+                                             updated_at, provider_token_count,
+                                             authored_by)
     await _index_passages_after_write(path, stored_id, content)
     return stored_id
 
