@@ -265,6 +265,39 @@ print(json.dumps({'n':len(rows),'anon':anon,'by':collections.Counter((r[0] or 'u
     fi
   fi
   echo "$DOCS" > "$D/last-doc-count"
+
+  # ⛔⛔ AN UNTITLED MEMO IS UNFINDABLE AND INVISIBLE IN EVERY LISTING, AND NOTHING NOTICED.
+  #    memo_store's `title` is optional with a null default, so a caller that omits it gets
+  #    a 200 and a memo nobody can find by name. 13 had accumulated through October across
+  #    several seats before an inbound DM happened to surface one; all 13 were titled
+  #    2026-10-22 19:30 and the corpus went to 0. Fixing the STORE to refuse or derive a
+  #    title needs a :8000 rebuild and has not been done, so this makes the symptom loud
+  #    in the meantime.
+  # ⭐ EDGE-TRIGGERED ON THE COUNT, NOT ON THE COUNT BEING NONZERO. A standing backlog
+  #    would otherwise fire every 30 minutes forever and be muted within a day, which is
+  #    how a real alarm becomes furniture. Silence while it does not grow.
+  # ⛔ COUNT IT IN SQLITE, NOT BY PULLING /documents?limit=20000 EVERY 30 MINUTES. That
+  #    listing is several MB and this host is already the one with the IO pressure.
+  #    ⛔ `docker exec` WRITES 0 BYTES TO A REDIRECT -- the `| cat` is load-bearing, same
+  #       as the deletion_log read above.
+  UNTITLED=$(docker exec memo-v2 python3 -c "
+import sqlite3
+c=sqlite3.connect('file:/data/memo.db?mode=ro',uri=True)
+print(c.execute(\"select count(*) from documents where title is null or trim(title)=''\").fetchone()[0])
+" 2>/dev/null | cat | tr -dc '0-9')
+  if [ -z "$UNTITLED" ]; then
+    unknown "UNTITLED COUNT NOT TAKEN: the sqlite read inside memo-v2 returned nothing. ⛔ That is NOT zero untitled memos, it is no measurement -- and the usual cause is the docker fd trap, so check that the \`| cat\` is still on that pipeline before blaming the container. Re-run this script's own query by hand: sed -n '/COUNT IT IN SQLITE/,/tr -dc/p' /mnt/nas/data/code/memo/scripts/memo-watch/run"
+  else
+    UP=$(cat "$D/last-untitled" 2>/dev/null)
+    if [ -z "$UP" ]; then
+      echo "  untitled docs: $UNTITLED | establishing baseline, NOT a finding."
+    elif [ "$UNTITLED" -gt "$UP" ]; then
+      finding "UNTITLED MEMOS ROSE $UP -> $UNTITLED. A memo with no title is unfindable by name and blank in every /documents listing, and the store accepts one silently (memo_store title is optional, default null). Find them: curl -sS 'http://server4:8000/documents?limit=20000' | python3 -c \"import json,sys;[print(d['id'][:8], (d.get('tags') or [])[:4]) for d in json.load(sys.stdin) if not (d.get('title') or '').strip()]\" -- then PATCH a title derived from each memo's own opening line. ⛔ This is NOT a memo outage."
+    else
+      echo "  untitled docs: $UNTITLED (was $UP)"
+    fi
+    echo "$UNTITLED" > "$D/last-untitled"
+  fi
 fi
 if [ -n "$GAP" ] && [ "$GAP" != "0" ]; then
   # ⛔ RE-READ BEFORE ALARMING: the fleet writes ~100 memos/day and a single sample can catch
