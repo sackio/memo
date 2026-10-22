@@ -68,20 +68,38 @@ phase probe-coverage /usr/bin/timeout 14400 python3 run.py \
 # constant: the cost per memo is ordering-dependent (measured $0.291 stratified
 # vs $0.697 read-weighted) so a hardcoded batch count either strands credit or
 # fills the log with refusals.
+# ⛔⛔ AN UNREADABLE LEDGER IS NOT A ZERO BUDGET, AND THE OLD `except Exception:
+#    budget = 0.0` TURNED IT INTO ONE. That line was near-dead while `remaining()`
+#    read a local file and could not fail; since the reads moved to the broker
+#    (2026-10-22) it is live, and it fails in the WASTEFUL direction: a zero budget
+#    floors to ONE batch, the cycle logs a normal-looking small night, and the grant
+#    expires with the money unspent. Ben, #memo 2026-10-22: "I basically want you to
+#    use all these credits." Underspend is the loss here, not overspend.
+# ⇒ An unknown budget SKIPS the audit phase loudly rather than running a token
+#   batch that reads as success. Earlier phases have already run and are unaffected.
 BATCHES=$(python3 - <<'PY'
 import sys; sys.path.insert(0, ".")
 import keyring
 try:
     budget = sum(keyring.remaining(a) for a in keyring.load_grants())
-except Exception:
-    budget = 0.0
+except keyring.LedgerUnreadable as e:
+    print(f"spend ledger unreadable: {e}", file=sys.stderr); sys.exit(9)
+except Exception as e:
+    print(f"budget not computable: {type(e).__name__}: {e}", file=sys.stderr); sys.exit(9)
 per_batch = 2.60                      # measured mean, 2026-10-22 runs
 print(max(1, min(400, int(budget / per_batch))))
 PY
-)
-echo "budget buys ~${BATCHES} batches"
-phase audit /usr/bin/timeout 36000 python3 run.py --candidates candidates.json \
-    --batch-size 6 --batches "$BATCHES" --concurrency 2 --wait-for-lock 7200
+) || BATCHES=""
+if [ -z "$BATCHES" ]; then
+  echo "⛔ AUDIT PHASE SKIPPED: the spend ledger could not be read, so the budget is UNKNOWN."
+  echo "   Not run as one batch -- that would read as a quiet night while the grant expires."
+  echo "   Check: curl -sS http://192.168.1.168:3030/api-spend/totals | head -c 200"
+  echo "FAILED audit (budget unknown)"
+else
+  echo "budget buys ~${BATCHES} batches"
+  phase audit /usr/bin/timeout 36000 python3 run.py --candidates candidates.json \
+      --batch-size 6 --batches "$BATCHES" --concurrency 2 --wait-for-lock 7200
+fi
 
 echo "════ cycle done $(date -Is)"
 printf '%s\n' "${rcs[@]}"
