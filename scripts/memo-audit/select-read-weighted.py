@@ -69,7 +69,16 @@ def read_counts() -> dict[str, int]:
 
 
 def audited_ids() -> set[str]:
-    """8-char prefixes this pipeline has already spent money on."""
+    """8-char prefixes this pipeline has already spent money on.
+
+    ⚠ A SKIPPED BATCH WRITES A FULL RECORD -- same filename, `n` set, `skipped`
+    set, `cost_usd: 0`. Measured 2026-10-22 on run 20261022T120910 (125 records,
+    9 of them RAN): those records carry `ids: []`, so nothing has in fact been
+    retired unspent. This filter is the invariant made explicit, NOT a repair:
+    the day a refusal records which memos it declined, unioning blindly would
+    retire them permanently on zero work. A record of an ATTEMPT is not a record
+    of WORK -- filter on the outcome, not on the file's existence.
+    """
     done: set[str] = set()
     for f in (HERE / "runs").glob("*/batch-*.json"):
         if ".raw." in f.name:
@@ -78,6 +87,8 @@ def audited_ids() -> set[str]:
             d = json.loads(f.read_text())
         except (ValueError, OSError):
             continue                      # a torn record is not an empty one
+        if d.get("skipped") or d.get("is_error"):
+            continue                      # attempted, refused or failed != audited
         done.update(d.get("ids") or [])
     return done
 
