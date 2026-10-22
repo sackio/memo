@@ -16,7 +16,7 @@ corrects. ⇒ A high score here means "worth a look", never "this is wrong".
 """
 from __future__ import annotations
 
-import json, re, sys, urllib.request
+import argparse, json, re, sys, urllib.request
 from datetime import datetime, timezone
 
 MEMO = "http://127.0.0.1:8000"
@@ -41,6 +41,17 @@ RULING = re.compile(r"\b(ben (said|ruled|decided|authoriz)|operator (said|ruled)
 
 
 def main() -> int:
+    # ⛔ PARSE BEFORE THE CORPUS FETCH. This script used to ignore its arguments
+    # entirely, --help included: the daily cycle passed `--out
+    # candidates-all.json` and it worked only because that equalled the
+    # hardcoded path. A script that accepts a flag and discards it is worse than
+    # one that rejects it -- the caller reads the flag back as configuration and
+    # nothing ever says otherwise. Parsing first also means `--help` answers
+    # instantly instead of pulling 11,800 documents to say nothing.
+    ap = argparse.ArgumentParser(description=(__doc__ or "").strip().split("\n")[0])
+    ap.add_argument("--out", default="candidates-all.json")
+    out = ap.parse_args().out
+
     docs = json.load(urllib.request.urlopen(MEMO + "/documents?limit=20000", timeout=120))
     now = datetime.now(timezone.utc).timestamp()
     live = [d for d in docs if d.get("valid_until") is None]
@@ -67,7 +78,8 @@ def main() -> int:
                      "checkability": round(check, 1), "score": round(score, 1)})
 
     rows.sort(key=lambda r: -r["score"])
-    json.dump(rows, open("candidates-all.json", "w"), indent=1)
+
+    json.dump(rows, open(out, "w"), indent=1)
     print(f"corpus {len(docs)} · live {len(live)} · ranked candidates {len(rows)}")
     print(f"total chars {sum(r['chars'] for r in rows):,} "
           f"(~{sum(r['chars'] for r in rows)//4:,} tokens)")
