@@ -29,6 +29,10 @@ PROMPT = HERE / "worker-prompt.md"
 CLAUDE = "/home/ben/.local/bin/claude"
 
 
+# Top-level keys that identify a worker report, one per brief this runner drives.
+REPORT_KEYS = {"audited", "probed", "stored"}
+
+
 def parse_result(raw: str) -> dict:
     """Extract the result JSON from `claude -p --output-format json` output.
 
@@ -162,7 +166,7 @@ def _report_from_session(session_id: str | None, cwd: Path) -> dict | None:
                 cand = json.loads(blob)
             except ValueError:
                 continue
-            if isinstance(cand, dict) and "audited" in cand:
+            if isinstance(cand, dict) and REPORT_KEYS.intersection(cand):
                 return cand
     return None
 
@@ -254,7 +258,13 @@ def run_batch(batch: list[dict], idx: int, outdir: Path, timeout: int,
             cand = json.loads(blob)
         except ValueError:
             continue
-        if isinstance(cand, dict) and "audited" in cand:
+        # ⚠ THE SHAPE IS NOT ALWAYS THE AUDIT'S. This runner now drives more
+        # than one brief (--prompt), and a probe-only pass reports `probed`, not
+        # `audited`. Testing for the audit's key alone made every one of those
+        # batches print "NO PARSEABLE REPORT" and store report: null, while the
+        # work had in fact landed -- measured 2026-10-22 on all 3 pilot batches.
+        # Accept any of the known top-level report keys.
+        if isinstance(cand, dict) and REPORT_KEYS.intersection(cand):
             report = cand
             break
     if report is None:

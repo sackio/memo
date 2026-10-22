@@ -35,6 +35,7 @@ BEN = "U0NGEHS2J"
 ROOT = Path("/mnt/nas/data/slack-archive")
 HERE = Path(__file__).resolve().parent
 CHECKPOINT = HERE / "mine-checkpoint.json"
+PENDING = HERE / "mine-checkpoint-pending.json"
 LEAD_IN = 4                      # messages before Ben's, so his reply has a referent
 
 
@@ -201,9 +202,19 @@ def main() -> int:
         print(f"  {r['ben_turns']:4d} turns  {r['chars']:7d} chars  #{r['channel']}")
 
     if a.checkpoint:
-        cp.update(high)
-        CHECKPOINT.write_text(json.dumps(cp, indent=1))
-        print(f"checkpoint updated for {len(high)} channels → {CHECKPOINT}")
+        # ⛔⛔ THE CHECKPOINT IS NOT ADVANCED HERE. Building a digest is not
+        # mining it. If this ran the high-water mark forward at digest time, a
+        # crash in the mining phase would retire that window permanently and
+        # the channels would simply never be read -- silently, because the next
+        # run would start after the messages it never looked at.
+        # Measured 2026-10-22: a 128 KiB argv limit killed 3 of 10 mining
+        # groups, 4 channels, AFTER their digests were built. Under the old
+        # behaviour that day's #servers, #scripts and #shopping would be gone.
+        # ⇒ Write the marks as PENDING; `mine-run.py` promotes a channel only
+        # when its worker returns.
+        PENDING.write_text(json.dumps(high, indent=1))
+        print(f"{len(high)} channel marks staged PENDING → {PENDING} "
+              f"(promoted by mine-run.py on success, never here)")
     return 0
 
 

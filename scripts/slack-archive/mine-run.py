@@ -144,6 +144,26 @@ def main() -> int:
     spent = sum(float(r.get("cost_usd") or 0) for r in recs)
     ran = sum(1 for r in recs if not r.get("skipped"))
     print(f"workers ran {ran}/{len(groups)} · spent ${spent:.2f}")
+
+    # ⭐ PROMOTE THE CHECKPOINT ONLY FOR CHANNELS A WORKER ACTUALLY RETURNED ON.
+    # mine.py stages the marks as pending precisely so a crash here cannot
+    # retire a window nobody read.
+    pending = HERE / "mine-checkpoint-pending.json"
+    cpf = HERE / "mine-checkpoint.json"
+    if pending.exists():
+        try:
+            marks = json.loads(pending.read_text())
+            cp = json.loads(cpf.read_text()) if cpf.exists() else {}
+        except ValueError:
+            marks, cp = {}, {}
+        ok = {c for r in recs if not r.get("skipped") and not r.get("is_error")
+              for c in (r.get("channels") or [])}
+        promoted = {c: marks[c] for c in ok if c in marks}
+        cp.update(promoted)
+        cpf.write_text(json.dumps(cp, indent=1))
+        held = sorted(set(marks) - ok)
+        print(f"checkpoint promoted for {len(promoted)} channel(s); "
+              f"{len(held)} held back for the next run: {held[:8]}")
     return 0
 
 

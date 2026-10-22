@@ -160,8 +160,14 @@ def validate(p: dict) -> None:
             raise Unsafe(f"{binary!r} is not an allowed read-only binary")
         sub = ALLOWED_ARGV[binary]
         if sub is not None:
+            # ⚠ NOT EVERY SUBCOMMAND IS A BARE WORD. `crontab -l` names its read
+            # mode with an OPTION, so looking only for the first non-option token
+            # finds nothing and the probe is refused -- measured 2026-10-22, a
+            # worker wanted exactly that probe and had to settle for a grep.
+            # Accept either form: the first non-option token, or any allowed
+            # token appearing in argv.
             got = _subcommand(argv)
-            if got not in sub:
+            if got not in sub and not any(t in sub for t in argv[1:]):
                 raise Unsafe(f"{binary} subcommand {got!r} must be one of {sorted(sub)}")
         bad = ARGV_FORBIDDEN_FLAGS.intersection(argv)
         if bad:
@@ -373,6 +379,10 @@ def self_test() -> int:
         ("git -C log accepted",   {"kind": "cmd", "argv":
                                    ["git", "-C", "/mnt/nas/data/code/memo", "log",
                                     "-1", "--format=%s"]}, "holds"),
+        ("crontab -l accepted",   {"kind": "cmd", "argv": ["crontab", "-l"],
+                                   "expect_substr": "cronguard"}, "holds"),
+        ("crontab write refused", {"kind": "cmd", "argv": ["crontab", "/tmp/x"]},
+                                  "inconclusive"),
         ("git -c alias refused",  {"kind": "cmd", "argv":
                                    ["git", "-c", "alias.z=!id", "-C", "/tmp", "z"]},
                                   "inconclusive"),
