@@ -1,0 +1,42 @@
+#!/bin/bash
+# Client-observed write latency against the shared NAS volume1 share.
+#
+# WHY: 2026-10-22, memo-watch's heartbeat write started failing. The cause was
+# not memo and not the heartbeat — /mnt/nas write latency is BIMODAL: p50 4-8ms
+# on most hosts, then a ~13-17% tail straight to seconds, measured to 40s.
+#
+# ⛔⛔ THE PARAMETERS BELOW ARE A CONTRACT ACROSS ARMS, NOT TUNING KNOBS.
+#    This instrument exists to compare an a31-RUNNING arm against an a31-PAUSED
+#    arm on the SAME clock window on different days (cluster, 2026-10-22: a
+#    market-hours-only pause makes a31 perfectly collinear with time of day, so
+#    stopped==market-hours and running==overnight and neither can be separated).
+#    ⇒ A CHANGED BOUND BETWEEN ARMS LOOKS EXACTLY LIKE A CHANGED TAIL. Do not
+#    alter BOUND or CADENCE between arms. If you must, the arms are incomparable
+#    on magnitude and you have to say so.
+BOUND=60      # seconds. ⚠️ A FLOOR ON OBSERVED MAGNITUDE, NOT A CEILING:
+              # `timeout` sends SIGTERM, which CANNOT interrupt uninterruptible
+              # sleep, so a D-state stall overruns it. Measured 2026-10-22: a
+              # 40,066ms sample came back from a `timeout 30`.
+CADENCE=2     # seconds between samples, SERIAL — the next sample starts after
+              # the previous returns, so cadence degrades during a stall. That
+              # is inherent and identical in both arms; do not "fix" it with a
+              # parallel sampler, which would change the offered load.
+D=/mnt/nas/data/memo-watch           # the share under test
+ARM="${1:?arm label, e.g. A-a31-running}"
+END_EPOCH="${2:?end time as epoch seconds}"
+# ⛔ THE LOG IS HOST-LOCAL ON PURPOSE. Writing the log to the share under test
+#    would both perturb the measurement and block the logger during the very
+#    stall it is trying to record.
+LOG="$HOME/.memo-watch/nfs-latency/$(hostname).$ARM.log"
+mkdir -p "$(dirname "$LOG")"
+printf '# arm=%s host=%s bound=%s cadence=%s start=%s end_epoch=%s\n' \
+  "$ARM" "$(hostname)" "$BOUND" "$CADENCE" "$(date -Is)" "$END_EPOCH" >> "$LOG"
+while [ "$(date +%s)" -lt "$END_EPOCH" ]; do
+  s=$(date +%s%N)
+  timeout "$BOUND" touch "$D/.lat.$(hostname)" 2>/dev/null; rc=$?
+  e=$(date +%s%N)
+  printf '%s %s %s %s\n' "$(date -Is)" "$(hostname)" "$rc" "$(( (e-s)/1000000 ))" >> "$LOG"
+  sleep "$CADENCE"
+done
+rm -f -- "$D/.lat.$(hostname)" 2>/dev/null
+printf '# arm=%s host=%s ENDED %s\n' "$ARM" "$(hostname)" "$(date -Is)" >> "$LOG"
