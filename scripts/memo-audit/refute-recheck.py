@@ -38,12 +38,13 @@ STUCK_AT = 3                      # consecutive refutations before we stop payin
 
 
 def corpus(api: str, limit: int = 20000) -> list[dict]:
-    """⛔ SCAN /documents. `/search` ranks by relevance and silence is not absence."""
-    with urllib.request.urlopen(f"{api}/documents?limit={limit}", timeout=300) as r:
-        docs = json.loads(r.read().decode())
-    if not isinstance(docs, list):
-        docs = docs.get("documents") or docs.get("items") or []
-    return docs
+    """⛔ SCAN /documents. `/search` ranks by relevance and silence is not absence.
+
+    Served from the shared cache (corpus.py) -- a full fetch is ~78 MB and this
+    runs alongside the workers, which scan it too.
+    """
+    import corpus as _corpus
+    return _corpus.load(api=api)
 
 
 def main() -> int:

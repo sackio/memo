@@ -52,7 +52,8 @@ def main() -> int:
     ap.add_argument("--out", default="candidates-all.json")
     out = ap.parse_args().out
 
-    docs = json.load(urllib.request.urlopen(MEMO + "/documents?limit=20000", timeout=120))
+    import corpus as _corpus
+    docs = _corpus.load(api=MEMO)      # ~78 MB per full fetch; share one copy
     now = datetime.now(timezone.utc).timestamp()
     live = [d for d in docs if d.get("valid_until") is None]
 

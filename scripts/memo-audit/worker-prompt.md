@@ -225,8 +225,18 @@ third of memos deserve it, so do not inflate it and do not avoid it.
   2026-10-19 -- an unattributable deletion trail across a corpus the operator may
   want to review or revert. Always:
   `curl -X DELETE "http://127.0.0.1:8000/documents/<id>?actor=memo-audit-2026-10-19&reason=<short+why>&replaced_by=<id+or+omit>"`
-  ⛔ BEFORE DELETING, COUNT THE CITERS. Fetch `/documents?limit=20000` and grep the
-  8-hex prefix and the full uuid across live titles and content. Report the count.
+  ⛔ BEFORE DELETING, COUNT THE CITERS -- but ⛔⛔ **DO NOT FETCH THE CORPUS
+  YOURSELF.** `GET /documents?limit=20000` is a ~78 MB full-table read, and you
+  are one of up to six workers running at once. Measured 2026-10-22 by the
+  `system` seat: the memo container read **1.68 TB cumulative, 494 MB/s at
+  peak** off server4's ROOT disk -- the fleet's single point of failure, mid
+  RAID-rebuild -- because every worker was pulling the whole corpus. Use the
+  shared cache instead, which refreshes itself every 10 minutes:
+  `C=$(python3 /mnt/nas/data/code/memo/scripts/memo-audit/corpus.py --path)`
+  then grep `$C` for the 8-hex prefix and the full uuid. Report the count.
+  ⚠️ The cache can be up to 10 minutes old. That is fine for counting citers and
+  wrong for reading back something you just wrote -- for a read-back, GET the
+  single document by id, which is cheap.
   If anything outside the set you are consolidating cites it, TIME-SCOPE instead of
   deleting -- that keeps the id resolvable.
   ⛔⛔ **AGE IS NEVER SUPERSESSION.** Delete on EVIDENCE -- falsified, duplicated,

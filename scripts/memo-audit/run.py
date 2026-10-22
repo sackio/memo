@@ -328,9 +328,8 @@ def main() -> int:
         # because the second probe usually agrees with the first, the waste is
         # invisible in the output. One scan of /documents costs nothing against
         # the spend it prevents.
-        import urllib.request
-        with urllib.request.urlopen(f"{API_BASE}/documents?limit=20000", timeout=300) as r:
-            docs = json.loads(r.read().decode())
+        import corpus
+        docs = corpus.load()          # shared cache: see corpus.py on why
         probed = {d["id"] for d in docs if (d.get("metadata") or {}).get("refute")}
         before = len(cands)
         cands = [c for c in cands if c["id"] not in probed]
