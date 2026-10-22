@@ -31,6 +31,10 @@
 # in ionice/nice at the exec by run.py; the cap here is the second half of it.
 set -u
 cd "$(dirname "$0")" || exit 1
+# \u26d4 ABSOLUTE, AND EXPORTED, because the python heredocs below used sys.path.insert(0, ".")
+#    and "." is the PROCESS cwd, not this file's directory. It happened to be right only
+#    because of the cd above. See the wrong-module guard each heredoc now carries.
+export MEMO_AUDIT_DIR="$PWD"
 SLACK=../slack-archive
 LOG_PREFIX="$(date -Is)"
 rcs=()
@@ -62,8 +66,20 @@ PHASE_FLOOR_S=600
 #    the end, and DM the seat when the night fell short of what the soonest expiry needs.
 BUDGET_BEFORE=/tmp/memo-credit-cycle.before.json
 python3 - > "$BUDGET_BEFORE" <<'PYSNAP' || echo "⚠ budget snapshot FAILED -- the end-of-run shortfall check will say so, not assume zero" >&2
-import sys, json; sys.path.insert(0, ".")
+import sys, json, os; sys.path.insert(0, os.environ["MEMO_AUDIT_DIR"])
 import keyring
+if not hasattr(keyring, "load_grants"):
+    # \u26d4 rc 3, NOT a bare sys.exit(<str>) which returns 1 -- 1 is SHORTFALL, and an
+    #    import fault announcing itself as a shortfall is a wrong diagnosis wearing a
+    #    real one's clothes.
+    print("\u26d4 IMPORTED THE WRONG keyring: %s\n"
+             "   The PyPI credential library of the same name shadows ours whenever our\n"
+             "   directory is not first on sys.path, and the import SUCCEEDS -- the fault\n"
+             "   only surfaces later as AttributeError, which this script used to report as\n"
+             "   'the spend ledger could not be read'. That diagnosis sends someone to the\n"
+             "   broker for an import fault. Ours is scripts/memo-audit/keyring.py."
+             % getattr(keyring, "__file__", "?"), file=sys.stderr)
+    sys.exit(3)
 print(json.dumps({a: keyring.remaining(a) for a in keyring.load_grants()}))
 PYSNAP
 
@@ -163,8 +179,20 @@ phase probe-coverage /usr/bin/timeout 14400 python3 run.py \
 # ⇒ An unknown budget SKIPS the audit phase loudly rather than running a token
 #   batch that reads as success. Earlier phases have already run and are unaffected.
 BATCHES=$(python3 - <<'PY'
-import sys; sys.path.insert(0, ".")
+import sys, os; sys.path.insert(0, os.environ["MEMO_AUDIT_DIR"])
 import keyring
+if not hasattr(keyring, "load_grants"):
+    # \u26d4 rc 3, NOT a bare sys.exit(<str>) which returns 1 -- 1 is SHORTFALL, and an
+    #    import fault announcing itself as a shortfall is a wrong diagnosis wearing a
+    #    real one's clothes.
+    print("\u26d4 IMPORTED THE WRONG keyring: %s\n"
+             "   The PyPI credential library of the same name shadows ours whenever our\n"
+             "   directory is not first on sys.path, and the import SUCCEEDS -- the fault\n"
+             "   only surfaces later as AttributeError, which this script used to report as\n"
+             "   'the spend ledger could not be read'. That diagnosis sends someone to the\n"
+             "   broker for an import fault. Ours is scripts/memo-audit/keyring.py."
+             % getattr(keyring, "__file__", "?"), file=sys.stderr)
+    sys.exit(3)
 try:
     budget = sum(keyring.remaining(a) for a in keyring.load_grants())
 except keyring.LedgerUnreadable as e:
@@ -193,9 +221,21 @@ fi
 BROKER=http://192.168.1.168:3030
 SHORTFALL_REPORT=/tmp/memo-credit-cycle.shortfall.txt
 python3 - "$BUDGET_BEFORE" > "$SHORTFALL_REPORT" 2>&1 <<'PYACCT'
-import sys, json, datetime
-sys.path.insert(0, ".")
+import sys, json, datetime, os
+sys.path.insert(0, os.environ["MEMO_AUDIT_DIR"])
 import keyring
+if not hasattr(keyring, "load_grants"):
+    # \u26d4 rc 3, NOT a bare sys.exit(<str>) which returns 1 -- 1 is SHORTFALL, and an
+    #    import fault announcing itself as a shortfall is a wrong diagnosis wearing a
+    #    real one's clothes.
+    print("\u26d4 IMPORTED THE WRONG keyring: %s\n"
+             "   The PyPI credential library of the same name shadows ours whenever our\n"
+             "   directory is not first on sys.path, and the import SUCCEEDS -- the fault\n"
+             "   only surfaces later as AttributeError, which this script used to report as\n"
+             "   'the spend ledger could not be read'. That diagnosis sends someone to the\n"
+             "   broker for an import fault. Ours is scripts/memo-audit/keyring.py."
+             % getattr(keyring, "__file__", "?"), file=sys.stderr)
+    sys.exit(3)
 try:
     before = json.load(open(sys.argv[1]))
 except Exception as e:
@@ -243,8 +283,9 @@ if [ "$ACCT_RC" -ne 0 ]; then
 import sys, json
 body = open(sys.argv[1]).read()
 rc = sys.argv[2]
-subj = "credit cycle: SHORTFALL against the soonest grant expiry" if rc == "1" \
-       else "credit cycle: tonight's spend could not be verified"
+subj = {"1": "credit cycle: SHORTFALL against the soonest grant expiry",
+        "2": "credit cycle: tonight's spend could not be verified",
+       }.get(rc, f"credit cycle: the spend accounting itself FAILED (rc={rc})")
 print(json.dumps({"to": "memo", "from": "memo", "subject": subj,
                   "content": body + "\n\nSource: daily-credit-cycle.sh, server4. "
                              "Per-account figures come from keyring.remaining() against the "

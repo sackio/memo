@@ -24,6 +24,14 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "memo-audit"))
 import keyring                                              # noqa: E402
+if not hasattr(keyring, "load_grants"):
+    sys.exit("\u26d4 IMPORTED THE WRONG keyring: %s\n"
+             "   The PyPI credential library of the same name shadows ours whenever our\n"
+             "   directory is not first on sys.path, and the import SUCCEEDS -- the fault\n"
+             "   only surfaces later as AttributeError, which this script used to report as\n"
+             "   'the spend ledger could not be read'. That diagnosis sends someone to the\n"
+             "   broker for an import fault. Ours is scripts/memo-audit/keyring.py."
+             % getattr(keyring, "__file__", "?"))
 
 CLAUDE = "/home/ben/.local/bin/claude"
 
