@@ -55,6 +55,18 @@ echo "batch window closes $(date -d "@$DEADLINE" -Is) -- $(( (DEADLINE - _now) /
 # spends real money. 600s is the smallest slice worth starting.
 PHASE_FLOOR_S=600
 
+# ⛔⛔ A CYCLE THAT RAN AND SPENT NOTHING EXITS 0 AND LOOKS EXACTLY LIKE A GOOD NIGHT.
+#    That is the failure that costs money here: a grant expires on a date, so the loss is
+#    silent, gradual and never produces an error. The cronguard wrapper only writes a line
+#    on a NON-ZERO exit, and nobody reads that file. ⇒ Snapshot the budget now, diff it at
+#    the end, and DM the seat when the night fell short of what the soonest expiry needs.
+BUDGET_BEFORE=/tmp/memo-credit-cycle.before.json
+python3 - > "$BUDGET_BEFORE" <<'PYSNAP' || echo "⚠ budget snapshot FAILED -- the end-of-run shortfall check will say so, not assume zero" >&2
+import sys, json; sys.path.insert(0, ".")
+import keyring
+print(json.dumps({a: keyring.remaining(a) for a in keyring.load_grants()}))
+PYSNAP
+
 phase () {   # phase <name> <command...>
   local name="$1"; shift
   local left=$(( DEADLINE - $(date +%s) ))
@@ -150,6 +162,83 @@ else
   echo "budget buys ~${BATCHES} batches"
   phase audit /usr/bin/timeout 36000 python3 run.py --candidates candidates.json \
       --batch-size 6 --batches "$BATCHES" --concurrency 2 --wait-for-lock 7200
+fi
+
+# ── what the night actually bought ─────────────────────────────────────
+# ⚠ Reports per ACCOUNT, never a pooled total. $200 expiring in 33 days and $125 expiring
+#   in 4 are not interchangeable, and a pooled figure is the one number that hides the only
+#   question worth asking: is the money that disappears FIRST being spent?
+BROKER=http://192.168.1.168:3030
+SHORTFALL_REPORT=/tmp/memo-credit-cycle.shortfall.txt
+python3 - "$BUDGET_BEFORE" > "$SHORTFALL_REPORT" 2>&1 <<'PYACCT'
+import sys, json, datetime
+sys.path.insert(0, ".")
+import keyring
+try:
+    before = json.load(open(sys.argv[1]))
+except Exception as e:
+    print(f"⛔ NO BASELINE: the start-of-run budget snapshot is unreadable ({type(e).__name__}: {e}).")
+    print("   This run's spend CANNOT be computed. That is not the same as zero spend.")
+    sys.exit(2)
+g = keyring.load_grants()
+today = datetime.date.today()
+rows, worst = [], None
+for a in g:
+    try:
+        now = keyring.remaining(a)
+    except Exception as e:
+        print(f"⛔ {a}: remaining() failed ({type(e).__name__}) -- not counted as zero spend."); continue
+    spent = before.get(a)
+    spent = None if spent is None else spent - now
+    exp = g[a].get("expires")
+    days = (datetime.date.fromisoformat(exp) - today).days if exp else None
+    need = (now / max(1, days)) if (days is not None and days >= 0 and now > 0) else 0.0
+    rows.append((a, now, exp, days, spent, need))
+    if now > 1.0 and days is not None and (worst is None or days < worst[3]):
+        worst = (a, now, exp, days, spent, need)
+print("acct        remaining   expires      days   spent tonight   needed/night")
+for a, now, exp, days, spent, need in sorted(rows, key=lambda r: (r[3] if r[3] is not None else 9999)):
+    sp = "   unknown" if spent is None else f"{spent:10.2f}"
+    print(f"{a:<10} {now:10.2f}   {exp or '-':<11} {days if days is not None else '-':>5}   {sp}      {need:10.2f}")
+if worst is None:
+    print("\nNo account holds a spendable balance with a known expiry.")
+    sys.exit(0)
+a, now, exp, days, spent, need = worst
+print(f"\nSOONEST EXPIRY: {a}, ${now:.2f} left, {days} day(s) to {exp} -> ${need:.2f}/night to not waste it.")
+if spent is None:
+    print("⛔ Tonight's spend on it is UNKNOWN (no baseline). Treat as unverified, not as fine."); sys.exit(2)
+if spent < need * 0.5:
+    print(f"⛔ SHORTFALL: spent ${spent:.2f} tonight against ${need:.2f} needed. At this rate the grant expires with money on it.")
+    sys.exit(1)
+print(f"✅ On pace: spent ${spent:.2f} tonight against ${need:.2f} needed.")
+PYACCT
+ACCT_RC=$?
+echo "──── spend accounting rc=${ACCT_RC}"
+cat "$SHORTFALL_REPORT"
+# DM only when there is something to act on (rc 1 shortfall, rc 2 unverifiable). rc 0 is silence.
+if [ "$ACCT_RC" -ne 0 ]; then
+  python3 - "$SHORTFALL_REPORT" "$ACCT_RC" > /tmp/memo-credit-cycle.dm.json <<'PYDM'
+import sys, json
+body = open(sys.argv[1]).read()
+rc = sys.argv[2]
+subj = "credit cycle: SHORTFALL against the soonest grant expiry" if rc == "1" \
+       else "credit cycle: tonight's spend could not be verified"
+print(json.dumps({"to": "memo", "from": "memo", "subject": subj,
+                  "content": body + "\n\nSource: daily-credit-cycle.sh, server4. "
+                             "Per-account figures come from keyring.remaining() against the "
+                             "broker ledger; a pooled total would hide this."}))
+PYDM
+  DM_CODE=$(curl -sS --max-time 15 -X POST "$BROKER/messages" -H 'Content-Type: application/json' \
+                 --data-binary @/tmp/memo-credit-cycle.dm.json -o /tmp/memo-credit-cycle.dm-resp.json \
+                 -w '%{http_code}' 2>/dev/null)
+  # ⛔ DECIDE ON THE HTTP CODE, NEVER curl's EXIT STATUS: a 404 on a dead route exits 0.
+  case "${DM_CODE:-}" in
+    2*) if grep -q '"sent":0' /tmp/memo-credit-cycle.dm-resp.json 2>/dev/null; then
+          echo "⛔ DM ACCEPTED BUT NOT ROUTED (sent:0) -- the shortfall stands and reached nobody."
+        else echo "✅ shortfall DM delivered"; fi ;;
+    *)  echo "⛔ DM SEND FAILED (HTTP ${DM_CODE:-<none>}) -- the shortfall stands; it reached nobody."
+        head -c 300 /tmp/memo-credit-cycle.dm-resp.json 2>/dev/null ;;
+  esac
 fi
 
 echo "════ cycle done $(date -Is)"
