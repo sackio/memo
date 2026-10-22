@@ -21,6 +21,14 @@
 # ⚠️ A PHASE THAT FAILS DOES NOT STOP THE CYCLE. A Slack archive that did not
 # run must not cost the corpus its audit. Each phase reports its own rc and the
 # script carries on; the summary at the end names every failure.
+# ⛔ CONCURRENCY 2, AND 03:30 IS INSIDE THE PERMITTED WINDOW ON PURPOSE.
+# `system`, relaying Ben from #system 2026-10-22 14:55: memo's batch work runs
+# on server4 only at concurrency 2, idle priority, between 22:00 and 06:00.
+# server4 is a single point of failure and its ROOT disk (sde) holds every
+# session transcript, so a worker's own logging is the I/O that hurts -- this
+# seat drove the host to load 170 at ~195 MB/s during a RAID rebuild.
+# ⚠ Do not raise either number without `system` agreeing. Workers are wrapped
+# in ionice/nice at the exec by run.py; the cap here is the second half of it.
 set -u
 cd "$(dirname "$0")" || exit 1
 SLACK=../slack-archive
@@ -38,7 +46,7 @@ phase () {   # phase <name> <command...>
 
 phase slack-archive  /usr/bin/timeout 1800 python3 "$SLACK/archive.py" --days 2
 phase slack-digests  /usr/bin/timeout  900 python3 "$SLACK/mine.py" --days 1.2 --checkpoint
-phase slack-mine     /usr/bin/timeout 10800 python3 "$SLACK/mine-run.py" --per-worker 4 --concurrency 3 --wait-for-lock 7200
+phase slack-mine     /usr/bin/timeout 10800 python3 "$SLACK/mine-run.py" --per-worker 4 --concurrency 2 --wait-for-lock 7200
 phase refute-recheck /usr/bin/timeout 1800 python3 refute-recheck.py --queue
 phase candidates-all /usr/bin/timeout 1800 python3 select-all.py --out candidates-all.json
 phase candidates     /usr/bin/timeout  900 python3 select-read-weighted.py \
@@ -52,7 +60,9 @@ phase candidates     /usr/bin/timeout  900 python3 select-read-weighted.py \
 # ⚠️ Bounded on purpose. It runs ahead of the audit and takes a fixed slice
 # (~$20, ~600 memos), not the whole grant -- the split between coverage and
 # depth is Ben's call, not a default this script should quietly make.
-phase probe-coverage /usr/bin/timeout 10800 python3 run.py     --candidates candidates-all.json --prompt probe-prompt.md --model sonnet     --batch-size 10 --batches 60 --concurrency 4
+phase probe-coverage /usr/bin/timeout 14400 python3 run.py \
+    --candidates candidates-all.json --prompt probe-prompt.md --model sonnet \
+    --batch-size 10 --batches 60 --concurrency 2 --wait-for-lock 7200
 
 # How many batches the remaining grant actually pays for. ⚠️ Derived, never a
 # constant: the cost per memo is ordering-dependent (measured $0.291 stratified
@@ -71,7 +81,7 @@ PY
 )
 echo "budget buys ~${BATCHES} batches"
 phase audit /usr/bin/timeout 36000 python3 run.py --candidates candidates.json \
-    --batch-size 6 --batches "$BATCHES" --concurrency 4 --wait-for-lock 7200
+    --batch-size 6 --batches "$BATCHES" --concurrency 2 --wait-for-lock 7200
 
 echo "════ cycle done $(date -Is)"
 printf '%s\n' "${rcs[@]}"
