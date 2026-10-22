@@ -1,0 +1,61 @@
+#!/bin/bash
+# Which NFS metadata operation class is paying the /mnt/nas stall tax?
+#
+# WHY: arm A of the latency A/B (SETATTR on an existing per-host file) saw 65.2% of
+# minutes stalled where `cluster`'s nas-write-tail-sample saw 87.3% over the same window,
+# with cadence and definition already matched. The residual is the OPERATION. cluster's
+# op is CREATE + UNLINK of a `$$`-suffixed name -- it writes no data -- so the candidate
+# explanation is that mutating the PARENT DIRECTORY is dearer than mutating one inode.
+# ⛔ The earlier guess that its probe did a data write was wrong; corrected by cluster
+#    2026-10-22 from its own script. `datawrite` below exists to test that term anyway,
+#    because it is nearly free to carry and it is the obvious next question.
+#
+# ⭐ THE OPS ARE INTERLEAVED, NOT RUN IN BLOCKS. /mnt/nas stalls arrive in episodes with a
+#    5.6s median and a 28.8s p95, so two ops measured in consecutive 10-minute blocks
+#    would differ by which episodes they happened to contain. Round-robin at one cadence
+#    makes every op share the same minutes.
+#
+# ⛔ DO NOT CHANGE BOUND. A changed bound looks exactly like a changed tail (see
+#    nfs-latency-probe). This one is NOT an arm of that A/B and must not be pooled with it.
+BOUND=60        # seconds. ⚠️ A FLOOR: SIGTERM cannot interrupt uninterruptible sleep.
+CADENCE=2       # seconds between samples, serial, so each op is sampled every 6s.
+SHARED=/mnt/nas/data/memo-watch/opclass-shared   # ⭐ every host writes HERE -- the contention arm
+OWN=/mnt/nas/data/memo-watch/opclass-$(hostname) # per-host dir -- the uncontended arm
+LABEL="${1:?label, e.g. 20261022-pm}"
+END_EPOCH="${2:?end time as epoch seconds}"
+LOG="$HOME/.memo-watch/nfs-latency/$(hostname).opclass-$LABEL.log"   # ⛔ host-local on purpose
+mkdir -p "$(dirname "$LOG")" "$SHARED" "$OWN"
+STABLE="$OWN/.stable"
+: > "$STABLE"            # the SETATTR and datawrite target: exists for the whole run
+printf '# opclass label=%s host=%s bound=%s cadence=%s shared=%s own=%s start=%s end_epoch=%s\n' \
+  "$LABEL" "$(hostname)" "$BOUND" "$CADENCE" "$SHARED" "$OWN" "$(date -Is)" "$END_EPOCH" >> "$LOG"
+i=0
+while [ "$(date +%s)" -lt "$END_EPOCH" ]; do
+  case $(( i % 4 )) in
+    0) OP=setattr ;;
+    1) OP=create_own ;;
+    2) OP=create_shared ;;
+    3) OP=datawrite ;;
+  esac
+  i=$(( i + 1 ))
+  s=$(date +%s%N)
+  case "$OP" in
+    setattr)       timeout "$BOUND" touch "$STABLE" 2>/dev/null; rc=$? ;;
+    datawrite)     timeout "$BOUND" dd if=/dev/zero of="$STABLE" bs=4096 count=1 \
+                     conv=notrunc,fsync 2>/dev/null; rc=$? ;;
+    create_own)    N="$OWN/.c.$$.$i"
+                   timeout "$BOUND" touch "$N" 2>/dev/null; rc=$?
+                   rm -f -- "$N" 2>/dev/null ;;
+    create_shared) N="$SHARED/.c.$(hostname).$$.$i"
+                   timeout "$BOUND" touch "$N" 2>/dev/null; rc=$?
+                   rm -f -- "$N" 2>/dev/null ;;
+  esac
+  e=$(date +%s%N)
+  # ⛔ The UNLINK is deliberately OUTSIDE the timed region. Timing create+unlink together
+  #    would make this op two directory mutations against the others' one, and the result
+  #    would not answer "is a directory mutation dearer than an inode mutation".
+  printf '%s %s %s %s %s\n' "$(date -Is)" "$(hostname)" "$OP" "$rc" "$(( (e-s)/1000000 ))" >> "$LOG"
+  sleep "$CADENCE"
+done
+rm -f -- "$STABLE" 2>/dev/null
+printf '# opclass label=%s host=%s ENDED %s\n' "$LABEL" "$(hostname)" "$(date -Is)" >> "$LOG"
