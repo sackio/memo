@@ -93,17 +93,20 @@ the shared-directory case, not a clean per-client reading.
 directory, same host, same window — not touch-vs-touch-plus-write. `cluster` removed its
 sampler's cron at 16:03, so this instrument is the one that could run it at 2s cadence.
 
-✅ **IT RAN, AND THE RESIDUAL IS THE OPERATION.** `nfs-op-class-probe`, six hosts, 2,211
-samples, 17:26–18:15 the same day, five ops interleaved in a **rotating** order so that no op
-owns a position. Paired within a round, CREATE stalled where the SETATTR two seconds beside
-it did not in **165 rounds against 41** (McNemar p<0.0001); it took **35.8% of the window's
-wall clock against 2.5%**. The 22-point gap needs no second cause.
+✅ **IT RAN TWICE, AND THE RESIDUAL IS THE OPERATION.** `nfs-op-class-probe`, six hosts,
+rotating order so no op owns a position: 2,211 samples 17:26–18:15 and 2,680 samples
+18:34–19:39 the same day. Paired within a round, CREATE stalled where the SETATTR two seconds
+beside it did not in **165 rounds against 41**, then **189 against 37** — McNemar p<0.0001 in
+both, taking 35.8% and 27.6% of the window's wall clock against 2.5% and 2.4%. The 22-point
+gap needs no second cause.
 Figures, the controls, and what is still open: **`nfs-op-class-results.md`**.
 
-⛔ **Two things in the section above did not survive that run.** (1) The shared-directory
-contention `cluster` names as inflating its own 87.3% runs the **wrong way** on this mount —
-the shared directory is the *cheaper* one, p<0.0001, in two runs under two different orders;
-whatever inflates their figure, it is not that. (2) A `datawrite` term was carried as the
+⛔ **Two things in the section above did not survive those runs.** (1) The shared-directory
+contention `cluster` names as inflating its own 87.3% is **not measurable at all** here: a
+six-host shared directory and a per-host directory nothing else touches are indistinguishable
+(85 vs 94 discordant rounds, p=0.55). The per-host directory the probe itself works in is the
+expensive one, and that is self-inflicted heat, not contention. Whatever inflates their
+figure, it is not four hosts sharing a parent. (2) A `datawrite` term was carried as the
 obvious next question and is **closed**: a 4 KiB fsync'd write is the cheapest op measured.
 
 ⛔ **Still do not merge the two series or quote one figure for the other** — that was never

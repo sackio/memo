@@ -141,8 +141,11 @@ hb_mount_root() { printf '/%s/%s' "$(echo "$HB" | cut -d/ -f2)" "$(echo "$HB" | 
 # ⛔ CITE THE PAIRED COLUMNS, NOT THE p50s. This comment used to quote 28,470ms against
 #    472ms from the fixed-order run, where every op owned one position and position and
 #    operation were the same measurement; and a p50 on this mount is a statement about the
-#    hour it was taken in -- the same probe read SETATTR at 510ms and at 11ms 16 minutes
-#    apart. Direction survived the rotation; the magnitudes were never transferable.
+#    hour it was taken in -- the same probe read SETATTR at 510ms, 11ms and 112ms in three
+#    windows on one afternoon. The CREATE direction replicated across both rotated runs at
+#    p<0.0001; the magnitudes never transferred, and neither did any effect weaker than that
+#    (two at p=0.003-0.05 failed to replicate, one flipping direction). Figures and the
+#    retraction: nfs-op-class-results.md.
 # ⚠️ The directory-slow threshold is a VARIABLE so the control harness can force that branch.
 #    A verdict no test can reach is a verdict nobody has read.
 HB_DIR_SLOW_MS=${HB_DIR_SLOW_MS:-3000}
@@ -184,7 +187,7 @@ if ! timeout 25 test -f "$HB"; then
   else
     VERDICT="=> THE MOUNT IS HEALTHY AND SO IS THE DIRECTORY. A static sibling in the SAME directory answered in ${STAT_MS}ms and the mount root $(hb_mount_root) in ${ROOT_MS}ms, while $HB did not answer in 25s. The contention is on THIS ONE FILE, which is rewritten every cadence. Not an NFS outage, and not evidence the watch is dead. Measured 2026-10-22: the same pattern showed 9,160ms on the heartbeat against 92ms on a static file.
 => NOT ACTIONABLE BY THE NAS OWNER, AND NOT A PARTIAL-WRITE PROBLEM: run already writes the heartbeat to a temp name and renames it into place atomically (scripts/memo-watch/run:397), so a reader never sees a half-written file.
-=> CAUSE NOT SETTLED, and the standing guess is weaker than it was. The guess is attribute-cache revalidation: this mount is nfs4 with acregmin=acregmax=600, so a static file answers from cache in milliseconds while a file whose mtime keeps changing forces a round trip. AGAINST IT, measured 2026-10-22 by nfs-op-class-probe across six hosts with the op order rotated: touching a constantly-rewritten inode and touching a cold one DO differ, and the COLD one is dearer (85 discordant rounds to 50, p=0.0034) -- the opposite of what this guess needs. That measures SETATTR where this is GETATTR, so it narrows the guess rather than killing it; figures in scripts/memo-watch/nfs-op-class-results.md. DISCRIMINATOR: whether the gap persists on a mount with the caching options removed."
+=> CAUSE NOT SETTLED, and the standing guess is weaker than it was. The guess is attribute-cache revalidation: this mount is nfs4 with acregmin=acregmax=600, so a static file answers from cache in milliseconds while a file whose mtime keeps changing forces a round trip. NEITHER FOR NOR AGAINST IT, and that is the honest state: nfs-op-class-probe compared touching a constantly-rewritten inode against a cold one on six hosts in THREE runs on 2026-10-22 and got three answers -- p=0.81, p=0.0034 with cold dearer, p=0.41 with the direction flipped. At ~440 paired rounds the effect is below what that instrument resolves, so do not cite any of them. It also measures SETATTR where this is GETATTR; figures in scripts/memo-watch/nfs-op-class-results.md. DISCRIMINATOR: whether the gap persists on a mount with the caching options removed."
   fi
   dm "⛔ memo-watch heartbeat UNREADABLE" \
      "heartbeat-check on $(hostname) could not read $HB within 25s.
