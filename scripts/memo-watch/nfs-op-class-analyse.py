@@ -36,7 +36,14 @@ PAIRS = [("setattr_cold", "create_own"),    # inode mutation vs directory mutati
          ("create_idle", "create_own"),     # ~equal => the term is visit frequency
          ("setattr_hot", "setattr_cold"),   # hot inode vs cold inode
          ("setattr_cold", "datawrite"),     # is there a data-write term at all
-         ("create_own", "datawrite")]
+         ("create_own", "datawrite"),
+         # GETATTR arm (nfs-getattr-probe). Absent from an op-class log and SKIPPED AND
+         # NAMED there, which is the point of that behaviour.
+         ("getattr_hot", "getattr_static"),    # THE memo-watch heartbeat question
+         ("getattr_cold", "getattr_static"),   # heat, or merely cache residency?
+         ("getattr_hot", "getattr_cold"),
+         ("getattr_hot", "setattr_hot"),       # is reading the hot file as dear as writing it
+         ("getattr_static", "create_idle")]    # a cached read against a directory mutation
 
 
 def quantile(v, q):

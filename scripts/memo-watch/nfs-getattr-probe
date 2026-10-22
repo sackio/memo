@@ -1,0 +1,91 @@
+#!/bin/bash
+# Is a GETATTR on a constantly-rewritten file dearer than on a static one, same directory?
+#
+# WHY: the memo-watch heartbeat alert has carried a standing GUESS all of 2026-10-22 --
+# that /mnt/nas/data/memo-watch/heartbeat is slow to stat BECAUSE it is rewritten every
+# cadence, the mount being nfs4 with acregmin=acregmax=600 so a static file answers from
+# cache while a changing one forces a round trip. The entire evidence for it is ONE pair:
+# 9,160 ms on the heartbeat against 92 ms on a static file, 2026-10-22. n=1, unpaired,
+# and the two files were not even in the same directory at the time.
+# ⛔ nfs-op-class-probe CANNOT settle this. It measures SETATTR, CREATE and a data write.
+#    This is GETATTR, and that distinction was the standing caveat on every answer given.
+#
+# ⛔⛔ AND THE ADJACENT SETATTR QUESTION IS RETRACTED, WHICH IS WHY THIS IS A FRESH PROBE
+#    AND NOT A CITATION. Hot-vs-cold SETATTR was measured three times on 2026-10-22 and
+#    gave p=0.81, p=0.0034 (cold dearer) and p=0.41 (direction flipped). Nothing there is
+#    established, so nothing there can be carried across to GETATTR. See
+#    nfs-op-class-results.md, "RETRACTED".
+#
+# ⭐ ALL THREE GETATTR TARGETS LIVE IN ONE DIRECTORY, ON PURPOSE. Measured the same day:
+#    a create in the probe's own busy directory stalls far more than one in an idle
+#    directory (48 vs 140 discordant rounds, p<0.0001), so the PARENT is a live confound.
+#    Putting .hot, .static and the cold pool side by side holds it fixed: whatever the
+#    directory is doing, it is doing to all three.
+# ⭐ INTERLEAVED, ROTATING ORDER. /mnt/nas stalls arrive in episodes (p50 5.6s, p95 28.8s),
+#    so ops in consecutive blocks differ by which episodes they caught; and in a FIXED
+#    round order an op meeting an episode's onset absorbs it and makes its successor look
+#    cheap, which makes position and operation the same measurement.
+# ⛔ READ THE PAIRED COLUMNS, NOT THE p50s. Across two matched runs this instrument
+#    replicated every effect at p<0.0001 and NEITHER effect between p=0.003 and p=0.05,
+#    one of which flipped direction. A p of 0.003 here is not yet a finding.
+BOUND=60        # seconds. ⚠️ A FLOOR: SIGTERM cannot interrupt uninterruptible sleep.
+CADENCE=2       # serial, 6 ops, so each op is sampled every ~12s plus whatever it stalls
+POOL_N=180      # cold files, revisited about every POOL_N rounds
+GA=/mnt/nas/data/memo-watch/getattr-$(hostname)        # all three stat targets, one dir
+DWD=/mnt/nas/data/memo-watch/getattr-dw-$(hostname)    # the data write lives ELSEWHERE...
+IDLE=/mnt/nas/data/memo-watch/getattr-idle-$(hostname) # ...and so does the create, so
+                                                       # neither adds heat to $GA
+LABEL="${1:?label, e.g. 20261022-getattr}"
+END_EPOCH="${2:?end time as epoch seconds}"
+LOG="$HOME/.memo-watch/nfs-latency/$(hostname).getattr-$LABEL.log"   # ⛔ host-local
+mkdir -p "$(dirname "$LOG")" "$GA" "$DWD" "$IDLE"
+HOT="$GA/.hot"; STATIC="$GA/.static"; DW="$DWD/.dw"
+
+# ⛔ HEADER FIRST, SETUP SECOND, AND THE SETUP IS TIMED. Writing the header after the pool
+#    creation left the log FILE ABSENT for the whole of setup -- minutes, on a degraded
+#    mount -- so "0 samples, still starting" and "0 samples, died" were byte-identical.
+printf '# getattr label=%s host=%s bound=%s cadence=%s ga=%s dw=%s idle=%s pool_n=%s start=%s end_epoch=%s\n' \
+  "$LABEL" "$(hostname)" "$BOUND" "$CADENCE" "$GA" "$DWD" "$IDLE" "$POOL_N" "$(date -Is)" "$END_EPOCH" >> "$LOG"
+_s0=$(date +%s%N)
+: > "$HOT"; : > "$DW"
+# ⛔ $STATIC IS WRITTEN EXACTLY ONCE, HERE, AND NEVER TOUCHED AGAIN. That is the whole
+#    control. If the run has to be restarted, delete $GA first or $STATIC carries the
+#    previous run's age, which is a different variable than the one named.
+: > "$STATIC"
+i=0; while [ "$i" -lt "$POOL_N" ]; do : > "$GA/f$i"; i=$(( i + 1 )); done
+_s1=$(date +%s%N)
+printf '# setup pool_n=%s elapsed_ms=%s done=%s\n' "$POOL_N" "$(( (_s1-_s0)/1000000 ))" "$(date -Is)" >> "$LOG"
+
+i=0
+while [ "$(date +%s)" -lt "$END_EPOCH" ]; do
+  r=$(( i / 6 )); p=$(( i % 6 ))
+  case $(( (p + r) % 6 )) in
+    0) OP=getattr_hot ;;
+    1) OP=getattr_cold ;;
+    2) OP=getattr_static ;;
+    3) OP=setattr_hot ;;
+    4) OP=datawrite ;;
+    5) OP=create_idle ;;
+  esac
+  i=$(( i + 1 ))
+  s=$(date +%s%N)
+  case "$OP" in
+    # ⛔ `stat` NOT `ls`: ls -l on a directory is a READDIRPLUS, a different op entirely.
+    getattr_hot)    timeout "$BOUND" stat -c %Y "$HOT"    >/dev/null 2>&1; rc=$? ;;
+    getattr_cold)   timeout "$BOUND" stat -c %Y "$GA/f$(( r % POOL_N ))" >/dev/null 2>&1; rc=$? ;;
+    getattr_static) timeout "$BOUND" stat -c %Y "$STATIC" >/dev/null 2>&1; rc=$? ;;
+    setattr_hot)    timeout "$BOUND" touch "$HOT" 2>/dev/null; rc=$? ;;
+    datawrite)      timeout "$BOUND" dd if=/dev/zero of="$DW" bs=4096 count=1 \
+                      conv=notrunc,fsync 2>/dev/null; rc=$? ;;
+    create_idle)    N="$IDLE/.c.$$.$i"
+                    timeout "$BOUND" touch "$N" 2>/dev/null; rc=$?
+                    rm -f -- "$N" 2>/dev/null ;;
+  esac
+  e=$(date +%s%N)
+  printf '%s %s %s %s %s\n' "$(date -Is)" "$(hostname)" "$OP" "$rc" "$(( (e-s)/1000000 ))" >> "$LOG"
+  sleep "$CADENCE"
+done
+rm -f -- "$HOT" "$STATIC" "$DW" 2>/dev/null
+find "$GA" -mindepth 1 -delete 2>/dev/null
+find "$IDLE" -mindepth 1 -delete 2>/dev/null
+printf '# getattr label=%s host=%s ENDED %s\n' "$LABEL" "$(hostname)" "$(date -Is)" >> "$LOG"
