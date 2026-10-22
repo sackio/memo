@@ -16,6 +16,10 @@ than style:
   bypasses the shim.
 * **Always `-m <max>`.** An unbounded match count on a 40 MB transcript returns
   a result set nobody can use and that we would then have to hold in memory.
+  Since 2026-10-15 the bound sits on the SECOND grep of a pipeline, so that it
+  counts conversation rather than Claude Code's API-request records — see
+  `EXCLUDED_RECORD_TYPES`. The first grep is unbounded but never accumulates:
+  it is SIGPIPEd as soon as the second has enough.
 * **Never read a whole transcript.** Only matched line ranges are returned.
 """
 from __future__ import annotations
@@ -37,6 +41,46 @@ CONTEXT_LINES = 2
 # Refuse to run a pattern this long: bounded-alternation regexes are what make
 # the shimmed scanner pathological, and a giant pattern is the usual shape.
 MAX_PATTERN_LEN = 200
+
+# ⛔ Claude Code 2.1.300 writes three new record types into EVERY transcript:
+# `api-request-shape`, `api-request-blob` and `api-request`. They carry each API
+# request's system prompt, tool schemas and parameters — CLAUDE.md, the skill
+# listing and the tool list, byte-identical across every session on the fleet.
+# Measured by `guide` on server3, 2026-10-15: ~126 KB on the first request
+# (blob 87 KB + shape 39 KB), then ~2 KB per request; the blobs are deduped, so
+# it is one-off per session rather than per turn.
+#
+# They are not conversation. A provenance citation that lands on one cites the
+# prompt rather than anything anybody said, and on a common word they can
+# outnumber the real matches, eating the `-m` budget before grep reaches a line
+# somebody typed.
+#
+# ⭐ This is the only transcript reader in the repo that is NOT type-gated:
+# `scripts/transcript-search` (classify), `scripts/transcript-passages` and
+# `skills/memo-minder/bin/capture_miss_scan.py` all allow-list user/assistant
+# and drop these for free. A raw grep has no such gate, so it is explicit here.
+EXCLUDED_RECORD_TYPES = ("api-request-shape", "api-request-blob", "api-request")
+
+# How far into a line to look for its `"type"` key. The records above put it in
+# the first few dozen bytes; 400 is slack, and reading further would mean
+# holding an 87 KB blob per hit. ⚠️ If a future record buries its type past
+# this, the line is KEPT — the miss degrades to today's behaviour and can never
+# drop a real match, which is the direction this has to fail in.
+_TYPE_SCAN_CHARS = 400
+
+# The exclusion, as grep sees it. It is applied as a SECOND grep in a pipeline
+# rather than as a filter in Python, because `-m` has to count the lines a
+# caller wanted: a session holds one `api-request` record per request, so on a
+# pattern that appears in the system prompt they fill the match window entirely
+# and the conversation is never reached. Measured on a synthetic 200-request
+# transcript: a 5x over-fetch still returned 0 real matches out of 20.
+#
+# ⚠️ `.{0,%d}` bounds it to the head of the line, so a message that merely
+# QUOTES one of these type strings — this module's own session does — is not
+# dropped. `type` is not always the first key (it sits at index 3-4 on
+# user/assistant records), so the prefix cannot be anchored tighter than this.
+_EXCLUDE_RE = r'^.{0,%d}"type": ?"(%s)"' % (
+    _TYPE_SCAN_CHARS, "|".join(EXCLUDED_RECORD_TYPES))
 
 
 class LogQueryError(Exception):
@@ -68,28 +112,85 @@ def _validate(pattern: str) -> None:
         raise LogQueryError(f"invalid regex: {e}") from e
 
 
-def _sync_grep(path: Path, pattern: str, max_matches: int) -> list[dict]:
-    """Run `command grep -n -m<max>` and parse `line:text` output."""
+def _excluded_record_type(text: str) -> str | None:
+    """The API-request type this line is, or None if it is not one of them.
+
+    Read off the head of the line rather than by parsing it: the blob record is
+    87 KB and there is no reason to decode it to learn that we are throwing it
+    away. One function, so the test and the label it prints cannot disagree.
+    """
+    head = text[:_TYPE_SCAN_CHARS]
+    for t in EXCLUDED_RECORD_TYPES:
+        if f'"type":"{t}"' in head or f'"type": "{t}"' in head:
+            return t
+    return None
+
+
+def _sync_grep(path: Path, pattern: str, max_matches: int) -> dict:
+    """Match `pattern` in the transcript, minus the API-request records.
+
+    Two greps in a pipeline, wired argv-to-argv so no shell — and therefore no
+    shim — is involved. The first is unbounded but never accumulates: the
+    second carries `-m`, and when it has enough it exits and SIGPIPEs the
+    first. So the bound still holds and nothing large is ever held in memory,
+    while `-m` counts only lines a caller would want.
+    """
     import subprocess
 
     grep = shutil.which("grep") or "/bin/grep"
-    # argv form, so no shell is involved and therefore no shim to bypass —
-    # `command grep` is the equivalent discipline when a shell IS involved.
-    proc = subprocess.run(
-        [grep, "-n", "-a", "-E", f"-m{max_matches}", "--", pattern, str(path)],
-        capture_output=True, text=True, timeout=30,
-    )
-    # grep exits 1 on "no matches", which is not an error here.
-    if proc.returncode not in (0, 1):
-        raise LogQueryError(f"grep failed ({proc.returncode}): {proc.stderr[:200]}")
+    want = max_matches + 1          # one extra, purely to detect "there is more"
+    p1 = subprocess.Popen(
+        [grep, "-n", "-a", "-E", "--", pattern, str(path)],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    p2 = subprocess.Popen(
+        [grep, "-v", "-a", "-E", f"-m{want}", "--", _EXCLUDE_RE],
+        stdin=p1.stdout, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    p1.stdout.close()               # so p1 actually receives the SIGPIPE
+    try:
+        stdout, stderr2 = p2.communicate(timeout=30)
+    except subprocess.TimeoutExpired:
+        p2.kill(); p1.kill()
+        raise LogQueryError(f"grep timed out after 30s on {path}")
+    # `communicate`, not `wait`: p1's stderr is a pipe nobody has drained, and a
+    # process blocked writing to a full pipe never exits — `wait` would hang on
+    # it rather than report anything.
+    try:
+        _, err1 = p1.communicate(timeout=5)
+    except subprocess.TimeoutExpired:
+        p1.kill()
+        _, err1 = p1.communicate()
+    # 0 = matched, 1 = no matches, 141/-13 = SIGPIPE (p1 stopped because p2 had
+    # enough). None of those is an error here; anything else is.
+    if p1.returncode not in (0, 1, 141, -13):
+        raise LogQueryError(
+            f"grep failed ({p1.returncode}): {(err1 or b'')[:200]!r}")
+    if p2.returncode not in (0, 1):
+        raise LogQueryError(f"grep failed ({p2.returncode}): {stderr2[:200]}")
 
     out: list[dict] = []
-    for line in proc.stdout.splitlines():
+    excluded = 0
+    for line in stdout.splitlines():
         num, _, text = line.partition(":")
         if not num.isdigit():
             continue
-        out.append({"line": int(num), "text": text})
-    return out
+        # Second net, behind the grep one. Same window, same strings, so it
+        # should never fire — and if it does, the warning below says the two
+        # have drifted rather than letting the budget quietly leak again.
+        if _excluded_record_type(text):
+            excluded += 1
+            continue
+        # Truncate here, not at the caller: an unsliced blob line is 87 KB and
+        # the response only ever shows the first 500 characters of it.
+        out.append({"line": int(num), "text": text[:4000]})
+    if excluded:
+        # The two nets are meant to agree by construction, so this is drift —
+        # the regex let through what `_excluded_record_type` caught. Not fatal,
+        # but it means `-m` is being spent on machinery again.
+        logger.warning("log_query: %d api-request record(s) passed the grep "
+                       "exclusion and were dropped in Python — _EXCLUDE_RE and "
+                       "_excluded_record_type have drifted", excluded)
+    return {"hits": out, "excluded": excluded,
+            "more_available": len(out) > max_matches}
 
 
 def _sync_extract(path: Path, line_no: int, context: int) -> dict:
@@ -104,7 +205,15 @@ def _sync_extract(path: Path, line_no: int, context: int) -> dict:
                 break
             if i < lo:
                 continue
-            lines.append(raw.rstrip("\n"))
+            elided = None if i == line_no else _excluded_record_type(raw)
+            if elided:
+                # ⛔ An adjacent `api-request-blob` is 87 KB, and the excerpt is
+                # capped at 2000 characters — so without this the context
+                # window silently swallows the very line being cited. The line
+                # RANGE still spans it, because that is what is on disk.
+                lines.append(f"[{elided} record elided]")
+            else:
+                lines.append(raw.rstrip("\n"))
             if i == line_no:
                 try:
                     rec = json.loads(raw)
@@ -128,7 +237,8 @@ async def query(*, project_dir: str, session_uuid: str, pattern: str,
     if not path.is_file():
         raise LogQueryError(f"no transcript at {path}")
 
-    hits = await asyncio.to_thread(_sync_grep, path, pattern, capped)
+    scan = await asyncio.to_thread(_sync_grep, path, pattern, capped)
+    hits = scan["hits"][:capped]
     matches = []
     for h in hits:
         detail = await asyncio.to_thread(_sync_extract, path, h["line"], context)
@@ -141,7 +251,10 @@ async def query(*, project_dir: str, session_uuid: str, pattern: str,
         "transcript": str(path),
         "pattern": pattern,
         "match_count": len(matches),
-        "truncated": len(matches) >= capped,
+        # ⚠️ Was `len(matches) >= capped`, which is an INFERENCE from a full
+        # window and not the same claim. The second grep fetches one extra line
+        # for exactly this, so the flag now reports a measurement.
+        "truncated": scan["more_available"],
         "max_matches": capped,
         "matches": matches,
         # Ready to drop into a Provenance block once the caller picks a match.
