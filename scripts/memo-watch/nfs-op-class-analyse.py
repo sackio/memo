@@ -84,16 +84,35 @@ def main(paths):
     #    and these four figures SUM to the window's total stalled fraction. Dividing by
     #    4 to give each op "its own" quarter produced 262% on the first run -- a stalled
     #    op consumes wall clock the other three never got.
+    wall_total = 0.0
     for op in OPS:
         v = bucket.get(op) or []
         if not v:
             continue
         lat = [ms for _, ms in v]
         st = [ms for ms in lat if ms > THRESH_MS]
+        share = 100 * sum(st) / 1000.0 / span_s
+        wall_total += share
         print("%-14s %7d %8.0f %8.0f %8.0f %8.1f%% %8.1f%% %9d" % (
             op, len(v), quantile(lat, .5), quantile(lat, .95), max(lat),
-            100 * len(st) / len(v), 100 * sum(st) / 1000.0 / span_s,
+            100 * len(st) / len(v), share,
             sum(1 for rc, _ in v if rc != 0)))
+    # ⛔⛔ THE ONE ARITHMETIC INVARIANT THIS TABLE HAS, ASSERTED RATHER THAN ASSUMED.
+    #    The ops are SERIAL on one timeline, so their stalled-time shares divide one wall
+    #    clock and CANNOT sum past 100%. The first run of this analyser printed 262%
+    #    because it divided by 4 to give each op "its own" quarter, and nothing in the
+    #    output said that was impossible -- it was caught by reading, which does not
+    #    scale. A synthetic log whose timestamps do not advance by the real durations
+    #    trips it too, which is exactly right: that log cannot support a %ofwall claim.
+    if wall_total > 100.5:
+        print("\n⛔ %%ofwall SUMS TO %.1f%%, WHICH IS IMPOSSIBLE for serial ops on one "
+              "timeline.\n   Either the timestamps do not advance by the measured durations "
+              "(a synthetic or\n   stitched log), or the span is wrong. ⇒ THE %%ofwall COLUMN "
+              "IS NOT USABLE HERE.\n   The %%>1s column and every PAIRED result below are "
+              "unaffected -- they do not use span." % wall_total)
+    else:
+        print("           (%%ofwall sums to %.1f%% of one wall clock -- serial ops, so this "
+              "must be <=100%%)" % wall_total)
 
     # ⛔⛔ A ROUND IS FIVE CONSECUTIVE SAMPLES, NOT "EVERYTHING UNTIL setattr_hot COMES
     #    ROUND AGAIN". This used to increment the round counter whenever it saw OPS[0],
