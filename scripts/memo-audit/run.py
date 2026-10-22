@@ -344,7 +344,7 @@ def main() -> int:
           f"· batch-size {a.batch_size} · concurrency {a.concurrency}")
     print(f"brief: {a.prompt}")
     print(f"next account: {keyring.next_acct()} "
-          f"(remaining ~${keyring.remaining(keyring.next_acct()):.2f}, local ledger)")
+          f"(remaining ~${keyring.remaining(keyring.next_acct()):.2f}, {keyring.ledger_source()})")
     _ok, _why = keyring.guard_ok()
     print(("⛔ " if not _ok else "") + _why)
     if not _ok and not a.dry_run:

@@ -201,6 +201,18 @@ class LedgerUnreadable(RuntimeError):
     """
 
 
+def ledger_source() -> str:
+    """Which ledger the spend figures were actually read from.
+
+    ⛔ EXISTS BECAUSE THREE CALL SITES WENT ON PRINTING "local ledger" AFTER THE
+    READS MOVED TO THE BROKER -- run.py's account line and two strings in here.
+    This file already carries that lesson from the day grants.json replaced the
+    ACCOUNTS table and only the reporter was left behind, and it happened again
+    in the same file within the hour. ⇒ Derive the label, never spell it.
+    """
+    return "broker ledger" if USE_BROKER_FLAG.exists() else "local ledger"
+
+
 def _broker_totals(since: float = 0.0) -> dict:
     import urllib.request
     url = BROKER_TOTALS_URL
@@ -284,7 +296,7 @@ def remaining(acct: str) -> float:
     """What is actually left on the account, Console-first.
 
     ⛔⛔ `monthly - spent()` IS NOT THE BALANCE, AND IT ERRS UPWARD — the one
-    direction that overspends. The local ledger is a FLOOR: it records the cost
+    direction that overspends. The ledger is a FLOOR either way: it records the cost
     the Claude Code CLI reports, so anything spent outside the wrapper, and any
     premium the CLI omits, is invisible. Measured 2026-10-22 on `ben`: ledger
     said $38.99 left, Console said $29.30. A percentage margin on the ledger
@@ -514,7 +526,7 @@ def next_acct(now: datetime | None = None, min_balance: float = 0.0) -> str:
         raise RuntimeError(
             f"no tracked grant can fund ${floor:.2f}. Balances: "
             + ", ".join(f"{a}=${remaining(a):.2f}" for a in sorted(grants))
-            + ". The local ledger is a FLOOR, not the truth -- confirm against "
+            + f". The {ledger_source()} is a FLOOR, not the truth -- confirm against "
               "Console with `agents` before concluding there is no credit left."
         )
 
