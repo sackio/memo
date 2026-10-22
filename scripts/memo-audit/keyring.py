@@ -528,11 +528,14 @@ def log_unmeasured(acct: str, reason: str, est_usd: float) -> None:
     wrong by construction. It is still strictly better than a zero, because a
     zero is also wrong AND claims to be measured.
     """
+    # ⚠️ `estimated` AND `reason` DO NOT SURVIVE THE BROKER. Its contract is
+    #    {acct, actor, model, usd, ts} and nothing else, so the only channel for
+    #    "this figure is a stand-in" is the model name. Both fields stay on the
+    #    local row, which is why the local append is still worth keeping.
     rec = {"day": date.today().isoformat(), "ts": int(time.time()),
-           "acct": acct, "model": "unknown", "usd": round(float(est_usd), 6),
+           "acct": acct, "model": "unknown-estimated", "usd": round(float(est_usd), 6),
            "actor": this_actor(), "estimated": True, "reason": reason}
-    with SPEND_LOG.open("a") as fh:
-        fh.write(json.dumps(rec) + "\n")
+    _record(rec)
 
 
 def key_env(acct: str, base: dict | None = None) -> dict:
@@ -596,6 +599,21 @@ def log_spend(acct: str, model: str, usd: float) -> None:
     rec = {"day": date.today().isoformat(), "ts": int(time.time()),
            "acct": acct, "model": model, "usd": round(float(usd), 6),
            "actor": actor}
+    _record(rec)
+
+
+def _record(rec: dict) -> None:
+    """The ONE place a ledger row is written. Both writers go through it.
+
+    ⛔⛔ THEY DID NOT, AND THAT IS WHY THIS EXISTS. `log_spend` was taught to POST
+    and `log_unmeasured` was not, so once the reads moved to the broker every
+    estimated row -- the stand-in written when a worker is KILLED and reports no
+    cost -- became invisible to every budget read. That is the exact hole
+    `log_unmeasured` was built to close, reopened from the other side by the port
+    that was supposed to make the ledger more reliable. Caught by listing the
+    writers of SPEND_LOG after listing its readers.
+    ⇒ ONE WRITER. A second one is how the next flag flip loses rows too.
+    """
     if USE_BROKER_FLAG.exists():
         why = post_spend(rec)
         if why:
