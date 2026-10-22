@@ -501,3 +501,43 @@ if __name__ == "__main__":
     print("⚠️ 'spent' counts only wrapper-logged calls. Console is authoritative: "
           "measured 2026-10-19, this ledger under-reported pushbuild's Console "
           "balance by $2.44 (1.2%), so any cap enforced here runs ~1% permissive.")
+
+
+# ── one spender at a time, across PROCESSES ───────────────────────────────────
+SPENDER_LOCK = "/tmp/memo-grant-spender.lock"
+
+
+def acquire_spender_lock(who: str):
+    """Take the fleet-wide grant-spending lock, or raise naming who holds it.
+
+    ⛔⛔ `_INFLIGHT` IS A PROCESS GLOBAL, SO THE BUDGET GUARD IS BLIND TO EVERY
+    OTHER PROCESS. A second runner sees only SETTLED spend in the ledger and
+    therefore under-counts the live commitment by exactly the first runner's
+    concurrency -- the same shape as the bug fixed in f99c3a6, one scope up.
+    MEASURED 2026-10-22: two audit runs were alive at once for 46 minutes,
+    marching the same candidate list, each believing it was alone.
+
+    ⇒ There is no override flag. A flag is how an invariant becomes optional,
+    and the failure it prevents is silent: both runs look healthy, the grant
+    drains at twice the rate the guard reports, and the overlap only shows up
+    afterwards in duplicated work.
+    """
+    import fcntl
+    import os
+
+    f = open(SPENDER_LOCK, "a+")
+    try:
+        fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        f.seek(0)
+        holder = f.read().strip() or "an unnamed process"
+        f.close()
+        raise RuntimeError(
+            f"another grant spender holds {SPENDER_LOCK}: {holder}. "
+            "Wait for it, or stop it -- two spenders cannot see each other's "
+            "in-flight cost and will overrun the grant.")
+    f.seek(0)
+    f.truncate()
+    f.write(f"{who} pid={os.getpid()} since={datetime.now(timezone.utc).isoformat()}\n")
+    f.flush()
+    return f                      # keep the handle alive; closing releases it

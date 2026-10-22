@@ -1,0 +1,13 @@
+# ⛔ ALLOWLIST, for the same reason memo-audit uses one, plus a sharper one:
+# everything this directory GENERATES is verbatim Slack content from Ben's
+# private channels — health, finance, insurance, house-reno. Digests, worker
+# records and checkpoints must never reach a remote. They all regenerate from
+# the archive, so there is nothing to preserve and everything to leak.
+*
+!.gitignore
+!archive.py
+!verify.py
+!mine.py
+!mine-run.py
+!mine-prompt.md
+!README.md

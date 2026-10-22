@@ -276,6 +276,15 @@ def main() -> int:
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
 
+    # ⛔ One grant spender at a time, across PROCESSES. Held for the whole run;
+    # released when this process exits, however it exits.
+    if not a.dry_run:
+        try:
+            _lock = keyring.acquire_spender_lock(f"memo-audit {a.candidates}")
+        except RuntimeError as e:
+            print(f"⛔ {e}")
+            return 3
+
     cands = json.loads(Path(a.candidates).read_text())
     sel = cands[a.offset:a.offset + a.batch_size * a.batches]
     batches = [sel[i:i + a.batch_size] for i in range(0, len(sel), a.batch_size)]
