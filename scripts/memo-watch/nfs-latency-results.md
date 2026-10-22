@@ -68,9 +68,29 @@ latency series, not on the cadence" — measured here, they are not.
 hosts, 1/min, same window). Matching its cadence and its definition on this dataset gives
 **65.2%** (union over the same 4 hosts, thinned to 1/min, 253 of 388 minutes).
 
-The 22-point residual is **not** statistical: cadence and definition are matched. The
-remaining difference is the probe OPERATION — this instrument times a `touch` (a metadata
-SETATTR on an existing file), `cluster`'s times a touch **plus a data write**. Leading
-hypothesis, stated as inferred: the degraded path hits data writes harder than metadata
-updates. ⭐ DISCRIMINATOR: run both operations from one host in one window and compare.
-Until that runs, do not merge the two series or quote one figure for both.
+The 22-point residual is **not** statistical: cadence and definition are matched. It is the
+probe OPERATION, and the two operations are further apart than they look:
+
+| | this instrument | `nas-write-tail-sample` |
+|---|---|---|
+| op | `touch` an existing per-host file | `touch` a new `$$`-suffixed name, then `rm` it |
+| syscall class | SETATTR on one inode | CREATE + UNLINK, **mutating the parent directory** |
+| filename | stable per host | new every run |
+| contention | per-host files | all 4 hosts in **one shared directory** |
+
+⛔ **Both are metadata operations; they are not the same class.** CREATE and UNLINK mutate
+the parent directory and need directory-level serialisation on the server, where SETATTR
+touches a single inode. On a degraded filesystem the directory-modifying op is far more
+expensive. (Read from `cluster`'s script by `cluster`, 2026-10-22, correcting an inference
+of mine that its probe performed a data write — it writes no data at all.)
+
+⚠️ `cluster` also names a confound inside its own figure that inflates it: its four hosts
+create and unlink in the SAME directory every minute, so they contend on one parent
+directory lock and that contention is part of the 87.3%. That number is an upper bound on
+the shared-directory case, not a clean per-client reading.
+
+⭐ DISCRIMINATOR, restated: **SETATTR-on-existing vs CREATE+UNLINK-of-a-new-name**, same
+directory, same host, same window — not touch-vs-touch-plus-write. Only if the gap survives
+that is there a data-write term to look for. `cluster` removed its sampler's cron at 16:03,
+so this instrument is the one that can run it at 2s cadence. Until it runs, do not merge the
+two series or quote one figure for the other.
