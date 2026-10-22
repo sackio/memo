@@ -284,7 +284,14 @@ def guard_ok(now: datetime | None = None, reserve: float = 0.0,
     about. See run.py's `_INFLIGHT`.
     """
     now = now or datetime.now(timezone.utc)
-    acct = acct or next_acct(now)
+    # ⭐ Choose an account that can actually fund what is being committed. With a
+    #    bare next_acct() the caller gets whichever grant expires soonest even
+    #    when it holds less than this batch costs, and then refuses it forever.
+    if acct is None:
+        try:
+            acct = next_acct(now, min_balance=reserve)
+        except RuntimeError as e:
+            return False, str(e)
     budget = remaining(acct)   # already margined, at the term that is uncertain
     mine, unattributed = spent_today(now=now)
     basis = "Console" if load_grants()[acct].get("console_left") is not None else "ledger only"
@@ -304,13 +311,13 @@ def guard_ok(now: datetime | None = None, reserve: float = 0.0,
                        f"This is a loop or a bad estimate, not a big job -- fix the caller, "
                        f"do not raise the constant to get past it.")
     if reserve >= budget:
-        return False, (f"grant exhausted: {detail} -- stopping. ⭐ The tail is RELEASABLE, "
-                       f"not gone: have `agents` read Console and reconcile the ledger, then "
-                       f"the margin spends. Switching accounts is automatic via next_acct().")
+        return False, (f"grant exhausted on EVERY usable account: {detail} -- stopping. "
+                       f"⭐ The tail is RELEASABLE, not gone: have `agents` read Console and "
+                       f"reconcile the ledger, then the margin spends.")
     return True, f"grant guard: {detail}"
 
 
-def next_acct(now: datetime | None = None) -> str:
+def next_acct(now: datetime | None = None, min_balance: float = 0.0) -> str:
     """The account to spend next: soonest EXPIRY first, among those with budget.
 
     ⭐ SOONEST-EXPIRY-FIRST IS THE WHOLE POINT, not round-robin. Unused grant is
@@ -336,12 +343,24 @@ def next_acct(now: datetime | None = None) -> str:
     """
     now = now or datetime.now(timezone.utc)
     grants = load_grants()
-    usable = [(a, remaining(a)) for a in grants if remaining(a) > 1.0]
+    # ⛔⛔ `min_balance` IS WHY A RUN ROLLS INSTEAD OF HALTING, AND OMITTING IT
+    #    STRANDED $362 OF CREDIT. Measured 2026-10-22 12:37: the audit stopped at
+    #    batch 20 with ben down to $9.20 and $10.62 already in flight. ben still
+    #    cleared the old flat $1.00 floor, so this function kept returning ben,
+    #    the guard kept refusing it, and `agents` ($199.68) and `pushbuild`
+    #    ($162.78) were never consulted. The run reported "grant exhausted" while
+    #    two thirds of the money sat untouched — the exact stranding the
+    #    balance-bound budget was built to end, reintroduced one level down.
+    # ⇒ AN ACCOUNT THAT CANNOT FUND THE WORK IN HAND IS NOT A USABLE ACCOUNT.
+    #    Ask for the amount you are about to commit, not for a token balance.
+    floor = max(1.0, min_balance)
+    usable = [(a, remaining(a)) for a in grants if remaining(a) > floor]
     if not usable:
         raise RuntimeError(
-            "every tracked grant looks exhausted by the local ledger. That ledger "
-            "is a floor, not the truth -- confirm against Console with `agents` "
-            "before concluding there is no credit left."
+            f"no tracked grant can fund ${floor:.2f}. Balances: "
+            + ", ".join(f"{a}=${remaining(a):.2f}" for a in sorted(grants))
+            + ". The local ledger is a FLOOR, not the truth -- confirm against "
+              "Console with `agents` before concluding there is no credit left."
         )
 
     def sort_key(ar: tuple[str, float]):
