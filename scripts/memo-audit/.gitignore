@@ -32,3 +32,4 @@
 !verify-run.py
 !refute.py
 !refute-recheck.py
+!daily-credit-cycle.sh
