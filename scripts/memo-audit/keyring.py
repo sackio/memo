@@ -34,6 +34,33 @@ from pathlib import Path
 KEY_DIR = Path("/home/ben/.claude/state/api-keys")
 SPEND_LOG = KEY_DIR / "spend.jsonl"          # schema shared with the `agents` seat
 
+# ── the broker ledger, pre-wired so the cutover needs nobody awake ──────────
+# `agents` 2026-10-22 17:30: /api-spend is built (atc 3e8223d), not deployed.
+# When atc confirms the seed, `agents` creates USE_BROKER_FLAG on server4.
+# Contract: POST {acct, actor, model, usd, ts}; ts epoch seconds or ms; the 201
+# echoes ts_units; actor required; negative usd refused.
+#
+# ⭐⭐ THIS DUAL-WRITES RATHER THAN CUTTING OVER, AND THAT IS DELIBERATE.
+# `agents` asked that this file "stop appending to spend.jsonl and POST at that
+# same moment, or rows written in the gap exist only in the file". A flag read
+# per call already removes the gap -- the flip takes effect on the next call,
+# with no window. But a HARD cutover opens a different hole: every reader here
+# (`_sum_spend`, `remaining`, `spent_today`, the whole budget path) is built on
+# spend.jsonl, and the totals endpoint's response shape has not been published.
+# Switching the WRITE without the READ would make this seat's budget see its
+# own spending as zero and bill against a balance that no longer decreases --
+# an error in the overspend direction, which is the one the grant guard exists
+# to prevent. ⇒ Write BOTH until the read side is ported against a known shape.
+# ⚠️ TOLD TO `agents`: the broker therefore receives each row exactly once from
+# the flip onward, so a RE-SEED of spend.jsonl after the flip would double-count
+# the overlap. Seed once, before the flip.
+USE_BROKER_FLAG = KEY_DIR / "USE_BROKER"
+BROKER_SPEND_URL = "http://192.168.1.168:3030/api-spend"   # ⛔ literal: $ATC_URL is unset here
+# ⛔ WE SEND SECONDS. An unknown or millisecond echo is a FAILURE, not a shrug:
+#    a 10-digit epoch read as milliseconds lands in January 1970 and the row is
+#    silently excluded from every window the budget asks about.
+_TS_UNITS_SECONDS = {"s", "sec", "secs", "second", "seconds", "epoch_s", "epoch_seconds"}
+
 # ⭐ SINGLE SOURCE OF TRUTH, shared with the `agents` seat (its 8990793, this
 # file 2026-10-19): /home/ben/.claude/state/api-keys/grants.json, shape
 #   {"<acct>": {"monthly": 200, "renews": "YYYY-MM-DD" | null}}
@@ -459,8 +486,47 @@ def log_spend(acct: str, model: str, usd: float) -> None:
     rec = {"day": date.today().isoformat(), "ts": int(time.time()),
            "acct": acct, "model": model, "usd": round(float(usd), 6),
            "actor": actor}
+    if USE_BROKER_FLAG.exists():
+        why = post_spend(rec)
+        if why:
+            rec["broker_failed"] = why
+            print(f"⚠️ keyring: broker ledger refused this row ({why}); kept locally only. "
+                  f"The broker's totals are now short by ${rec['usd']}.")
     with SPEND_LOG.open("a") as fh:
         fh.write(json.dumps(rec) + "\n")
+
+
+def post_spend(rec: dict) -> str | None:
+    """POST one row to the broker ledger. Returns None on success, else the reason.
+
+    ⛔ IT RETURNS THE REASON RATHER THAN RAISING. A ledger write must never take
+    down the work it is accounting for -- the caller has already spent the money,
+    and losing the call to protect the bookkeeping is backwards. The row is kept
+    locally with `broker_failed` set either way, so nothing is lost and the gap
+    is greppable.
+    """
+    import urllib.error
+    import urllib.request
+    body = {"acct": rec["acct"], "actor": rec["actor"], "model": rec["model"],
+            "usd": rec["usd"], "ts": rec["ts"]}
+    try:
+        req = urllib.request.Request(
+            BROKER_SPEND_URL, data=json.dumps(body).encode(),
+            headers={"Content-Type": "application/json"}, method="POST")
+        with urllib.request.urlopen(req, timeout=10) as r:
+            if r.status != 201:
+                return f"HTTP {r.status}"
+            raw = r.read() or b"{}"
+        units = (json.loads(raw) or {}).get("ts_units")
+        if units is None:
+            return "201 carried no ts_units to assert against"
+        if str(units).strip().lower() not in _TS_UNITS_SECONDS:
+            return f"ts sent in SECONDS but the broker echoed ts_units={units!r}"
+        return None
+    except urllib.error.HTTPError as e:
+        return f"HTTP {e.code}: {(e.read() or b'')[:200].decode('utf-8', 'replace')}"
+    except Exception as e:                      # noqa: BLE001 - any failure keeps the row local
+        return f"{type(e).__name__}: {e}"
 
 
 if __name__ == "__main__":
