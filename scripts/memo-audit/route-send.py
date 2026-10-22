@@ -100,6 +100,36 @@ def harvest(rundir: Path) -> dict[str, list[dict]]:
     return routes
 
 
+# ⛔⛔ THE LEDGER CONFLATES "RESOLVED" WITH "STILL OPEN AND DELIBERATELY UNRESOLVED",
+#    AND A SEAT TOLD US SO. Suppressing a re-send assumes the owner acted. Some
+#    findings are the opposite: the owner AGREES, cannot act unilaterally, and needs
+#    the reminder to keep arriving until the condition clears.
+#    `ha`, 2026-10-22, on the HVAC hold watchdog: "DO NOT mark this handled and DO NOT
+#    stop re-sending it ... Keep re-sending until the condition no longer references
+#    `hold_is_manual`. If I go quiet on it, that is a failure, not a resolution."
+#    ⇒ Under the old logic that finding would have been sent exactly once and then
+#    silently suppressed forever, and the silence would have read as a fix.
+#
+# ⭐ THE ENTRY MUST CARRY ITS OWN RETIREMENT CONDITION, not a date. A date expires
+#    whether or not the reason did; `clears_when` is checkable by whoever reads it.
+# ⚠️ Keep this list SHORT and owner-requested. It defeats de-duplication on purpose,
+#    so an entry nobody asked for is just a seat being spammed every run.
+RESEND_FORCED = [
+    {"seat": "ha",
+     "match": "hold_is_manual",
+     "clears_when": "the watchdog condition no longer references `hold_is_manual` "
+                    "(ha, 2026-10-22; needs Ben's ruling — changes HVAC behaviour, "
+                    "and the attribute is under a symmetric authorship ban, "
+                    "memos 6e972137 + 52afcba8)"},
+]
+
+
+def resend_forced(seat: str, finding: str) -> bool:
+    """True if this finding must bypass ledger suppression and be re-sent."""
+    f = (finding or "").lower()
+    return any(r["seat"] == seat and r["match"].lower() in f for r in RESEND_FORCED)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--rundir", required=True)
@@ -127,7 +157,7 @@ def main() -> int:
         fresh = []
         for e in entries:
             fp = fingerprint(seat, e.get("finding") or "")
-            if fp in ledger:
+            if fp in ledger and not resend_forced(seat, e.get("finding") or ""):
                 skipped += 1
                 continue
             fresh.append((fp, e))
