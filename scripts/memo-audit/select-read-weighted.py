@@ -93,6 +93,20 @@ def audited_ids() -> set[str]:
     return done
 
 
+def refuted_ids() -> set[str]:
+    """Memos the free nightly recheck disproved since the last run.
+
+    ⚠ ABSENT IS NOT EMPTY. No queue file means the recheck has never run, not
+    that every probe holds -- so this returns an empty set either way and the
+    CALLER must not read a zero here as evidence of corpus health.
+    """
+    q = HERE / "refute-queue.json"
+    try:
+        return set(json.loads(q.read_text()).get("ids") or [])
+    except (OSError, ValueError):
+        return set()
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--candidates", default="candidates-all.json")
@@ -103,8 +117,14 @@ def main() -> int:
     cands = json.loads(Path(a.candidates).read_text())
     counts = read_counts()
     done = audited_ids()
+    refuted = refuted_ids()
 
-    kept = [c for c in cands if c["id"][:8] not in done]
+    # ⭐ A REFUTED PROBE RE-ENTERS THE BACKLOG EVEN IF IT WAS AUDITED BEFORE.
+    # That is the point of the probe loop: the free nightly recheck found the
+    # world moved under a memo we already paid for, and the audited-ids ledger
+    # would otherwise keep it retired forever. Drift is exactly what the grant
+    # should be buying.
+    kept = [c for c in cands if c["id"][:8] not in done or c["id"] in refuted]
     for c in kept:
         c["get_count"] = counts.get(c["id"], 0)
 
@@ -113,14 +133,19 @@ def main() -> int:
     # checked. ⚠️ Not a blend -- a weighted sum would let a high checkability
     # score promote a memo nobody has ever opened, which is the whole thing
     # this ordering exists to stop.
-    kept.sort(key=lambda c: (-c["get_count"], -(c.get("score") or 0)))
+    # Refuted first -- a memo a probe has disproved is known-wrong, where
+    # everything else in this list is only unverified.
+    kept.sort(key=lambda c: (c["id"] not in refuted, -c["get_count"],
+                             -(c.get("score") or 0)))
     if a.top:
         kept = kept[:a.top]
 
     Path(a.out).write_text(json.dumps(kept, indent=1))
     tot = sum(c["get_count"] for c in kept)
     never = sum(1 for c in kept if c["get_count"] == 0)
-    print(f"candidates {len(cands)} · already audited {len(done)} · kept {len(kept)}")
+    print(f"candidates {len(cands)} · already audited {len(done)} · "
+          f"refuted by probe {len(refuted & {c['id'] for c in kept})} (first) · "
+          f"kept {len(kept)}")
     print(f"{len(kept)} -> {a.out} · {tot} reads covered · {never} never read")
     if kept:
         print(f"top get_count {kept[0]['get_count']}, "
