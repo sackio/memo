@@ -67,9 +67,29 @@ import keyring
 print(json.dumps({a: keyring.remaining(a) for a in keyring.load_grants()}))
 PYSNAP
 
-phase () {   # phase <name> <command...>
+# ⛔⛔ THE AUDIT GETS A RESERVED SLICE, OR THE CLAMP STARVES THE ONE PHASE THAT MATTERS.
+#    Phase order puts the cheap, additive work first and the expensive audit last, and the
+#    earlier timeouts sum to over 9 hours on their own -- probe-coverage alone is 4. Clamping
+#    everything to 06:00 without a reserve means a slow night spends the whole window on
+#    coverage and SKIPS the audit, which is the phase that drains the grant about to expire.
+#    ⇒ A phase may declare PHASE_RESERVE=<seconds>: it is clamped to leave that much behind.
+#    ⚠️ A reserve is not a guarantee the audit will fill it -- it only stops an earlier phase
+#      taking it. If the audit still skips, the window is genuinely too short, which is a
+#      different finding and the end-of-run accounting will say so.
+AUDIT_RESERVE_S=$(( 5 * 3600 ))
+
+phase () {   # phase <name> <command...>   (PHASE_RESERVE=<s> to hold time back)
   local name="$1"; shift
   local left=$(( DEADLINE - $(date +%s) ))
+  local reserve="${PHASE_RESERVE:-0}"
+  if [ "$reserve" -gt 0 ]; then
+    local usable=$(( left - reserve ))
+    if [ "$usable" -lt "$PHASE_FLOOR_S" ]; then
+      echo "════ ${name} SKIPPED $(date -Is): ${left}s left, ${reserve}s reserved for the audit"
+      rcs+=("${name}=SKIPPED-reserve"); return 0
+    fi
+    left="$usable"
+  fi
   if [ "$left" -lt "$PHASE_FLOOR_S" ]; then
     echo "════ ${name} SKIPPED $(date -Is): ${left}s left in the 22:00-${WINDOW_END_H}:00 window, floor ${PHASE_FLOOR_S}s"
     rcs+=("${name}=SKIPPED-window")
@@ -109,6 +129,7 @@ fi
 
 phase slack-archive  /usr/bin/timeout 1800 python3 "$SLACK/archive.py" --days 2
 phase slack-digests  /usr/bin/timeout  900 python3 "$SLACK/mine.py" --days 1.2 --checkpoint
+PHASE_RESERVE="$AUDIT_RESERVE_S" \
 phase slack-mine     /usr/bin/timeout 10800 python3 "$SLACK/mine-run.py" --per-worker 4 --concurrency 2 --wait-for-lock 7200
 phase refute-recheck /usr/bin/timeout 1800 python3 refute-recheck.py --queue
 phase candidates-all /usr/bin/timeout 1800 python3 select-all.py --out candidates-all.json
@@ -123,6 +144,7 @@ phase candidates     /usr/bin/timeout  900 python3 select-read-weighted.py \
 # ⚠️ Bounded on purpose. It runs ahead of the audit and takes a fixed slice
 # (~$20, ~600 memos), not the whole grant -- the split between coverage and
 # depth is Ben's call, not a default this script should quietly make.
+PHASE_RESERVE="$AUDIT_RESERVE_S" \
 phase probe-coverage /usr/bin/timeout 14400 python3 run.py \
     --candidates candidates-all.json --prompt probe-prompt.md --model sonnet \
     --batch-size 10 --batches 60 --concurrency 2 --wait-for-lock 7200 --skip-probed
