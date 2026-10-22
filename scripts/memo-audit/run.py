@@ -27,6 +27,7 @@ import keyring
 HERE = Path(__file__).resolve().parent
 PROMPT = HERE / "worker-prompt.md"
 CLAUDE = "/home/ben/.local/bin/claude"
+API_BASE = "http://server4:8000"
 
 # ⛔ WRAP EVERY WORKER, DO NOT RENICE THE PARENT. A batch worker is background
 # work competing with interactive seats and, on server4, with the root disk that
@@ -301,6 +302,8 @@ def main() -> int:
     ap.add_argument("--model", default=None,
                     help="pass through to claude -p; a probe-only pass does not "
                          "need the model a truth audit needs")
+    ap.add_argument("--skip-probed", action="store_true",
+                    help="drop candidates that already carry a REFUTE probe")
     ap.add_argument("--wait-for-lock", type=float, default=0.0,
                     help="seconds to wait for the grant-spender lock; scheduled "
                          "work should wait rather than lose the night")
@@ -317,6 +320,23 @@ def main() -> int:
             return 3
 
     cands = json.loads(Path(a.candidates).read_text())
+
+    if a.skip_probed:
+        # ⭐ A MEMO THAT ALREADY CARRIES A PROBE DOES NOT NEED A SECOND ONE.
+        # The probe pass selects from the full ranked list, so a resumed or
+        # repeated run would pay again for memos it already covered -- and
+        # because the second probe usually agrees with the first, the waste is
+        # invisible in the output. One scan of /documents costs nothing against
+        # the spend it prevents.
+        import urllib.request
+        with urllib.request.urlopen(f"{API_BASE}/documents?limit=20000", timeout=300) as r:
+            docs = json.loads(r.read().decode())
+        probed = {d["id"] for d in docs if (d.get("metadata") or {}).get("refute")}
+        before = len(cands)
+        cands = [c for c in cands if c["id"] not in probed]
+        print(f"skip-probed: {before} candidates → {len(cands)} "
+              f"({len(probed)} already carry a probe)")
+
     sel = cands[a.offset:a.offset + a.batch_size * a.batches]
     batches = [sel[i:i + a.batch_size] for i in range(0, len(sel), a.batch_size)]
     outdir = Path(a.outdir) / datetime.now().strftime("%Y%m%dT%H%M%S")

@@ -62,7 +62,7 @@ phase candidates     /usr/bin/timeout  900 python3 select-read-weighted.py \
 # depth is Ben's call, not a default this script should quietly make.
 phase probe-coverage /usr/bin/timeout 14400 python3 run.py \
     --candidates candidates-all.json --prompt probe-prompt.md --model sonnet \
-    --batch-size 10 --batches 60 --concurrency 2 --wait-for-lock 7200
+    --batch-size 10 --batches 60 --concurrency 2 --wait-for-lock 7200 --skip-probed
 
 # How many batches the remaining grant actually pays for. ⚠️ Derived, never a
 # constant: the cost per memo is ordering-dependent (measured $0.291 stratified
