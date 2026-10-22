@@ -177,7 +177,7 @@ def run_batch(batch: list[dict], idx: int, outdir: Path, timeout: int,
     global _INFLIGHT
     est = mean_batch_cost()
     with _INFLIGHT_LOCK:
-        ok, why = keyring.guard_ok(reserve=_INFLIGHT + est)
+        ok, why = keyring.guard_ok(reserve=_INFLIGHT + est, batch_est=est)
         if ok:
             _INFLIGHT += est
     if not ok:

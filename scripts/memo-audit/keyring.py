@@ -139,34 +139,90 @@ def _sum_spend(now: datetime, acct: str | None = None, since: float = 0.0,
 
 
 def remaining(acct: str) -> float:
-    return max(0.0, float(load_grants()[acct].get("monthly") or 0.0) - spent(acct))
+    """What is actually left on the account, Console-first.
+
+    ⛔⛔ `monthly - spent()` IS NOT THE BALANCE, AND IT ERRS UPWARD — the one
+    direction that overspends. The local ledger is a FLOOR: it records the cost
+    the Claude Code CLI reports, so anything spent outside the wrapper, and any
+    premium the CLI omits, is invisible. Measured 2026-10-22 on `ben`: ledger
+    said $38.99 left, Console said $29.30. A percentage margin on the ledger
+    figure does not save you — 8% off $38.99 is $35.87, still $6.57 more than
+    exists. ⇒ WHEN A CONSOLE READ EXISTS, IT IS THE BALANCE, and the ledger's
+    job is only to age it forward.
+
+    ⭐ A BALANCE IS A FACT ABOUT AN INSTANT. `console_left` is meaningless
+    without `console_at`, so this subtracts only spend logged AFTER that
+    instant; spend before it is already inside the Console figure and
+    subtracting it again would double-count.
+    ⭐ THE MARGIN GOES ON THE LEDGER TERM, NOT ON THE BALANCE. A Console figure
+    is exact at its instant; only the spend aged onto it is uncertain. Marking
+    the whole balance down 8% would strand $16 of a $200 grant for no reason —
+    which is the stranding this rewrite exists to stop — while marking up the
+    ledger term costs pennies an hour after a fresh read and grows only as the
+    read goes stale. Same protection, applied where the error actually is.
+    """
+    g = load_grants()[acct]
+    left = g.get("console_left")
+    at = g.get("console_at")
+    if left is not None and at:
+        since = datetime.fromisoformat(at.replace("Z", "+00:00")).timestamp()
+        aged = _sum_spend(datetime.now(timezone.utc), acct=acct, since=since)
+        return max(0.0, float(left) - aged * (1.0 + GRANT_MARGIN))
+    # No Console read: the whole figure is ledger-derived and erring upward, so
+    # the markdown applies to all of it.
+    return max(0.0, (float(g.get("monthly") or 0.0) - spent(acct)) * (1.0 - GRANT_MARGIN))
 
 
-# ── my own runaway guard ────────────────────────────────────────────────────
-# $40/day, flat. Agreed with `agents` 2026-10-19 after this seat spent $69.47 in
-# a day and darkened fleet haiku for every other seat.
+# ── the binding constraint is the GRANT BALANCE, not a daily number ─────────
+# Ben, Slack #memo 2026-10-22 11:42 EDT, VERBATIM: "I basically want you to use
+# all these credits. No limit usage no whatever just use them up to the amount
+# that we have so that we maximize them if we start to have other things
+# competing for these credits then we can read discuss but my thought is that I
+# want this to be used to just improve and maintain the memo for everyone."
 #
-# ⛔ A $60/day BURST "through Oct 22" LIVED HERE FOR ABOUT 40 MINUTES AND WAS
-# BUILT ON A MISREADING OF WHAT `renews` MEANS. `agents` had unibrowse read
-# pushbuild's Console directly (measured 2026-10-19 16:37): the grant was
-# GRANTED 10/12 and EXPIRES 11/11, with $162.78 of $200 left. Each monthly grant
-# is its own line with its own 30-day expiry, so "Next credit Oct 22" is the date
-# ben's NEXT grant ARRIVES -- not the date the current one dies. There was never
-# an Oct 22 cliff and nothing was about to lapse.
+# ⛔⛔ A FLAT DAILY CAP CANNOT SPEND A GRANT THAT EXPIRES SOON, AND IT FAILS
+# SILENTLY — it refuses work while money dies, and every refusal looks like the
+# guard working. Measured 2026-10-22: `agents@sack.io` held $199.68 expiring
+# 10/26, four days out. At $40/day that stranded ~$38 with nothing to signal it.
+# ⇒ The cap is now each ACCOUNT'S REMAINING BALANCE. Unused grant is destroyed
+#   at expiry, so the only real budget is "what is left on the account I am
+#   about to bill", and the only real deadline is that account's expiry.
 #
-# ⭐ THE SHAPE OF THE ERROR: a field named for the next arrival was read as a
-# deadline for the current balance, and that invented a use-it-or-lose-it
-# urgency that justified spending 50% faster. ⇒ When a date is about to be used
-# as a DEADLINE, confirm what the date is OF. "Renews", "expires", "resets" and
-# "next credit" are four different events, and only one of them destroys money.
-#
-# Pace is now even to the real expiries: ~$650 across the four accounts over
-# ~23 days ~ $28/day, plus each new grant as it lands -- comfortably inside $40.
-DAILY_CAP = 40.0
+# ⚠️ WHAT THE OLD $40 WAS ACTUALLY PROTECTING IS GONE. It was agreed with
+# `agents` 2026-10-19 after this seat spent $69.47 in a day and darkened fleet
+# haiku. That blackout was the OLD FLEET-WIDE daily cap letting one actor's
+# spend refuse every other script's calls; it is per-actor now (`spent_today`
+# filters on `actor`), so this seat can no longer starve another. Confirmed by
+# `agents` 2026-10-22 and verified here. ⇒ The runaway risk that remains is a
+# LOOP, not a budget, and RUNAWAY_BATCH_USD is the guard for that.
+RUNAWAY_BATCH_USD = 25.0
+# One batch has never cost more than $4.18 (the 2026-10-20 head). A single
+# batch asking for 6x that is a bug, not a big job, and it is the only failure
+# mode a balance check cannot catch — a balance stops you at $200 of garbage,
+# which is $200 too late.
+
+# ⚠️ THE LEDGER IS A FLOOR, SO SPENDING TO EXACTLY `remaining()` OVERSHOOTS.
+# Measured under-report against Console: 1.2% on pushbuild (2026-10-19, $2.44)
+# and ~6% on ben (2026-10-22, ~$9.70 — the CLI's own `total_cost_usd` is what
+# this ledger records, so the shortfall is in what the CLI REPORTS, not in any
+# arithmetic here). Hold back the larger of the two, rounded up.
+# ⭐ This is not a hedge against Ben's instruction, it is how you obey it: he
+#   said use them "up to the amount that we have", and the amount we have is
+#   known only to Console. The held-back tail is RELEASABLE — have `agents` read
+#   Console and reconcile the ledger, and it spends.
+GRANT_MARGIN = 0.08
 
 
 def daily_cap(now: datetime | None = None) -> float:
-    return DAILY_CAP
+    """⛔ RETIRED 2026-10-22 — kept only so an old caller fails loudly.
+
+    There is no daily cap any more. Call `guard_ok`, which binds on the
+    account's remaining balance.
+    """
+    raise RuntimeError(
+        "DAILY_CAP was retired 2026-10-22 on Ben's instruction (#memo 11:42). "
+        "The budget is now each account's remaining grant -- use guard_ok(acct=...)."
+    )
 
 
 def this_actor() -> str:
@@ -208,7 +264,8 @@ def spent_today(actor: str | None = None, now: datetime | None = None) -> tuple[
     return mine, max(0.0, total - attributed)
 
 
-def guard_ok(now: datetime | None = None, reserve: float = 0.0) -> tuple[bool, str]:
+def guard_ok(now: datetime | None = None, reserve: float = 0.0,
+              acct: str | None = None, batch_est: float | None = None) -> tuple[bool, str]:
     """(may_spend, human reason). Checked BEFORE each batch, not at kickoff.
 
     ⭐ The 2026-10-19 breach happened because the cap was checked at the start of
@@ -227,40 +284,55 @@ def guard_ok(now: datetime | None = None, reserve: float = 0.0) -> tuple[bool, s
     about. See run.py's `_INFLIGHT`.
     """
     now = now or datetime.now(timezone.utc)
-    cap = daily_cap(now)
+    acct = acct or next_acct(now)
+    budget = remaining(acct)   # already margined, at the term that is uncertain
     mine, unattributed = spent_today(now=now)
-    used = mine + unattributed + reserve
-    detail = (f"${mine:.2f} mine + ${unattributed:.2f} unattributed"
-              + (f" + ${reserve:.2f} in flight" if reserve else "")
-              + f" = ${used:.2f} of ${cap:.2f}")
-    if used >= cap:
-        return False, (f"daily guard TRIPPED: {detail} today -- stopping. Wait for "
-                       f"midnight or raise DAILY_CAP deliberately; do not edit it "
-                       f"mid-run to get past a batch.")
-    return True, f"daily guard: {detail} used today"
+    basis = "Console" if load_grants()[acct].get("console_left") is not None else "ledger only"
+    detail = (f"{acct}: ${budget:.2f} spendable ({basis}, {GRANT_MARGIN:.0%} margin "
+              f"on the ledger term)"
+              + (f"; ${reserve:.2f} in flight" if reserve else "")
+              + f" (today so far ${mine + unattributed:.2f})")
+    # ⛔ COMPARE THE SINGLE BATCH, NOT `reserve`. `reserve` is CUMULATIVE work in
+    # flight, so at concurrency 4 it legitimately reaches ~$16-20 and a per-batch
+    # ceiling checked against it would refuse healthy runs. The first version of
+    # this guard did exactly that -- the constant said "a single batch" and the
+    # comparison used the total, which is the same name-vs-quantity conflation
+    # that cost three wrong findings on 2026-10-22.
+    if batch_est is not None and batch_est >= RUNAWAY_BATCH_USD:
+        return False, (f"RUNAWAY GUARD TRIPPED: one batch estimated ${batch_est:.2f}, over "
+                       f"${RUNAWAY_BATCH_USD:.2f}. No batch has ever cost more than $4.18. "
+                       f"This is a loop or a bad estimate, not a big job -- fix the caller, "
+                       f"do not raise the constant to get past it.")
+    if reserve >= budget:
+        return False, (f"grant exhausted: {detail} -- stopping. ⭐ The tail is RELEASABLE, "
+                       f"not gone: have `agents` read Console and reconcile the ledger, then "
+                       f"the margin spends. Switching accounts is automatic via next_acct().")
+    return True, f"grant guard: {detail}"
 
 
 def next_acct(now: datetime | None = None) -> str:
-    """The account to spend next: soonest renewal first, among those with budget.
+    """The account to spend next: soonest EXPIRY first, among those with budget.
 
-    ⭐ SOONEST-RENEWAL-FIRST IS THE WHOLE POINT, not round-robin. Unused grant does
-    NOT roll over, so the grant closest to resetting is the one whose balance is
-    about to be destroyed. Round-robin spreads spend evenly and lets the nearest
+    ⭐ SOONEST-EXPIRY-FIRST IS THE WHOLE POINT, not round-robin. Unused grant is
+    DESTROYED at expiry, so the grant closest to dying is the one whose balance
+    is about to be lost. Round-robin spreads spend evenly and lets the nearest
     deadline expire with money on it.
 
-    ⚠️ An account whose `renews` is null sorts LAST, not first: an unknown date
+    ⚠️ An account with NEITHER date sorts LAST, not first: an unknown date
     cannot be argued to be urgent, and acting on a placeholder is how the old
     hardcoded table nearly doubled a burst on a guessed pushbuild date.
 
-    ⛔ THE SORT KEY SHOULD BE THE GRANT'S EXPIRY, NOT ITS RENEWAL DATE, and it is
-    not yet -- grants.json carries only `renews`. `agents` established 2026-10-19
-    (unibrowse, Console) that each grant is a separate line expiring 30 days
-    after it was GRANTED, so "renews" is when the NEXT grant arrives, which is a
-    different event from when the current balance dies. They currently differ by
-    about a day (pushbuild: expires 11/11, renews 11/12) so the ordering is the
-    same either way, and the per-grant expiries for ben/agents/agents2 are due
-    from unibrowse. ⇒ When they land, add `expires` to grants.json and sort on
-    THAT; do not keep inferring a deadline from an arrival date.
+    ⭐ SORTS ON `expires` AS OF 2026-10-22, WHICH IS WHAT THE DEADLINE ACTUALLY IS.
+    It used to sort on `renews` under a standing note to switch once the per-grant
+    expiries landed. They landed: `agents` had unibrowse read them from Console on
+    2026-10-22 and they are in grants.json now.
+
+    ⛔ THE TWO ARE DIFFERENT EVENTS AND ONLY ONE DESTROYS MONEY. Each grant is its
+    own line expiring 30 days after it was GRANTED, so `renews` is when the NEXT
+    grant ARRIVES and `expires` is when the current BALANCE dies. A $60/day burst
+    once lived in this file for 40 minutes built on exactly that conflation, and
+    on 2026-10-22 this seat put a $90/day ask to Ben built on an inverted Console
+    reading. Confirm what a date is OF before using it as a deadline.
     """
     now = now or datetime.now(timezone.utc)
     grants = load_grants()
@@ -273,10 +345,13 @@ def next_acct(now: datetime | None = None) -> str:
         )
 
     def sort_key(ar: tuple[str, float]):
-        renews = grants[ar[0]].get("renews")
-        if not renews:
+        g = grants[ar[0]]
+        # `expires` is the real deadline. `renews` is only a fallback, because
+        # an account with no Console read still has to sort somewhere sane.
+        deadline = g.get("expires") or g.get("renews")
+        if not deadline:
             return (1, 10**6, -ar[1])              # unknown date => last
-        return (0, (date.fromisoformat(renews) - now.date()).days, -ar[1])
+        return (0, (date.fromisoformat(deadline) - now.date()).days, -ar[1])
 
     usable.sort(key=sort_key)
     return usable[0][0]
