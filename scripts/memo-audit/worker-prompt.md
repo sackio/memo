@@ -67,6 +67,36 @@ So:
   the next pass will pick it up. An accurate report of someone else's broken
   memo is worth more than a write that collides.
 
+## ⛔⛔ READ A CONFIG ENTRY WITH THE FIELD THAT SAYS WHETHER IT IS ACTIVE
+
+An entry's presence in a config file is NOT a claim that it is in force. Many
+declarative systems express "make sure this is GONE" by keeping the entry and
+marking it, and that entry looks identical to a live one if you read only its body.
+
+**MEASURED FALSE POSITIVE, 2026-10-22.** A worker reported that Ansible
+`group_vars/all.yml` listed an `nfs_mounts` entry for
+`192.168.1.236:/mnt/zfs/sdq_pool/media`, a src that is no longer exported, and
+called it stale. `servers` refuted it: that entry is **`state: absent`** at
+`group_vars/all.yml:187`, and the file says why -- the nfs role acts only on
+entries PRESENT in the list, so DELETING the entry is a no-op that would leave
+every client's fstab pointing at a destroyed export. It is a deliberate absent
+stub, and **the src being unexported is the entry's PREMISE, not a defect.**
+
+⇒ Before reporting any config entry as stale, find and read its state/enabled/
+disabled/managed field. If there is none, say so -- "no state field, read as
+active" is an honest qualifier and an unqualified staleness claim is not.
+
+⭐ THE GENERAL FORM: **a declarative config records intent, not just current
+state, and a tombstone entry is intent.** The same shape appears in `/etc/exports`
+comments, systemd `masked` units, and any "ensure absent" idiom.
+
+⚠️ AND DO NOT PROMOTE A DATASET'S REMOVAL INTO ITS POOL'S REMOVAL. `sdq_pool` on
+server6 was NOT destroyed -- it is live with ~20 datasets (`backup/*`, `discovery`,
+`nas-mirror`) and `sdq_pool/discovery` is still exported (fsid=105). Only the
+`media` DATASET is gone. (Verified 2026-10-22 against all 11,658 live memos: zero
+of them actually make the pool-destroyed claim, so this is a guard against writing
+one, not a correction of one.)
+
 ## AUDIT THE CLAIM, DO NOT REREAD THE MEMO
 A memo that is internally coherent can still be false. For each checkable claim,
 go and look. Evidence sources, in descending order of trust:
