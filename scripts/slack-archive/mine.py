@@ -71,6 +71,29 @@ def speaker(m: dict) -> str:
     return f"user:{m.get('user') or '?'}"
 
 
+def body_of(m: dict) -> str:
+    """The message's text PLUS its attachments.
+
+    ⛔⛔ A BARE `yes` IS UNREADABLE WITHOUT THE ASK IT ANSWERS, AND THE ASK IS
+    NOT IN `text`. The Slack bridge HOISTS every `ASK:`/`NEED:` line out of the
+    message body into a green attachment, so an agent's question lives in
+    `attachments[].text` while `text` holds only the prose around it. A digest
+    built from `text` alone shows Ben answering nothing.
+
+    Found 2026-10-22 by the first mining worker, which hit exactly this on his
+    10-21 "yes" in #alpaca and had to go back to the live thread for the
+    question. It only recovered because it had tools; the digest had lost it.
+    """
+    parts = [m.get("text") or ""]
+    for att in m.get("attachments") or []:
+        t = att.get("text") or att.get("fallback") or ""
+        if t:
+            parts.append(f"[ASK/attachment] {t}")
+    for f in m.get("files") or []:
+        parts.append(f"[file uploaded: {f.get('name') or f.get('id')}]")
+    return "\n".join(p for p in parts if p.strip())
+
+
 def clean(text: str) -> str:
     text = re.sub(r"<@([A-Z0-9]+)>", lambda m: "@ben" if m.group(1) == BEN else "@someone", text or "")
     text = re.sub(r"<(https?://[^|>]+)(\|[^>]*)?>", r"\1", text)
@@ -105,7 +128,7 @@ def digest_channel(name: str, msgs: list[dict], max_chars: int) -> tuple[str, in
     lines = []
     for i in sorted(keep):
         m = msgs[i]
-        body = clean(m.get("text") or "")
+        body = clean(body_of(m))
         if not body:
             continue
         when = datetime.fromtimestamp(float(m.get("ts") or 0), timezone.utc).astimezone()

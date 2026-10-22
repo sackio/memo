@@ -101,10 +101,12 @@ def main() -> int:
     ap.add_argument("--est", type=float, default=1.20, help="$ estimate per worker")
     ap.add_argument("--max-workers-total", type=int, default=0, help="0 = every digest")
     ap.add_argument("--outdir", default=str(HERE / "mine-runs"))
+    ap.add_argument("--digests", default=str(DIGESTS),
+                    help="digest directory; a subset is how you test one channel")
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
 
-    digests = sorted(p for p in DIGESTS.glob("*.md"))
+    digests = sorted(Path(a.digests).glob("*.md"))
     if not digests:
         print("⛔ no digests — run mine.py first. NOT SEARCHED, not a quiet day.")
         return 2
