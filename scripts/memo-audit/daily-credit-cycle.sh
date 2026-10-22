@@ -44,6 +44,16 @@ phase candidates-all /usr/bin/timeout 1800 python3 select-all.py --out candidate
 phase candidates     /usr/bin/timeout  900 python3 select-read-weighted.py \
                          --candidates candidates-all.json --out candidates.json --top 0
 
+# ── probe coverage, before the deep audit ────────────────────────────────────
+# ⭐ CHEAP AND STRICTLY ADDITIVE. Measured 2026-10-22: a probe-only pass is
+# $0.034/memo against $0.41 for a full audit. Every memo that gains a probe is
+# one the FREE nightly recheck can watch from then on, so this phase buys
+# permanent coverage where the audit buys one memo's correctness.
+# ⚠️ Bounded on purpose. It runs ahead of the audit and takes a fixed slice
+# (~$20, ~600 memos), not the whole grant -- the split between coverage and
+# depth is Ben's call, not a default this script should quietly make.
+phase probe-coverage /usr/bin/timeout 10800 python3 run.py     --candidates candidates-all.json --prompt probe-prompt.md --model sonnet     --batch-size 10 --batches 60 --concurrency 4
+
 # How many batches the remaining grant actually pays for. ⚠️ Derived, never a
 # constant: the cost per memo is ordering-dependent (measured $0.291 stratified
 # vs $0.697 read-weighted) so a hardcoded batch count either strands credit or
