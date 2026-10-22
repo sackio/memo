@@ -97,8 +97,19 @@ _INFLIGHT = 0.0
 _INFLIGHT_LOCK = threading.Lock()
 
 
-def mean_batch_cost(default: float = 1.00) -> float:
-    """Mean cost of a COMPLETED batch, for standing in when one is killed.
+# ⚠️ SEED COSTS, used ONLY until a priced record of the SAME KIND exists, and never
+#    as a budget. MEASURED 2026-10-22 from the run directories: the audit run
+#    20261022T124246 averaged $2.4945/batch over 26 batches at batch-size 6; the probe
+#    runs 20261022T141514 and 20261022T144125 averaged $0.3429 and $0.2783 at
+#    batch-size 10. ⛔ A per-batch cost is not comparable across kinds -- different
+#    prompt, different batch size -- which is the whole reason these are separated.
+#    ⛔ Do not tune these to make a run fit a budget; they exist to stop a 9x-low
+#    estimate on the FIRST batch of a kind, nothing more.
+SEED_BATCH_COST = {"worker-prompt.md": 2.50, "probe-prompt.md": 0.30}
+
+
+def mean_batch_cost(default: float = 1.00, prompt: str | None = None) -> float:
+    """Mean cost of a COMPLETED batch OF THIS KIND, for standing in when one is killed.
 
     ⛔ READ THE BATCH RECORDS, NOT THE SPEND LEDGER. A first version averaged
     ledger rows for this actor and returned $0.0000 -- the ledger mixes a
@@ -107,8 +118,24 @@ def mean_batch_cost(default: float = 1.00) -> float:
     estimator: it writes a confident "nothing was spent" into the budget.
     ⇒ Average the thing you are actually estimating (one batch), from the records
     that only ever contain that thing.
+
+    ⛔⛔ AND "ONE BATCH" IS NOT ONE KIND OF THING -- THE SAME LESSON, ONE LEVEL UP.
+    A probe batch and an audit batch both land in runs/*/batch-*.json and used to
+    be indistinguishable, so this averaged whichever ran most recently. MEASURED
+    2026-10-22: the audit run 20261022T124246 cost $2.4945/batch and the probe runs
+    that followed cost $0.3429 and $0.2783, so the estimator returned $0.2678 for an
+    audit batch -- 9x low. It is not a rare interleaving either: daily-credit-cycle.sh
+    runs 60 probe batches IMMEDIATELY BEFORE the audit, every night, by design.
+    An estimate 9x low under-reserves `_INFLIGHT` (the concurrency blindness this
+    whole guard exists to close), under-charges a KILLED worker through
+    log_unmeasured, and leaves RUNAWAY_BATCH_USD unable to trip.
+    ⇒ Records now carry the prompt that produced them and this filters on it.
+    ⚠️ Records written before 2026-10-22 carry no `prompt` and CANNOT be attributed.
+      They are EXCLUDED, not pooled in: a wrong mean is worse than a stated default.
     """
+    default = SEED_BATCH_COST.get(prompt, default)
     vals = []
+    unattributable = 0
     # ⚠️ TRAILING WINDOW, DELIBERATELY SHORT. Cost per memo is not constant
     # across the queue: the read-weighted ordering puts the largest, most
     # cross-referenced memos first, and the 2026-10-20 head cost $4.18/batch
@@ -116,16 +143,33 @@ def mean_batch_cost(default: float = 1.00) -> float:
     # mean dilutes the region actually being worked with runs priced for a
     # different one. Track the recent past, which is what the next batch
     # resembles.
-    for f in sorted((HERE / "runs").glob("*/batch-*.json"))[-12:]:
+    # ⚠️ Widen the scan when filtering by kind -- the last 12 FILES may hold none of
+    #    this kind at all. Still a trailing window: the 12 most recent MATCHES, taken
+    #    below, not the 12 most recent files.
+    scan = sorted((HERE / "runs").glob("*/batch-*.json"))[-(400 if prompt else 12):]
+    for f in scan:
         if ".raw." in f.name:
             continue
         try:
-            v = float(json.loads(f.read_text()).get("cost_usd") or 0.0)
+            r = json.loads(f.read_text())
+            v = float(r.get("cost_usd") or 0.0)
         except (ValueError, OSError):
             continue
+        if prompt is not None:
+            if r.get("prompt") is None:
+                unattributable += 1
+                continue
+            if r.get("prompt") != prompt:
+                continue
         if v > 0:
             vals.append(v)
-    return round(sum(vals) / len(vals), 4) if vals else default
+    vals = vals[-12:]
+    if not vals:
+        print(f"  ⚠️ no priced batch records for prompt={prompt!r} "
+              f"({unattributable} unattributable, pre-2026-10-22) -- seeding at "
+              f"${default:.2f}. The first batch of this kind replaces it.")
+        return default
+    return round(sum(vals) / len(vals), 4)
 
 
 def _report_from_session(session_id: str | None, cwd: Path) -> dict | None:
@@ -188,16 +232,21 @@ def run_batch(batch: list[dict], idx: int, outdir: Path, timeout: int,
     # single step felt like a budget decision. A guard consulted once is a guard
     # on the smallest thing you ever did.
     global _INFLIGHT
-    est = mean_batch_cost()
+    est = mean_batch_cost(prompt=prompt_path.name)
     with _INFLIGHT_LOCK:
-        ok, why = keyring.guard_ok(reserve=_INFLIGHT + est, batch_est=est)
+        # ⛔ ONE DECISION. `guard_ok` picks the account with the real floor
+        #    (min_balance=reserve) and returns it; this used to re-pick below with a
+        #    bare next_acct(), floor $1.00, and bill a grant the guard had just
+        #    skipped as unable to fund the batch. See keyring.guard_ok's docstring.
+        ok, why, acct = keyring.guard_ok(reserve=_INFLIGHT + est, batch_est=est)
         if ok:
             _INFLIGHT += est
     if not ok:
         print(f"  batch {idx}: ⛔ SKIPPED — {why}")
         rec = {"batch": idx, "acct": None, "n": len(batch), "ids": [],
                "cost_usd": 0.0, "wall_s": 0.0, "is_error": False,
-               "num_turns": 0, "result": "", "skipped": why}
+               "num_turns": 0, "result": "", "skipped": why,
+               "prompt": prompt_path.name}
         # ⛔ A SKIP MUST LEAVE A RECORD ON DISK. Until 2026-10-20 it returned this
         # dict and wrote nothing, so a run that skipped 8 of 20 batches left 12
         # files and no trace of the other 8 -- indistinguishable from a run that
@@ -205,8 +254,7 @@ def run_batch(batch: list[dict], idx: int, outdir: Path, timeout: int,
         (outdir / f"batch-{idx:04d}.json").write_text(json.dumps(rec, indent=1))
         return rec
 
-    acct = keyring.next_acct()
-    ACCT_FOR_BATCH[idx] = acct
+    ACCT_FOR_BATCH[idx] = acct          # the account guard_ok approved, never a re-pick
     assignments = "\n".join(_assignment_line(m) for m in batch)
     prompt = prompt_path.read_text().replace("{{ASSIGNMENTS}}", assignments)
 
@@ -252,6 +300,7 @@ def run_batch(batch: list[dict], idx: int, outdir: Path, timeout: int,
     ids = [x[:8] for m in batch for x in (m.get("ids") or [m["id"]])]
 
     rec = {"batch": idx, "acct": acct, "n": len(batch), "ids": ids,
+           "prompt": prompt_path.name,    # ⛔ which KIND of batch this priced
            "cost_usd": cost, "wall_s": round(time.time() - t0, 1),
            "is_error": bool(d.get("is_error")), "num_turns": d.get("num_turns"),
            "result": d.get("result") or "", "parse_error": d.get("_parse")}
@@ -339,13 +388,35 @@ def main() -> int:
     sel = cands[a.offset:a.offset + a.batch_size * a.batches]
     batches = [sel[i:i + a.batch_size] for i in range(0, len(sel), a.batch_size)]
     outdir = Path(a.outdir) / datetime.now().strftime("%Y%m%dT%H%M%S")
+    # ⛔ RECORD WHAT THIS RUN WAS. Run directories held batch files and nothing else,
+    #    so "was 20261022T144125 an audit or a probe pass?" could only be answered by
+    #    guessing from the costs -- circular, when the costs are the thing in question.
+    #    Each batch record now carries its prompt; this names the run as a whole.
+    # ⚠️ A dry run writes nothing. Creating the directory here left an empty run dir
+    #    per invocation -- litter that also reads like a run that died before batch 0.
+    if not a.dry_run:
+        outdir.mkdir(parents=True, exist_ok=True)
+        (outdir / "run.json").write_text(json.dumps({
+            "started": datetime.now().isoformat(timespec="seconds"),
+            "prompt": Path(a.prompt).name, "candidates": a.candidates,
+            "batch_size": a.batch_size, "batches": a.batches,
+            "concurrency": a.concurrency, "model": a.model,
+        }, indent=1))
 
     print(f"candidates {len(cands)} · selected {len(sel)} · batches {len(batches)} "
           f"· batch-size {a.batch_size} · concurrency {a.concurrency}")
     print(f"brief: {a.prompt}")
-    print(f"next account: {keyring.next_acct()} "
-          f"(remaining ~${keyring.remaining(keyring.next_acct()):.2f}, {keyring.ledger_source()})")
-    _ok, _why = keyring.guard_ok()
+    # ⚠️ Print the account the GUARD picks, not a bare next_acct(). The two use
+    #    different floors, and a header that names a different account from the one
+    #    that will be billed is a label that lies -- the same shape as the three call
+    #    sites that went on printing "local ledger" after the broker cutover.
+    _est = mean_batch_cost(prompt=Path(a.prompt).name)
+    _ok, _why, _acct = keyring.guard_ok(reserve=_est, batch_est=_est)
+    if _acct:
+        print(f"next account: {_acct} "
+              f"(remaining ~${keyring.remaining(_acct):.2f}, {keyring.ledger_source()})")
+    else:
+        print(f"next account: NONE FUNDABLE ({keyring.ledger_source()})")
     print(("⛔ " if not _ok else "") + _why)
     if not _ok and not a.dry_run:
         print("⛔ refusing to start: the daily guard is already spent. "
@@ -375,7 +446,7 @@ def main() -> int:
                 # timed-out batch is invisible to the ledger and to the daily
                 # guard -- measured 2026-10-19, an aborted run left a finished
                 # memo in the corpus and $0.00 recorded.
-                est = mean_batch_cost()
+                est = mean_batch_cost(prompt=Path(a.prompt).name)
                 keyring.log_unmeasured(ACCT_FOR_BATCH.get(i, "unknown"),
                                        f"timeout after {a.timeout}s", est)
                 print(f"  batch {i}: ⛔ TIMEOUT after {a.timeout}s "

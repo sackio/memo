@@ -432,8 +432,21 @@ def spent_today(actor: str | None = None, now: datetime | None = None) -> tuple[
 
 
 def guard_ok(now: datetime | None = None, reserve: float = 0.0,
-              acct: str | None = None, batch_est: float | None = None) -> tuple[bool, str]:
-    """(may_spend, human reason). Checked BEFORE each batch, not at kickoff.
+              acct: str | None = None, batch_est: float | None = None
+              ) -> tuple[bool, str, str | None]:
+    """(may_spend, human reason, THE ACCOUNT APPROVED). Checked BEFORE each batch.
+
+    ⛔⛔ IT RETURNS THE ACCOUNT BECAUSE APPROVING ONE AND BILLING ANOTHER IS A REAL
+    BUG, NOT A TIDINESS POINT. This used to return only (ok, why), so every caller
+    picked an account a SECOND time -- and run.py picked with a bare `next_acct()`,
+    floor $1.00, while the guard had picked with `min_balance=reserve`, ~$2.60 plus
+    whatever is in flight. The two disagree exactly when an account drains below one
+    batch: the guard skips the nearly-empty grant and approves a funded one, then the
+    caller bills the nearly-empty one, which cannot pay. And it keeps being chosen,
+    because $1.50 still clears $1.00 -- so the run stalls on a dead account with every
+    other grant untouched. That is the $362 stranding `next_acct`'s own docstring
+    records as fixed: it was fixed IN next_acct and reintroduced AT THE CALL SITE.
+    ⇒ One decision, made here. Callers must bill the account this returns.
 
     ⭐ The 2026-10-19 breach happened because the cap was checked at the start of
     a 6-memo pilot and never again as the work scaled to 85 sets. A guard that is
@@ -458,7 +471,7 @@ def guard_ok(now: datetime | None = None, reserve: float = 0.0,
         try:
             acct = next_acct(now, min_balance=reserve)
         except RuntimeError as e:
-            return False, str(e)
+            return False, str(e), None
     budget = remaining(acct)   # already margined, at the term that is uncertain
     mine, unattributed = spent_today(now=now)
     basis = "Console" if load_grants()[acct].get("console_left") is not None else "ledger only"
@@ -476,12 +489,12 @@ def guard_ok(now: datetime | None = None, reserve: float = 0.0,
         return False, (f"RUNAWAY GUARD TRIPPED: one batch estimated ${batch_est:.2f}, over "
                        f"${RUNAWAY_BATCH_USD:.2f}. No batch has ever cost more than $4.18. "
                        f"This is a loop or a bad estimate, not a big job -- fix the caller, "
-                       f"do not raise the constant to get past it.")
+                       f"do not raise the constant to get past it."), acct
     if reserve >= budget:
         return False, (f"grant exhausted on EVERY usable account: {detail} -- stopping. "
                        f"⭐ The tail is RELEASABLE, not gone: have `agents` read Console and "
-                       f"reconcile the ledger, then the margin spends.")
-    return True, f"grant guard: {detail}"
+                       f"reconcile the ledger, then the margin spends."), acct
+    return True, f"grant guard: {detail}", acct
 
 
 def next_acct(now: datetime | None = None, min_balance: float = 0.0) -> str:

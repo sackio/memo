@@ -45,13 +45,15 @@ def run_group(group: list[Path], idx: int, outdir: Path, timeout: int, est: floa
     """One worker over a handful of channels."""
     global _INFLIGHT
     with _LOCK:
-        ok, why = keyring.guard_ok(reserve=_INFLIGHT + est, batch_est=est)
+        ok, why, acct = keyring.guard_ok(reserve=_INFLIGHT + est, batch_est=est)
         if not ok:
             rec = {"group": idx, "channels": [p.stem for p in group], "skipped": why}
             (outdir / f"group-{idx:03d}.json").write_text(json.dumps(rec, indent=1))
             print(f"  group {idx}: ⛔ SKIPPED — {why}")
             return rec
-        acct = keyring.next_acct(min_balance=_INFLIGHT + est)
+        # ⛔ Use the account guard_ok approved. This picked its own with the right
+        #    floor, so it agreed in practice -- but two picks of one decision is the
+        #    shape that let run.py diverge, and it only shows when a grant runs dry.
         _INFLIGHT += est
 
     body = "\n\n".join(p.read_text() for p in group)
