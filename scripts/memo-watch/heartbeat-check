@@ -91,14 +91,56 @@ PY
   esac
 }
 
+# ⛔⛔ AN UNREADABLE HEARTBEAT HAS TWO CAUSES AND THEY NEED DIFFERENT PEOPLE.
+#    "the watch is dead" is memo's problem; "/mnt/nas is not answering" is the
+#    NAS's. This alarm used to name both and settle neither, so every firing
+#    cost a human the same investigation. It fired three times on 2026-10-22
+#    and the answer was identical each time.
+#    ⇒ RUN A CONTROL BEFORE DECIDING. A static file in the SAME MOUNT separates
+#      the two: if the control answers fast while the heartbeat does not, the
+#      mount is healthy and the contention is on that one file.
+#    ⭐ MEASURED 2026-10-22 15:20 from server3, which is why this exists:
+#      heartbeat stat 9,160ms · a static file in the same mount 92ms · the mount
+#      root 12ms. The NAS was fine. The heartbeat is rewritten every cadence, and
+#      it is the REWRITING that makes it slow to stat, not the filesystem.
+mount_control() {   # echoes "<ms> <rc>" for a static path in the same mount
+  # ⛔ `stat`, NOT `test -f`. The first version of this used `test -f` for both
+  #    probes and the mount ROOT is a DIRECTORY, so a perfectly healthy mount
+  #    answering in 2ms returned rc=1 and the alarm declared an NFS outage.
+  #    Caught by this script's own negative control on the first run, which is
+  #    the whole reason to write one: a control that cannot fail proves nothing,
+  #    and this one failed usefully before it ever reached a real alert.
+  # ⛔ THE CONTROL MUST BE DERIVED FROM $HB, NEVER HARDCODED. The first version
+  #    probed /mnt/nas whatever $HB was, so pointing the check at a dead mount
+  #    still reported "the mount is healthy" -- it vouched for a mount it had
+  #    not tested. Caught by control B below, which is the one that is supposed
+  #    to catch it.
+  local p="$1"
+  local s e rc
+  s=$(date +%s%N); timeout 10 stat -c %Y "$p" >/dev/null 2>&1; rc=$?; e=$(date +%s%N)
+  echo "$(( (e - s) / 1000000 )) $rc"
+}
+
+# /mnt/nas/data/memo-watch/heartbeat -> /mnt/nas : the mount $HB actually lives on.
+hb_mount_root() { printf '/%s/%s' "$(echo "$HB" | cut -d/ -f2)" "$(echo "$HB" | cut -d/ -f3)"; }
+
 if ! timeout 25 test -f "$HB"; then
-  echo "UNREADABLE: $HB does not exist or the mount did not answer in 25s"
+  read -r CTL_MS CTL_RC <<<"$(mount_control "$(dirname "$HB")")"
+  read -r ROOT_MS ROOT_RC <<<"$(mount_control "$(hb_mount_root)")"
+  echo "UNREADABLE: $HB did not answer in 25s (control: its own directory ${CTL_MS}ms rc=${CTL_RC}, mount root $(hb_mount_root) ${ROOT_MS}ms rc=${ROOT_RC})"
+  if [ "$CTL_RC" = "0" ] && [ "$ROOT_RC" = "0" ]; then
+    VERDICT="⇒ THE MOUNT IS HEALTHY. Its own directory answered in ${CTL_MS}ms and the mount root $(hb_mount_root) in ${ROOT_MS}ms, while $HB did not answer in 25s. That is contention on THIS FILE -- it is rewritten every cadence -- not an NFS outage, and not evidence the watch is dead. Measured 2026-10-22: the same pattern showed 9,160ms on the heartbeat against 92ms on a sibling.
+⇒ NOT ACTIONABLE BY THE NAS OWNER, AND NOT A PARTIAL-WRITE PROBLEM: `run` already writes the heartbeat to a temp name and `mv`s it into place atomically (scripts/memo-watch/run:397), so a reader never sees a half-written file. The likely cause is attribute-cache revalidation -- this mount is nfs4 with acregmin=acregmax=600, so a STATIC file is answered from cache in milliseconds while a file whose mtime keeps changing forces a round trip to the server. That is inferred from the 100x gap between the two probes, not measured directly; the discriminator is whether the gap persists on a mount with the caching options removed."
+  else
+    VERDICT="⇒ THE MOUNT ITSELF IS NOT ANSWERING from $(hostname): its directory rc=${CTL_RC} in ${CTL_MS}ms, mount root $(hb_mount_root) rc=${ROOT_RC} in ${ROOT_MS}ms. This is an NFS/NAS problem, not a memo problem. Route it to the NAS owner, and do NOT read it as evidence about whether memo-watch is running -- nothing here can see that."
+  fi
   dm "⛔ memo-watch heartbeat UNREADABLE" \
-     "heartbeat-check on $(hostname) could not read $HB (missing file, or the NFS mount did not answer within 25s).
+     "heartbeat-check on $(hostname) could not read $HB within 25s.
 
-⛔ THIS IS NOT EVIDENCE THE WATCH IS FINE AND IT IS NOT EVIDENCE IT IS DEAD. Absence is not freshness. Two different causes, both real: the watch is not running on server4, or /mnt/nas is not answering from $(hostname).
+$VERDICT
 
-Check, in this order: ssh -p 4999 ben@server4 'tail -5 /home/ben/.memo-watch/run.out' (does the job still run?), then 'crontab -l | grep memo-watch', then the NFS mount here."
+⛔ EITHER WAY THIS IS NOT EVIDENCE THE WATCH IS FINE AND NOT EVIDENCE IT IS DEAD. Absence is not freshness.
+If you still need to know whether the job runs: ssh -p 4999 ben@server4 'tail -5 /home/ben/.memo-watch/run.out; crontab -l | grep memo-watch'."
   exit 2
 fi
 # ⛔⛔ A BARE `stat` OVER NFS CAN BE UP TO 600s STALE, AND THAT ALWAYS READS AS *OLDER*.
