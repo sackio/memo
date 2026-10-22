@@ -40,25 +40,39 @@ and 49 serial ssh probes cannot finish inside one second.
 ⭐ **PRECISION IS NOT RESOLUTION.** A field's format tells you the first; only
 its writer tells you the second.
 
-### The sound version of the arity argument, which is stronger
+### ⛔ The arity argument is WEAKER than it looks — the monitor is PARALLEL
 
-A **serial** loop that records 49 `df_rc=124` rows in one cycle spent at least
-49 x 8s = 392s — **>= 6.5 minutes** — purely on those timeouts, and every one
-timed out. So that cycle witnesses a *sustained* NAS-wide stall of 6.5 minutes
-or more, not 49 coincident instants. Likewise 2026-09-29T21:37:01Z (28 rows,
->= 3.7 min) and 2026-10-21T23:52:08Z (26 rows, >= 3.5 min).
+`disk-monitor.sh:144` is `probe_one "$name" "$ip" "$role" "$port" &` inside the
+host loop, with a bare `wait` at `:146`. **~56 hosts are probed concurrently**,
+and `TS` is set once at `:15`.
 
-Arity rules out a per-host cause — 36-49 **distinct** clients, not one bad
-client path. It never showed simultaneity.
+⇒ The 49 timeouts in a cycle ran **concurrently inside one ~8-12 s window**.
+⇒ The statfs load in those cycles **is the monitor's own 56-way burst**, which
+is exactly what `cluster`'s memo `0fee2412` says.
 
-⚠️ A serial loop cannot fan out concurrent statfs calls, so self-inflicted
-concurrency is not the mechanism here. But it does hold a statfs open for 8s per
-failing host, so a 49-failure cycle is itself 6.5 minutes of statfs pressure.
-That cannot *create* the stall — the first host timed out before the 49th was
-probed — but this record cannot distinguish a stall that outlasted the cycle
-from one extended by the probing. `nfs-latency-probe` (no fan-out, fixed 2s
-cadence) is the only clean evidence the stalls exist outside the monitor's
-own activity.
+So the record **cannot separate "the NAS was stalling" from "56 concurrent
+statfs calls caused the stall"**. What survives: 36-49 **distinct** clients
+timing out rules out a single bad client path, and nothing more. The arity and
+the fan-out are the same event.
+
+⭐ **The independent samplers are the only evidence the stalls exist outside
+the monitor's own activity** — `nfs-latency-probe` (fixed 2 s cadence, no
+fan-out) and `cluster`'s `nas-write-tail-sample`.
+
+### ⛔ FINDING THE STRING YOU EXPECT IN A PLAUSIBLE FILE IS NOT FINDING THE CODE THAT RAN
+
+An earlier version of this file argued the opposite — a *serial* loop, therefore
+49 x 8 s = **>= 6.5 minutes** of sustained stall. That inference is withdrawn.
+
+It came from grepping `/home/ben/scripts/disk-monitor-cron`, which **is the alert
+wrapper, not the writer**, and which contains a genuine reprobe copy of the
+`timeout 8 df -P /mnt/nas /` payload. The grep found the expected string, found
+no parallelism, and confirmed the hypothesis **in the wrong file**. There was no
+error to notice.
+
+The discriminator, which costs one command: `grep -n 'disk-monitor.sh'` in the
+wrapper says at `:78` that `MON=~/.claude/skills/disk-monitor/disk-monitor.sh`
+does the detection.
 
 ### Other limits, all cutting the same way
 
