@@ -97,6 +97,35 @@ server6 was NOT destroyed -- it is live with ~20 datasets (`backup/*`, `discover
 of them actually make the pool-destroyed claim, so this is a guard against writing
 one, not a correction of one.)
 
+## ⛔⛔ A LOCAL `origin/*` REF IS NOT THE REMOTE — FETCH BEFORE YOU COUNT
+
+`git rev-list --count origin/master..master` answers a question about a **cached
+ref in that checkout**, not about GitHub. The ref is only as fresh as the last
+`git fetch` anyone ran there, and nothing in the output says how old it is.
+
+⚠️ MEASURED 2026-10-22, reported back by `nginx`: a worker found "74 unpushed
+commits" in the nginx repo. The count was right — and it was measured against an
+`origin/master` ref last fetched **2025-08-13, fourteen months earlier**. The
+finding was luck, not method. The same command cannot tell "74 unpushed" from
+"this ref is a year stale", and both render as a confident integer.
+
+⇒ **Fetch first, then count, and say you fetched:**
+```
+git -C <repo> fetch --quiet origin 2>/dev/null || echo "FETCH FAILED -- count is INCONCLUSIVE, not zero"
+git -C <repo> rev-list --count origin/<branch>..<branch>
+```
+⇒ If the fetch fails (no network, no credentials, NFS stall), the count is
+**inconclusive**. Report it as inconclusive. A stale-ref count that happens to be
+right teaches the owner to trust the next one, which will not be.
+
+⭐ THE GENERAL FORM, and it is the most common way this audit produces a
+confident-wrong finding: **a cached local answer to a question about a remote
+system.** `origin/*` refs, a DNS answer, a `docker inspect` of an image that has
+since been rebuilt, a mount's attribute cache, a subscriber list. In every case
+the stale value is well-formed, plausible, and indistinguishable from the fresh
+one. Name what you refreshed, or say you did not.
+
+
 ## AUDIT THE CLAIM, DO NOT REREAD THE MEMO
 A memo that is internally coherent can still be false. For each checkable claim,
 go and look. Evidence sources, in descending order of trust:
