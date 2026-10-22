@@ -38,7 +38,7 @@ phase () {   # phase <name> <command...>
 
 phase slack-archive  /usr/bin/timeout 1800 python3 "$SLACK/archive.py" --days 2
 phase slack-digests  /usr/bin/timeout  900 python3 "$SLACK/mine.py" --days 1.2 --checkpoint
-phase slack-mine     /usr/bin/timeout 7200 python3 "$SLACK/mine-run.py" --per-worker 4 --concurrency 3
+phase slack-mine     /usr/bin/timeout 10800 python3 "$SLACK/mine-run.py" --per-worker 4 --concurrency 3 --wait-for-lock 7200
 phase refute-recheck /usr/bin/timeout 1800 python3 refute-recheck.py --queue
 phase candidates-all /usr/bin/timeout 1800 python3 select-all.py --out candidates-all.json
 phase candidates     /usr/bin/timeout  900 python3 select-read-weighted.py \
@@ -71,7 +71,7 @@ PY
 )
 echo "budget buys ~${BATCHES} batches"
 phase audit /usr/bin/timeout 36000 python3 run.py --candidates candidates.json \
-    --batch-size 6 --batches "$BATCHES" --concurrency 4
+    --batch-size 6 --batches "$BATCHES" --concurrency 4 --wait-for-lock 7200
 
 echo "════ cycle done $(date -Is)"
 printf '%s\n' "${rcs[@]}"

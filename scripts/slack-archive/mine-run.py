@@ -110,6 +110,9 @@ def main() -> int:
     ap.add_argument("--outdir", default=str(HERE / "mine-runs"))
     ap.add_argument("--digests", default=str(DIGESTS),
                     help="digest directory; a subset is how you test one channel")
+    ap.add_argument("--wait-for-lock", type=float, default=0.0,
+                    help="seconds to wait for the grant-spender lock; scheduled "
+                         "work should wait rather than lose the night")
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
 
@@ -129,7 +132,7 @@ def main() -> int:
         return 0
 
     try:
-        _lock = keyring.acquire_spender_lock("slack-mine")
+        _lock = keyring.acquire_spender_lock("slack-mine", a.wait_for_lock)
     except RuntimeError as e:
         print(f"⛔ {e}")
         return 3

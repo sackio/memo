@@ -507,7 +507,7 @@ if __name__ == "__main__":
 SPENDER_LOCK = "/tmp/memo-grant-spender.lock"
 
 
-def acquire_spender_lock(who: str):
+def acquire_spender_lock(who: str, wait_s: float = 0.0):
     """Take the fleet-wide grant-spending lock, or raise naming who holds it.
 
     ⛔⛔ `_INFLIGHT` IS A PROCESS GLOBAL, SO THE BUDGET GUARD IS BLIND TO EVERY
@@ -525,17 +525,31 @@ def acquire_spender_lock(who: str):
     import fcntl
     import os
 
+    import time as _time
+
+    # ⭐ WAITING BEATS SKIPPING FOR SCHEDULED WORK. The nightly cycle fires at a
+    # fixed hour; a long run started by hand can still hold the lock then, and a
+    # cycle that merely refuses loses the whole night -- Slack unmined, probes
+    # unrechecked, grant unspent, which is the outcome the cycle exists to
+    # prevent. An interactive caller still wants the immediate refusal, so the
+    # wait is opt-in and bounded, never the default.
     f = open(SPENDER_LOCK, "a+")
-    try:
-        fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except BlockingIOError:
-        f.seek(0)
-        holder = f.read().strip() or "an unnamed process"
-        f.close()
-        raise RuntimeError(
-            f"another grant spender holds {SPENDER_LOCK}: {holder}. "
-            "Wait for it, or stop it -- two spenders cannot see each other's "
-            "in-flight cost and will overrun the grant.")
+    deadline = _time.time() + max(0.0, wait_s)
+    while True:
+        try:
+            fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            break
+        except BlockingIOError:
+            if _time.time() >= deadline:
+                f.seek(0)
+                holder = f.read().strip() or "an unnamed process"
+                f.close()
+                raise RuntimeError(
+                    f"another grant spender holds {SPENDER_LOCK}: {holder}"
+                    + (f" (waited {wait_s:.0f}s)" if wait_s else "")
+                    + ". Wait for it, or stop it -- two spenders cannot see "
+                      "each other's in-flight cost and will overrun the grant.")
+            _time.sleep(min(30.0, max(1.0, deadline - _time.time())))
     f.seek(0)
     f.truncate()
     f.write(f"{who} pid={os.getpid()} since={datetime.now(timezone.utc).isoformat()}\n")

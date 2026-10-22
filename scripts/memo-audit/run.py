@@ -293,6 +293,9 @@ def main() -> int:
     ap.add_argument("--model", default=None,
                     help="pass through to claude -p; a probe-only pass does not "
                          "need the model a truth audit needs")
+    ap.add_argument("--wait-for-lock", type=float, default=0.0,
+                    help="seconds to wait for the grant-spender lock; scheduled "
+                         "work should wait rather than lose the night")
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
 
@@ -300,7 +303,7 @@ def main() -> int:
     # released when this process exits, however it exits.
     if not a.dry_run:
         try:
-            _lock = keyring.acquire_spender_lock(f"memo-audit {a.candidates}")
+            _lock = keyring.acquire_spender_lock(f"memo-audit {a.candidates}", a.wait_for_lock)
         except RuntimeError as e:
             print(f"⛔ {e}")
             return 3
