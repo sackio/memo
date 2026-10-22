@@ -40,7 +40,7 @@ mkdir -p "$STATE" "$(dirname "$HB")" 2>/dev/null || true
 
 # Re-exec once with stdout captured, so a DM can carry the FULL run without the cron line
 # having to tee it. The child writes $STATE/run.out; the parent echoes it and preserves rc.
-if [ -z "${MEMO_WATCH_TEE:-}" ]; then
+if [ -z "${MEMO_WATCH_TEE:-}" ] && [ "${1:-}" != "--selftest-docker" ]; then
   export MEMO_WATCH_TEE=1
   "$0" "$@" > "$STATE/run.out" 2>&1; rc=$?
   cat "$STATE/run.out"
@@ -59,15 +59,105 @@ DK=/snap/bin/docker
 #    `docker inspect memo-v2` and `docker logs --tail` all returned promptly.
 #    ⛔ Do NOT 'improve' this to `inspect memo-v2` — that needs a container to EXIST, so a
 #    removed container would read as an unreachable daemon.
+DK_FALLBACK=/run/snap.docker/tmp.sock
+DK_PIDFILE=/run/snap.docker/docker.pid
+DK_PROBE_T=45
+_DK_OK=""; _DK_HOST=""; _DK_MS=""   # ⛔ EMPTY MEANS NOT MEASURED, NOT ZERO
 pick_socket() {
-  for s in "" "unix:///run/snap.docker/tmp.sock"; do
-    if [ -z "$s" ]; then unset DOCKER_HOST; else export DOCKER_HOST="$s"; fi
-    if timeout 45 $DK version --format '{{.Server.Version}}' >/dev/null 2>&1; then
-      echo "  docker socket: ${DOCKER_HOST:-default}"; return 0
+  # ⭐ CACHE SUCCESS, NEVER FAILURE. The two call sites probe INDEPENDENTLY on purpose — a
+  #    daemon too busy to answer at the container-start check may well answer a minute later
+  #    at step 3+4, and caching the failure throws that second chance away. Caching the
+  #    SUCCESS costs nothing and saves a second 45s wait on a saturated host.
+  if [ -n "$_DK_OK" ]; then
+    if [ -n "$_DK_HOST" ]; then export DOCKER_HOST="$_DK_HOST"; else unset DOCKER_HOST; fi
+    echo "  docker socket: ${DOCKER_HOST:-default} (cached, ${_DK_MS}ms)"; return 0
+  fi
+  local s t0 t1
+  for s in "" "unix://$DK_FALLBACK"; do
+    if [ -z "$s" ]; then
+      unset DOCKER_HOST
+    elif [ ! -S "$DK_FALLBACK" ]; then
+      # ⛔⛔ AN ABSENT PATH IS NOT A SECOND OPINION. Until 2026-10-22 this loop reported
+      #    "did not answer within 45s on EITHER socket" while the fallback had never existed:
+      #    measured that day, /run/snap.docker/tmp.sock is absent and that leg fails in 150ms.
+      #    One socket was probed and counted twice. ⛔ And the obvious "fix" of pointing it at
+      #    /var/run/docker.sock is THE SAME SOCKET — /var/run is a symlink to /run and both
+      #    names resolve to inode 1374584.
+      #    ⇒ Say it was not probed. A control that cannot disagree with the thing it backs up
+      #      is decoration, and here it was decoration inside the verdict text.
+      echo "  fallback socket $DK_FALLBACK: ABSENT — not probed, and not a second opinion."
+      continue
+    else
+      export DOCKER_HOST="$s"
     fi
+    t0=$(date +%s%N)
+    if timeout "$DK_PROBE_T" $DK version --format '{{.Server.Version}}' >/dev/null 2>&1; then
+      t1=$(date +%s%N); _DK_MS=$(( (t1 - t0) / 1000000 ))
+      _DK_OK=1; _DK_HOST="${DOCKER_HOST:-}"
+      echo "  docker socket: ${DOCKER_HOST:-default} (${_DK_MS}ms)"; return 0
+    fi
+    t1=$(date +%s%N); _DK_MS=$(( (t1 - t0) / 1000000 ))
   done
   unset DOCKER_HOST; return 1
 }
+
+# ⛔⛔ "THE DAEMON DID NOT ANSWER" IS ONE SYMPTOM WITH THREE CAUSES AND THREE DIFFERENT
+#    ACTIONS — daemon dead (start it), host saturated (touch nothing), daemon wedged (a
+#    human). The verdict said none of them, so every firing cost the same investigation to
+#    reach an answer the host could have supplied for free. MEASURED 2026-10-22 15:43: the
+#    check timed out while load1 was 94.87 on 32 cores with 42 processes in uninterruptible
+#    I/O wait, and dockerd was alive and serving — the alarm read as a docker outage.
+#    ⭐ Same defect as the UNREADABLE heartbeat branch (ebd2c53): name the cause or do not fire.
+docker_verdict() {   # $1=pid-or-empty $2=load1 $3=D-count $4=ncpu $5=elapsed-ms
+  local pid="$1" load1="$2" dcount="$3" ncpu="$4" ms="$5"
+  # ⛔ AN UNMEASURED ELAPSED IS NOT A ZERO. docker_why can be reached without pick_socket
+  #    having timed anything (the self-test does exactly that), and "waited 0ms" would be a
+  #    fabricated measurement sitting inside an otherwise-measured verdict.
+  if [ -n "$ms" ]; then ms="waited ${ms}ms"; else ms="elapsed not measured in this run"; fi
+  if [ -z "$pid" ]; then
+    echo "THE DOCKER DAEMON IS NOT RUNNING on $(hostname) — no live pid via $DK_PIDFILE. Then every container on this host is down, memo-v2 among them; steps 1/1b/2 above say whether the API still answers. Next: sudo systemctl start snap.docker.dockerd"
+    return
+  fi
+  if awk -v l="$load1" -v n="$ncpu" 'BEGIN{exit !(l+0 > n+0)}' || [ "$dcount" -ge 8 ]; then
+    echo "THE HOST IS SATURATED, NOT THE DAEMON — dockerd is alive (pid $pid) but did not answer \`docker version\` within ${DK_PROBE_T}s (${ms}). load1 $load1 on $ncpu cores, $dcount processes in uninterruptible I/O wait. ⛔ NOT a memo finding and NOT a docker fault: do not restart docker, do not recreate memo-v2. Only the CONTAINER-START check is lost — steps 1/1b/2/3+4 probe memo directly and stand on their own. Next: ps -eo pcpu,pid,user,etimes,comm --sort=-pcpu | head -20"
+    return
+  fi
+  echo "THE DAEMON IS WEDGED — dockerd is alive (pid $pid) and the host is NOT busy (load1 $load1 on $ncpu cores, $dcount in D-state), yet \`docker version\` did not answer within ${DK_PROBE_T}s (${ms}). A live, idle, unresponsive daemon needs a human. Next: sudo journalctl -u snap.docker.dockerd --since '-15min' | tail -50"
+}
+
+docker_why() {
+  # ⛔ DO NOT 'SIMPLIFY' THIS TO `systemctl is-active docker`. MEASURED on server4 2026-10-22:
+  #    there is no docker.service on this host — the unit is `snap.docker.dockerd.service` and
+  #    `docker.service` reports `not-found`, so `systemctl is-active docker` prints `inactive`
+  #    and exits 3 WHILE DOCKER IS RUNNING AND SERVING. A liveness test keyed on a unit NAME
+  #    inherits that host's packaging; a pidfile + /proc test does not. (memo f572d6ea)
+  local pid="" load1 dcount ncpu
+  if [ -r "$DK_PIDFILE" ]; then
+    pid=$(tr -dc '0-9' < "$DK_PIDFILE" 2>/dev/null || echo "")
+    [ -n "$pid" ] && [ -d "/proc/$pid" ] || pid=""
+  fi
+  load1=$(cut -d' ' -f1 /proc/loadavg 2>/dev/null || echo 0)
+  dcount=$(ps -eo stat= 2>/dev/null | grep -c '^D' || true)
+  ncpu=$(nproc 2>/dev/null || echo 1)
+  docker_verdict "$pid" "$load1" "${dcount:-0}" "$ncpu" "$_DK_MS"
+}
+
+if [ "${1:-}" = "--selftest-docker" ]; then
+  # ⭐ NEGATIVE CONTROLS FIRST. A verdict function that cannot return every one of its
+  #    verdicts is a constant wearing a signature; E and C exist so the saturation threshold
+  #    has to come back BOTH ways.
+  st_fail=0
+  st() { local label="$1" want="$2"; shift 2; local got; got=$(docker_verdict "$@")
+    case "$got" in *"$want"*) echo "✅ $label";;
+      *) echo "❌ $label: wanted '$want', got: $got"; st_fail=1;; esac; }
+  st "A no live dockerd pid"        "IS NOT RUNNING"    ""    0.1  0 32 45000
+  st "B load1 94.9 > 32 cores"      "HOST IS SATURATED" 1234 94.9 42 32 45000
+  st "C alive, idle, unresponsive"  "DAEMON IS WEDGED"  1234  0.4  0 32 45000
+  st "D D-state 12, load low"       "HOST IS SATURATED" 1234  0.9 12 32 45000
+  st "E load1 31.0 < 32 cores"      "DAEMON IS WEDGED"  1234 31.0  0 32 45000
+  echo "F this host, now -> $(docker_why)"
+  exit $st_fail
+fi
 
 echo "=== memo-watch $(date -Is) host $(hostname) ==="
 
@@ -282,7 +372,7 @@ if pick_socket; then
     | python3 -c "import json,sys; d=json.load(sys.stdin)[0]; print(' ',d['State']['StartedAt'],'restarts',d['RestartCount'])" 2>/dev/null \
     || unknown "could not read container start"
 else
-  unknown "docker daemon did not answer within 45s on either socket -- CONTAINER-START check SKIPPED, which is NOT a pass (a recreate would be invisible). Steps 3+4 re-probe independently: read what they actually print."
+  unknown "CONTAINER-START CHECK SKIPPED — which is NOT a pass, a recreate would be invisible. $(docker_why)"
 fi
 
 echo "=== 3+4. codes, client IPs, per-IP 4xx recovery ==="
