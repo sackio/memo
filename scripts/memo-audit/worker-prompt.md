@@ -428,6 +428,32 @@ discriminator, and a cron will report `holds` forever on a memo that rotted.
 is the right probe for exactly one memo in the corpus and the wrong probe for
 every other, because it returns 200 whatever the memo says.
 
+### ⛔⛔ A DATED RECORD HAS NO PRESENT-TENSE DISCRIMINATOR
+
+Measured on the first batch of real probes (2026-10-22): a worker gave
+`f16c222a — server4 storage layout SNAPSHOT 2026-09-21 [HISTORICAL]` a probe
+asserting that a line is PRESENT in `/etc/modprobe.d/zfs.conf` today. The line
+is gone, so the probe reported `refuted` — but the memo is a record of what was
+true on 2026-09-21 and **nothing observable now can make it false.** The probe
+queues a paid re-audit on a memo that was never wrong.
+
+⇒ If the title or the content scopes the claim to a date — SNAPSHOT, AS OF,
+HISTORICAL, "measured <date>" — **there is no probe.** A memo that says the
+world WAS a certain way is refuted only by finding the record itself wrong,
+which is not a cron's job.
+
+### ⚠️ YOUR ASSUMPTIONS ABOUT OUR OWN API AGE TOO
+
+Same batch: a probe asserted `GET /documents/<deleted-id>` returns **404**. It
+returns **410** — tombstones with `superseded_by` shipped 2026-10-20 and the
+status changed under a probe written days later. `refuted`, on a memo that is
+still entirely true.
+
+⇒ A probe whose expectation encodes OUR behaviour is a probe about us, not
+about the claim. Prefer the content over the status (`expect_substr`), accept
+the set of statuses that all mean the same thing (`"expect_status": [404, 410]`),
+and remember that what your probe really tests is whatever you wrote down.
+
 ### ⚠️ MOST MEMOS HAVE NO PROBE, AND THAT IS THE HONEST ANSWER
 
 *"Ben decided X"*, *"the reason we chose Y"*, a synthesis across six seats — none
