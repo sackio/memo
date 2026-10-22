@@ -144,7 +144,27 @@ def main() -> int:
         if bad in routes and good in seats:
             routes.setdefault(good, []).extend(routes.pop(bad))
             print(f"  ↪ remapped {bad} → {good} (alias)")
-    unknown = {s_ for s_ in routes if s_ not in seats}
+    # ⛔⛔ A THREAD IS A VALID TARGET AND IS *NEVER* IN THE SUBSCRIBER REGISTRY.
+    #    A conversation has conv_id `<seat>.<label>` but REGISTERS under its wire
+    #    (`thread-<seat>-<n>`), so `ha.led` is absent from GET /subscribers while
+    #    being perfectly deliverable — the broker resolves the conv_id on send.
+    #    Validating against the registry alone therefore DROPS a good address and
+    #    prints "no such subscriber", which is the confident-wrong direction.
+    #    MEASURED 2026-10-22: `ha` main asked for three walkway/WLED findings to be
+    #    re-sent to `ha.led` because that thread owns them. Sent by hand, it
+    #    resolved to wire `thread-ha-2`, delivered live. Under the old check the
+    #    worker could never have routed there at all.
+    # ⭐ So: accept `<seat>.<label>` when <seat> itself is a known subscriber. That
+    #    keeps the typo protection (an unknown PARENT is still refused) without
+    #    pretending the registry is the set of all addresses. Presence in the
+    #    registry proves reachability; ABSENCE FROM IT PROVES NOTHING.
+    def _addressable(target: str) -> bool:
+        if target in seats:
+            return True
+        parent, sep, label = target.partition(".")
+        return bool(sep and label and parent in seats)
+
+    unknown = {s_ for s_ in routes if not _addressable(s_)}
     for s_ in sorted(unknown):
         print(f"  ⛔ UNKNOWN SEAT {s_!r} — {len(routes[s_])} finding(s) NOT sent, "
               f"no such subscriber. Reroute by hand or add an alias:")
