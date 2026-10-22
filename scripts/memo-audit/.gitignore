@@ -30,3 +30,5 @@
 !consolidate-prompt.md
 !README.md
 !verify-run.py
+!refute.py
+!refute-recheck.py

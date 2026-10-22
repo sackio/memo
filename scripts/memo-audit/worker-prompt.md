@@ -383,13 +383,77 @@ from query_log and must never justify a deletion.
 Decide on EVIDENCE about the claim -- is it true? is it duplicated? is it
 superseded? -- never on apparent disuse.
 
+## ⭐ LEAVE A REFUTE PROBE — the cheapest thing you produce all day
+
+Operator instruction, Ben, Slack #memo 2026-10-22, answering ask `a0u`: **yes**.
+
+While you verify a memo you necessarily work out its DISCRIMINATOR — the single
+observation that, had it come back the other way, would have settled the claim
+as wrong. That is the expensive half of this job and until today nobody kept it.
+Store it, and a cron rechecks the memo for the cost of one request; only a
+probe that comes back REFUTED spends an LLM again.
+
+```bash
+R=/mnt/nas/data/code/memo/scripts/memo-audit/refute.py
+python3 $R --validate '{"kind":"http","url":"http://server4:8000/documents/<id>","expect_status":[200]}'
+python3 $R --store <memo-id> '<the same json>'
+```
+
+**Four kinds, and nothing else.** A probe is data, not a command line: it runs
+unattended on a host that owns the fleet, so there is no shell, no pipe, no
+redirection and no writer.
+
+| kind | fields | example |
+|---|---|---|
+| `http` | `url` (LAN only), `expect_status`, `expect_substr`, `expect_absent_substr` | the service still answers, and still says X |
+| `path` | `path`, `expect: exists\|absent` | the file the memo is about is still there |
+| `grep` | `path`, `pattern`, `expect: present\|absent` | the config line the memo quotes is still in the file |
+| `cmd` | `argv` (allowlisted read-only binaries, no shell), `expect_rc`, `expect_substr`, optional `host` | `git -C <repo> log -1 --format=%H` still names the commit |
+
+`--validate` tells you in one call whether a probe will be accepted. If it is
+refused, **do not reshape the claim to fit the allowlist** — report no probe.
+
+### ⛔⛔ A PROBE THAT CANNOT COME BACK BOTH WAYS IS NOT A PROBE
+
+This is the whole discipline, and it is the failure this fleet pays for most
+often. Nine instruments misled three seats on 2026-10-22 alone, every one of
+them the same shape: it agreed with every hypothesis and contradicted none.
+A `%util` pinned at 100%. A blocked-thread count that rises when the bottleneck
+clears AND when it worsens. A five-sample probe against a 13% event, which sees
+nothing half the time. **Before you store a probe, say what its REFUTED output
+would look like.** If you cannot write that sentence, you have a ceiling, not a
+discriminator, and a cron will report `holds` forever on a memo that rotted.
+
+⇒ `GET /documents/<id> == 200` refutes *"this memo exists"* and NOTHING else. It
+is the right probe for exactly one memo in the corpus and the wrong probe for
+every other, because it returns 200 whatever the memo says.
+
+### ⚠️ MOST MEMOS HAVE NO PROBE, AND THAT IS THE HONEST ANSWER
+
+*"Ben decided X"*, *"the reason we chose Y"*, a synthesis across six seats — none
+has a cheap discriminator, because what makes it true is not observable from a
+shell. **Report `"refute": null` and move on.** An invented probe is worse than
+none: it manufactures freshness, which is the one output of this pipeline nobody
+can audit from the outside.
+
+### ⛔⛔ `metadata` ON PATCH IS A FULL REPLACE — USE THE HELPER
+
+Measured 2026-10-22 against the live service: `PATCH {"metadata":{"x":true}}`
+leaves the document holding exactly `{"x": true}` and silently drops everything
+else that was in there, provenance included. Same family as `content=`.
+`--store` reads, merges, writes and then reads back field by field. **Do not
+hand-roll the PATCH.**
+
 ## Report
 Finish with a JSON block and nothing after it:
 ```json
 {"audited": [{"id": "...", "verdict": "CURRENT|STALE|SUPERSEDED|SPLIT|DELETE|UNVERIFIABLE",
   "claims_checked": ["..."], "evidence": ["what you actually ran or read"],
   "action": "what you changed, or none", "cites_found": 0,
-  "parts": ["<new id>", "..."]}],
+  "parts": ["<new id>", "..."],
+  "refute": {"stored": true, "probe": {...}, "refuted_would_look_like": "one sentence"}
+            // or null, with "refute_why_none": "what makes this claim true is not observable"
+  }],
  "route": [{"seat": "cluster|network|models|atc|servers|ha|...",
             "finding": "one sentence, with the evidence you ran",
             "from_memo": "<id you found it auditing>"}],
