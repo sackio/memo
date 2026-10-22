@@ -56,10 +56,51 @@ SPEND_LOG = KEY_DIR / "spend.jsonl"          # schema shared with the `agents` s
 # the overlap. Seed once, before the flip.
 USE_BROKER_FLAG = KEY_DIR / "USE_BROKER"
 BROKER_SPEND_URL = "http://192.168.1.168:3030/api-spend"   # ⛔ literal: $ATC_URL is unset here
-# ⛔ WE SEND SECONDS. An unknown or millisecond echo is a FAILURE, not a shrug:
-#    a 10-digit epoch read as milliseconds lands in January 1970 and the row is
-#    silently excluded from every window the budget asks about.
-_TS_UNITS_SECONDS = {"s", "sec", "secs", "second", "seconds", "epoch_s", "epoch_seconds"}
+BROKER_TOTALS_URL = BROKER_SPEND_URL + "/totals"
+# ⛔⛔ DO NOT SMOKE-TEST THIS ENDPOINT. It is append-only with NO delete route, and
+#    this seat put two junk accounts in the shared ledger on 2026-10-22 probing the
+#    contract; `atc` had to remove them by hand. Exercise post_spend against a local
+#    stub or read GET /api-spend/totals, which is free.
+# ⛔ THE READ SIDE READS `GET /api-spend/totals` AND NOTHING ELSE.
+#    `atc` 2026-10-22: Redis is the source of truth; the NAS mirror lags it and an
+#    undercount lets spend run over. The `buffered` and `durable_through` fields
+#    currently describe a file inside the container that a recreate destroys, so do
+#    not build on them -- but a 201 is never lost (AOF fsync 1s + snapshots).
+#
+# ⛔⛔ THE READ SIDE WAS PORTED THE MOMENT `agents` FLIPPED THE FLAG (17:37, same
+#    day), AND IT HAD TO BE. `scripts/haiku` now POSTs ONLY -- it no longer appends
+#    to spend.jsonl -- so from that instant the local file stopped being a complete
+#    ledger for accounts this seat also bills. Leaving `remaining()` on the file
+#    would have made it miss every haiku row and OVERSTATE the balance, which is
+#    the overspend direction and exactly what the grant guard exists to stop.
+#    ⇒ Dual-WRITE, single-READ. The local append survives only as a forensic trail.
+#
+# ⛔⛔ `?since=` IS MILLISECONDS AND A SECONDS VALUE FAILS SILENTLY IN THE WORST
+#    DIRECTION. Measured 2026-10-22: `?since=<10-digit seconds>` returns ALL 260
+#    rows and echoes the value back, so the response looks filtered when it is not
+#    -- every stored ms timestamp exceeds any 10-digit seconds value. The same
+#    value * 1000 filters correctly and monotonically (ben: 112 rows all-time, 102
+#    since 10-18, 69 since 10-20, 33 since 10-22).
+#    ⚠️ ONE ENDPOINT, TWO UNIT CONVENTIONS, ONLY ONE OF THEM SELF-DESCRIBING: POST
+#    `ts` takes seconds OR ms and tells you which it read via ts_units; GET `since`
+#    takes ms only and tells you nothing. Reported to `atc`.
+# ⛔ WE SEND SECONDS. An "ms" echo is a FAILURE, not a shrug: a 10-digit epoch
+#    read as milliseconds lands in January 1970 and the row drops out of every
+#    window the budget asks about.
+# ⭐ VOCABULARY, from `atc` 2026-10-22 17:36, EXACTLY THREE VALUES:
+#      "seconds"   - the broker read our ts as epoch seconds. Correct for us.
+#      "ms"        - it read the same digits as milliseconds. WRONG for us.
+#      "defaulted" - no ts arrived and the broker used its own clock. The money
+#                    is recorded and the time is approximately right, so this is
+#                    accepted WITH A WARNING rather than failed -- but it means
+#                    our ts field did not survive the request.
+# ⚠️ `atc` advised accepting all three. That is right for a client that may send
+#    either unit and wrong for this one: we only ever send seconds, so "ms" is
+#    precisely the misread this assert exists to catch. Accepting it would make
+#    the check decorative. Told `atc`.
+_TS_UNITS_OK = "seconds"
+_TS_UNITS_DEFAULTED = "defaulted"
+_TS_UNITS_MS = "ms"
 
 # ⭐ SINGLE SOURCE OF TRUTH, shared with the `agents` seat (its 8990793, this
 # file 2026-10-19): /home/ben/.claude/state/api-keys/grants.json, shape
@@ -141,8 +182,64 @@ def spent(acct: str, now: datetime | None = None) -> float:
     return _sum_spend(now, acct=acct, since=since)
 
 
+class LedgerUnreadable(RuntimeError):
+    """The broker ledger could not be read.
+
+    ⛔ RAISED, NEVER SWALLOWED INTO A ZERO. Since the flag flipped, the local file
+    is missing other seats' rows, so falling back to it would read as "less has
+    been spent than really has" and bill against a balance that does not exist.
+    A budget that cannot read its ledger must refuse, not guess.
+    """
+
+
+def _broker_totals(since: float = 0.0) -> dict:
+    import urllib.request
+    url = BROKER_TOTALS_URL
+    if since:
+        url += f"?since={int(float(since) * 1000)}"      # ⛔ MILLISECONDS. See above.
+    try:
+        with urllib.request.urlopen(url, timeout=15) as r:
+            if r.status != 200:
+                raise LedgerUnreadable(f"{url} -> HTTP {r.status}")
+            return json.loads(r.read() or b"{}").get("accts") or {}
+    except LedgerUnreadable:
+        raise
+    except Exception as e:                               # noqa: BLE001
+        raise LedgerUnreadable(f"{url} -> {type(e).__name__}: {e}") from e
+
+
 def _sum_spend(now: datetime, acct: str | None = None, since: float = 0.0,
                actor: str | None = None, day: str | None = None) -> float:
+    if USE_BROKER_FLAG.exists():
+        # ⛔⛔ REFUSE BEFORE THE LOOP, NOT INSIDE IT. The first cut of this raised
+        #    from within the per-acct loop, so when the `since` filter returned NO
+        #    accounts the loop never ran and the unsupported combination returned
+        #    0.0 -- a guard that is skipped in exactly the case it exists for, and
+        #    silently. Caught by its own control, which expected a refusal and got
+        #    a number.
+        # ⚠️ by_actor_day is DAY-GRANULAR, so an actor/day query cannot also honour
+        #    a sub-day `since`. No caller combines them (spent_today passes day,
+        #    remaining passes since); this refuses rather than returning a figure
+        #    that is neither.
+        if since and (actor is not None or day is not None):
+            raise LedgerUnreadable(
+                "by_actor_day is day-granular: an actor/day query cannot also "
+                "honour a sub-day since")
+        accts = _broker_totals(since)
+        total = 0.0
+        for name, v in accts.items():
+            if acct is not None and name != acct:
+                continue
+            if actor is None and day is None:
+                total += float(v.get("total_usd") or 0.0)
+                continue
+            for row in v.get("by_actor_day") or []:
+                if actor is not None and row.get("actor") != actor:
+                    continue
+                if day is not None and row.get("day") != day:
+                    continue
+                total += float(row.get("usd") or 0.0)
+        return total
     total = 0.0
     if not SPEND_LOG.exists():
         return total
@@ -277,7 +374,20 @@ def spent_today(actor: str | None = None, now: datetime | None = None) -> tuple[
     today = date.today().isoformat()
     mine = _sum_spend(now, actor=actor, day=today)
     total = _sum_spend(now, day=today)
+    # ⛔⛔ `attributed` MUST COME FROM THE SAME LEDGER AS `total`. Porting the reads
+    #    to the broker while leaving this loop on spend.jsonl made the subtraction
+    #    mix two sources, and since `scripts/haiku` went POST-only at 17:37 the file
+    #    is the SHORTER of the two -- so `total - attributed` over-states the
+    #    unattributed remainder, and the clamp to 0.0 hides it. Measured right after
+    #    the port: mine=$143.64 with unattributed=$0.00 against a fleet total of
+    #    $143.79. ⇒ A difference between two ledgers is not a fact about either.
     attributed = 0.0
+    if USE_BROKER_FLAG.exists():
+        for v in _broker_totals().values():
+            for r in v.get("by_actor_day") or []:
+                if r.get("day") == today and (r.get("actor") or "unknown") != "unknown":
+                    attributed += float(r.get("usd") or 0.0)
+        return mine, max(0.0, total - attributed)
     if SPEND_LOG.exists():
         for line in SPEND_LOG.read_text().splitlines():
             if not line.strip():
@@ -520,8 +630,18 @@ def post_spend(rec: dict) -> str | None:
         units = (json.loads(raw) or {}).get("ts_units")
         if units is None:
             return "201 carried no ts_units to assert against"
-        if str(units).strip().lower() not in _TS_UNITS_SECONDS:
-            return f"ts sent in SECONDS but the broker echoed ts_units={units!r}"
+        u = str(units).strip().lower()
+        if u == _TS_UNITS_MS:
+            return (f"ts was sent in SECONDS ({rec['ts']}) but the broker echoed "
+                    f"ts_units='ms', so this row is dated 1970 and will not appear "
+                    f"in any window the budget asks about")
+        if u == _TS_UNITS_DEFAULTED:
+            print(f"⚠️ keyring: the broker saw no ts and used its own clock "
+                  f"(sent ts={rec['ts']}). Row accepted; the timestamp is the "
+                  f"broker's, not ours.")
+            return None
+        if u != _TS_UNITS_OK:
+            return f"unrecognised ts_units={units!r} -- not one of ms/seconds/defaulted"
         return None
     except urllib.error.HTTPError as e:
         return f"HTTP {e.code}: {(e.read() or b'')[:200].decode('utf-8', 'replace')}"
