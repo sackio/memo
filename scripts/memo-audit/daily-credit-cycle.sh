@@ -157,8 +157,10 @@ phase slack-digests  /usr/bin/timeout  900 python3 "$SLACK/mine.py" --days 1.2 -
 #    is a check that is absent exactly when the fleet is busiest.
 # ⛔ scan.py defaults touch no NFS. Do NOT add --paths while /mnt/nas is degraded:
 #    a GETATTR sweep across 194 files on a mount doing 60s writes is an outage.
-phase instr-files /usr/bin/timeout  600 python3 "$INSTR/scan.py" ~/.claude
-phase instr-pins  /usr/bin/timeout  900 python3 "$INSTR/pins.py"
+# route.py runs scan.py and pins.py itself, then DMs each owning seat ONLY its
+# NEW defects and sends memo the full digest. ⛔ Printing alone is not
+# maintenance: in cron nobody reads stdout, and the phase still shows green.
+phase instr-audit /usr/bin/timeout 1800 python3 "$INSTR/route.py"
 PHASE_RESERVE="$AUDIT_RESERVE_S" \
 phase slack-mine     /usr/bin/timeout 10800 python3 "$SLACK/mine-run.py" --per-worker 4 --concurrency 2 --wait-for-lock 7200
 phase refute-recheck /usr/bin/timeout 1800 python3 refute-recheck.py --queue
