@@ -142,12 +142,28 @@ def main():
     for v in by_agent.values():
         v.sort(key=lambda s: s.get("created_at") or "")
 
-    findings, unresolved = [], set()
+    findings, unresolved, retired = [], set(), set()
     for agent, items in by_agent.items():
         owner = resolve_owner(agent, known)
+        # ⛔⛔ "NOT AN ATC SUBSCRIBER" IS NOT "DEAD SEAT", AND CONFLATING THEM WOULD
+        #    HAVE QUEUED A LIVE BOT'S ROWS FOR DELETION. Measured 2026-10-23 on the
+        #    cleaned 27-row board: all four unresolvable agent_ids are cron BOTS --
+        #    lan-scanner, claude-usage-cron, claude-backup-watchdog,
+        #    zfs-backup-watchdog. They post constantly (lan-scanner's newest row was
+        #    0 days old) and simply never registered as subscribers. The 30-day
+        #    floor happened to spare them today; it would stop sparing them the
+        #    moment a wanted bot went quiet for a month.
+        # ⇒ THE DISCRIMINATOR IS WHETHER THE AGENT IS STILL POSTING, not whether the
+        #   broker knows its name. An agent whose NEWEST row is older than the
+        #   staleness window is retired; one posting today is live, registered or
+        #   not. `retired:` may be deleted. `unresolved:` never may.
+        ages = [x for x in (age_days(s, now) for s in items) if x is not None]
+        newest = min(ages) if ages else None
         if owner is None:
             unresolved.add(agent)
-        key = owner or f"unresolved:{agent}"
+            if newest is not None and newest >= a.min_age_days:
+                retired.add(agent)
+        key = owner or (f"retired:{agent}" if agent in retired else f"unresolved:{agent}")
 
         # churn: same opening line again and again, digits normalised away
         seen_head = {}
@@ -213,9 +229,15 @@ def main():
     print(f"agents posting     : {len(by_agent)}")
     print(f"findings           : {len(findings)} across {len(by_owner)} owner(s)")
     if unresolved:
-        print(f"⚠️ {len(unresolved)} agent_id(s) do not resolve to a live subscriber: "
-              f"{sorted(unresolved)[:8]}")
-        print("   Reported, never DMed -- an unresolvable name is not a seat to tell.")
+        live_bots = sorted(unresolved - retired)
+        print(f"⚠️ {len(unresolved)} agent_id(s) do not resolve to a live subscriber.")
+        if retired:
+            print(f"   RETIRED (newest row >= {a.min_age_days:.0f}d old, nobody is posting): "
+                  f"{sorted(retired)[:8]}")
+            print("   ⇒ the only ones whose rows may be deleted.")
+        if live_bots:
+            print(f"   STILL POSTING, merely unregistered -- cron bots, DO NOT DELETE: {live_bots[:8]}")
+            print("   ⇒ no subscriber record is not a death certificate.")
     for owner in sorted(by_owner, key=lambda o: -len(by_owner[o])):
         print(f"\n--- {owner}  ({len(by_owner[owner])}) ---")
         for f in by_owner[owner][:20]:

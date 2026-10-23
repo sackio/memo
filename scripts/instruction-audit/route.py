@@ -55,6 +55,19 @@ ACTIONABLE = {"OVER-CLIFF", "dangling-memo-ref", "unreadable", "budget-unmeasure
 #    the ones where a reader can be actively misled TODAY.
 STATUS_ACTIONABLE = {"contradicted-by-later", "dangling-memo-ref",
                      "churn-posting-not-replacing"}
+# ⭐ STANDING ARRANGEMENT WITH `atc`, 2026-10-23. Ben, Slack #atc ts 1792762352,
+#    verbatim: "yes and this is good you and memo should continuously monitor for
+#    that stuff" — confirmed by me in #atc directly, not taken on atc's relay,
+#    because it authorises recurring DELETION.
+#    Division of labour atc asked for: a status row whose agent_id does not
+#    resolve to a live subscriber AND is older than this many days goes to `atc`,
+#    who deletes it without asking Ben again. Anything owned by a LIVE seat goes
+#    to that seat instead — I never ask atc to touch a live seat's row.
+# ⚠️ BOTH SIDES RECORD THIS. atc holds its half; mine is here and in memo. An
+#    agreement recorded on one side is invisible to the side that forgot, and the
+#    side that forgot has no reason to know an agreement existed.
+ATC_SEAT = "atc"
+ATC_DEAD_ROW_MIN_AGE_DAYS = 30
 HERE = Path(__file__).resolve().parent
 
 # skill directory -> the seat that has DEMONSTRATED ownership by acting on a
@@ -179,7 +192,7 @@ def main():
     stats = parse(run("statuses.py"), "status")
 
     # pins.py groups by FINDING KIND with owner in col 1; scan.py groups by OWNER.
-    by_owner, advisory = {}, []
+    by_owner, advisory, dead_rows = {}, [], {}
     for f in pins:
         line = f"[pin/{f['group']}] {f['rest']}"
         if f["group"] in ACTIONABLE:
@@ -217,7 +230,27 @@ def main():
         #    tell -- statuses.py already refused to guess one. 89 of these belong
         #    to two RETIRED guardian seats whose July attestations are still being
         #    pushed at the fleet; that needs a decision, not a DM into the void.
-        if owner.startswith("unresolved:") or kind not in STATUS_ACTIONABLE:
+        # ⛔ `retired:` ONLY. statuses.py marks an agent retired when its NEWEST
+        #    row is also past the staleness window; `unresolved:` means merely
+        #    unregistered, which on the cleaned board was FOUR LIVE CRON BOTS.
+        #    Sending those to atc would ask it to delete a bot's current status.
+        if owner.startswith("unresolved:"):
+            advisory.append(f"{owner}: {line}  [unregistered but STILL POSTING -- not deletable]")
+            continue
+        if owner.startswith("retired:"):
+            agent_id = owner.split("retired:", 1)[1]
+            m = re.search(r"\b(\d+)d\b", f["rest"])
+            age = int(m.group(1)) if m else None
+            status_id = f["rest"].split()[0] if f["rest"].split() else "?"
+            # ⚠️ An age we could not parse is NOT an old row. Unknown goes to the
+            #    digest, never into a deletion queue -- the whole point of the
+            #    30-day floor is that it is measured.
+            if age is not None and age >= ATC_DEAD_ROW_MIN_AGE_DAYS:
+                dead_rows.setdefault(status_id, (agent_id, age, kind, f["rest"]))
+            else:
+                advisory.append(f"{owner}: {line}")
+            continue
+        if kind not in STATUS_ACTIONABLE:
             advisory.append(f"{owner}: {line}")
             continue
         by_owner.setdefault(owner, []).append(line)
@@ -313,6 +346,31 @@ def main():
             print(f"DM {owner}: sent={r.get('sent')} live={r.get('live')}")
         for l in lines:
             seen.add((owner, l))
+
+    # ── dead status rows -> `atc`, who owns the board and does the deleting ──
+    dead_new = {sid: v for sid, v in dead_rows.items()
+                if (ATC_SEAT, sid) not in seen}
+    print(f"\nstatus rows from unreachable owners >= {ATC_DEAD_ROW_MIN_AGE_DAYS}d: "
+          f"{len(dead_rows)} found, {len(dead_new)} not yet sent to {ATC_SEAT}")
+    if dead_new:
+        rows = "\n  ".join(
+            f"{sid}  {agent_id}  {age}d  {kind}"
+            for sid, (agent_id, age, kind, _) in sorted(dead_new.items(), key=lambda kv: -kv[1][1]))
+        msg = (f"Dead status rows, nightly audit. Each line is `status_id  agent_id  age  reason`. "
+               f"All {len(dead_new)} have an agent_id that resolves to NO live subscriber in "
+               f"/sessions or /reminders-owners, and all are >= {ATC_DEAD_ROW_MIN_AGE_DAYS} days "
+               f"old -- the two conditions you said you would delete on without asking Ben again "
+               f"(your DM 2026-10-23; Ben #atc ts 1792762352).\n\n  {rows}\n\n"
+               f"⚠️ Rows belonging to LIVE seats are NOT in this list -- those go to their owner, "
+               f"not to you. ⚠️ An age I could not parse is not treated as old; it goes to the "
+               f"digest instead of to you.")
+        if dry:
+            print(f"--- would DM {ATC_SEAT} (dead rows) ---\n{msg}\n")
+        else:
+            r = post(ATC_SEAT, "dead status rows: unreachable owner, over 30 days", msg)
+            print(f"DM {ATC_SEAT}: sent={r.get('sent')} live={r.get('live')}")
+        for sid in dead_new:
+            seen.add((ATC_SEAT, sid))
 
     if not dry:
         STATE.parent.mkdir(parents=True, exist_ok=True)
