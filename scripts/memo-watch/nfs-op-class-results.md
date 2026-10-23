@@ -491,3 +491,53 @@ whole mount — and therefore whether server3's frozen "contention is on THIS ON
 text can finally be corrected. Running it now would widen the loaded arm and contaminate
 the cleanest natural A/B available. **Run it after 06:41, inside the quiet window, where
 it is also a cleaner measurement.**
+
+## 2026-10-23 06:50 — the fault is volume1-specific; shared nfsd ruled out, my migration prediction retracted
+
+`system` corrected the prediction I sent them at 06:30 (that Ben's 05:00 overflow
+migration would hold `/mnt/nas` in the tens-of-seconds regime continuously). Their
+correction, 06:42: the migration WRITES to volume2 (`/mnt/overflow`, separate disks,
+cachedev_0) and only READS volume1, and volume1 has been `noatime` since 06:02 so
+those reads no longer write. The only thing the two volumes share is the NAS's nfsd
+threads, RAM and CPU. **Discriminator they named: a paired write probe on
+`/mnt/overflow`.**
+
+Both claims verified here before acting on them: `/mnt/nas` is
+`192.168.1.207:/volume1/nas`, `/mnt/overflow` is `192.168.1.207:/volume2/overflow`,
+and `noatime` is present in volume1's live mount options.
+
+Paired 45-byte writes, interleaved seconds apart, **write order alternated each
+round** so a consistent gap cannot be an ordering artifact. 06:50:03–06:52:58, inside
+the quiet window with nothing of mine running:
+
+| round | nas ms | overflow ms | wrote first |
+|---|---|---|---|
+| 1 | 42 | 26 | nas |
+| 2 | 13,515 | 2 | ovf |
+| 3 | 296 | 4 | nas |
+| 4 | 10,863 | 2 | ovf |
+| 5 | 1,136 | 3 | nas |
+| 6 | 2 | 436 | ovf |
+| 7 | 8,724 | 2 | nas |
+| 8 | 18,346 | 2 | ovf |
+
+volume1 median ~4,930 ms, max 18,346. volume2 median 2.5 ms, max 436.
+
+⇒ **Same NAS, same nfsd, same client, same instant, ~2000× apart at the median.**
+The shared nfsd/RAM/CPU term cannot be the bottleneck, because volume2 rides it and
+is fast. **The overflow migration is not the cause**, and the prediction I sent
+`system` is retracted — it carries no weight and should not be cited.
+
+⭐ THE REASON THIS PROBE IS WORTH MORE THAN THE WHOLE LOADED/QUIET SERIES IT
+   SUPPLEMENTS. The arm comparison has one instrument and varies the load, so every
+   confounder that tracks time of day is still in it — and its quiet arm (n=2) was
+   never going to separate them. This probe varies the VOLUME and holds the instant,
+   the client, the payload and the NAS fixed. ⇒ **When an effect is wide, stop adding
+   samples to a one-armed series and find a second arm that differs in one term.**
+   Eight paired samples settled in three minutes what sixteen more heartbeats at
+   30-minute spacing would not have settled by tonight.
+
+⚠️ RECORDED SO THE 09:22 ARM-B COMPARISON IS NOT SILENTLY CONTAMINATED: this probe
+   put 8 × 45-byte writes onto `/mnt/nas` inside the 06:11–09:22 quiet window.
+   Negligible beside a 30-minute heartbeat of the same size, but the quiet arm is no
+   longer pristine and the figure should carry that caveat rather than be quoted flat.
