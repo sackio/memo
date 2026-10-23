@@ -69,8 +69,20 @@ PROHIBITION = re.compile(r"\b(never|do not|don't|must not|cannot|banned|"
 #    carries its own handle -- the attribution. Measured on the dry-run: lines
 #    like `Ben 2026-09-15: "you're not gatekeeping"` and `SUPPORT seat. NOT a
 #    trader (Ben, 2026-08-21)` were being routed as unanchored claims.
-DIRECTIVE = re.compile(r"\b(ben|operator|laura)\b\s*[,:(]|\(\s*(ben|operator)\b|"
-                       r"\bben (?:said|says|authoris|authoriz|ruled|decided|scoped)", re.I)
+DIRECTIVE = re.compile(
+    r"\b(ben|operator|laura)\b\s*[,:(]"                 # "Ben, 2026-09-15:" / "(Ben"
+    r"|\(\s*(ben|operator)\b"
+    r"|\bben (?:said|says|authoris|authoriz|ruled|decided|scoped|ok'?d|approved)\b"
+    # ⭐ ADDED 2026-10-23 after `thread-tradedesk-12` showed a quote this missed:
+    #    "⛔⛔ FULL AUTONOMY OVER BOOKS — Ben #tradedesk 10-20 11:10 (confirmed at
+    #    source)". No comma or colon after the name, so the forms above do not
+    #    fire, and "confirmed at source" trips the verification cue -- an
+    #    operator ruling flagged as an unanchored measurement, which is the one
+    #    class I promised not to flag.
+    r"|\bben\s+#[a-z0-9_-]+"                             # "Ben #tradedesk 10-20"
+    r"|\bben\s+\d{1,2}[-/]\d{1,2}"                       # "Ben 10-20 ..."
+    r"|\b(?:per|from|by)\s+ben\b",
+    re.I)
 
 # ⛔ PIN HEADERS AND SELF-DESCRIPTION. `PIN alpaca v144 — 2026-10-15.`,
 #    `STANDING CONTEXT — aloha (server3). Rev 2026-10-18.`, `This is REMINDER
