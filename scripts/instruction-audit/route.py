@@ -154,6 +154,55 @@ HOSTLOCAL_OWNERS = {
 }
 
 
+_seats_cache = None
+
+
+def seat_exists(name: str) -> bool:
+    """Is this an addressable seat? ⛔ ASKED, NEVER ASSUMED -- the broker answers.
+
+    ⭐ The point of resolving `projects/guide` -> `guide` is that the SECOND half
+       is often a real seat name, and this is the check that makes that a fact
+       rather than a hopeful string operation. `guide` is live; `alpaca` is live;
+       `bb_sat` is not, and must land in the digest instead of being DM'd into
+       `no_resolution`.
+    """
+    global _seats_cache
+    if _seats_cache is None:
+        names = set()
+        try:
+            sess = get("/sessions")
+            rows = sess if isinstance(sess, list) else sess.get("sessions", [])
+            for r in rows:
+                for k in ("subscriber_id", "id", "name", "seat"):
+                    if r.get(k):
+                        names.add(r[k])
+        except Exception:
+            pass
+        try:
+            for o in get("/reminders-owners")["owners"]:
+                if o.get("owner"):
+                    names.add(o["owner"])
+        except Exception:
+            pass
+        _seats_cache = names
+    return name in _seats_cache
+
+
+def repo_owner_seat(owner: str):
+    """`projects/guide` -> `guide` when that seat is addressable, else None.
+
+    ⛔ A CONTAINER PATH IS NOT A SEAT NAME. scan.py now resolves a finding under
+       `code/forks` or `code/projects` to `<container>/<project>` instead of the
+       container -- correct for naming the FILE's owner, still not an address.
+       The trailing segment is frequently the seat (`guide`, `alpaca`), and
+       `seat_exists` is what turns that from a guess into a route.
+    """
+    if "/" not in owner:
+        return None
+    tail = owner.rsplit("/", 1)[1]
+    return tail if seat_exists(tail) else None
+
+
 def owner_for_hostlocal(owner: str):
     """`host-local:~/.claude/skills/<dir>@<host>` -> (seat, host), or None.
 
@@ -387,7 +436,15 @@ def main():
             by_owner.setdefault(owner, []).append(
                 f"[file on {host}] {f['a']} {f['rest']}")
             continue
-        by_owner.setdefault(owner, []).append(f"[file] {f['a']} {f['rest']}")
+        mapped = repo_owner_seat(owner)
+        if mapped:
+            by_owner.setdefault(mapped, []).append(
+                f"[file in code/{owner}] {f['a']} {f['rest']}")
+        elif "/" in owner:
+            advisory.append(f"UNOWNED code/{owner}: {f['a']} {f['rest']} "
+                            f"[no seat named `{owner.rsplit('/', 1)[1]}`]")
+        else:
+            by_owner.setdefault(owner, []).append(f"[file] {f['a']} {f['rest']}")
 
     for f in stats:
         owner, kind = f["group"], f["a"]
@@ -433,6 +490,15 @@ def main():
                 continue
             owner, host = mapped
             prefix = f"[no memo id, on {host}]"
+        mapped = repo_owner_seat(owner)
+        if mapped:
+            unanch_by_owner.setdefault(mapped, []).append(
+                f"{prefix} in code/{owner}: {f['rest']}")
+            continue
+        if "/" in owner:
+            advisory.append(f"UNOWNED code/{owner}: {f['rest']} "
+                            f"[no seat named `{owner.rsplit('/', 1)[1]}`]")
+            continue
         unanch_by_owner.setdefault(owner, []).append(f"{prefix} {f['rest']}")
 
     try:

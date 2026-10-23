@@ -113,9 +113,28 @@ def owner_of(p: Path) -> str:
     except OSError:
         return "<unresolvable>"
     s = str(real)
-    m = re.match(r'(/mnt/nas/data/code/[^/]+)', s)
+    m = re.match(r'/mnt/nas/data/code/([^/]+)(?:/([^/]+))?', s)
     if m:
-        return m.group(1).split("/")[-1]
+        first, second = m.group(1), m.group(2)
+        # ⭐⭐ A CONTAINER DIRECTORY IS NOT AN OWNER, AND COLLAPSING ONE INVENTS
+        #    AN UNADDRESSABLE SEAT. `code/forks` holds 24 independent
+        #    third-party forks and `code/projects` holds 9 unrelated projects;
+        #    neither is a repo or a seat, so every finding under them was filed
+        #    against the name "forks" or "projects" -- and the broker answered
+        #    `no_resolution`, because no such seat exists. MEASURED 2026-10-23
+        #    after Ben pointed out (#memo 10:44) that these are folders in
+        #    `code`: 3 of my 8 unaddressable "owners" were this one bug.
+        # ⛔ DECIDED ON EVIDENCE, NOT A HARDCODED LIST: a directory that has no
+        #    `.git` and no `CLAUDE.md` of its own, while its children DO, is a
+        #    container -- so the owner is one level deeper. `omada` keeps its own
+        #    name (no .git but it has a CLAUDE.md); `server_admin` keeps its own
+        #    (it is a git repo).
+        root = Path("/mnt/nas/data/code") / first
+        if second and not (root / ".git").exists() and not (root / "CLAUDE.md").exists():
+            child = root / second
+            if (child / ".git").exists() or (child / "CLAUDE.md").exists():
+                return f"{first}/{second}"
+        return first
     m = re.match(r'(/mnt/nas/data/[^/]+)', s)
     if m:
         return "nas:" + m.group(1).split("/")[-1]
