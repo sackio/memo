@@ -20,6 +20,13 @@
 set -u
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
+# ⛔ AN INTERMITTENT TIMING FAULT LOGGED WITHOUT A TIMESTAMP CANNOT BE ASKED "WHEN".
+#    1,492 log lines held 10 UNREADABLE events and NOT ONE carried a clock, so the one
+#    question the open investigation needs -- do these cluster in a particular minute of
+#    the hour (memo 3284310d, the ":20-slot" confound) -- could not be answered from the
+#    record at all, only guessed at from the two alerts a reader happened to see arrive.
+stamp() { date '+%Y-%m-%dT%H:%M:%S%z'; }
+
 HB=${MEMO_WATCH_HEARTBEAT:-/mnt/nas/data/memo-watch/heartbeat}
 BROKER=${ATC_BROKER:-http://192.168.1.168:3030}
 DM_TO=${MEMO_WATCH_DM_TO:-memo}
@@ -175,7 +182,7 @@ if ! timeout 25 test -f "$HB"; then
   read -r CTL_MS CTL_RC <<<"$(mount_control "$(dirname "$HB")")"
   read -r ROOT_MS ROOT_RC <<<"$(mount_control "$(hb_mount_root)")"
   read -r STAT_MS STAT_RC <<<"$(hb_static_control)"
-  echo "UNREADABLE: $HB did not answer in 25s (controls: static sibling ${STAT_MS}ms rc=${STAT_RC}, its own directory ${CTL_MS}ms rc=${CTL_RC}, mount root $(hb_mount_root) ${ROOT_MS}ms rc=${ROOT_RC})"
+  echo "$(stamp) UNREADABLE: $HB did not answer in 25s (controls: static sibling ${STAT_MS}ms rc=${STAT_RC}, its own directory ${CTL_MS}ms rc=${CTL_RC}, mount root $(hb_mount_root) ${ROOT_MS}ms rc=${ROOT_RC})"
   if [ "$CTL_RC" != "0" ] || [ "$ROOT_RC" != "0" ]; then
     VERDICT="=> THE MOUNT ITSELF IS NOT ANSWERING from $(hostname): its directory rc=${CTL_RC} in ${CTL_MS}ms, mount root $(hb_mount_root) rc=${ROOT_RC} in ${ROOT_MS}ms. This is an NFS/NAS problem, not a memo problem. Route it to the NAS owner, and do NOT read it as evidence about whether memo-watch is running -- nothing here can see that."
   elif [ "$STAT_RC" = "new" ]; then
@@ -215,7 +222,7 @@ timeout 25 ls -la "$(dirname "$HB")" >/dev/null 2>&1 || true     # force attribu
 MT=$(timeout 25 stat -c %Y "$HB" 2>/dev/null || echo "")
 CT=$(timeout 25 head -c 64 "$HB" 2>/dev/null | awk '{print $1}' | command grep -E '^[0-9]{10}$' || echo "")
 if [ -z "$MT" ] && [ -z "$CT" ]; then
-  echo "UNREADABLE: neither stat nor the content stamp on $HB answered"
+  echo "$(stamp) UNREADABLE: neither stat nor the content stamp on $HB answered"
   dm "⛔ memo-watch heartbeat UNREADABLE (stat+content)" \
      "Neither stat -c %Y nor the in-file epoch stamp on $HB answered within 25s from $(hostname), after a forced directory revalidation. Absence is not freshness."
   exit 2
@@ -223,14 +230,14 @@ fi
 BEST=${MT:-0}; [ -n "$CT" ] && [ "$CT" -gt "$BEST" ] && BEST=$CT
 if [ -n "$MT" ] && [ -n "$CT" ]; then
   SKEW=$(( MT > CT ? MT - CT : CT - MT ))
-  [ "$SKEW" -gt 120 ] && echo "note: stat mtime and in-file stamp disagree by ${SKEW}s — using the fresher (${BEST}); suspect NFS attribute cache, not a stalled writer"
+  [ "$SKEW" -gt 120 ] && echo "$(stamp) note: stat mtime and in-file stamp disagree by ${SKEW}s — using the fresher (${BEST}); suspect NFS attribute cache, not a stalled writer"
 fi
 AGE=$(( $(date +%s) - BEST ))
 if [ "$AGE" -le "$STALE_S" ]; then
-  echo "fresh: heartbeat ${AGE}s old (stale at ${STALE_S}s)"
+  echo "$(stamp) fresh: heartbeat ${AGE}s old (stale at ${STALE_S}s)"
   exit 0
 fi
-echo "STALE: heartbeat ${AGE}s old (> ${STALE_S}s)"
+echo "$(stamp) STALE: heartbeat ${AGE}s old (> ${STALE_S}s)"
 WINS=$(( AGE / 1800 - 1 )); [ "$WINS" -lt 1 ] && WINS=1
 dm "⛔ memo-watch HAS NOT RUN for $((AGE / 60)) min" \
    "memo-watch's heartbeat ($HB) is $((AGE / 60)) min old (stale threshold ${STALE_S}s). Cadence is 30 min, so at least $WINS window(s) went UNWATCHED and the gap is STILL OPEN.
