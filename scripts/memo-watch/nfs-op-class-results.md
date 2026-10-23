@@ -335,3 +335,87 @@ timeout, so they describe the mount ~25s later, not at the same instant. Stalls 
 in episodes, so a post-hoc control is systematically weaker than a simultaneous one and
 will tend to read clean. ⛔ NOT changed tonight — the alert text stays frozen until the
 probe-load test resolves.
+
+## 2026-10-23 02:00 — the heartbeat-write failure has a START DATE, and CREATE carries the tail again
+
+server3 DM'd at 02:00 EDT: *"memo-watch HAS NOT RUN for 79 min"*. **That headline is false.**
+The watch ran at 01:11 and 01:41, both `verdict: 0 finding(s), 0 unreadable`. What failed was
+the heartbeat WRITE, so the previous file aged past the 4200s staleness threshold and server3 —
+whose only channel is that file — read staleness as not-running.
+
+⛔ **A HEARTBEAT IS A CONJUNCTION — "the job ran" AND "the job could write" — AND ITS ABSENCE
+CANNOT SAY WHICH CONJUNCT FAILED.** The two have different owners: one is cron/host, the other
+is storage. A monitor that reports the conjunction as if it were the first term sends the wrong
+seat looking, and it does so in confident language.
+
+### The step change, from the watch's own log
+
+`~/.memo-watch/cron.log` on server4, 1,012 runs, 2026-09-30T22:41 → 2026-10-23T01:41:
+
+| date | runs | heartbeat-write failures |
+|---|---|---|
+| 09-30 → 10-17 | 757 | **0** |
+| 10-18 | 43 | 1 |
+| 10-19 | 44 | 2 |
+| 10-20 | 48 | 5 |
+| 10-21 | 48 | 2 |
+| 10-22 | 48 | **14** |
+| 10-23 (to 01:41) | 4 | 2 |
+
+**757 consecutive clean runs, then onset on 10-18 and acceleration.** This is the start date the
+postmortem did not have — the 10-22 evidence I sent `system`/`agents` began at 09:29 that day and
+could not distinguish "bad all along" from "newly bad."
+
+⭐ **NOT MINE, AND THE DATES ARE THE CONTROL.** My `nfs-latency` probes ran 19:54–21:48 on 10-22
+only; the first automated credit cycle started 22:05 on 10-22. The onset precedes both by four
+days, and 10-18 05:11, 10-19 12:41, 10-20 12:11/16:11 and 10-21 18:11 all fall outside the
+22:00–06:00 batch window. ⚠️ Tonight's 2-in-4 may well be inflated by my own credit cycle; the
+10-18→10-21 onset cannot be.
+
+### Measured directly, in the operation that actually fails
+
+20 rounds of "create a 45-byte file, then rename it" in `/mnt/nas/data/memo-watch/`,
+2026-10-23 02:04 EDT from server4, while the credit cycle was running:
+
+| op | n | p50 | p95 | max |
+|---|---|---|---|---|
+| **create** | 20 | 7.6 ms | 34,811 ms | **34,811 ms** |
+| rename | 20 | 0.8 ms | 3,931 ms | 3,931 ms |
+
+**One round in twenty blocked ~35 seconds writing 45 bytes.** The guard was `timeout 20`, so that
+round would have been recorded as a failure — the mechanism, reproduced on demand, in the exact
+call that fails.
+
+⭐ **This independently replicates the run-v3rot/v4 finding above: the residual is CREATE.** A
+different instrument (the heartbeat's own write, not the probe), a different day, same split —
+create carries the whole tail, rename is an order of magnitude cheaper. Two instruments agreeing
+is worth more than either one's p-value.
+
+### Both fixes, and why the second one exists
+
+1. **`timeout 20` → `timeout 90`.** 20s sat *below* the mount's observed stall (29,378 ms GETATTR
+   on 10-22; 34,811 ms create today), so the ceiling itself was manufacturing failures. 90s is
+   above every stall measured here and far inside cronguard's 600s for a run that takes ~23s.
+2. **Log the write duration on EVERY run** (`~/.memo-watch/hb-write-latency.tsv`), and on the
+   **second consecutive** failure DM the truth on the same channel the false alarm uses.
+
+⛔⛔ **FIX 1 ALONE WOULD HAVE DESTROYED THE EVIDENCE FOR THIS ENTIRE SECTION.** Raising the ceiling
+converts a 35s stall into a *slow success*, which is silent — so the signal that detected the
+degradation would have disappeared at exactly the moment the mount got worse, and the table above
+could never have been built again. **When you raise a threshold, start recording the quantity it
+was thresholding, in the same commit.** A threshold is a detector you are about to switch off.
+
+⚠️ The DM gate is `>= 2 consecutive` on purpose: that is precisely when the 4200s threshold is
+about to be crossed and the misleading alarm fires, so the correction arrives with it rather than
+14 times a day.
+
+⚠️ **What is NOT verified:** the new DM's delivery was not exercised end-to-end — `MEMO_WATCH_NO_DM=1`
+is mandatory for control runs and suppresses it, for the documented reason that a forged alarm
+degrades the only channel this watch has. It posts to `$BROKER/messages` with the same curl form
+the finding-DM uses, and the existing control probe verifies that route resolves every run. Both
+branches, the counter and the payload's JSON were exercised; the POST was not.
+
+### Still not mine to fix
+
+The cause of the NAS degradation is measured here, not explained. **Why** `/mnt/nas` began
+stalling on CREATE around 2026-10-18 belongs to the seat that owns the mount.

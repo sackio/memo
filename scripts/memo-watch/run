@@ -520,12 +520,62 @@ echo "$NOW" > "$STATE/last-run"
 # ⭐ `mv` within one filesystem is atomic, so a reader sees either the OLD heartbeat or
 #    the complete new one, never a half-written or empty one. The temp file must live
 #    in the SAME directory as $HB for that to hold.
+# ⛔ THE TIMEOUT WAS 20s AND THAT WAS BELOW THIS MOUNT'S OBSERVED STALL. MEASURED
+#    2026-10-23 02:04 EDT from server4: 20 rounds of "create a 45-byte file + rename" in
+#    THIS directory gave create p50 7.6ms but max 34,811ms, rename max 3,931ms -- one
+#    round in twenty blocked ~35s writing 45 bytes, past the old 20s ceiling. Raised to
+#    90s, above every stall measured on this mount (29,378ms GETATTR 10-22, 34,811ms
+#    create 10-23) and far inside cronguard's 600s for a run that otherwise takes ~23s.
+# ⭐ RECORD THE DURATION ON EVERY RUN, NOT ONLY ON FAILURE. Raising the ceiling turns a
+#    35s stall into a SLOW SUCCESS, which is silent -- so the signal that warned us would
+#    vanish exactly as the mount got worse. The latency log is what survives that.
 HB_TMP="$HB.tmp.$$"
-if timeout 20 bash -c "echo \"$NOW $(hostname) $(date -Is)\" > '$HB_TMP' && mv -f '$HB_TMP' '$HB'" 2>/dev/null; then
-  :
+HB_T0=$(date +%s%3N)
+if timeout 90 bash -c "echo \"$NOW $(hostname) $(date -Is)\" > '$HB_TMP' && mv -f '$HB_TMP' '$HB'" 2>/dev/null; then
+  HB_MS=$(( $(date +%s%3N) - HB_T0 ))
+  echo "  heartbeat written in ${HB_MS}ms"
+  echo "$NOW ok $HB_MS" >> "$STATE/hb-write-latency.tsv"
+  echo 0 > "$STATE/hb-write-consec-fails"
 else
+  HB_MS=$(( $(date +%s%3N) - HB_T0 ))
   rm -f -- "${HB_TMP:?}" 2>/dev/null
-  echo "  ⚠️ could not write heartbeat $HB (NFS?) -- the PREVIOUS heartbeat is intact and will go stale; server3's staleness check will alarm, which is the correct direction."
+  echo "$NOW fail $HB_MS" >> "$STATE/hb-write-latency.tsv"
+  HB_FAILS=$(( $(cat "$STATE/hb-write-consec-fails" 2>/dev/null || echo 0) + 1 ))
+  echo "$HB_FAILS" > "$STATE/hb-write-consec-fails"
+  echo "  ⚠️ could not write heartbeat $HB after ${HB_MS}ms (NFS) -- $HB_FAILS consecutive."
+  echo "     The PREVIOUS heartbeat is intact and will go stale; server3's staleness check will alarm."
+  # ⛔⛔ server3's ALARM SAYS "memo-watch HAS NOT RUN" AND THAT HEADLINE IS FALSE HERE.
+  #    The heartbeat file is the ONLY channel server3 can see, so it cannot separate "the
+  #    job never fired" from "the job ran, was clean, and could not write 45 bytes to the
+  #    NAS". Those are a cron/host problem and a STORAGE problem, and they are owned by
+  #    different seats -- so the wrong headline sends the wrong person looking.
+  #    ⇒ On the SECOND consecutive failure -- the point at which the 4200s staleness
+  #    threshold is about to be crossed and that false alarm fires -- say the true thing on
+  #    the same channel, so whoever reads the alarm already holds the correction.
+  #    ⚠️ Deliberately NOT a FINDING: a finding means memo has a problem, and memo is fine.
+  if [ "$HB_FAILS" -ge 2 ] && [ -z "${MEMO_WATCH_NO_DM:-}" ]; then
+    python3 - "$HB_FAILS" "$HB_MS" "$DM_TO" "$STATE/hb-write-latency.tsv" > "$D/hb-dm.json" <<'PYHB'
+import json,sys
+fails,ms,to,lat = sys.argv[1],sys.argv[2],sys.argv[3],sys.argv[4]
+try: tail="".join(open(lat,errors="replace").readlines()[-12:])
+except Exception: tail="(latency log unreadable)"
+print(json.dumps({"to":to,"from":"memo","durable":True,"priority":"warning",
+ "subject":"memo-watch RAN AND WAS CLEAN -- the NAS write failed (%s in a row)" % fails,
+ "content":(
+  "\u26d4 IF server3 ALSO SENDS YOU \"memo-watch HAS NOT RUN\", THAT HEADLINE IS WRONG.\n"
+  "This run fired on schedule and completed. It could not write its heartbeat to\n"
+  "/mnt/nas/data/memo-watch/heartbeat, so the OLD file is going stale, and server3 reads\n"
+  "staleness as not-running -- it cannot tell the two apart, the heartbeat is its only channel.\n\n"
+  "  heartbeat write: FAILED after %sms, %s consecutive\n"
+  "  this is a /mnt/nas WRITE problem -- not cron, not memo\n\n"
+  "Recent heartbeat-write latencies from server4 (epoch, ok|fail, ms):\n%s\n"
+  "Watch FINDINGS arrive as a separate DM. Silence on that channel still means clean."
+ ) % (ms, fails, tail)}))
+PYHB
+    HB_DM_CODE=$(curl -sS --max-time 15 -X POST "$BROKER/messages" -H 'Content-Type: application/json' \
+                      --data-binary @"$D/hb-dm.json" -o "$D/hb-dm-resp.json" -w '%{http_code}' 2>/dev/null)
+    echo "     heartbeat-failure DM HTTP=${HB_DM_CODE:-<none>}: $(head -c 160 "$D/hb-dm-resp.json" 2>/dev/null)"
+  fi
 fi
 
 NF=$(grep -c '^FINDING:' "$VERDICT" 2>/dev/null); NF=${NF:-0}
