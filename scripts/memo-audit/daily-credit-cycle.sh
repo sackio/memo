@@ -36,6 +36,7 @@ cd "$(dirname "$0")" || exit 1
 #    because of the cd above. See the wrong-module guard each heredoc now carries.
 export MEMO_AUDIT_DIR="$PWD"
 SLACK=../slack-archive
+INSTR=../instruction-audit
 LOG_PREFIX="$(date -Is)"
 rcs=()
 
@@ -145,6 +146,19 @@ fi
 
 phase slack-archive  /usr/bin/timeout 1800 python3 "$SLACK/archive.py" --days 2
 phase slack-digests  /usr/bin/timeout  900 python3 "$SLACK/mine.py" --days 1.2 --checkpoint
+
+# ⭐ INSTRUCTION SURFACE -- the files and pins that are LOADED into sessions.
+#    Ben, #memo 2026-10-23: "maintain any files that anyone is using with claims
+#    that a. should reference memo which we can better control, b. need to be
+#    reverified and maintained."
+#    These run EARLY and cost no credits: they are pure script, no LLM, per the
+#    standing token embargo. Placed before the paid phases so the window clamp
+#    can never squeeze them out -- a cheap check that only runs on quiet nights
+#    is a check that is absent exactly when the fleet is busiest.
+# ⛔ scan.py defaults touch no NFS. Do NOT add --paths while /mnt/nas is degraded:
+#    a GETATTR sweep across 194 files on a mount doing 60s writes is an outage.
+phase instr-files /usr/bin/timeout  600 python3 "$INSTR/scan.py" ~/.claude
+phase instr-pins  /usr/bin/timeout  900 python3 "$INSTR/pins.py"
 PHASE_RESERVE="$AUDIT_RESERVE_S" \
 phase slack-mine     /usr/bin/timeout 10800 python3 "$SLACK/mine-run.py" --per-worker 4 --concurrency 2 --wait-for-lock 7200
 phase refute-recheck /usr/bin/timeout 1800 python3 refute-recheck.py --queue
