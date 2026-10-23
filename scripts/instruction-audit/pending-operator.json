@@ -1,0 +1,15 @@
+{
+ "_doc": "Seats that replied `awaiting-operator` to a SKILL.md/CLAUDE.md finding. The DM promises: 'I will NOT re-ask while that is pending.' Today that promise is kept by the file lane being send-once (seen.json), so this file is the RECORD, not yet the mechanism. \u26a0\ufe0f THE GAP, stated so it is not discovered as a surprise: a NEW claim appearing in the same file while a proposal is pending WILL be sent, which trickles at a seat that is already waiting on Ben. Fix when it first happens; pre-building it would be guessing at a shape nobody has hit.",
+ "seats": {
+  "cluster": {
+   "at": "2026-10-23",
+   "scope": "server_admin/skills/* (7 skills, 50 claims)",
+   "said": "awaiting-operator (DM 10:58). Folding into one request to Ben."
+  },
+  "cloud": {
+   "at": "2026-10-23",
+   "scope": "cloud CLAUDE.md, cloud-pricing SKILL.md, VAST_RENTING.md",
+   "said": "awaiting-operator (DM 10:58). Their request went to Ben in #cloud at 11:00 and he held it up as the shape he wants."
+  }
+ }
+}
