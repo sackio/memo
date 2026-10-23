@@ -23,6 +23,12 @@ import json, re, subprocess, sys, urllib.request
 from pathlib import Path
 
 BROKER = "http://192.168.1.168:3030"
+
+
+def get(path):
+    with urllib.request.urlopen(BROKER + path, timeout=25) as r:
+        return json.loads(r.read())
+
 STATE = Path.home() / ".memo-instruction-audit" / "seen.json"
 MAX_SEATS = 12
 
@@ -64,6 +70,41 @@ def parse(out, source):
                 found.append({"source": source, "group": kind,
                               "a": parts[0], "rest": " ".join(parts[1:])})
     return found
+
+
+def cliff_advice(owner):
+    """The BROKER's own pruning text for this seat, fetched live -- never copied.
+
+    ⛔ A DM that says "SHED 2469" and nothing else tells a seat the size of its
+       problem and not one thing about the fix, so the seat invents one. The
+       endpoint already carries authoritative guidance under `how_to_prune`
+       ("DELETE, DO NOT REWRITE -- spent pointers first; rewording nets ~zero").
+       Forward it instead of paraphrasing: a paraphrase in this file goes stale
+       the day the broker's advice changes, and nothing would catch it.
+
+    ⭐ TRIM `retire_when` FIRST -- it is WRAPPER, not body, so it raises your
+       CEILING instead of lowering your content, and costs nothing. Measured by
+       `unibrowse` 2026-10-23: three retire_when strings, wrapper 1358 -> 1087,
+       max_body_chars 7925 -> 8196.
+    ⚠️ It is FREE, not BIG. Same measurement: 271 chars from retire_when versus
+       1,704 that still had to come out of real standing constraints. A seat
+       over by thousands cannot get there this way, and saying otherwise sends
+       it looking for budget that is not there.
+    """
+    try:
+        d = get(f"/session-payload/{owner}")
+    except Exception:
+        return ""
+    howto = (d.get("how_to_prune") or "").strip()
+    if not howto:
+        return ""
+    return ("\n\nOVER/AT-RISK ON THE SESSION-START CLIFF. Two levers, free one first:\n"
+            "  1. Trim `retire_when` on your pins -- it is WRAPPER, so it RAISES max_body_chars\n"
+            "     and costs no content. Free, but bounded: ~271 chars when `unibrowse` did it.\n"
+            "  2. Then the body. The broker's own guidance, verbatim:\n\n     " + howto +
+            "\n\n⛔ Re-read your verdict from GET /session-payload/<you> after editing. Do not\n"
+            "   compute headroom from a body figure -- the budget is body + a per-item wrapper\n"
+            "   against YOUR max_body_chars, with a fleet-state reserve another seat can spend.")
 
 
 def post(to, subject, content):
@@ -123,6 +164,8 @@ def main():
                "files and pins cite a memo id, the owning seat makes the edit, memo detects and "
                "reverifies nightly. I do not edit other seats' files.\n\n"
                "Reported once. You will not be re-sent this unless it changes.")
+        if any("OVER-CLIFF" in l or "at-risk-cliff" in l for l in lines):
+            msg += cliff_advice(owner)
         if dry:
             print(f"--- would DM {owner} ---\n{msg}\n")
         else:
