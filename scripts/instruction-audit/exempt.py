@@ -25,7 +25,14 @@ from datetime import date
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-STATE = Path.home() / ".memo-instruction-audit" / "pin-exempt.json"
+# ⛔⛔ IN THE REPO, NOT IN $HOME -- UNLIKE THE OTHER TWO LEDGERS, AND DELIBERATELY.
+# seen.json and pin-nag.json record what I DID; losing them costs a duplicate
+# notice. This file records what ANOTHER SEAT DECIDED -- nine holders have told
+# me a specific line is not a claim and I promised to stop asking. Losing it
+# means breaking that promise to nine seats with no way to know I had made it,
+# and $HOME is HOST-LOCAL, so a run from another host starts with none of them.
+# ⇒ Shared NFS, in git, reviewable, and it travels with the detector that reads it.
+STATE = Path(__file__).resolve().parent / "pin-exempt.json"
 
 
 def claim_key(rest: str) -> str:

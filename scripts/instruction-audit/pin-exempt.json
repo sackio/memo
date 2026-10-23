@@ -1,0 +1,114 @@
+{
+ "apis": [
+  {
+   "at": "2026-10-23",
+   "claim": "PROJECT: apis \u2014 DONE = every BUILD item in TASKS.md is live on the Apify Store and on RapidAPI, passes Apify's",
+   "note": "project done-definition: a target, not an observation (DM 10-23 10:10)",
+   "who": "apis"
+  }
+ ],
+ "assistant": [
+  {
+   "at": "2026-10-23",
+   "claim": "\u26d4 **A SUCCESS FLAG DESCRIBES THE REPORTER'S WORLD** \u2014 `live:1` = broker routed, NOT Slack accepted. **Prove ev [author atc]",
+   "note": "method rule; the live:1 example is from the broker's own docs (DM 10-23 10:16)",
+   "who": "assistant"
+  }
+ ],
+ "models": [
+  {
+   "at": "2026-10-23",
+   "claim": "\ud83d\udd34\ud83d\udd34 THE SHAPES THAT ACTUALLY BITE \u2014 all measured, all mine:",
+   "note": "section header over rules (DM 10-23 10:19)",
+   "who": "models"
+  }
+ ],
+ "pantry": [
+  {
+   "at": "2026-10-23",
+   "claim": "(as of 2026-08-28; REFUTE what is armed: curl -sS http://192.168.1.168:3030/inbound/pantry)",
+   "note": "pointer to a live probe; the date is the pin's authoring stamp (DM 10-23 10:17)",
+   "who": "pantry"
+  }
+ ],
+ "scripts": [
+  {
+   "at": "2026-10-23",
+   "claim": "\ud83d\udd32 STILL OPEN: the AT-SPI fix covers the ~4-min wedges, NOT the 26-36 HOUR runs \u2014 self-heal STAYS ON. Chrome's [author atc]",
+   "note": "backed by memos 8b5c917c, 47505146, ec4bec0f cited in the next line (DM 10-23 10:11)",
+   "who": "scripts"
+  }
+ ],
+ "thread-assistant-10": [
+  {
+   "at": "2026-10-23",
+   "claim": "\u26a0\ufe0f WHY: this pane's subscriber id is `thread-assistant-<n>`, but the pin is owned by the SEAT name `assistant`",
+   "note": "a pointer to the parent pin at /reminders/assistant, not a claim; correct if the thread returns (DM 10-23 10:41)",
+   "who": "assistant (parent, for an unaddressable thread)"
+  }
+ ],
+ "thread-assistant-6": [
+  {
+   "at": "2026-10-23",
+   "claim": "\u26a0\ufe0f WHY: this pane's subscriber id is `thread-assistant-6`, but the pin is owned by the SEAT name `assistant`.",
+   "note": "a pointer to the parent pin at /reminders/assistant, not a claim; correct if the thread returns (DM 10-23 10:41)",
+   "who": "assistant (parent, for an unaddressable thread)"
+  }
+ ],
+ "thread-assistant-7": [
+  {
+   "at": "2026-10-23",
+   "claim": "\u26a0\ufe0f WHY: this pane's subscriber id is `thread-assistant-<n>`, but the pin is owned by the SEAT name `assistant`",
+   "note": "a pointer to the parent pin at /reminders/assistant, not a claim; correct if the thread returns (DM 10-23 10:41)",
+   "who": "assistant (parent, for an unaddressable thread)"
+  }
+ ],
+ "thread-assistant-8": [
+  {
+   "at": "2026-10-23",
+   "claim": "\u26a0\ufe0f WHY: this pane's subscriber id is `thread-assistant-<n>`, but the pin is owned by the SEAT name `assistant`",
+   "note": "a pointer to the parent pin at /reminders/assistant, not a claim; correct if the thread returns (DM 10-23 10:41)",
+   "who": "assistant (parent, for an unaddressable thread)"
+  }
+ ],
+ "thread-tradedesk-13": [
+  {
+   "at": "2026-10-23",
+   "claim": "BEN'S ASKS: 16:30 report vs SPY total return; winners study standing; new books pre-registered + journal `laun",
+   "note": "list of operator asks and rulings (DM 10-23 10:21)",
+   "who": "thread-tradedesk-13"
+  }
+ ],
+ "thread-tradedesk-14": [
+  {
+   "at": "2026-10-23",
+   "claim": "\u26d4 HAZARDS LEARNED: cost for close-to-close trades must be MEASURED AT THE CLOSE (r1's model lacked >1B and was",
+   "note": "standing method rule; evidence is run r5b in projects/events/NOTES.md, kept out of memo by Ben's 10-05 ruling (DM 10-23 10:25)",
+   "who": "thread-tradedesk-14"
+  }
+ ],
+ "thread-tradedesk-4": [
+  {
+   "at": "2026-10-23",
+   "claim": "\u26d4 \"measured and rejected\" is for a structure that LOST; one whose losses are UNSAMPLED is UNMEASURED, which ar",
+   "note": "classification rule for labelling results (DM 10-23 10:21)",
+   "who": "thread-tradedesk-4"
+  }
+ ],
+ "tradedesk": [
+  {
+   "at": "2026-10-23",
+   "claim": "OPEN (as of 10-10 22:20; REFUTE: curl -sS http://192.168.1.168:3030/inbound/tradedesk):",
+   "note": "dated pointer with a REFUTE probe, not a measurement (DM 10-23 10:10)",
+   "who": "tradedesk"
+  }
+ ],
+ "travel": [
+  {
+   "at": "2026-10-23",
+   "claim": "**Authority = OBSERVED BEHAVIOUR OF THE LIVE SYSTEM.** Not another document, including this one. [author atc]",
+   "note": "trust rule: how to verify, not an observation (DM 10-23 10:21)",
+   "who": "travel"
+  }
+ ]
+}

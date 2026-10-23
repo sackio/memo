@@ -70,7 +70,14 @@ PIN_NAG_SEATS_MAX = 10000
 PIN_MAX_LINES = 12                 # per DM; the rest are counted, not listed
 PIN_ESCALATE_DAYS = 3              # asked this many times, still there -> Ben
 PIN_STATE = Path.home() / ".memo-instruction-audit" / "pin-nag.json"
-PIN_EXEMPT = Path.home() / ".memo-instruction-audit" / "pin-exempt.json"
+# ⛔⛔ IN THE REPO, NOT IN $HOME -- UNLIKE THE OTHER TWO LEDGERS, AND DELIBERATELY.
+# seen.json and pin-nag.json record what I DID; losing them costs a duplicate
+# notice. This file records what ANOTHER SEAT DECIDED -- nine holders have told
+# me a specific line is not a claim and I promised to stop asking. Losing it
+# means breaking that promise to nine seats with no way to know I had made it,
+# and $HOME is HOST-LOCAL, so a run from another host starts with none of them.
+# ⇒ Shared NFS, in git, reviewable, and it travels with the detector that reads it.
+PIN_EXEMPT = Path(__file__).resolve().parent / "pin-exempt.json"
 
 
 def claim_key(rest: str) -> str:
@@ -252,6 +259,32 @@ SENDER_RPM = 28                 # 30 is the cap; leave room for my own replies
 _sent_at: list[float] = []
 
 
+class Unaddressable(RuntimeError):
+    """The broker has no route to this name at all (`drop_reason:
+    "no_resolution"`). ⭐ A DIFFERENT FINDING FROM A FAILED SEND, because no
+    retry, no pacing and no patience will deliver it: the seat owns pins and
+    instruction files that WILL fire when it returns, and there is nobody to
+    tell. Measured 2026-10-23: 8 such owners -- `forks`, `projects`,
+    `server_admin`, `omada` and four `thread-assistant-*`. All 8 are absent
+    from /sessions; `assistant`, `network` and `cluster` are present.
+    ⛔ So "unregistered but its pins still fire" has a consequence the pin audit
+       did not state: THERE IS NO ADDRESS TO WARN ANYONE AT."""
+
+
+def parent_seat(name: str) -> str | None:
+    """`thread-assistant-6` -> `assistant`, when that parent actually resolves.
+
+    ⭐ STRUCTURAL, NOT INFERRED -- the thread naming convention is the broker's
+       own, not a guess about who owns what. ⛔ But it stops there: I do NOT map
+       `omada` to `network` because that would be exactly the inferred ownership
+       this file refuses elsewhere. An unaddressable seat with no structural
+       parent goes to the digest, naming the likely owner as a possibility to
+       confirm rather than a route.
+    """
+    m = re.match(r"^thread-(.+)-\d+$", name)
+    return m.group(1) if m else None
+
+
 def post(to, subject, content, attempts=3):
     """DM a seat, PACED, and verify delivery. Returns the broker's response.
 
@@ -282,6 +315,16 @@ def post(to, subject, content, attempts=3):
         if reason == "dedup":
             # Already in flight with identical text -- not a failure to repair.
             return last
+        if reason == "no_resolution":
+            # ⛔⛔ A SECOND DROP CAUSE, AND RETRYING IT IS PURE WASTE. The broker
+            #    has NO ADDRESS for this name -- it is not in /sessions and has
+            #    no route -- so three attempts at 20s each buy a guaranteed
+            #    failure a minute slower. MEASURED 2026-10-23: of the 53 notices
+            #    the first fleet-wide run lost, 44 were `sender_cap` and went out
+            #    on the paced retry; 8 were THIS, and no pacing will ever fix
+            #    them. ⚠️ I had reported all 53 as the cap, having measured the
+            #    cause on exactly one of them -- one sample, generalised.
+            raise Unaddressable(to)
         print(f"   [DROPPED] {to}: {reason} (attempt {attempt + 1}/{attempts})")
         time.sleep(20.0)
     raise RuntimeError(f"broker dropped the message to {to}: "
@@ -291,6 +334,7 @@ def post(to, subject, content, attempts=3):
 def main():
     dry = "--dry-run" in sys.argv
     undelivered = []   # seats the broker refused; NOT recorded as told
+    unaddressable = []  # seats with no broker route at all -- a different finding
     pins = parse(run("pins.py"), "pin")
     # ⭐ sweep.py, not scan.py: scan.py sees server4 only, and the first all-host
     #    run proved that matters -- docker-heal's fix had landed on server4 alone
@@ -426,6 +470,10 @@ def main():
         else:
             try:
                 r = post(owner, "instruction-surface findings in files/pins you own", msg)
+            except Unaddressable:
+                unaddressable.append(owner)
+                print(f"⛔ UNADDRESSABLE {owner}: no broker route")
+                continue
             except RuntimeError as e:
                 print(f"⛔ NOT SENT {owner}: {e}")
                 undelivered.append(owner)
@@ -471,6 +519,10 @@ def main():
         else:
             try:
                 r = post(owner, "dated claims in your instruction files carry no memo id", msg)
+            except Unaddressable:
+                unaddressable.append(owner)
+                print(f"⛔ UNADDRESSABLE {owner}: no broker route")
+                continue
             except RuntimeError as e:
                 print(f"⛔ NOT SENT {owner}: {e}")
                 undelivered.append(owner)
@@ -515,6 +567,10 @@ def main():
         else:
             try:
                 r = post(owner, "an ATC pin you own is a log, not standing context", msg)
+            except Unaddressable:
+                unaddressable.append(owner)
+                print(f"⛔ UNADDRESSABLE {owner}: no broker route")
+                continue
             except RuntimeError as e:
                 print(f"⛔ NOT SENT {owner}: {e}")
                 undelivered.append(owner)
@@ -593,6 +649,21 @@ def main():
     if n_exempt:
         print(f"pin claims: {n_exempt} line(s) exempted by their holder (pin-exempt.json)")
 
+    # ⛔⛔ READ "WHEN DID I LAST ASK THIS SEAT" BEFORE ANY LINE IS CLEARED, AND
+    #    KEEP IT SEPARATELY FROM THE LINES. The per-line records are deleted as
+    #    soon as a holder fixes a line, and an owner whose records all cleared is
+    #    dropped from the ledger entirely -- so a seat that fixed one line and
+    #    still has another came back as FIRST CONTACT and got a second DM the
+    #    same morning, ten minutes after the first. Measured on the dry-run:
+    #    `garden`, `network`, `nginx`, `omada`, `pricetracker` and two threads.
+    # ⇒ The asked-date belongs to the OWNER, not to the line, because what it
+    #   protects is the seat's attention, not the claim's bookkeeping.
+    asked = nag.pop("_asked", {}) if isinstance(nag.get("_asked"), dict) else {}
+    for owner, lines in nag.items():
+        for v in lines.values():
+            if v.get("last") and v["last"] > asked.get(owner, ""):
+                asked[owner] = v["last"]
+
     cleared = []
     for owner, lines in list(nag.items()):
         live = {claim_key(l) for l in pin_claims.get(owner, [])}
@@ -610,9 +681,8 @@ def main():
     #    respond. A seat already asked today is skipped, and `n` advances once
     #    per calendar day -- so the second sweep's job is to catch NEW scar
     #    tissue and to clear what was fixed since breakfast, not to nag twice.
-    asked_today = {o for o in nag
-                   if any(v.get("last") == today for v in nag[o].values())}
-    repeats = [o for o in nag if o not in asked_today
+    asked_today = {o for o, d in asked.items() if d == today}
+    repeats = [o for o in nag if o != "_asked" and o not in asked_today
                and any(k in {claim_key(l) for l in pin_claims.get(o, [])} for k in nag[o])]
     repeats.sort(key=lambda o: -max(nag[o][k].get("n", 0) for k in nag[o]))
     fresh = sorted((o for o in pin_claims if o not in nag and o not in asked_today),
@@ -620,7 +690,8 @@ def main():
     picked_pins = (repeats + fresh)[:PIN_NAG_SEATS_MAX]
 
     overdue = [(o, max(nag[o][k].get("n", 0) for k in nag[o])) for o in nag
-               if max(nag[o][k].get("n", 0) for k in nag[o]) >= PIN_ESCALATE_DAYS]
+               if o != "_asked" and nag[o]
+               and max(nag[o][k].get("n", 0) for k in nag[o]) >= PIN_ESCALATE_DAYS]
     print(f"\npins/claims: {sum(len(v) for v in pin_claims.values())} unanchored claims "
           f"across {len(pin_claims)} owner(s); {len(cleared)} line(s) no longer flagged; "
           f"asking {len(picked_pins)} tonight ({len(repeats)} repeat, {len(fresh)} new); "
@@ -671,6 +742,10 @@ def main():
         else:
             try:
                 r = post(owner, "your standing pin needs revising -- claims with no memo id", msg)
+            except Unaddressable:
+                unaddressable.append(owner)
+                print(f"⛔ UNADDRESSABLE {owner}: no broker route -- its pin still fires")
+                continue
             except RuntimeError as e:
                 # ⛔ NOT RECORDED. An unrecorded seat is re-asked on the next
                 #    sweep; a recorded-but-undelivered one never hears at all.
@@ -678,6 +753,7 @@ def main():
                 undelivered.append(owner)
                 continue
             print(f"DM {owner}: sent={r.get('sent')} live={r.get('live')}")
+        asked[owner] = today
         for l in lines:
             e = nag.setdefault(owner, {}).setdefault(claim_key(l), {"first": today, "n": 0})
             # ⚠️ Count ASKS, not days. A night the cycle did not run is not an
@@ -689,7 +765,9 @@ def main():
 
     if not dry:
         PIN_STATE.parent.mkdir(parents=True, exist_ok=True)
-        PIN_STATE.write_text(json.dumps(nag, indent=1, sort_keys=True))
+        out = dict(nag)
+        out["_asked"] = asked      # ⚠️ survives the clearing of every line
+        PIN_STATE.write_text(json.dumps(out, indent=1, sort_keys=True))
 
     # ── dead status rows -> `atc`, who owns the board and does the deleting ──
     dead_new = {sid: v for sid, v in dead_rows.items()
@@ -742,6 +820,31 @@ def main():
         post("memo", "instruction-surface audit digest", digest)
     print(f"routed {len(new)} seat(s); {sum(len(v) for v in by_owner.values())} defect(s), "
           f"{len(advisory)} advisory")
+    if unaddressable:
+        print(f"⛔ {len(unaddressable)} owner(s) have NO BROKER ROUTE: "
+              f"{sorted(set(unaddressable))}")
+        for owner in sorted(set(unaddressable)):
+            par = parent_seat(owner)
+            note = (f"`{owner}` holds pins or instruction files with findings and the broker "
+                    f"has no route to it (drop_reason no_resolution; absent from /sessions). "
+                    f"Its pins are NOT retired -- they fire if that seat returns.")
+            if par:
+                msg = (note + f"\n\nComing to you because `{owner}` is structurally your "
+                       f"thread. If you can reach it or speak for it, the findings are in "
+                       f"tonight's digest; if it is finished, its pins can be retired.\n\n"
+                       f"⛔ I do not edit or delete another seat's pins.")
+                if dry:
+                    print(f"--- would DM {par} (unaddressable child {owner}) ---\n{msg}\n")
+                elif (par, f"unaddressable:{owner}") not in seen:
+                    try:
+                        r = post(par, f"your thread `{owner}` has pin findings and no address", msg)
+                        print(f"DM {par} (for {owner}): sent={r.get('sent')}")
+                        seen.add((par, f"unaddressable:{owner}"))
+                    except (RuntimeError, Unaddressable) as e:
+                        print(f"⛔ NOT SENT {par}: {e}")
+            else:
+                advisory.append(f"UNADDRESSABLE {owner}: {note} No structural parent -- "
+                                f"needs an owner assigned, or its pins retired.")
     if undelivered:
         # ⛔ LOUD, AND LAST. 53 silent drops on this lane's first run read as 53
         #    delivered notices for 20 minutes.
