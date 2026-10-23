@@ -63,6 +63,34 @@ export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 #    ⛔ DO NOT revert this schedule until the question is settled -- reverting it
 #      destroys the only discriminator, and the fault is intermittent enough that
 #      re-arming costs another day.
+#
+# ⭐⭐ RESULT 2026-10-23 18:13, AND BOTH PRE-REGISTERED PREDICTIONS ARE REFUTED.
+#    On 5,25,45 the reader ran 15 times over 5 hours (13:25 -> 18:05): ZERO failures.
+#      - prediction (a) attribute cache said :45 would fail. It did not, 5/5, and it
+#        reads the FRESHEST heartbeat of any slot (~220-233s, well inside 600s) --
+#        fresher than the ~540s that was failing. THE CACHE STORY IS DEAD.
+#      - prediction (b) contention said :05 would fail. It did not, 5/5, and :05 IS
+#        one of the 5,20,35,50 slots it blamed. THE CONTENTION STORY IS DEAD.
+#    ⭐ Writing both predictions down first is what makes this a result instead of a
+#      shrug: neither survived, and neither can now be quietly re-fitted to the data.
+#
+# ⛔⛔ BUT DO NOT READ "0 FAILURES" AS "MOVING THE SLOT FIXED IT". I CONFOUNDED THIS.
+#    The last failure was 13:20:01 and I changed the schedule at 13:22 -- two minutes
+#    later. So "moving off :20 avoided the fault" and "the fault stopped on its own at
+#    13:20" predict EXACTLY the same 5 hours of silence, and nothing here separates
+#    them. ⚠️ An intervention made immediately after the last occurrence of an
+#    intermittent fault cannot be credited with its absence. a31 also resumed at 16:05
+#    and volume1 noatime is on, so the NAS was not held still either.
+#
+# ⭐ REVERSAL ARMED 2026-10-23 18:13: cron 5,25,45 -> 5,20,25,45. :20 is restored
+#    ALONGSIDE the three controls, so slot and time are separated WITHIN each hour:
+#      :20 fails while :05/:25/:45 do not  => the slot is causal and the fault is live
+#      nothing fails at all                => the fault ended around 13:20, and every
+#                                             slot-based reading of it was noise
+#      everything fails                    => it was never about the slot
+#    ⚠️ The third outcome is the one that would have been invisible on 0,20,40:
+#      with only one sampled slot inside each 20-minute span there was no within-hour
+#      control, so a fault that was really about TIME read as a fault about SLOT.
 stamp() { date '+%Y-%m-%dT%H:%M:%S%z'; }
 
 HB=${MEMO_WATCH_HEARTBEAT:-/mnt/nas/data/memo-watch/heartbeat}
