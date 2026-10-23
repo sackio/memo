@@ -20,6 +20,7 @@
    refs at once, this stops and tells `memo` instead of DMing the fleet.
 """
 import json, re, subprocess, sys, urllib.request
+from datetime import datetime
 from pathlib import Path
 
 BROKER = "http://192.168.1.168:3030"
@@ -42,6 +43,29 @@ MAX_SEATS = 12
 UNANCHORED_SEATS_PER_NIGHT = 3
 UNANCHORED_MAX_LINES = 12          # per seat; the rest are counted, not listed
 UNANCHORED_MIN_AGE_DAYS = "30"     # a claim dated last week is not yet rot
+
+# ⭐⭐ THE PIN LANE IS A DAILY NAG, NOT A ONE-SHOT NOTICE. Ben, Slack #memo
+#    2026-10-23 09:55, answering ask a15 (he had my proposal of a 7-day
+#    re-check): "I think that's too long I think it should be daily and yes I
+#    agree that you shouldn't be editing the pen but I think it really needs to
+#    be brought up to the holder and they're told that it needs to be revised".
+# ⇒ Three things follow, and the first two are a REVERSAL of how every other
+#   lane in this file behaves:
+#     1. REPEATS. Every other lane sends once and records it in seen.json. This
+#        one re-asks DAILY while the line is still in the pin.
+#     2. THE DM SAYS "REVISE THIS", not "FYI". A notice a seat may ignore is the
+#        same as no notice; the holder is the only one who can edit a pin, so
+#        the ask has to be an ask.
+#     3. VERIFICATION IS MECHANICAL. "Fixed" means the line is GONE from the
+#        live pin on the next run -- never a seat's own say-so.
+PIN_FIRST_CONTACT_SEATS = 3        # new seats introduced per night
+PIN_NAG_SEATS_MAX = 12             # total pin DMs per night, repeats first
+PIN_MAX_LINES = 12                 # per DM; the rest are counted, not listed
+PIN_ESCALATE_DAYS = 3              # asked this many times, still there -> Ben
+PIN_STATE = Path.home() / ".memo-instruction-audit" / "pin-nag.json"
+# ⚠️ HOST-LOCAL ($HOME), like seen.json. The cycle runs on server4 only (Ben /
+#    system, 10-22), so one ledger is correct -- but a run from another host
+#    would re-introduce every seat as first contact.
 
 # ⛔ SEVERITY SPLIT. Only a DEFECT earns a DM. Sitting at 86% of the session-start
 #    budget is a fact about headroom, not something broken, and DMing 12 seats
@@ -195,6 +219,12 @@ def main():
     by_owner, advisory, dead_rows = {}, [], {}
     for f in pins:
         line = f"[pin/{f['group']}] {f['rest']}"
+        # ⛔ BOTH NEW KINDS HAVE THEIR OWN LANE BELOW AND MUST NOT FALL THROUGH
+        #    HERE. `unanchored-pin-claim` alone is 930 findings (measured
+        #    2026-10-23); appending them to `advisory` would put 930 lines in the
+        #    nightly digest, which is how a digest stops being read.
+        if f["group"] in ("unanchored-pin-claim", "dm-pin-oversize"):
+            continue
         if f["group"] in ACTIONABLE:
             by_owner.setdefault(f["a"], []).append(line)
         else:
@@ -347,6 +377,142 @@ def main():
         for l in lines:
             seen.add((owner, l))
 
+    # ── oversize pins -> their owner, once (size is a design decision) ──────
+    # ⛔ NOT a daily nag. A 712,925-char record is either a mistake the owner
+    #    fixes once or a deliberate design they defend once (dojo's pin is
+    #    deliberately over the limit, by agreement). Re-asking daily about a
+    #    documented exemption is the alarm-on-correct-behaviour failure, and the
+    #    recipient learns to filter me.
+    for f in pins:
+        if f["group"] != "dm-pin-oversize":
+            continue
+        owner, pid = f["a"], f["rest"].split()[0] if f["rest"].split() else "?"
+        if (owner, f["rest"]) in seen:
+            continue
+        msg = ("One of your ATC pins is large enough that it is a LOG, not standing "
+               f"context:\n\n  {f['rest']}\n\n"
+               "Two things you may not know, both measured on the broker today:\n"
+               "  1. The 10,000-char session-start cliff guard watches `as:\"inline\"` ONLY. "
+               "`as:\"dm\"` records are deliberately excluded from that sum "
+               "(reminders.ts:5562), so nothing refuses growth on this carrier.\n"
+               "  2. Since 2026-10-11 an `as:\"dm\"` record with a compact/startup trigger "
+               "FIRES AT SESSION START (reminders.ts:4563) -- before that only a cadence "
+               "partner delivered it. Nothing in reminders.ts truncates a body (:1879), so "
+               "the whole thing is delivered on every compaction and every start.\n\n"
+               "Fleet-wide: `as:\"dm\"` pins now hold 1,157,982 chars across 107 records "
+               "against 606,623 across 223 inline ones -- the unguarded carrier is the "
+               "bigger one.\n\n"
+               "If this size is DELIBERATE, say so and I will record the exemption on both "
+               "sides and stop flagging it -- an agreement recorded on one side is invisible "
+               "to the side that forgot. If it is not, the content that must survive a "
+               "compaction belongs in memo with a pointer in the pin; memo is pulled on "
+               "demand and costs nothing until it is read.\n\n"
+               "Reported once, not nightly.")
+        if dry:
+            print(f"--- would DM {owner} (oversize pin {pid}) ---\n{msg}\n")
+        else:
+            r = post(owner, "an ATC pin you own is a log, not standing context", msg)
+            print(f"DM {owner}: sent={r.get('sent')} live={r.get('live')}")
+        seen.add((owner, f["rest"]))
+
+    # ── pins: claims with no memo id, re-asked DAILY until the line is gone ──
+    pin_claims = {}
+    for f in pins:
+        if f["group"] == "unanchored-pin-claim":
+            pin_claims.setdefault(f["a"], []).append(f["rest"])
+
+    try:
+        nag = json.loads(PIN_STATE.read_text())
+    except Exception:
+        nag = {}
+    today = datetime.now().date().isoformat()
+
+    # ⭐ CLEARED = THE LINE IS NO LONGER FLAGGED. ⛔ NOT "the seat fixed it":
+    #    a line also leaves this set if the seat DELETED it, retired the whole
+    #    pin, or if I changed the detector. Two of those three are not progress,
+    #    and calling them a fix would manufacture a success rate. Report what was
+    #    measured -- it stopped being flagged -- and let the number mean that.
+    cleared = []
+    for owner, lines in list(nag.items()):
+        live = set(pin_claims.get(owner, []))
+        for key in list(lines):
+            if key not in live:
+                cleared.append((owner, lines[key].get("n", 0)))
+                del lines[key]
+        if not lines:
+            del nag[owner]
+
+    # who to ask tonight: REPEATS FIRST -- they are the ones Ben wants pressed.
+    repeats = [o for o in nag if any(k in set(pin_claims.get(o, [])) for k in nag[o])]
+    repeats.sort(key=lambda o: -max(nag[o][k].get("n", 0) for k in nag[o]))
+    fresh = sorted((o for o in pin_claims if o not in nag),
+                   key=lambda o: -len(pin_claims[o]))[:PIN_FIRST_CONTACT_SEATS]
+    picked_pins = (repeats + fresh)[:PIN_NAG_SEATS_MAX]
+
+    overdue = [(o, max(nag[o][k].get("n", 0) for k in nag[o])) for o in nag
+               if max(nag[o][k].get("n", 0) for k in nag[o]) >= PIN_ESCALATE_DAYS]
+    print(f"\npins/claims: {sum(len(v) for v in pin_claims.values())} unanchored claims "
+          f"across {len(pin_claims)} owner(s); {len(cleared)} line(s) no longer flagged; "
+          f"asking {len(picked_pins)} tonight ({len(repeats)} repeat, {len(fresh)} new); "
+          f"{len(overdue)} seat(s) past {PIN_ESCALATE_DAYS} asks")
+
+    for owner in picked_pins:
+        lines = pin_claims.get(owner, [])
+        if not lines:
+            continue
+        # ⛔ THE AGE IS THE SECOND TOKEN -- `<pin-id8>  <age>d  <text>`. `^(\d+)d`
+        #    matched nothing at all, so every line sorted as 0 and "oldest first"
+        #    was the pin's own line order wearing a label. Anchor past the id.
+        lines = sorted(lines, key=lambda l: -(int(m.group(1))
+                                              if (m := re.match(r"\S+\s+(\d+)d\b", l)) else 0))
+        shown, extra = lines[:PIN_MAX_LINES], max(0, len(lines) - PIN_MAX_LINES)
+        prior = max((nag.get(owner, {}).get(l, {}).get("n", 0) for l in lines), default=0)
+        again = (f"\n\n⛔ THIS IS ASK #{prior + 1}. The lines above were in your pin when I "
+                 f"last checked and are still there. I re-check every night and I cannot edit "
+                 f"your pin -- only you can." if prior else "")
+        msg = ("⛔ YOUR STANDING PIN NEEDS REVISING -- it carries claims nothing can reverify.\n\n"
+               "Each line below says of itself that it was MEASURED, VERIFIED, CONFIRMED or "
+               "OBSERVED -- and cites no memo id, so it cannot be corrected where it was "
+               "learned. (Prohibitions, operator rulings and pin headers are deliberately "
+               "NOT flagged; only self-declared observations are.) Your pin "
+               "is spliced in AHEAD of your first turn, so a line that has gone false is read as "
+               "established fact by a you with no memory to question it. Oldest first:\n\n  "
+               + "\n  ".join(shown)
+               + (f"\n  ... and {extra} more lines in the same pin." if extra else "")
+               + again
+               + "\n\nWHAT TO DO with each line -- one of three, and the third is fine:\n"
+                 "  1. STILL TRUE: put the measurement in a memo (`/memorize`) and cite the id in "
+                 "the line. Then a correction lands in ONE place for the whole fleet.\n"
+                 "  2. NO LONGER TRUE: delete it. ⭐ A correction that does not RETIRE what it "
+                 "corrects is a second claim, not a fix -- `scripts` holds both 'TAKING server5 "
+                 "%61, do not converge' and its own later 'RELEASED, no action needed', 55 days "
+                 "side by side with no ordering cue a reader is obliged to notice.\n"
+                 "  3. NOT A CLAIM: a prohibition or a pointer needs no id. Say so and I will "
+                 "stop flagging that line.\n\n"
+               "Ben, Slack #memo 2026-10-23 09:50: seats \"build up these pins and start building "
+               "up scar tissue around different stuff they think happened or happened once and "
+               "it's been fixed\" -- and 09:55, that this must be \"brought up to the holder and "
+               "they're told that it needs to be revised\". So: daily, until the line is gone. "
+               f"After {PIN_ESCALATE_DAYS} asks I name the seat to him, which is the only "
+               "escalation I have -- I do not edit another seat's pin.")
+        if dry:
+            print(f"--- would DM {owner} (pin claims, ask #{prior + 1}) ---\n{msg}\n")
+        else:
+            r = post(owner, "your standing pin needs revising -- claims with no memo id", msg)
+            print(f"DM {owner}: sent={r.get('sent')} live={r.get('live')}")
+        for l in lines:
+            e = nag.setdefault(owner, {}).setdefault(l, {"first": today, "n": 0})
+            # ⚠️ Count ASKS, not days. A night the cycle did not run is not an
+            #    ignored ask, and counting dates would escalate a seat for my
+            #    own downtime.
+            if l in shown:
+                e["n"] = e.get("n", 0) + 1
+            e["last"] = today
+
+    if not dry:
+        PIN_STATE.parent.mkdir(parents=True, exist_ok=True)
+        PIN_STATE.write_text(json.dumps(nag, indent=1, sort_keys=True))
+
     # ── dead status rows -> `atc`, who owns the board and does the deleting ──
     dead_new = {sid: v for sid, v in dead_rows.items()
                 if (ATC_SEAT, sid) not in seen}
@@ -383,6 +549,12 @@ def main():
               f"{sum(len(v) for v in unanch_by_owner.values())} unanchored claims "
               f"across {len(unanch_by_owner)} owner(s) "
               f"({len(unanch_new)} not yet told, {len(picked)} DMed tonight)."
+              + (f"\n\n⛔ PIN HOLDERS ASKED {PIN_ESCALATE_DAYS}+ TIMES, LINE STILL THERE "
+                 f"-- Ben asked to be told: "
+                 + ", ".join(f"{o} (x{n})" for o, n in sorted(overdue, key=lambda x: -x[1]))
+                 if overdue else "")
+              + f"\n\nPIN CLAIMS: {sum(len(v) for v in pin_claims.values())} unanchored across "
+                f"{len(pin_claims)} owner(s); {len(cleared)} line(s) no longer flagged today."
               f"\n\nDEFECTS (routed):\n  "
               + ("\n  ".join(f"{o}: {'; '.join(ls)}" for o, ls in sorted(by_owner.items())) or "none")
               + "\n\nADVISORY (not routed):\n  " + ("\n  ".join(sorted(advisory)) or "none"))

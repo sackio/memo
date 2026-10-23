@@ -33,8 +33,120 @@ from pathlib import Path
 BROKER = "http://192.168.1.168:3030"
 BUDGET = 10000                      # session-start payload cliff
 
+# ⛔⛔ A PIN THIS SIZE IS NOT STANDING CONTEXT, IT IS A LOG WITH A TRIGGER ON IT.
+#    Measured on the broker 2026-10-23: `as:"dm"` pins hold 1,157,982 chars
+#    across 107 records against 606,623 inline across 223 -- the UNGUARDED
+#    carrier is now the bigger one. The 10,000-char cliff guard only ever
+#    watched `inline`, and `as:"dm"` records are deliberately excluded from
+#    that sum (reminders.ts:5562), so growth went where nothing refuses it.
+#    ⭐ MY READ, NOT A MEASUREMENT: the guard CAUSED this. A seat that cannot
+#       append to its inline pin still has something to keep, and `as:"dm"`
+#       accepts any length.
+#    ⚠️ AND SINCE 2026-10-11 THOSE RECORDS FIRE AT SESSION START TOO
+#       (reminders.ts:4563) -- before that only a cadence partner delivered
+#       them. Nothing in reminders.ts truncates a body (:1879), so `cluster`'s
+#       712,925-char record is delivered WHOLE on every compaction and every
+#       startup: ~178k tokens, against a permanent token embargo.
+DM_PIN_OVERSIZE = 20000
+
+# A pin over that size is excluded from the claim-anchor lane and reported as
+# ONE finding instead. ⛔ NEVER SILENTLY: a 712,925-char record contributed
+# 1,503 of the fleet's 2,552 unanchored claims, so dripping its lines at
+# `cluster` would bury the 132 other seats in one outlier's rolling ledger.
+# Its defect is that it exists at this size, not that line 900 lacks an id.
+
+
+# ⛔ OUT OF SCOPE BY THE PIN-AUDIT SKILL'S OWN RULE. A prohibition is the one line
+#    class that is never the problem, and only its owner knows which one is
+#    load-bearing.
+PROHIBITION = re.compile(r"\b(never|do not|don't|must not|cannot|banned|"
+                         r"prohibited|refused|forbidden)\b", re.I)
+
+# ⛔⛔ AN OPERATOR DIRECTIVE IS NOT A ROTTING MEASUREMENT, AND ASKING A SEAT TO GO
+#    MEMO-IFY ONE IS BOTH WRONG AND IRRITATING. Ben's standing order is "do not
+#    re-litigate a decision he has made", and an attributed, dated quote already
+#    carries its own handle -- the attribution. Measured on the dry-run: lines
+#    like `Ben 2026-09-15: "you're not gatekeeping"` and `SUPPORT seat. NOT a
+#    trader (Ben, 2026-08-21)` were being routed as unanchored claims.
+DIRECTIVE = re.compile(r"\b(ben|operator|laura)\b\s*[,:(]|\(\s*(ben|operator)\b|"
+                       r"\bben (?:said|says|authoris|authoriz|ruled|decided|scoped)", re.I)
+
+# ⛔ PIN HEADERS AND SELF-DESCRIPTION. `PIN alpaca v144 — 2026-10-15.`,
+#    `STANDING CONTEXT — aloha (server3). Rev 2026-10-18.`, `This is REMINDER
+#    <uuid> — NOT a zone pin`. All dated, none a claim about the world.
+META = re.compile(r"^(standing context|pin\b|this is reminder|⏰|retires? when)|"
+                  r"\brev \d|\bv\d+\s*[—-]|anything true beyond this session|"
+                  r"context past \d+%", re.I)
+
+
+def is_claim(t: str) -> bool:
+    """⭐ ONE DEFINITION OF "CLAIM", used by the drip AND by the headline count.
+
+    ⛔ THEY WERE TWO FUNCTIONS FOR ONE RUN AND THE NUMBERS DISAGREED. The count
+       was still accepting QTY-alone after the drip had stopped, so the report
+       said "1,002 claims, 50 anchored (5.0%)" over a lane that had picked 409 --
+       a denominator that answers a question nobody asked, printed next to the
+       lane it does not describe. A percentage is only meaningful against a
+       stated population, and the population must be the one being acted on.
+    """
+    if len(t) < 25 or META.search(t) or PROHIBITION.search(t) or DIRECTIVE.search(t):
+        return False
+    # ⭐⭐ A VERIFICATION CUE, NOT A BARE DATE. Dropping DATE-alone was the single
+    #    biggest precision win: a date attaches to pin headers, operator quotes,
+    #    role definitions and delivery receipts just as readily as to a
+    #    measurement. A line that says "measured/verified/confirmed/as of" has
+    #    declared itself an observation of the world -- that is the population
+    #    that rots, and the population a memo id can serve.
+    return bool(CUE.search(t))
+
+
+def claim_lines(body: str, min_age_days: int = 0):
+    """Lines that ASSERT something checkable and cite no memo id.
+
+    ⭐ THE SAME DETECTOR ALREADY RUN OVER CLAUDE.md AND SKILL FILES, POINTED AT
+       THE PUSH SURFACE WITH THE SHORTEST PATH TO A SEAT'S BELIEFS. A skill file
+       is PULL -- a seat has to open it. A pin is spliced in ahead of the first
+       turn, so a stale line there is read as established fact by a seat with no
+       memory to question it. Ben, Slack #memo 2026-10-23 09:50: "these seats
+       build up these pins and start building up scar tissue around different
+       stuff they think happened or happened once and it's been fixed".
+
+    ⛔ A DATE IS NOT AN ANCHOR. Only a memo id is a handle: it gives a reader
+       somewhere to check and gives the fleet ONE place to correct. Measured
+       2026-10-23: of 2,627 checkable claims in fleet pin bodies, 75 cite a memo
+       id (2.9%) -- so 2,552 claims can only be corrected by finding every copy.
+
+    ⚠️ Per-LINE, not per-section. A pin has no headings; its unit is the bullet.
+    """
+    out = []
+    for line in body.splitlines():
+        t = line.strip()
+        if len(t) < 25:
+            continue
+        # ⛔⛔ CUE OR DATE, **NOT** QTY ALONE -- A NUMBER IS NOT A CLAIM. First cut
+        #    accepted any line carrying a quantity, and the first dry-run DM to
+        #    `cluster` was half instructions: "⚠️ CONTEXT PAST 60% -- bank it
+        #    before you lose it", "⛔⛔ NO quantum-feed SECRET DELETION -- 5 exist
+        #    only in-cluster". Both carry a figure; neither asserts anything a
+        #    memo could reverify. ⇒ A DETECTOR THAT CRIES WOLF IS WORSE THAN NONE:
+        #    the recipient learns to filter the sender and the one real finding
+        #    goes with it -- and this lane's first contact is 132 seats at once.
+        if not is_claim(t):
+            continue
+        if has_memo_ref(t):
+            continue
+        iso, age = newest_date(t)
+        # ⚠️ An UNDATED claim is not a young one -- it is one nobody can date at
+        #    all, which is worse. It passes the age gate and sorts as 0 so it
+        #    cannot outrank a measured 326-day claim (route.py's `oldest`).
+        if age is not None and age < min_age_days:
+            continue
+        out.append((age, t))
+    return out
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from scan import RE_FULL, RE_SHORT, is_memo_ref, live_ids, schedule_ids, confirm_dangling   # noqa: E402
+from unanchored import CUE, DATE, QTY, has_memo_ref, newest_date   # noqa: E402
 
 
 def get(path):
@@ -97,6 +209,8 @@ def main():
     sched = schedule_ids()
 
     findings, n_pins, n_inline, unknown = [], 0, 0, []
+    n_claims = n_anchored = n_skipped_claims = 0
+    oversize = []
 
     for o in owners:
         name = o.get("owner")
@@ -147,6 +261,32 @@ def main():
             if not retired and not (r.get("retire_when") or "").strip():
                 findings.append({"owner": name, "kind": "no-retire-when", "id": rid,
                                  "detail": body[:70].replace("\n", " ")})
+
+            # ── the carrier nobody guards ──────────────────────────────
+            if not retired and len(body) > DM_PIN_OVERSIZE:
+                fires = sorted(trigs & {"compact", "startup", "cadence", "context"})
+                oversize.append((len(body), name, as_, rid))
+                findings.append({"owner": name, "kind": "dm-pin-oversize", "id": rid,
+                                 "detail": f"{len(body):,} chars as={as_ or '?'} "
+                                           f"fires={fires} (~{len(body)//4:,} tokens per "
+                                           f"delivery; the broker truncates nothing)"})
+
+            # ── checkable claims with no memo id ───────────────────────────
+            if not retired:
+                if len(body) > DM_PIN_OVERSIZE:
+                    n_skipped_claims += len(claim_lines(body))
+                else:
+                    for line in body.splitlines():
+                        t = line.strip()
+                        if is_claim(t):
+                            n_claims += 1
+                            if has_memo_ref(t):
+                                n_anchored += 1
+                    for age, t in claim_lines(body, min_age_days=0):
+                        findings.append({"owner": name, "kind": "unanchored-pin-claim",
+                                         "id": rid,
+                                         "detail": f"{age if age is not None else '?'}d  "
+                                                   f"{t[:110]}"})
 
             # dangling memo references inside the pin body
             for m in RE_FULL.finditer(body):
@@ -206,9 +346,21 @@ def main():
         print("   ⇒ (a) retired seat, delete the pins, vs (b) live seat under another "
               "name: the broker cannot tell these apart (atc, 2026-10-23). Check the "
               "`agents` roster or whether the seat's cwd still exists.")
+    print(f"claims in pins : {n_claims}  ({n_anchored} cite a memo id, "
+          f"{(100.0*n_anchored/n_claims if n_claims else 0):.1f}%)")
+    if n_skipped_claims:
+        # ⛔ NEVER A SILENT EXCLUSION. Say how many claims the oversize pins hold,
+        #    so the headline percentage is read against a stated denominator.
+        print(f"               + {n_skipped_claims} more inside {len(oversize)} pin(s) over "
+              f"{DM_PIN_OVERSIZE:,} chars -- counted, NOT dripped (reported as "
+              f"dm-pin-oversize instead)")
     for kind in sorted(by_kind, key=lambda k: -len(by_kind[k])):
         print(f"\n--- {kind}  ({len(by_kind[kind])}) ---")
-        for f in by_kind[kind][:25]:
+        # ⛔ THE DRIP KIND MUST NOT BE TRUNCATED. route.py consumes this stdout and
+        #    picks 3 seats a night from it; a 25-line display cap would hide most
+        #    owners from the picker and look exactly like a short queue.
+        cap = None if kind == "unanchored-pin-claim" else 25
+        for f in by_kind[kind][:cap]:
             print(f"  {f['owner']:<24} {str(f.get('id',''))[:8]:<10} {f.get('detail','')}")
     print("\n⛔ Mechanical only. A pin whose CLAIM went stale -- the alpaca case -- is")
     print("   invisible here and needs a reader.")
