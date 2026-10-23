@@ -143,3 +143,57 @@ cannot sum past 100%. The first version of this analyser printed **262%** by div
 give each op "its own" quarter. The sum is now printed every run and refused when violated
 (v3rot 73.8%, v4 72.8%), naming what it does *not* invalidate: `%>1s` and every paired result
 are unaffected, because they do not use the span.
+
+---
+
+## 2026-10-22 20:30 — two results about the HEARTBEAT ALERT itself
+
+### 1. The ":20 past the hour" pattern is NOT REAL — do not chase it
+
+All six of 2026-10-22's `heartbeat UNREADABLE` alerts landed at **:20**, against a
+check that runs `*/20` (so :00, :20, :40). Six for six looks like p≈0.0014 and looks
+like a scheduled job.
+
+⛔ **It does not replicate.** Tested on arm A — an independent instrument, 37,637
+samples, 6 hosts, 09:29–16:00, the same hours — with
+`nfs-minute-of-hour.py`: **minute 20 ranks 24th of 60** at a >1s threshold and
+**28th of 60** at >10s (chi² 1.84 and 0.22).
+
+⭐ **Why it looked real, and the rule that generalises:** the pattern was found by
+looking at the data. A p computed on a pattern you went hunting for — over an
+unbounded set of patterns you might equally have noticed — is not a p. With 60
+candidate minutes something always wins. ⇒ **The rank is the answer, not the p.**
+And no job in any of the six crontabs fires hourly at :20 only; the `*/20` jobs all
+hit :00 and :40 as well, so there was never a mechanism either.
+
+### 2. ⚠️ EVERY ALERT TODAY FIRED WHILE I WAS PROBING — the apparatus may be the cause
+
+The UNREADABLE detector shipped `bb246c1` on **2026-10-20** and ran clean through
+the 21st — a genuine negative, not a missing detector (the `fresh:` lines prove it
+was exercising).
+
+| when | alerts | what was running |
+|---|---|---|
+| 10-20 (post-`bb246c1`), 10-21 | **0** | nothing of mine |
+| 13:20, 14:20, 15:20 | 3 | arm A, 6 hosts, 09:29–16:00 |
+| 17:20, 18:20 | 2 | op-class v3rot + v4, 16:37–19:39 |
+| 20:20 | 1 | GETATTR probe, from 19:54 |
+
+arm A writes into `/mnt/nas/data/memo-watch` — **the heartbeat's own directory** —
+from six hosts every ~3.6s. Base write-stall rate measured there: **>1s in 95.1% of
+host-minutes, >10s in 62.9%.**
+
+⚠️ **Not directory contention** — v4 disconfirmed that (`create_idle` ≈
+`create_shared`, p=0.55). If this is my load, it is **mount-wide**, not local to the
+directory.
+⛔ **Observational and confounded**: one probing day against two quiet days. This is
+a hypothesis with a clean test, not a finding.
+
+⭐ **PRE-REGISTERED DISCRIMINATOR, resolves the same night, costs nothing:** the
+GETATTR probe ends 21:48 and nothing else of mine touches that mount afterward.
+**Clean checks at 22:00 onward ⇒ the load hypothesis survives. An UNREADABLE at
+22:20 or 22:40 with no probe running ⇒ it is dead and the mount does this alone.**
+⚠️ The 22:05 credit cycle is not NAS-silent, so the window is good, not perfect.
+
+⛔ **Until this resolves, leave the `heartbeat-check` alert text alone.** It
+currently refuses to name a cause, which is the correct state.
