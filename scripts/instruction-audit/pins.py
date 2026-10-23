@@ -108,10 +108,22 @@ def main():
             findings.append({"owner": name, "kind": "unreadable", "detail": str(e)})
             continue
 
-        # ⛔ TRAP 1: empty + owner_known:false is NOT a clean seat.
-        if d.get("owner_known") is False:
+        # ⛔⛔ TRAP 1, AND I GOT IT EXACTLY BACKWARDS FOR A DAY.
+        #    The rule is "an empty list from an unknown owner is not a clean
+        #    seat". I implemented it as `continue`, which skipped the owner
+        #    ENTIRELY -- so instead of not trusting an empty list, I never looked
+        #    at a FULL one. MEASURED 2026-10-23 after `atc` pushed back: all 12
+        #    of these owners return their pins under `reminders[]`, 16 pins in
+        #    total, and I had audited none of them while reporting them as
+        #    "unaudited, not clean" -- which sounds like a known gap and was
+        #    really a self-inflicted one I could have closed by reading the body
+        #    I had already fetched.
+        # ⭐ A CAUTION THAT SAYS "DO NOT TRUST X" MUST NOT BE CODED AS "DO NOT
+        #    READ X". The first keeps the data and withholds the conclusion; the
+        #    second discards the data and reports the withholding as a finding.
+        unreg = d.get("owner_known") is False
+        if unreg:
             unknown.append(name)
-            continue
 
         items = d.get("reminders", d.get("items", [])) or []
         # ⛔ TRAP 2: audit only OWNED pins; inherited ones belong to their owner.
@@ -156,7 +168,15 @@ def main():
                                          "id": rid, "detail": f"{sid} [{why}]"})
 
         pv = payload_verdict(name)
-        if pv is None:
+        if pv is None and unreg:
+            # ⚠️ EXPLAINED, SO NOT A DEFECT. A name with no subscriber record has
+            #    no session-start payload to be over budget, and there is no seat
+            #    to DM about it. Emitting `budget-unmeasured` here would route 12
+            #    undeliverable DMs a night and bury the real ones. Its PINS are
+            #    still audited above -- that is the part that matters, because
+            #    they fire if the seat ever comes back.
+            pass
+        elif pv is None:
             findings.append({"owner": name, "kind": "budget-unmeasured", "id": "-",
                              "detail": "no session-payload verdict -- NOT a clean result"})
         else:
@@ -179,7 +199,13 @@ def main():
     print(f"pins audited   : {n_pins}  ({n_inline} inline, counted once under their owner)")
     print(f"findings       : {len(findings)}")
     if unknown:
-        print(f"⛔ owner_known:false for {len(unknown)} -- NOT audited, NOT clean: {unknown[:8]}")
+        print(f"⚠️ no subscriber record for {len(unknown)} owner(s) -- their PINS ARE "
+              f"audited above; only their session-start budget is unmeasurable, and "
+              f"there is no seat to DM. {unknown[:8]}")
+        print("   ⛔ Not retired: a stale pin on a down seat fires when it returns.")
+        print("   ⇒ (a) retired seat, delete the pins, vs (b) live seat under another "
+              "name: the broker cannot tell these apart (atc, 2026-10-23). Check the "
+              "`agents` roster or whether the seat's cwd still exists.")
     for kind in sorted(by_kind, key=lambda k: -len(by_kind[k])):
         print(f"\n--- {kind}  ({len(by_kind[kind])}) ---")
         for f in by_kind[kind][:25]:
