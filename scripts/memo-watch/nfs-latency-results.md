@@ -236,3 +236,47 @@ control live in.
 ⛔ AT MONDAY'S LAUNCH: write EVERY NAS change between 2026-10-23 16:14 and the launch
 into the header as explicit confounds (`cluster`, 16:14). Ask `cluster` and `system`
 for that list — do not infer it.
+
+### An independent instrument was already running, and it EXCLUDES noatime
+
+`~/.memo-watch/hb-write-latency.tsv` on server4 — the memo-watch heartbeat's own WRITE
+duration, one sample every 30 min, kept by `run` since 02:11. Nobody built it for this
+A/B. It is a different operation (one write by the owning process) from a different
+host on a different cadence, and it covers all three regimes.
+
+| window | a31 | noatime | n | median | >25s |
+|---|---|---|---|---|---|
+| 10-23 02:11–05:41 | running | **off** | 8 | 32,962ms | 4/8 |
+| 10-23 06:11–09:11 | running | on | 7 | 10,826ms | 2/7 |
+| 10-23 09:41–15:41 (arm B) | **paused** | on | 13 | **64ms** | **0/13** |
+| 10-23 16:11–18:11 (post-resume) | running | on | 5 | 3,443ms | 1/5 |
+
+⭐ **noatime IS EXCLUDED AS THE EXPLANATION.** It came on at 06:02:49, so rows 2 and 4
+are *noatime ON with a31 RUNNING* — the cell arm B's confound table could not reach.
+They look like a31-running (medians 10,826ms and 3,443ms), not like arm B (64ms).
+Pooling them against arm B, with noatime ON in BOTH groups so a31 is the only
+difference: median **7,134ms vs 64ms**, exact Mann-Whitney **p = 0.00399** (n=12 vs 13).
+⇒ One of arm B's three confounds is dead. `tradedesk`'s overflow reads are untested.
+
+⛔⛔ **BUT THIS DOES NOT CROWN a31, AND THE REASON IS THE EXACT TRAP THAT KILLED ARM C.**
+The a31-RUNNING samples here come from 06:11–09:11 and 16:11–18:11; the a31-PAUSED ones
+from 09:41–15:41. So in this dataset too, **a31-paused IS market hours** — the
+collinearity `cluster` named on 10-22. a31 and time-of-day remain confounded; only
+noatime has been separated out.
+⚠️ I nearly reported this as "a31 confirmed" an hour after flagging the identical
+defect in someone else's design. A test that arrives at a conclusion you already
+favour is the one to re-read for the confound you just finished naming elsewhere.
+
+⭐ **THIS IS WHY ARM C IS STILL NEEDED AND IS CORRECTLY DESIGNED.** The 2×2 is:
+
+| | a31 paused | a31 running |
+|---|---|---|
+| **market hours** | arm B — 13.4% | **MISSING ← arm C, Mon 09:29–16:00** |
+| **off hours** | never observed | hb-write series, median 7,134ms |
+
+Arm C fills the one empty cell that breaks the collinearity. Nothing above replaces it.
+
+⚠️ Caveats on the table: n is small, the samples are 30 min apart (which helps
+independence, unlike the 2s probes), and the >25s column matters because the
+heartbeat READER's timeout is 25s — 7 of 33 writes exceeded it, so the reader's
+UNREADABLE alerts and these write stalls may be one phenomenon, not two.
