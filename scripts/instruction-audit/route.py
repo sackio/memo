@@ -172,6 +172,12 @@ REPO_OWNERS = {
     # ruling, so it needs no confirmation from `network` -- but they are told,
     # because an ownership they have not heard about is one they cannot act on.
     "omada": "network",
+    # `massive`, DM 2026-10-23 11:31, asked directly: "Yes, I own
+    # code/forks/mcp_polygon; route its findings to me." ⚠️ `tradedesk` NAMED
+    # them first and that was NOT enough -- a third party's say-so is not
+    # ownership, so they were asked and they answered. The repo holds the 22
+    # massive-* skills, 18 of them symlinked into ~/.claude/skills.
+    "forks/mcp_polygon": "massive",
     # ⚠️ `server_admin` IS SHARED, AND THIS ENTRY IS ONLY TRUE OF THE FILES I
     #    CURRENTLY FIND THERE. Ben, same message: "a couple different folks are
     #    going to own things cluster models and servers will probably own things

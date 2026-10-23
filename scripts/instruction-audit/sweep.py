@@ -38,6 +38,23 @@ SCRIPTS = {"scan": "scan.py", "unanchored": "unanchored.py"}
 TIMEOUT = 600
 
 
+GENERIC_BASENAMES = {"SKILL.md", "CLAUDE.md", "AGENTS.md", "README.md", "index.md"}
+
+
+def disp_path(fp):
+    """Enough of the path to name ONE file.
+
+    ⛔ A BARE BASENAME IS NOT A REFERENCE WHEN THE BASENAME IS GENERIC. Every
+       finding in code/forks/mcp_polygon printed as `SKILL.md:14`, and the repo
+       holds 22 of them -- `massive` had to ask which file each claim was in
+       before they could act, which is the whole cost of the line being short.
+    """
+    p = Path(fp or "?")
+    if p.name in GENERIC_BASENAMES and p.parent.name:
+        return f"{p.parent.name}/{p.name}"
+    return p.name
+
+
 def run_host(host, script, extra):
     """-> (state, findings, stderr). state in searched|unreachable|errored.
 
@@ -103,8 +120,17 @@ def main():
                 f["host"] = h
                 f["owner"] = f"{owner}@{h}"      # addressable: which host to fix on
             else:
-                # same bytes on every host -- one finding, not four
-                key = (owner, Path(f.get("file", "")).name, f.get("line"), ident)
+                # same bytes on every host -- one finding, not four.
+                # ⛔⛔ KEY ON THE WHOLE PATH, NEVER THE BASENAME. This read
+                #    `Path(...).name`, and one owner can hold many files with the
+                #    SAME generic basename: code/forks/mcp_polygon has 22
+                #    SKILL.md files. Two different SKILL.md findings on the same
+                #    line with the same section title collapsed into ONE and the
+                #    second was dropped -- silently, in the component whose job is
+                #    to not lose findings. The path is identical across hosts for
+                #    a shared file (that is what makes the collapse correct), so
+                #    using it loses nothing and distinguishes the files.
+                key = (owner, f.get("file", ""), f.get("line"), ident)
             results.setdefault(key, f)
 
     findings = list(results.values())
@@ -128,7 +154,7 @@ def main():
     for owner in sorted(by_owner, key=lambda o: -len(by_owner[o])):
         print(f"--- {owner}  ({len(by_owner[owner])}) ---")
         for f in by_owner[owner][:40]:
-            loc = f"{Path(f.get('file','?')).name}:{f.get('line','?')}"
+            loc = f"{disp_path(f.get('file','?'))}:{f.get('line','?')}"
             age = f.get("age_days")
             tail = f.get("ref") or f.get("detail", "")
             if age is not None:

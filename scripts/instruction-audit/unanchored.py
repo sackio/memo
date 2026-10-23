@@ -189,7 +189,11 @@ def main():
         for f in by_owner[owner][:25]:
             age = f.get("age_days")
             tag = f"{age}d" if age is not None else "undated"
-            print(f"  {tag:>7}  {Path(f['file']).name}:{f.get('line','?')}  [{f.get('section','')}]")
+            _p = Path(f['file'])
+            _loc = (f"{_p.parent.name}/{_p.name}"
+                    if _p.name in {"SKILL.md", "CLAUDE.md", "AGENTS.md", "README.md", "index.md"}
+                    and _p.parent.name else _p.name)
+            print(f"  {tag:>7}  {_loc}:{f.get('line','?')}  [{f.get('section','')}]")
             print(f"      {f.get('detail','')}")
     print("\n⚠️ A claim with no number or no date is INVISIBLE here. This counts"
           "\n   the quantitative dated population only -- never read a 0 as"
