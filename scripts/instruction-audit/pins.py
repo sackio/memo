@@ -42,28 +42,31 @@ def get(path):
         return json.loads(r.read())
 
 
-def payload_exposure(owner):
-    """What a pane ACTUALLY receives at session start, per the broker's own rule.
+def payload_verdict(owner):
+    """The broker's OWN verdict for this seat. Returns (verdict, body, max, shed).
 
-    ⛔⛔ THREE WRONG ANSWERS CAME BEFORE THIS ONE, each a plausible aggregate:
-       1. sum of every live inline body -> ignores SCOPE. `tradedesk` read 258%
-          over; 16 of its 19 pins are scoped to other conversations and never
-          arrive at that wire.
-       2. the per-owner `delivered_chars` -> includes `as:dm` bodies, which are
-          delivered separately and never touch this cliff. `cluster` holds one
-          712,925-char dm pin and read 7,534% over.
-       3. the per-item `over_soft_budget` flag -> that is a 2,000-char PER-ITEM
-          advisory, not the 10,000 payload cliff. 102 pins trip it; it means
-          nothing about truncation.
+    ⛔⛔⛔ FOURTH AND FINAL CORRECTION. Every earlier version computed this and
+       every one was wrong. The endpoint says so in its own text:
+         "Do not compute your own headroom from a body figure -- re-query and
+          read the verdict."
+         "DO NOT SUBTRACT ANYTHING FROM 10,000 YOURSELF -- read max_body_chars,
+          which has already done it."
+       The budget is NOT body-vs-10000. It is body + a per-item WRAPPER (743
+       chars for a 1-item pin, far more for many) against a per-seat
+       `max_body_chars`, with a 717-char fleet-state board reserve held back
+       that ANOTHER seat's status post can spend while you do nothing.
 
-    The rule, quoted from /session-payload's own response: "Each pane receives
-    the (unscoped) group PLUS its own conversation's group -- never the sum of
-    all groups. inline_chars is the only figure the SessionStart cliff governs;
-    as:dm bodies are delivered separately and are excluded."
+    ⇒ The error was not conservative. Measured 2026-10-23: `unibrowse` 9,622,
+      `alpaca` 9,264 and `quantum-navigator` 9,263 all read as merely "at risk"
+      against 10,000, and are OVER -- their real ceilings are 7,925 / 7,480 /
+      7,830. I told `thread-alpaca-1` to shed 543 when the true figure was
+      2,469, so a seat acting on my number would still have been truncated and
+      would have believed it was fixed.
 
-    ⭐ THE GENERAL LESSON, which cost four iterations: when the system publishes
-       a verdict, recomputing it yourself is not independent verification -- it
-       is a second chance to be wrong, with the authority of your own arithmetic.
+    ⚠️ The verdict lives under the PER-TRIGGER keys `compact` and `startup`,
+       not at the top level. A top-level read returns None for every seat and
+       looks like "no seat has a verdict" -- a clean sweep that is really a
+       wrong lookup.
     """
     try:
         d = get(f"/session-payload/{owner}")
@@ -71,14 +74,16 @@ def payload_exposure(owner):
         return None
     if d.get("owner_known") is False:
         return None
-    unscoped, convs = 0, [0]
-    for k, v in (d.get("scopes") or {}).items():
-        n = v.get("inline_chars") or 0
-        if k.startswith("(unscoped"):
-            unscoped += n
-        else:
-            convs.append(n)
-    return unscoped + max(convs)       # worst-case pane, not the sum
+    worst = None
+    for trig in ("compact", "startup"):
+        c = d.get(trig) or {}
+        v = c.get("verdict")
+        if not v:
+            continue
+        rank = {"under": 0, "at_risk": 1, "over": 2}.get(v, 0)
+        if worst is None or rank > worst[0]:
+            worst = (rank, v, c.get("body_chars"), d.get("max_body_chars"), d.get("shed_chars"))
+    return worst[1:] if worst else None
 
 
 def main():
@@ -150,19 +155,20 @@ def main():
                         findings.append({"owner": name, "kind": "dangling-memo-ref",
                                          "id": rid, "detail": f"{sid} [{why}]"})
 
-        worst = payload_exposure(name)
-        if worst is None:
+        pv = payload_verdict(name)
+        if pv is None:
             findings.append({"owner": name, "kind": "budget-unmeasured", "id": "-",
-                             "detail": "no session-payload answer -- NOT a clean result"})
+                             "detail": "no session-payload verdict -- NOT a clean result"})
         else:
-            pct = 100.0 * worst / BUDGET
-            if worst > BUDGET:
+            verdict, body, mx, shed = pv
+            if verdict == "over":
                 findings.append({"owner": name, "kind": "OVER-CLIFF", "id": "-",
-                                 "detail": f"{worst} utf16 units = {pct:.0f}% of {BUDGET}"
-                                           f" -- payload replaced by a ~2KB preview, SILENTLY"})
-            elif pct >= 85:
+                                 "detail": f"body {body} / max {mx} -- SHED {shed}"
+                                           f" (payload replaced by a ~2KB preview, SILENTLY)"})
+            elif verdict == "at_risk":
                 findings.append({"owner": name, "kind": "at-risk-cliff", "id": "-",
-                                 "detail": f"{worst} utf16 units = {pct:.0f}%"})
+                                 "detail": f"body {body} / max {mx} -- shed {shed} to be safe"
+                                           f" on any board"})
 
     by_kind = {}
     for f in findings:
