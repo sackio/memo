@@ -151,7 +151,66 @@ HERE = Path(__file__).resolve().parent
 # finding in it. ⛔ Earn an entry; do not add one from a plausible name match.
 HOSTLOCAL_OWNERS = {
     "docker-heal": "system",      # fixed 3 dead ids 2026-10-23, all four hosts
+    # ⭐ CLAIMED BY `cluster`, DM 2026-10-23 10:49, naming each skill itself:
+    #   "Mine. Route all findings for server_admin/skills/* to `cluster`."
+    #   They also corrected me that mount-presence-gate and volume2-93-trigger
+    #   are theirs, not `system`'s -- I had read that off a crontab comment.
+    "allocation-gatekeeper": "cluster",
+    "cluster-capacity": "cluster",
+    "cluster-heal": "cluster",
+    "k8s-gpu": "cluster",
+    "k8s-job": "cluster",
+    "k8s-longrun": "cluster",
+    "resource-priorities": "cluster",
 }
+
+# Repo-path owners ESTABLISHED by the seat itself or ruled by the operator --
+# never inferred from the directory name, which is what produced three
+# unaddressable phantoms this morning.
+REPO_OWNERS = {
+    # Ben, Slack #memo 2026-10-23 10:49: "network will own omada". Operator
+    # ruling, so it needs no confirmation from `network` -- but they are told,
+    # because an ownership they have not heard about is one they cannot act on.
+    "omada": "network",
+    # ⚠️ `server_admin` IS SHARED, AND THIS ENTRY IS ONLY TRUE OF THE FILES I
+    #    CURRENTLY FIND THERE. Ben, same message: "a couple different folks are
+    #    going to own things cluster models and servers will probably own things
+    #    there and you can sort it out."
+    #    Established so far, each by the seat itself:
+    #      · `cluster` (DM 10:49) owns server_admin/skills/* and named all seven:
+    #        allocation-gatekeeper, cluster-capacity, cluster-heal, k8s-gpu,
+    #        k8s-job, k8s-longrun, resource-priorities. Also corrected me that
+    #        mount-presence-gate and volume2-93-trigger are theirs, not
+    #        `system`'s -- I had read that off a crontab comment.
+    #      · `models` (DM 10:48) owns ONLY server_admin/k8s model manifests
+    #        (embeddings, ollm, asr, tsfm) and explicitly disclaimed the skill
+    #        files.
+    #      · `servers` -- not yet asked. Ansible/host-install content is theirs
+    #        by the roster, and nothing I have flagged lands there yet.
+    # ⛔ EVERY FINDING I CURRENTLY HAVE UNDER THIS REPO IS A SKILL.md, so
+    #    `cluster` is right for all 50 of them TODAY. The moment a finding
+    #    appears under a different subtree this entry sends it to the wrong seat
+    #    silently -- so a non-SKILL.md finding here must re-open the question
+    #    rather than inherit this mapping.
+    "server_admin": "cluster",
+}
+
+# ⛔⛔ A SKILL FILE OR CLAUDE.md CANNOT BE EDITED BY THE SEAT THAT OWNS IT.
+#    `/home/ben/.claude/CLAUDE.md`: "Agents are strictly prohibited from editing
+#    CLAUDE.md or skill files without explicit operator authorization. Propose
+#    the change to the operator; do not make it."
+# ⇒ SO THE FILE LANE'S THREE OPTIONS WERE NEVER AVAILABLE TO THE HOLDER, and a
+#   daily re-ask would be nagging a seat about something it is forbidden to do --
+#   the alarm-that-fires-on-correct-behaviour failure, with the seat correctly
+#   refusing every time. Found by `cluster` 2026-10-23 10:49, who claimed the
+#   findings and then said: "skill-file edits need Ben's explicit authorization,
+#   so I can't anchor or delete the lines unilaterally. I'll fold your list into
+#   one proposal to Ben. A repeat ask before he answers will get no new action."
+# ⇒ For these files the deliverable is a PROPOSAL TO BEN, and this lane's real
+#   output is a queue for HIM, not a task for the seat. Pins are different and
+#   that is why the pin lane works: a pin is not a skill file, and 35 holders
+#   edited theirs within the hour.
+SKILLFILE = re.compile(r"(SKILL\.md|CLAUDE\.md|/\.claude/)", re.I)
 
 
 _seats_cache = None
@@ -197,6 +256,8 @@ def repo_owner_seat(owner: str):
        The trailing segment is frequently the seat (`guide`, `alpaca`), and
        `seat_exists` is what turns that from a guess into a route.
     """
+    if owner in REPO_OWNERS:
+        return REPO_OWNERS[owner]
     if "/" not in owner:
         return None
     tail = owner.rsplit("/", 1)[1]
@@ -567,6 +628,7 @@ def main():
         lines = unanch_new[owner]
         lines.sort(key=lambda l: -(int(m.group(1)) if (m := re.search(r"\b(\d+)d\b", l)) else 0))
         shown, extra = lines[:UNANCHORED_MAX_LINES], max(0, len(lines) - UNANCHORED_MAX_LINES)
+        skillfile = any(SKILLFILE.search(l) for l in lines)
         msg = ("Instruction files you own carry dated, quantitative claims with NO memo id "
                "-- so nothing can reverify them and nobody can correct them centrally. "
                "Oldest first:\n\n  " + "\n  ".join(shown)
@@ -577,9 +639,16 @@ def main():
                "stale Massive live-feed block carried its date in plain sight and `alpaca` "
                "built a fill pipeline on it anyway, a month after the bug was fixed.\n\n"
                "Ben's directive, Slack #memo 2026-10-23 05:57: files anyone relies on should "
-               "reference memo, which we can control and reverify. You make the edit; I detect "
-               "and recheck nightly. I do not edit other seats' files.\n\n"
-               "Reported once. Only NEW claims will be sent again.")
+               "reference memo, which we can control and reverify. I do not edit other seats' "
+               "files.\n\n"
+               + ("⛔ AND THESE ARE SKILL/CLAUDE.md FILES, WHICH YOU MAY NOT EDIT WITHOUT BEN'S "
+                  "EXPLICIT AUTHORIZATION (his CLAUDE.md: propose the change, do not make it). "
+                  "So the deliverable here is ONE PROPOSAL TO HIM, not an edit -- fold this list "
+                  "into it. ⭐ I will NOT re-ask while that is pending: reply "
+                  "`awaiting-operator` and I suppress these lines until he answers. Nagging you "
+                  "about a file you are forbidden to touch would be an alarm that fires on "
+                  "correct behaviour.\n\n" if skillfile else "")
+               + "Reported once. Only NEW claims will be sent again.")
         if dry:
             print(f"--- would DM {owner} (unanchored) ---\n{msg}\n")
         else:
