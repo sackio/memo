@@ -28,6 +28,7 @@
       ⛔ Do NOT filter them out: a down seat's stale pin fires when it returns.
 """
 import json, re, sys, urllib.request
+from datetime import datetime, timezone
 from pathlib import Path
 
 BROKER = "http://192.168.1.168:3030"
@@ -77,6 +78,37 @@ DIRECTIVE = re.compile(r"\b(ben|operator|laura)\b\s*[,:(]|\(\s*(ben|operator)\b|
 META = re.compile(r"^(standing context|pin\b|this is reminder|⏰|retires? when)|"
                   r"\brev \d|\bv\d+\s*[—-]|anything true beyond this session|"
                   r"context past \d+%", re.I)
+
+
+def delivery_age(rec, now):
+    """Days since this pin was last DELIVERED, or None if it never was.
+
+    ⭐⭐ A PIN'S OWN DELIVERY COUNTER IS THE LIVENESS SIGNAL, AND NO NEW ENDPOINT
+       IS NEEDED. `/sessions` answers REGISTRATION; `last_injected_at` answers
+       CONSUMPTION -- it only advances when the owner actually starts a session
+       or compacts. This is the same discriminator the statuses lane earned this
+       morning ("is the agent still posting?"), arriving at the same place from
+       the other side, and it settles the question this file recorded as
+       unanswerable: "(a) retired seat vs (b) live seat under another name: the
+       broker cannot tell these apart (atc, 2026-10-23)". It can.
+
+    ⛔⛔ MEASURED 2026-10-23, AND IT WOULD HAVE CONDEMNED LIVE SEATS: of the 12
+       owners with NO subscriber record, `omada` was last injected 0 DAYS AGO
+       (inject_count 5), `vbt` 3d (n=10) and `thread-quantum-lab-7` 3d (n=3).
+       Three of the twelve are demonstrably alive. Absence from the registry is
+       not a death certificate -- that is now twice in one day, on two different
+       surfaces.
+
+    ⚠️ VERIFIED, not assumed: this advances for `as:"dm"` records too -- `vbt`'s
+       dead0bc5 is as=dm with inject_count 14.
+    """
+    t = rec.get("last_injected_at")
+    if not t:
+        return None
+    try:
+        return (now - datetime.fromisoformat(str(t).replace("Z", "+00:00"))).days
+    except Exception:
+        return None
 
 
 def is_claim(t: str) -> bool:
@@ -211,6 +243,9 @@ def main():
     findings, n_pins, n_inline, unknown = [], 0, 0, []
     n_claims = n_anchored = n_skipped_claims = 0
     oversize = []
+    now = datetime.now(timezone.utc)
+    newest_delivery = {}   # owner -> days since its freshest delivery, or None
+    owner_pins = {}
 
     for o in owners:
         name = o.get("owner")
@@ -242,9 +277,22 @@ def main():
         items = d.get("reminders", d.get("items", [])) or []
         # ⛔ TRAP 2: audit only OWNED pins; inherited ones belong to their owner.
         items = [r for r in items if not r.get("inherited")]
+        owner_pins[name] = [r for r in items if not r.get("retired")]
 
         for r in items:
             n_pins += 1
+            # ⛔ PER OWNER, MAX OVER THEIR PINS -- NEVER PER PIN. A `context`- or
+            #    `cadence`-triggered pin with inject_count 0 says THE TRIGGER
+            #    NEVER FIRED, not that the seat is gone: `omada`'s dm pin has
+            #    n=0 while its inline pin was delivered TODAY. Judging per pin
+            #    would have reported a live seat as retired on its own evidence.
+            if not r.get("retired"):
+                a = delivery_age(r, now)
+                if a is not None:
+                    prev = newest_delivery.get(name)
+                    newest_delivery[name] = a if prev is None else min(prev, a)
+                else:
+                    newest_delivery.setdefault(name, None)
             body = r.get("body") or ""
             rid = r.get("id", "?")
             retired = bool(r.get("retired"))
@@ -330,6 +378,35 @@ def main():
                                  "detail": f"body {body} / max {mx} -- shed {shed} to be safe"
                                            f" on any board"})
 
+    # ── retired vs merely unregistered, decided on DELIVERY ────────────────
+    # ⛔ A CANDIDATE, NEVER A DELETION. Pins are not mine to delete and the
+    #    operator's standing rule is to confirm before deleting anything. This
+    #    emits the evidence and names who can act (`atc` owns the broker).
+    NEVER_DELIVERED_MIN_AGE = 45     # a pin created last week has had no chance
+    retired_owners = []
+    for name in unknown:
+        oldest_pin = None
+        for r in (owner_pins.get(name) or []):
+            a = None
+            try:
+                a = (now - datetime.fromisoformat(
+                    str(r.get("created_at")).replace("Z", "+00:00"))).days
+            except Exception:
+                pass
+            if a is not None:
+                oldest_pin = a if oldest_pin is None else max(oldest_pin, a)
+        delivered = newest_delivery.get(name)
+        if delivered is None and oldest_pin is not None and oldest_pin >= NEVER_DELIVERED_MIN_AGE:
+            retired_owners.append((name, oldest_pin, len(owner_pins.get(name) or [])))
+            findings.append({"owner": name, "kind": "pin-owner-never-delivered", "id": "-",
+                             "detail": f"{len(owner_pins.get(name) or [])} pin(s), oldest "
+                                       f"{oldest_pin}d, NEVER delivered (inject_count 0 on "
+                                       f"every pin) -- RETIRED CANDIDATE, not a deletion"})
+        elif delivered is not None:
+            findings.append({"owner": name, "kind": "unregistered-but-LIVE", "id": "-",
+                             "detail": f"last delivered {delivered}d ago -- NOT deletable; "
+                                       f"absent from /sessions is a REGISTRATION fact"})
+
     by_kind = {}
     for f in findings:
         by_kind.setdefault(f["kind"], []).append(f)
@@ -343,9 +420,12 @@ def main():
               f"audited above; only their session-start budget is unmeasurable, and "
               f"there is no seat to DM. {unknown[:8]}")
         print("   ⛔ Not retired: a stale pin on a down seat fires when it returns.")
-        print("   ⇒ (a) retired seat, delete the pins, vs (b) live seat under another "
-              "name: the broker cannot tell these apart (atc, 2026-10-23). Check the "
-              "`agents` roster or whether the seat's cwd still exists.")
+        # ⭐ ANSWERED 2026-10-23 by `last_injected_at`; the old text said the broker
+        #    could not tell these apart, and it can -- see delivery_age().
+        print(f"   ⇒ decided on DELIVERY, not registration: "
+              f"{len(retired_owners)} never delivered a pin (retired candidates, for `atc` "
+              f"to confirm), {len(unknown) - len(retired_owners)} delivered recently and are "
+              f"LIVE under a name /sessions does not carry.")
     print(f"claims in pins : {n_claims}  ({n_anchored} cite a memo id, "
           f"{(100.0*n_anchored/n_claims if n_claims else 0):.1f}%)")
     if n_skipped_claims:

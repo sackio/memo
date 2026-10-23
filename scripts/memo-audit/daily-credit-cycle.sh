@@ -187,7 +187,12 @@ phase slack-digests  /usr/bin/timeout  900 python3 "$SLACK/mine.py" --days 1.2 -
 #    was generous for half the work is a silent truncation for all of it -- the
 #    phase records rc=124, but the findings it never reached are indistinguishable
 #    from findings that do not exist.
-phase instr-audit /usr/bin/timeout 3000 python3 "$INSTR/route.py"
+# ⛔ SHARED LOCK WITH THE MORNING SWEEP (crontab 07:10, added 2026-10-23 on
+#    Ben's "multiple sweeps" directive, #memo 10:06). Both runs send DMs and
+#    both write ~/.memo-instruction-audit/*.json; two at once would race the
+#    seen-ledger and double-send a first-contact notice. They cannot overlap
+#    on the clock today, but a cycle that runs long into the morning would.
+phase instr-audit /usr/bin/flock /tmp/instr-audit-route.lock /usr/bin/timeout 3000 python3 "$INSTR/route.py"
 PHASE_RESERVE="$AUDIT_RESERVE_S" \
 phase slack-mine     /usr/bin/timeout 10800 python3 "$SLACK/mine-run.py" --per-worker 4 --concurrency 2 --wait-for-lock 7200
 phase refute-recheck /usr/bin/timeout 1800 python3 refute-recheck.py --queue

@@ -19,7 +19,7 @@
    MAX_SEATS caps a runaway: if a corpus incident ever dangles hundreds of
    refs at once, this stops and tells `memo` instead of DMing the fleet.
 """
-import json, re, subprocess, sys, urllib.request
+import json, re, subprocess, sys, time, urllib.request
 from datetime import datetime
 from pathlib import Path
 
@@ -40,7 +40,8 @@ MAX_SEATS = 12
 #    authorization, and noise that teaches every recipient to filter this sender.
 # ⇒ A few seats a night, OLDEST CLAIM FIRST, never repeated (seen.json). 65
 #   owners drains in ~22 nights and the rottenest claims leave first.
-UNANCHORED_SEATS_PER_NIGHT = 3
+# Same directive, 2026-10-23 10:06. Raised from 3; the backlog is 6 owners.
+UNANCHORED_SEATS_PER_NIGHT = 10000
 UNANCHORED_MAX_LINES = 12          # per seat; the rest are counted, not listed
 UNANCHORED_MIN_AGE_DAYS = "30"     # a claim dated last week is not yet rot
 
@@ -58,8 +59,14 @@ UNANCHORED_MIN_AGE_DAYS = "30"     # a claim dated last week is not yet rot
 #        the ask has to be an ask.
 #     3. VERIFICATION IS MECHANICAL. "Fixed" means the line is GONE from the
 #        live pin on the next run -- never a seat's own say-so.
-PIN_FIRST_CONTACT_SEATS = 3        # new seats introduced per night
-PIN_NAG_SEATS_MAX = 12             # total pin DMs per night, repeats first
+# ⛔⛔ NO DRIP. Ben, Slack #memo 2026-10-23 10:06: "go ahead and get everyone
+#    there notices now I think that probably something should happen early in
+#    the morning and something should happen at night time basically multiple
+#    sweeps". My 3-a-night drip was built for the FILE lane, where one seat can
+#    own 64 findings; the pin lane averages under two lines a seat, so dripping
+#    it bought nothing and delayed everything by six weeks.
+PIN_FIRST_CONTACT_SEATS = 10000    # effectively unlimited -- every holder, now
+PIN_NAG_SEATS_MAX = 10000
 PIN_MAX_LINES = 12                 # per DM; the rest are counted, not listed
 PIN_ESCALATE_DAYS = 3              # asked this many times, still there -> Ben
 PIN_STATE = Path.home() / ".memo-instruction-audit" / "pin-nag.json"
@@ -187,18 +194,64 @@ def cliff_advice(owner):
             "   against YOUR max_body_chars, with a fleet-state reserve another seat can spend.")
 
 
-def post(to, subject, content):
-    body = json.dumps({"to": to, "from": "memo", "durable": True,
-                       "priority": "info", "subject": subject,
-                       "content": content}).encode()
-    req = urllib.request.Request(BROKER + "/messages", data=body,
-                                 headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=20) as r:
-        return json.loads(r.read())
+# ⛔⛔ THE BROKER CAPS A SENDER AT 30 info MESSAGES PER 60s AND DROPS THE REST --
+#    HTTP 200, `sent: 0`, `drop_reason: "sender_cap"`, AND `durable: true` STILL
+#    IN THE RESPONSE. MEASURED 2026-10-23 10:09 on this lane's first fleet-wide
+#    run: 83 DMs attempted, 30 delivered, 53 DROPPED, and the ledger recorded all
+#    83 as told, so the drip would never have retried them. The dropped ones were
+#    absent from the recipients' delivery ledgers
+#    (`XREVRANGE atc:ledger:<seat>`), which is how I established they were not
+#    merely queued.
+# ⭐⭐ `durable: true` DOES NOT SURVIVE A CAP. Its own response text says what it
+#    means -- "preserved across a reconnect drain for 24h" -- which is about a
+#    message that was ACCEPTED. A message the gate refused never becomes durable,
+#    and the field sits there next to `sent: 0` reading like a guarantee.
+# ⛔ `sent` IS THE ONLY RECEIPT. A 200 is not one. ATC_SENDER_RPM (rate-limiter.ts:54)
+#    is 30/60s; warning and critical bypass it, and reaching for a higher priority
+#    to get past it would defeat a guard built to stop exactly this stampede.
+SENDER_RPM = 28                 # 30 is the cap; leave room for my own replies
+_sent_at: list[float] = []
+
+
+def post(to, subject, content, attempts=3):
+    """DM a seat, PACED, and verify delivery. Returns the broker's response.
+
+    ⚠️ Raises on exhausted retries so a caller cannot record a send that did not
+       happen -- the ledger write must be downstream of a real `sent >= 1`.
+    """
+    last = None
+    for attempt in range(attempts):
+        now = time.monotonic()
+        _sent_at[:] = [t for t in _sent_at if now - t < 60.0]
+        if len(_sent_at) >= SENDER_RPM:
+            wait = 60.0 - (now - _sent_at[0]) + 0.5
+            print(f"   [pacing] {len(_sent_at)} sends in the last 60s, sleeping {wait:.0f}s")
+            time.sleep(max(1.0, wait))
+            now = time.monotonic()
+            _sent_at[:] = [t for t in _sent_at if now - t < 60.0]
+        body = json.dumps({"to": to, "from": "memo", "durable": True,
+                           "priority": "info", "subject": subject,
+                           "content": content}).encode()
+        req = urllib.request.Request(BROKER + "/messages", data=body,
+                                     headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=20) as r:
+            last = json.loads(r.read())
+        _sent_at.append(time.monotonic())
+        if (last.get("sent") or 0) >= 1:
+            return last
+        reason = last.get("drop_reason") or "unknown"
+        if reason == "dedup":
+            # Already in flight with identical text -- not a failure to repair.
+            return last
+        print(f"   [DROPPED] {to}: {reason} (attempt {attempt + 1}/{attempts})")
+        time.sleep(20.0)
+    raise RuntimeError(f"broker dropped the message to {to}: "
+                       f"{(last or {}).get('drop_reason')} after {attempts} attempts")
 
 
 def main():
     dry = "--dry-run" in sys.argv
+    undelivered = []   # seats the broker refused; NOT recorded as told
     pins = parse(run("pins.py"), "pin")
     # ⭐ sweep.py, not scan.py: scan.py sees server4 only, and the first all-host
     #    run proved that matters -- docker-heal's fix had landed on server4 alone
@@ -332,7 +385,12 @@ def main():
         if dry:
             print(f"--- would DM {owner} ---\n{msg}\n")
         else:
-            r = post(owner, "instruction-surface findings in files/pins you own", msg)
+            try:
+                r = post(owner, "instruction-surface findings in files/pins you own", msg)
+            except RuntimeError as e:
+                print(f"⛔ NOT SENT {owner}: {e}")
+                undelivered.append(owner)
+                continue
             print(f"DM {owner}: sent={r.get('sent')} live={r.get('live')}")
         for l in lines:
             seen.add((owner, l))
@@ -372,7 +430,12 @@ def main():
         if dry:
             print(f"--- would DM {owner} (unanchored) ---\n{msg}\n")
         else:
-            r = post(owner, "dated claims in your instruction files carry no memo id", msg)
+            try:
+                r = post(owner, "dated claims in your instruction files carry no memo id", msg)
+            except RuntimeError as e:
+                print(f"⛔ NOT SENT {owner}: {e}")
+                undelivered.append(owner)
+                continue
             print(f"DM {owner}: sent={r.get('sent')} live={r.get('live')}")
         for l in lines:
             seen.add((owner, l))
@@ -411,9 +474,54 @@ def main():
         if dry:
             print(f"--- would DM {owner} (oversize pin {pid}) ---\n{msg}\n")
         else:
-            r = post(owner, "an ATC pin you own is a log, not standing context", msg)
+            try:
+                r = post(owner, "an ATC pin you own is a log, not standing context", msg)
+            except RuntimeError as e:
+                print(f"⛔ NOT SENT {owner}: {e}")
+                undelivered.append(owner)
+                continue
             print(f"DM {owner}: sent={r.get('sent')} live={r.get('live')}")
         seen.add((owner, f["rest"]))
+
+    # ── pin owners that never consumed a pin -> `atc`, as CANDIDATES ───────
+    # ⛔ A CANDIDATE, NOT A DELETION, AND THE DISTINCTION IS THE WHOLE POINT. The
+    #    same measurement found 8 owners with NO subscriber record that are LIVE
+    #    (`omada` delivered 0 days ago) -- so the registry cannot decide this and
+    #    `last_injected_at` can. Deleting another seat's pins is not mine to do.
+    for f in pins:
+        if f["group"] != "pin-owner-never-delivered":
+            continue
+        if (ATC_SEAT, f["a"]) in seen:
+            continue
+        msg = (f"RETIRED-PIN-OWNER CANDIDATE: `{f['a']}` -- {f['rest']}\n\n"
+               "Evidence, and it is not the registry: `last_injected_at` is null and "
+               "`inject_count` is 0 on every pin this owner holds, and the oldest was created "
+               "well past the window. A pin is only ever delivered when its owner starts a "
+               "session or compacts, so a pin that has NEVER been delivered has never had an "
+               "owner to read it.\n\n"
+               "⛔ This corrects the premise we both recorded this morning -- that the broker "
+               "cannot tell a retired seat from a live one under another name. It can, on "
+               "DELIVERY rather than registration. Measured 2026-10-23 across the 12 owners "
+               "with no subscriber record: 8 of them have been delivered a pin recently "
+               "(`omada` 0 days ago, inject_count 5; `vbt` 3d, n=10; `thread-quantum-lab-7` "
+               "3d, n=3), so they are live under names /sessions does not carry. Only these "
+               "never-delivered ones are candidates.\n\n"
+               "⚠️ Per-OWNER, max over their pins -- never per pin. `omada`'s `as:\"dm\"` "
+               "record has inject_count 0 because its `context` trigger never fired, while "
+               "its inline pin was delivered today. Judged per pin, a live seat condemns "
+               "itself.\n\n"
+               "Your call and Ben's, not mine: I do not delete another seat's pins.")
+        if dry:
+            print(f"--- would DM atc (retired candidate {f['a']}) ---\n{msg}\n")
+        else:
+            try:
+                r = post(ATC_SEAT, f"retired-pin-owner candidate: {f['a']}", msg)
+            except RuntimeError as e:
+                print(f"⛔ NOT SENT atc ({f['a']}): {e}")
+                undelivered.append(ATC_SEAT)
+                continue
+            print(f"DM atc ({f['a']}): sent={r.get('sent')} live={r.get('live')}")
+        seen.add((ATC_SEAT, f["a"]))
 
     # ── pins: claims with no memo id, re-asked DAILY until the line is gone ──
     pin_claims = {}
@@ -443,9 +551,18 @@ def main():
             del nag[owner]
 
     # who to ask tonight: REPEATS FIRST -- they are the ones Ben wants pressed.
-    repeats = [o for o in nag if any(k in set(pin_claims.get(o, [])) for k in nag[o])]
+    # ⛔⛔ SEVERAL SWEEPS A DAY, BUT ONE ASK A DAY. With a morning and a night
+    #    sweep, counting asks per RUN would reach the 3-ask escalation in a day
+    #    and a half and name a seat to Ben who has had one working day to
+    #    respond. A seat already asked today is skipped, and `n` advances once
+    #    per calendar day -- so the second sweep's job is to catch NEW scar
+    #    tissue and to clear what was fixed since breakfast, not to nag twice.
+    asked_today = {o for o in nag
+                   if any(v.get("last") == today for v in nag[o].values())}
+    repeats = [o for o in nag if o not in asked_today
+               and any(k in set(pin_claims.get(o, [])) for k in nag[o])]
     repeats.sort(key=lambda o: -max(nag[o][k].get("n", 0) for k in nag[o]))
-    fresh = sorted((o for o in pin_claims if o not in nag),
+    fresh = sorted((o for o in pin_claims if o not in nag and o not in asked_today),
                    key=lambda o: -len(pin_claims[o]))[:PIN_FIRST_CONTACT_SEATS]
     picked_pins = (repeats + fresh)[:PIN_NAG_SEATS_MAX]
 
@@ -498,14 +615,21 @@ def main():
         if dry:
             print(f"--- would DM {owner} (pin claims, ask #{prior + 1}) ---\n{msg}\n")
         else:
-            r = post(owner, "your standing pin needs revising -- claims with no memo id", msg)
+            try:
+                r = post(owner, "your standing pin needs revising -- claims with no memo id", msg)
+            except RuntimeError as e:
+                # ⛔ NOT RECORDED. An unrecorded seat is re-asked on the next
+                #    sweep; a recorded-but-undelivered one never hears at all.
+                print(f"⛔ NOT SENT {owner}: {e}")
+                undelivered.append(owner)
+                continue
             print(f"DM {owner}: sent={r.get('sent')} live={r.get('live')}")
         for l in lines:
             e = nag.setdefault(owner, {}).setdefault(l, {"first": today, "n": 0})
             # ⚠️ Count ASKS, not days. A night the cycle did not run is not an
             #    ignored ask, and counting dates would escalate a seat for my
             #    own downtime.
-            if l in shown:
+            if l in shown and e.get("last") != today:
                 e["n"] = e.get("n", 0) + 1
             e["last"] = today
 
@@ -564,6 +688,11 @@ def main():
         post("memo", "instruction-surface audit digest", digest)
     print(f"routed {len(new)} seat(s); {sum(len(v) for v in by_owner.values())} defect(s), "
           f"{len(advisory)} advisory")
+    if undelivered:
+        # ⛔ LOUD, AND LAST. 53 silent drops on this lane's first run read as 53
+        #    delivered notices for 20 minutes.
+        print(f"⛔ {len(undelivered)} DM(s) THE BROKER REFUSED and NOT recorded as told "
+              f"(they are re-asked on the next sweep): {sorted(set(undelivered))}")
     return 0
 
 
