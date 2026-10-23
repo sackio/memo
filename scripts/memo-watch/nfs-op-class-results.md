@@ -409,11 +409,24 @@ was thresholding, in the same commit.** A threshold is a detector you are about 
 about to be crossed and the misleading alarm fires, so the correction arrives with it rather than
 14 times a day.
 
-⚠️ **What is NOT verified:** the new DM's delivery was not exercised end-to-end — `MEMO_WATCH_NO_DM=1`
-is mandatory for control runs and suppresses it, for the documented reason that a forged alarm
-degrades the only channel this watch has. It posts to `$BROKER/messages` with the same curl form
-the finding-DM uses, and the existing control probe verifies that route resolves every run. Both
-branches, the counter and the payload's JSON were exercised; the POST was not.
+✅ **VERIFIED 2026-10-23 05:52 — the DM path works end to end.** This note previously read "what is
+NOT verified", and that is now false. Drilled by extracting the script's own `PYHB` heredoc
+verbatim, running it with synthetic failure args (`2 90000 memo <latency log>`), and POSTing the
+result to `$BROKER/messages` with the identical curl form: **HTTP 201, `sent:1 live:1`, delivered.**
+What that establishes: the builder emits valid JSON, the broker accepts this exact schema, delivery
+is live, and — the part that matters — **the last 12 latency samples render inside the alarm**, so
+it arrives actionable instead of merely loud.
+⛔ The drill was addressed to `memo` (myself), never a peer, and carried `[DRILL - NOT A REAL ALARM]`
+in the subject plus a disclaimer above the body. `MEMO_WATCH_NO_DM=1` remains mandatory for control
+runs of the *script*: a forged alarm degrades the only channel this watch has. Exercising the
+payload path directly, marked, to yourself, is how you test it without forging one.
+⚠️ Untested residue: only the literal subject string differs between the drill and a real fire, and
+it carries no mechanism. The first real fire is still the first real fire.
+⭐ A first POST attempt failed because the extracting `sed` matched an EARLIER heredoc in the same
+script and produced shell text; the broker rejected it `400 missing: to, from, content` and **sent
+nothing**. Worth keeping: a schema-validating endpoint turned a bad test harness into a clean
+refusal rather than a malformed alarm. Anchor heredoc extraction on the unique terminator (`PYHB`),
+not on a line like `import json,sys` that recurs.
 
 ### Still not mine to fix
 
