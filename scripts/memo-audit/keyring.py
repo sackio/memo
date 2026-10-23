@@ -743,8 +743,15 @@ if __name__ == "__main__":
               f" for {sorted(NEVER)}): {', '.join(untracked)}")
 
     print(f"\nnext account to spend: {next_acct(now)}")
-    ok, why = guard_ok(now)
-    print(("⛔ " if not ok else "✅ ") + why)
+    # ⛔ guard_ok returns THREE values (ok, why, acct) since 83717e9. It returns the
+    #    account it SELECTED so the caller acts on the same one it approved -- a caller
+    #    that re-derives the account via next_acct() can act on a different account than
+    #    the one the guard cleared, and they diverge exactly at the boundary the guard
+    #    exists for. This __main__ block was missed in that change and raised
+    #    ValueError: too many values to unpack, which broke `python3 keyring.py` -- the
+    #    precondition check the audit-resume schedule tells you to run first.
+    ok, why, acct = guard_ok(now)
+    print(("⛔ " if not ok else "✅ ") + why + (f"  [account: {acct}]" if acct else ""))
     print("⚠️ 'spent' counts only wrapper-logged calls. Console is authoritative: "
           "measured 2026-10-19, this ledger under-reported pushbuild's Console "
           "balance by $2.44 (1.2%), so any cap enforced here runs ~1% permissive.")
