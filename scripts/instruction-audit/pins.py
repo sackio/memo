@@ -34,7 +34,7 @@ BROKER = "http://192.168.1.168:3030"
 BUDGET = 10000                      # session-start payload cliff
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from scan import RE_FULL, RE_SHORT, is_memo_ref, live_ids, schedule_ids   # noqa: E402
+from scan import RE_FULL, RE_SHORT, is_memo_ref, live_ids, schedule_ids, confirm_dangling   # noqa: E402
 
 
 def get(path):
@@ -136,15 +136,19 @@ def main():
                 if sched and m.group(0)[:8] in sched:
                     continue
                 if is_memo_ref(body, m.start(), m.end(), m.group(0)) and m.group(0) not in full:
-                    findings.append({"owner": name, "kind": "dangling-memo-ref",
-                                     "id": rid, "detail": m.group(0)})
+                    why = confirm_dangling(m.group(0))
+                    if why:
+                        findings.append({"owner": name, "kind": "dangling-memo-ref",
+                                         "id": rid, "detail": f"{m.group(0)} [{why}]"})
             for m in RE_SHORT.finditer(body):
                 sid = m.group(1) or m.group(2)
                 if not sid or (sched and sid in sched):
                     continue
                 if is_memo_ref(body, m.start(), m.end(), sid) and sid not in pref:
-                    findings.append({"owner": name, "kind": "dangling-memo-ref",
-                                     "id": rid, "detail": sid + " (short)"})
+                    why = confirm_dangling(sid)
+                    if why:
+                        findings.append({"owner": name, "kind": "dangling-memo-ref",
+                                         "id": rid, "detail": f"{sid} [{why}]"})
 
         worst = payload_exposure(name)
         if worst is None:

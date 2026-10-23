@@ -63,6 +63,8 @@ SKIP_DIR = {".git", "node_modules", "__pycache__", ".venv", "venv",
 #    wrong thing, not finding a catastrophe.
 #    ⇒ Require a memo cue near the ref, and veto the known non-memo contexts.
 CUE   = re.compile(r'memo|/recall|/memorize|corpus|/documents', re.I)
+# the cue as it appears IMMEDIATELY before a citation, which is what marks one
+ADJACENT = re.compile(r'(?:memo|/recall|/memorize|corpus|/documents)\s*[`(\[]?\s*$', re.I)
 VETO  = re.compile(r'session|transcript|\.jsonl|originSessionId|beacon|'
                    r'e\.g\.|example|placeholder|captures|WRONG|short-form|'
                    r'sha256|image|digest|container', re.I)
@@ -80,8 +82,15 @@ def is_memo_ref(text: str, start: int, end: int, ident: str) -> bool:
     line = text[ls: le if le != -1 else len(text)]
     if VETO.search(line):
         return False
-    # cue on the line, or in the ~120 chars before it (a list under a memo heading)
-    return bool(CUE.search(line) or CUE.search(text[max(0, ls - 120):ls]))
+    # ⛔⛔ THE CUE MUST BE ADJACENT, NOT MERELY ON THE LINE.
+    #    A line-wide cue flags every hex string that happens to share a line
+    #    with a real memo reference. MEASURED 2026-10-23 on `finance`'s pin:
+    #    all 9 "dangling refs" were Plaid/bank ACCOUNT ids, flagged because the
+    #    same line also carried a genuine `memo \`3126d9c\`` citation --
+    #    e.g. "WF card ···8040 = `f8c91236`, memo `3126d9c`". Nine false
+    #    findings about someone's bank accounts, one DM away from being sent.
+    #    A real citation reads "memo `x`" / "(memo `x`)" / "see memo `x`".
+    return bool(ADJACENT.search(text[max(0, start - 18):start]))
 
 
 def owner_of(p: Path) -> str:
@@ -157,6 +166,36 @@ def schedule_ids():
     return {str(r.get("id", ""))[:8] for r in rows if r.get("id")}
 
 
+_CONFIRM = {}
+
+
+def confirm_dangling(ident: str):
+    """Re-check a cache MISS against the LIVE API. Returns None if it resolves.
+
+    ⛔⛔ THE CACHE IS UP TO 10 MINUTES OLD, SO A MEMO WRITTEN JUST NOW IS ABSENT
+       FROM IT AND ITS FRESH CITATION READS AS DANGLING. MEASURED 2026-10-23:
+       `storybook` cited `cbfc10da`, flagged against the cache, and the live
+       API returns 200 -- the memo was created the same day. Reporting that
+       would have told a seat to fix a citation that was already correct, and
+       the seat would have had to disprove me.
+    ⇒ The cache is the right instrument for the SWEEP (78 MB a full fetch, and
+       the 1.68 TB read incident is why it exists) and the wrong one for the
+       VERDICT. Sweep cheap, confirm live, report only what survives both.
+    """
+    if ident in _CONFIRM:
+        return _CONFIRM[ident]
+    import urllib.request, urllib.error
+    try:
+        urllib.request.urlopen(f"http://server4:8000/documents/{ident}", timeout=20).read()
+        out = None                                   # 200 -> it resolves, NOT a finding
+    except urllib.error.HTTPError as e:
+        out = {410: "deleted (tombstone)", 404: "absent"}.get(e.code, f"http {e.code}")
+    except Exception:
+        out = None                                   # ⛔ unreachable != dangling
+    _CONFIRM[ident] = out
+    return out
+
+
 def live_ids():
     """Every id in the corpus, plus a first-8 prefix index. Shared cache only."""
     import corpus
@@ -202,8 +241,11 @@ def main():
                 continue
             stats["refs"] += 1
             if m.group(0) not in full:
-                findings.append({"file": str(p), "owner": owner, "kind": "dangling-memo-ref",
-                                 "ref": m.group(0), "line": text[:m.start()].count("\n") + 1})
+                why = confirm_dangling(m.group(0))
+                if why:
+                    findings.append({"file": str(p), "owner": owner, "kind": "dangling-memo-ref",
+                                     "ref": f"{m.group(0)} [{why}]",
+                                     "line": text[:m.start()].count("\n") + 1})
         for m in RE_SHORT.finditer(text):
             if not is_memo_ref(text, m.start(), m.end(), (m.group(1) or m.group(2))):
                 stats["skipped"] += 1
@@ -213,9 +255,12 @@ def main():
                 continue
             stats["refs"] += 1
             if (m.group(1) or m.group(2)) not in pref:
-                findings.append({"file": str(p), "owner": owner, "kind": "dangling-memo-ref",
-                                 "ref": (m.group(1) or m.group(2)) + " (short)",
-                                 "line": text[:m.start()].count("\n") + 1})
+                sid = m.group(1) or m.group(2)
+                why = confirm_dangling(sid)
+                if why:
+                    findings.append({"file": str(p), "owner": owner, "kind": "dangling-memo-ref",
+                                     "ref": f"{sid} [{why}]",
+                                     "line": text[:m.start()].count("\n") + 1})
         if a.paths:
             for m in set(RE_PATH.findall(text)):
                 stats["paths"] += 1
