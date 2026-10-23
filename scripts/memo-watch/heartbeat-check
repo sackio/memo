@@ -25,6 +25,44 @@ export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 #    question the open investigation needs -- do these cluster in a particular minute of
 #    the hour (memo 3284310d, the ":20-slot" confound) -- could not be answered from the
 #    record at all, only guessed at from the two alerts a reader happened to see arrive.
+#
+# ⭐⭐ AND THE ANSWER WAS ALREADY ON DISK, IN A DIFFERENT LOG, THE WHOLE TIME.
+#    Adding this stamp() was right but the conclusion drawn beside it -- "so the series
+#    starts 2026-10-23, this is NOT retroactive" -- was WRONG, and it was wrong because
+#    only the job's OWN log was searched. cronguard writes every non-completion to
+#    /tmp/cronguard-misses.log WITH an ISO timestamp, going back to 2026-10-03.
+#    ⚠️ A TIMESTAMP THIS JOB NEVER WROTE WAS BEING WRITTEN FOR IT BY ITS WRAPPER.
+#    ⇒ Before declaring a question un-answerable from the record, enumerate every log
+#      that observes the job, not just the one it writes itself.
+#
+# ⭐ MEASURED 2026-10-23 from that log, and the clustering is not subtle:
+#    the job's own UNREADABLE exit (rc=2) has fired 11 times and ALL 11 were at :20.
+#    ZERO at :00, ZERO at :40. The same log's 4 rc=1 (STALE) events are at :40/:40/:00/:00
+#    -- a negative control from the same instrument, so this is not a logging artefact.
+#    DEFERRED (host io pressure, job never ran) is uniform 19/19/16 across the three
+#    slots, so the slots fire equally often and :20 is not over-sampled.
+#    First rc=2: 2026-10-22T13:20. The fault is ~24h old, NOT the ~32h estimated by
+#    counting log lines -- that estimate assumed no run was ever skipped, and 54 were.
+#
+# ⛔ TWO CANDIDATE CAUSES SURVIVE THIS, AND THE :20 FIGURE DOES NOT SEPARATE THEM.
+#    Writer cron is 11,41; reader cron WAS 0,20,40. So:
+#      (a) ATTRIBUTE CACHE. :20 reads a heartbeat ~540s old -- the ONLY slot inside the
+#          fleet's 600s NFS acattrmax. :00 reads ~1140s, :40 ~1740s. The logged "fresh:"
+#          ages confirm those figures exactly.
+#      (b) CONTENTION. server4 and server5 both run 5,20,35,50 jobs. A reader sampling
+#          only 0/20/40 can overlap a 5,20,35,50 job at :20 and nowhere else.
+#    ⇒ BOTH predict exactly 11/11 at :20. Neither is evidence over the other.
+#
+# ⭐ EXPERIMENT ARMED 2026-10-23 13:22, PREDICTIONS RECORDED BEFORE THE RESULT:
+#    reader cron moved 0,20,40 -> 5,25,45 on server3. Same 3 runs/hour, no coverage lost.
+#      (a) attribute cache  => failures move to :45 ONLY (reads the :41 write, ~240s old;
+#                              :05 reads :41 at ~1440s, :25 reads :11 at ~840s -- both out)
+#      (b) contention       => failures move to :05 ONLY (the 5,20,35,50 overlap)
+#    The two predicted slots are DISJOINT, so the next few rc=2 events decide it.
+#    ⚠️ If failures stay at :20 with nothing scheduled there, BOTH are wrong.
+#    ⛔ DO NOT revert this schedule until the question is settled -- reverting it
+#      destroys the only discriminator, and the fault is intermittent enough that
+#      re-arming costs another day.
 stamp() { date '+%Y-%m-%dT%H:%M:%S%z'; }
 
 HB=${MEMO_WATCH_HEARTBEAT:-/mnt/nas/data/memo-watch/heartbeat}
