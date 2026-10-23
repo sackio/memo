@@ -195,3 +195,44 @@ separates the two leading candidates with no new configuration at all:
   - still near arm B's 13% ⇒ noatime (or the desk reads) is
 ⚠️ It decays: every further NAS change folds into the comparison, and the
 longer the gap the weaker the pairing against arms A and B.
+
+### Arm C — LAUNCHED AND KILLED 2026-10-23 16:13, relaunch Mon 2026-10-26 09:29
+
+`cluster` authorised arm C at 16:12 ("same probes, bound=60, cadence=2, same six
+hosts, same length as arm A"). It was launched 16:13:39 for 391 minutes and killed
+at 16:15, 90 seconds in.
+
+⛔ **THE INSTRUCTION AND THE INSTRUMENT DISAGREED, AND THE INSTRUMENT WAS RIGHT.**
+"Same LENGTH as arm A" gives 16:13–22:44. Arms A and B both ran **09:29–16:00**. The
+probe script's own header carries `cluster`'s rule from 10-22: arms must run on the
+SAME CLOCK WINDOW on different days, *because a market-hours-only a31 pause makes a31
+perfectly collinear with time of day*. A 16:13–22:44 arm is largely post-market and
+reintroduces exactly the collinearity the instrument was built to exclude — against
+two market-hours arms. Flagged to `cluster` 16:14; they chose to kill and repair:
+*"You're right, my mistake. Option 2: kill it now."*
+
+⭐ **LENGTH AND PHASE ARE DIFFERENT PROPERTIES OF A WINDOW, AND ONLY ONE OF THEM WAS
+SPECIFIED.** Matching duration feels like matching the window and is not: a 391-minute
+block is comparable to another 391-minute block only if both sit at the same place in
+the daily load cycle. The check that caught it was reading the instrument's own
+contract before obeying an instruction about it.
+
+⚠️ Saturday and Sunday are off-market, so the next *paired* window is Monday.
+Armed in the broker as `memo`/`nfs-latency/arm-C-launch`, one-shot, Mon 2026-10-26
+09:27 EDT (schedule `d719c6ec`).
+
+⛔ The 90-second fragment was **renamed, not deleted**, on all six hosts to
+`<host>.C-a31-running-noatime.log.aborted-20261023-1613` — the probe APPENDS to its
+log, so a surviving fragment under the live name would silently prepend 90 seconds of
+Friday evening onto Monday's series. Deleting it would have worked too; renaming also
+leaves the evidence that the abort happened.
+
+⭐ Probes were killed BY PID, re-read from `ps` immediately before the kill. The six
+zero-byte `.lat.<host>` files the probe normally removes on exit were left behind —
+`kill` skips the `rm` that sits after the sampling loop — and were cleaned by hand from
+`/mnt/nas/data/memo-watch/`, which is the directory the heartbeat and its own static
+control live in.
+
+⛔ AT MONDAY'S LAUNCH: write EVERY NAS change between 2026-10-23 16:14 and the launch
+into the header as explicit confounds (`cluster`, 16:14). Ask `cluster` and `system`
+for that list — do not infer it.
