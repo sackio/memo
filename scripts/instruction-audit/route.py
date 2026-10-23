@@ -39,6 +39,31 @@ MAX_SEATS = 12
 ACTIONABLE = {"OVER-CLIFF", "dangling-memo-ref", "unreadable", "budget-unmeasured"}
 HERE = Path(__file__).resolve().parent
 
+# skill directory -> the seat that has DEMONSTRATED ownership by acting on a
+# finding in it. ⛔ Earn an entry; do not add one from a plausible name match.
+HOSTLOCAL_OWNERS = {
+    "docker-heal": "system",      # fixed 3 dead ids 2026-10-23, all four hosts
+}
+
+
+def owner_for_hostlocal(owner: str):
+    """`host-local:~/.claude/skills/<dir>@<host>` -> (seat, host), or None.
+
+    ⛔ THE HOST IS HALF THE FINDING AND REMAPPING THE OWNER DESTROYS IT. Once the
+       group becomes `system`, nothing in the finding line says WHICH machine is
+       wrong -- and these files differ per host by definition, which is the whole
+       reason they are reported per host. A DM reading "docker-heal:177 cites a
+       dead id" sends the seat to look at the copy in front of them, which may be
+       the one that is already fixed. Return both and keep the host in the text.
+    """
+    m = re.search(r"/skills/([^/@]+)", owner)
+    if not m:
+        return None
+    seat = HOSTLOCAL_OWNERS.get(m.group(1))
+    if not seat:
+        return None
+    return seat, (owner.rpartition("@")[2] if "@" in owner else "unknown-host")
+
 
 def run(script, *args):
     p = subprocess.run([sys.executable, str(HERE / script), *args],
@@ -120,7 +145,11 @@ def post(to, subject, content):
 def main():
     dry = "--dry-run" in sys.argv
     pins = parse(run("pins.py"), "pin")
-    files = parse(run("scan.py", str(Path.home() / ".claude")), "file")
+    # ⭐ sweep.py, not scan.py: scan.py sees server4 only, and the first all-host
+    #    run proved that matters -- docker-heal's fix had landed on server4 alone
+    #    while three hosts still served the pre-fix text. Routing off the local
+    #    scan would have reported that as clean.
+    files = parse(run("sweep.py"), "file")
 
     # pins.py groups by FINDING KIND with owner in col 1; scan.py groups by OWNER.
     by_owner, advisory = {}, []
@@ -133,7 +162,25 @@ def main():
     for f in files:
         owner = f["group"]
         if owner.startswith("host-local:"):
-            continue                       # no seat owns it -- goes to the digest only
+            # ⛔⛔ THESE ARE THE MOST ACTIONABLE FINDINGS AND ROUTING USED TO DROP
+            #    ALL OF THEM. A host-local skill file has no owner in its path,
+            #    so the only reason `system` heard about docker-heal yesterday is
+            #    that I hand-delivered it. Unattended, that finding dies in a
+            #    digest nobody is obliged to read.
+            # ⛔ BUT AN OWNER MUST BE ESTABLISHED, NEVER INFERRED FROM THE NAME.
+            #    A DM to a guessed seat is worse than none: it asks the wrong seat
+            #    to edit a file it does not own, and the right seat still never
+            #    hears. Only entries proven by that seat ACTING on the finding go
+            #    in the map; everything else goes to the digest, where a human
+            #    assigns it once and it earns a line here.
+            mapped = owner_for_hostlocal(owner)
+            if not mapped:
+                advisory.append(f"UNOWNED {owner}: {f['a']} {f['rest']}")
+                continue
+            owner, host = mapped
+            by_owner.setdefault(owner, []).append(
+                f"[file on {host}] {f['a']} {f['rest']}")
+            continue
         by_owner.setdefault(owner, []).append(f"[file] {f['a']} {f['rest']}")
 
     try:
