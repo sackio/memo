@@ -187,12 +187,25 @@ REPO_OWNERS = {
     #        files.
     #      · `servers` -- not yet asked. Ansible/host-install content is theirs
     #        by the roster, and nothing I have flagged lands there yet.
-    # ⛔ EVERY FINDING I CURRENTLY HAVE UNDER THIS REPO IS A SKILL.md, so
-    #    `cluster` is right for all 50 of them TODAY. The moment a finding
-    #    appears under a different subtree this entry sends it to the wrong seat
-    #    silently -- so a non-SKILL.md finding here must re-open the question
-    #    rather than inherit this mapping.
-    "server_admin": "cluster",
+    # ⛔⛔ THIS ENTRY IS A LIST OF (PATH RULE, SEAT), NOT A BARE SEAT, AND THAT IS
+    #    THE WHOLE POINT. It used to be `"server_admin": "cluster"` with a
+    #    comment saying a non-SKILL.md finding "must re-open the question rather
+    #    than inherit this mapping" -- and NOTHING ENFORCED IT. Every finding
+    #    under the repo today is a SKILL.md, so the map was right by accident;
+    #    the first Ansible or host-install finding would have been DMd to
+    #    `cluster`, who would correctly say "not mine", while `servers` never
+    #    heard. ⭐ A RULE THAT LIVES ONLY IN A COMMENT IS NOT A GUARD -- it is a
+    #    note to whoever reads the file, and the code is what routes.
+    #    An unmatched path returns None ON PURPOSE and lands in the advisory as
+    #    an unassigned subtree, which is the question being re-opened.
+    "server_admin": [
+        # `cluster`, DM 2026-10-23 10:49, naming all seven skills explicitly.
+        (re.compile(r"(^|/)(skills/|SKILL\.md\b)"), "cluster"),
+        # `models`, DM 2026-10-23 10:48: the k8s model manifests (embeddings,
+        # ollm, asr, tsfm) and NOTHING else -- they explicitly disclaimed the
+        # skill files, so this rule sits BELOW cluster's and must stay there.
+        (re.compile(r"(^|/)k8s/"), "models"),
+    ],
 }
 
 # ⛔⛔ A SKILL FILE OR CLAUDE.md CANNOT BE EDITED BY THE SEAT THAT OWNS IT.
@@ -247,7 +260,7 @@ def seat_exists(name: str) -> bool:
     return name in _seats_cache
 
 
-def repo_owner_seat(owner: str):
+def repo_owner_seat(owner: str, path: str = ""):
     """`projects/guide` -> `guide` when that seat is addressable, else None.
 
     ⛔ A CONTAINER PATH IS NOT A SEAT NAME. scan.py now resolves a finding under
@@ -256,12 +269,27 @@ def repo_owner_seat(owner: str):
        The trailing segment is frequently the seat (`guide`, `alpaca`), and
        `seat_exists` is what turns that from a guess into a route.
     """
-    if owner in REPO_OWNERS:
-        return REPO_OWNERS[owner]
+    rule = REPO_OWNERS.get(owner)
+    if isinstance(rule, str):
+        return rule
+    if isinstance(rule, list):
+        # ⛔ A SHARED REPO HAS NO SINGLE OWNER. Match the FILE, and return None
+        #    when nothing matches so the finding goes to the advisory instead of
+        #    inheriting whichever seat happens to own the rest of the tree.
+        for rx, seat in rule:
+            if rx.search(path):
+                return seat
+        return None
     if "/" not in owner:
         return None
     tail = owner.rsplit("/", 1)[1]
     return tail if seat_exists(tail) else None
+
+
+def finding_path(f):
+    """The file path a finding names -- `rest` always begins `<path>:<line>`."""
+    rest = (f.get("rest") or "").split()
+    return rest[0].split(":")[0] if rest else ""
 
 
 def owner_for_hostlocal(owner: str):
@@ -539,10 +567,13 @@ def main():
             by_owner.setdefault(owner, []).append(
                 f"[file on {host}] {f['a']} {f['rest']}")
             continue
-        mapped = repo_owner_seat(owner)
+        mapped = repo_owner_seat(owner, finding_path(f))
         if mapped:
             by_owner.setdefault(mapped, []).append(
                 f"[file in code/{owner}] {f['a']} {f['rest']}")
+        elif isinstance(REPO_OWNERS.get(owner), list):
+            advisory.append(f"UNASSIGNED SUBTREE code/{owner}: {f['a']} {f['rest']} "
+                            f"[shared repo; no rule covers this path -- ask who owns it]")
         elif "/" in owner:
             advisory.append(f"UNOWNED code/{owner}: {f['a']} {f['rest']} "
                             f"[no seat named `{owner.rsplit('/', 1)[1]}`]")
@@ -593,10 +624,21 @@ def main():
                 continue
             owner, host = mapped
             prefix = f"[no memo id, on {host}]"
-        mapped = repo_owner_seat(owner)
+            # ⛔ `owner` IS NOW A SEAT, NOT A REPO PATH. Re-running the repo
+            #    resolver over it would re-interpret a seat name as a directory
+            #    and label the line "in code/<seat>". Inert only because no
+            #    REPO_OWNERS key is also a seat name -- which is luck, not a
+            #    design, and the next entry added could end it.
+            unanch_by_owner.setdefault(owner, []).append(f"{prefix} {f['rest']}")
+            continue
+        mapped = repo_owner_seat(owner, finding_path(f))
         if mapped:
             unanch_by_owner.setdefault(mapped, []).append(
                 f"{prefix} in code/{owner}: {f['rest']}")
+            continue
+        if isinstance(REPO_OWNERS.get(owner), list):
+            advisory.append(f"UNASSIGNED SUBTREE code/{owner}: {f['rest']} "
+                            f"[shared repo; no rule covers this path -- ask who owns it]")
             continue
         if "/" in owner:
             advisory.append(f"UNOWNED code/{owner}: {f['rest']} "
