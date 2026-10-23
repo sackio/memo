@@ -107,6 +107,73 @@ def refuted_ids() -> set[str]:
         return set()
 
 
+def pin_cited_ids() -> set[str]:
+    """8-char prefixes of every memo cited by a live ATC standing pin.
+
+    ⭐⭐ BEN, Slack #memo 2026-10-23 10:15: "the memos that are referenced in pin
+       should be a priority for sweeping and confirming when you look at them
+       because if those things change we really need them to reference the new
+       memo and keep the pins healthy."
+
+    ⭐ AND IT CORRECTS A BLIND SPOT IN THE READ-WEIGHTING ABOVE, which is the
+       reason it outranks `get_count` rather than merely joining it. A pin is
+       PUSH: its text is spliced into a seat's session-start payload ahead of the
+       first turn, so the seat consumes the claim WITHOUT ever fetching the memo.
+       `get_count` therefore systematically UNDERCOUNTS exactly the memos the
+       fleet acts on most directly -- a memo can be read by 40 seats a day
+       through a pin and show a get_count of 2. Measured 2026-10-23: 274 distinct
+       memo ids are cited across 336 live pins, and 272 resolve.
+
+    ⛔ AN EMPTY SET HERE IS NOT "NO PINS CITE ANYTHING" -- it is almost certainly
+       a broker that did not answer. Raises rather than returning empty, because
+       a silent zero would drop the whole priority tier and leave the ordering
+       looking untouched.
+    """
+    import urllib.request
+    sys.path.insert(0, str(HERE.parent / "instruction-audit"))
+    from scan import RE_FULL, RE_SHORT, is_memo_ref          # the precision gate
+
+    BROKER = "http://192.168.1.168:3030"
+
+    def get(path):
+        with urllib.request.urlopen(BROKER + path, timeout=30) as r:
+            return json.loads(r.read())
+
+    owners = [o["owner"] for o in get("/reminders-owners?include_retired=1")["owners"]
+              if o.get("owner")]
+    if not owners:
+        raise SystemExit("⛔ broker returned no pin owners -- NOT a clean result")
+    cited: set[str] = set()
+    unreachable = []
+    for name in owners:
+        try:
+            d = get(f"/reminders/{name}?include_retired=1")
+        except Exception as e:                                # noqa: BLE001
+            unreachable.append(f"{name}: {e}")
+            continue
+        for r in (d.get("reminders") or []):
+            if r.get("inherited") or r.get("retired"):
+                continue
+            body = r.get("body") or ""
+            for m in RE_FULL.finditer(body):
+                if is_memo_ref(body, m.start(), m.end(), m.group(0)):
+                    cited.add(m.group(0)[:8])
+            for m in RE_SHORT.finditer(body):
+                i = m.group(1) or m.group(2)
+                if i and is_memo_ref(body, m.start(), m.end(), i):
+                    cited.add(i[:8])
+    if unreachable:
+        # ⚠️ Named, not swallowed: a seat whose pins could not be read has its
+        #    cited memos missing from the priority tier, and that is a smaller
+        #    queue, not a cleaner one.
+        print(f"⚠️ {len(unreachable)} owner(s) unreadable, their citations are NOT in the "
+              f"priority tier: {unreachable[:4]}", file=sys.stderr)
+    if not cited:
+        raise SystemExit("⛔ no memo citations found in any pin -- implausible, "
+                         "treat as a broken read rather than a clean corpus")
+    return cited
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--candidates", default="candidates-all.json")
@@ -135,7 +202,17 @@ def main() -> int:
     # this ordering exists to stop.
     # Refuted first -- a memo a probe has disproved is known-wrong, where
     # everything else in this list is only unverified.
-    kept.sort(key=lambda c: (c["id"] not in refuted, -c["get_count"],
+    # Tier order: REFUTED (known wrong) > PIN-CITED (a seat is being handed this
+    # claim unbidden) > read count > checkability. ⚠️ Still tiers, not a blend --
+    # a weighted sum would let a high checkability score promote a memo nobody
+    # has ever opened and no pin depends on.
+    pinned = pin_cited_ids()
+    n_pinned = sum(1 for c in kept if c["id"][:8] in pinned)
+    print(f"pin-cited priority tier: {len(pinned)} ids cited by live pins, "
+          f"{n_pinned} of them still unaudited and now at the front", file=sys.stderr)
+    kept.sort(key=lambda c: (c["id"] not in refuted,
+                             c["id"][:8] not in pinned,
+                             -c["get_count"],
                              -(c.get("score") or 0)))
     if a.top:
         kept = kept[:a.top]

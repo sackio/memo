@@ -70,6 +70,45 @@ PIN_NAG_SEATS_MAX = 10000
 PIN_MAX_LINES = 12                 # per DM; the rest are counted, not listed
 PIN_ESCALATE_DAYS = 3              # asked this many times, still there -> Ben
 PIN_STATE = Path.home() / ".memo-instruction-audit" / "pin-nag.json"
+PIN_EXEMPT = Path.home() / ".memo-instruction-audit" / "pin-exempt.json"
+
+
+def claim_key(rest: str) -> str:
+    """A pin claim's identity, STABLE ACROSS DAYS.
+
+    ⛔⛔ THE FIRST VERSION KEYED ON THE WHOLE FINDING LINE, WHICH STARTS
+       `<pin-id8>  <age>d  <text>` -- AND THE AGE CHANGES EVERY DAY. So tomorrow
+       every line would have looked like a brand-new claim: the ask counter would
+       never pass 1, nothing would ever reach the 3-ask escalation Ben asked for,
+       and the "no longer flagged" count would have reported the entire fleet as
+       fixed and re-broken every 24 hours. Caught before the first repeat sweep,
+       by asking what the key would be tomorrow.
+    ⚠️ The PIN ID is dropped too: a seat that rewrites its pin gets a new id, and
+       keying on it would re-introduce every surviving line as first contact.
+       The text is the claim; the carrier is not.
+    """
+    t = re.sub(r"^\S+\s+(?:\d+|\?)d\s+", "", rest).strip()
+    return t
+
+
+def load_exempt() -> dict:
+    """Lines a holder has DECLARED not-a-claim. Option 3 in the DM, and the DM
+    promises "I will stop flagging that line".
+
+    ⭐⭐ WITHOUT THIS THE LANE BREAKS ITS OWN WORD ON DAY TWO, which is the
+       cry-wolf failure arriving by the politest possible route. Within 20
+       minutes of the first fleet-wide send, four seats had replied "option 3,
+       please stop flagging it" -- `assistant` (a method rule), `apis` (a project
+       done-definition), `cloud` (a standing lesson), `tradedesk`/fw (each line
+       already cites a run id). All four were RIGHT, and a detector that re-asks
+       after being correctly told no is one the recipient starts filtering.
+    ⚠️ An exemption is the HOLDER's judgement, recorded with who said it and
+       when. It is not a silence I grant myself.
+    """
+    try:
+        return json.loads(PIN_EXEMPT.read_text())
+    except Exception:
+        return {}
 # ⚠️ HOST-LOCAL ($HOME), like seen.json. The cycle runs on server4 only (Ben /
 #    system, 10-22), so one ledger is correct -- but a run from another host
 #    would re-introduce every seat as first contact.
@@ -540,9 +579,23 @@ def main():
     #    pin, or if I changed the detector. Two of those three are not progress,
     #    and calling them a fix would manufacture a success rate. Report what was
     #    measured -- it stopped being flagged -- and let the number mean that.
+    exempt = load_exempt()
+    n_exempt = 0
+    for owner in list(pin_claims):
+        ex = {e["claim"] for e in exempt.get(owner, [])}
+        if not ex:
+            continue
+        before = len(pin_claims[owner])
+        pin_claims[owner] = [l for l in pin_claims[owner] if claim_key(l) not in ex]
+        n_exempt += before - len(pin_claims[owner])
+        if not pin_claims[owner]:
+            del pin_claims[owner]
+    if n_exempt:
+        print(f"pin claims: {n_exempt} line(s) exempted by their holder (pin-exempt.json)")
+
     cleared = []
     for owner, lines in list(nag.items()):
-        live = set(pin_claims.get(owner, []))
+        live = {claim_key(l) for l in pin_claims.get(owner, [])}
         for key in list(lines):
             if key not in live:
                 cleared.append((owner, lines[key].get("n", 0)))
@@ -560,7 +613,7 @@ def main():
     asked_today = {o for o in nag
                    if any(v.get("last") == today for v in nag[o].values())}
     repeats = [o for o in nag if o not in asked_today
-               and any(k in set(pin_claims.get(o, [])) for k in nag[o])]
+               and any(k in {claim_key(l) for l in pin_claims.get(o, [])} for k in nag[o])]
     repeats.sort(key=lambda o: -max(nag[o][k].get("n", 0) for k in nag[o]))
     fresh = sorted((o for o in pin_claims if o not in nag and o not in asked_today),
                    key=lambda o: -len(pin_claims[o]))[:PIN_FIRST_CONTACT_SEATS]
@@ -583,7 +636,8 @@ def main():
         lines = sorted(lines, key=lambda l: -(int(m.group(1))
                                               if (m := re.match(r"\S+\s+(\d+)d\b", l)) else 0))
         shown, extra = lines[:PIN_MAX_LINES], max(0, len(lines) - PIN_MAX_LINES)
-        prior = max((nag.get(owner, {}).get(l, {}).get("n", 0) for l in lines), default=0)
+        prior = max((nag.get(owner, {}).get(claim_key(l), {}).get("n", 0) for l in lines),
+                    default=0)
         again = (f"\n\n⛔ THIS IS ASK #{prior + 1}. The lines above were in your pin when I "
                  f"last checked and are still there. I re-check every night and I cannot edit "
                  f"your pin -- only you can." if prior else "")
@@ -625,7 +679,7 @@ def main():
                 continue
             print(f"DM {owner}: sent={r.get('sent')} live={r.get('live')}")
         for l in lines:
-            e = nag.setdefault(owner, {}).setdefault(l, {"first": today, "n": 0})
+            e = nag.setdefault(owner, {}).setdefault(claim_key(l), {"first": today, "n": 0})
             # ⚠️ Count ASKS, not days. A night the cycle did not run is not an
             #    ignored ask, and counting dates would escalate a seat for my
             #    own downtime.

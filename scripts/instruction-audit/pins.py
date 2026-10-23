@@ -80,6 +80,25 @@ META = re.compile(r"^(standing context|pin\b|this is reminder|⏰|retires? when)
                   r"context past \d+%", re.I)
 
 
+def is_retired(rec) -> bool:
+    """⛔⛔ THE FIELD IS `state`, AND THERE IS NO `retired` KEY AT ALL.
+
+    Every earlier version tested `rec.get("retired")`, which is ALWAYS None, so
+    EVERY RETIRED PIN WAS AUDITED AS LIVE. Caught by `atc` 2026-10-23 10:16 on
+    their own 67d84b5a: `state: "retired"` since 2026-08-11 and absent from
+    /reminders/atc, yet my DM asked them to revise it. Measured on a 109-pin
+    sample the same minute: 7 retired, all 7 read as active by the old test.
+    ⭐ `agents`, `mom` and `thread-code-2` each independently replied "that line
+      is not in my pin any more" -- three seats telling me the same thing about
+      three different pins, which is what a systematic read error looks like
+      from the outside. A seat saying "I cannot find what you are describing" is
+      evidence about the READER, not about the seat.
+    ⚠️ Belt and braces: the fetch below also drops `include_retired`, so neither
+       the query nor this filter is load-bearing alone.
+    """
+    return (rec.get("state") or "").lower() == "retired" or bool(rec.get("retired"))
+
+
 def delivery_age(rec, now):
     """Days since this pin was last DELIVERED, or None if it never was.
 
@@ -111,6 +130,32 @@ def delivery_age(rec, now):
         return None
 
 
+def anchored(t: str, pref: set) -> bool:
+    """Does this line cite a memo? ⭐ A LOOSER TEST THAN `is_memo_ref`, ON PURPOSE.
+
+    ⛔⛔ THE TWO DETECTORS NEED OPPOSITE ERROR DIRECTIONS AND CANNOT SHARE ONE
+       PREDICATE. `is_memo_ref` demands an adjacent cue in the 18 chars BEFORE
+       the id, because for the DANGLING-ref detector a false positive means
+       telling a seat that its bank-account number is a dead memo (measured on
+       `finance`: 9 Plaid ids, one DM away from being sent). Here the error
+       direction is reversed: a false NEGATIVE nags a holder about a line that
+       already cites a memo.
+    ⇒ So this accepts an id ANYWHERE on the line -- including at the very start,
+      which the adjacency gate structurally cannot -- and uses RESOLUTION as the
+      discriminator instead of position. A Plaid id does not resolve; a memo id
+      does. Found by `health` 2026-10-23: their line opens with `c9127e91`,
+      which holds the measurement, and I flagged it anyway.
+    """
+    if has_memo_ref(t):
+        return True
+    for m in re.finditer(r"\b([0-9a-f]{8})(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\b|"
+                         r"`([0-9a-f]{8})`", t):
+            ident = m.group(1) or m.group(2)
+            if ident and ident in pref:
+                return True
+    return False
+
+
 def is_claim(t: str) -> bool:
     """⭐ ONE DEFINITION OF "CLAIM", used by the drip AND by the headline count.
 
@@ -132,7 +177,7 @@ def is_claim(t: str) -> bool:
     return bool(CUE.search(t))
 
 
-def claim_lines(body: str, min_age_days: int = 0):
+def claim_lines(body: str, min_age_days: int = 0, pref: set | None = None):
     """Lines that ASSERT something checkable and cite no memo id.
 
     ⭐ THE SAME DETECTOR ALREADY RUN OVER CLAUDE.md AND SKILL FILES, POINTED AT
@@ -165,7 +210,7 @@ def claim_lines(body: str, min_age_days: int = 0):
         #    goes with it -- and this lane's first contact is 132 seats at once.
         if not is_claim(t):
             continue
-        if has_memo_ref(t):
+        if anchored(t, pref or set()):
             continue
         iso, age = newest_date(t)
         # ⚠️ An UNDATED claim is not a young one -- it is one nobody can date at
@@ -252,7 +297,7 @@ def main():
         if not name:
             continue
         try:
-            d = get(f"/reminders/{name}?include_retired=1")
+            d = get(f"/reminders/{name}")   # ⛔ NOT include_retired -- see is_retired()
         except Exception as e:
             findings.append({"owner": name, "kind": "unreadable", "detail": str(e)})
             continue
@@ -277,7 +322,7 @@ def main():
         items = d.get("reminders", d.get("items", [])) or []
         # ⛔ TRAP 2: audit only OWNED pins; inherited ones belong to their owner.
         items = [r for r in items if not r.get("inherited")]
-        owner_pins[name] = [r for r in items if not r.get("retired")]
+        owner_pins[name] = [r for r in items if not is_retired(r)]
 
         for r in items:
             n_pins += 1
@@ -286,7 +331,7 @@ def main():
             #    NEVER FIRED, not that the seat is gone: `omada`'s dm pin has
             #    n=0 while its inline pin was delivered TODAY. Judging per pin
             #    would have reported a live seat as retired on its own evidence.
-            if not r.get("retired"):
+            if not is_retired(r):
                 a = delivery_age(r, now)
                 if a is not None:
                     prev = newest_delivery.get(name)
@@ -295,7 +340,7 @@ def main():
                     newest_delivery.setdefault(name, None)
             body = r.get("body") or ""
             rid = r.get("id", "?")
-            retired = bool(r.get("retired"))
+            retired = is_retired(r)
             as_ = (r.get("as") or "").lower()
             trigs = {t.get("kind") for t in (r.get("triggers") or [])}
 
@@ -322,19 +367,29 @@ def main():
             # ── checkable claims with no memo id ───────────────────────────
             if not retired:
                 if len(body) > DM_PIN_OVERSIZE:
-                    n_skipped_claims += len(claim_lines(body))
+                    n_skipped_claims += len(claim_lines(body, pref=pref))
                 else:
                     for line in body.splitlines():
                         t = line.strip()
                         if is_claim(t):
                             n_claims += 1
-                            if has_memo_ref(t):
+                            if anchored(t, pref):
                                 n_anchored += 1
-                    for age, t in claim_lines(body, min_age_days=0):
+                    # ⭐ NAME THE AUTHOR WHEN IT IS NOT THE OWNER. A supervisor
+                    #    may plant a pin at another seat (no consent required, by
+                    #    design), so the holder can be carrying a claim it did
+                    #    not write and cannot vouch for. Found by
+                    #    `quantum-navigator` 2026-10-23: three lines I billed to
+                    #    them are `agents`' text. The owner still gets the
+                    #    finding -- they are the one being handed the claim every
+                    #    session -- but the DM now says who to route it to.
+                    author = r.get("author") or ""
+                    by = f" [author {author}]" if author and author != name else ""
+                    for age, t in claim_lines(body, min_age_days=0, pref=pref):
                         findings.append({"owner": name, "kind": "unanchored-pin-claim",
                                          "id": rid,
                                          "detail": f"{age if age is not None else '?'}d  "
-                                                   f"{t[:110]}"})
+                                                   f"{t[:110]}{by}"})
 
             # dangling memo references inside the pin body
             for m in RE_FULL.finditer(body):
