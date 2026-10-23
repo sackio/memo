@@ -148,7 +148,23 @@ are unaffected, because they do not use the span.
 
 ## 2026-10-22 20:30 — two results about the HEARTBEAT ALERT itself
 
-### 1. The ":20 past the hour" pattern is NOT REAL — do not chase it
+### 1. ⛔ RETRACTED 21:25 THE SAME EVENING — I TESTED THE WRONG VARIABLE
+
+**What follows in this subsection was my conclusion at 20:30 and it is WRONG. Read
+section 3 below for what replaced it.** I tested whether MOUNT-WIDE stalls cluster at
+:20 — they do not, and that part stands. But the claim I drew from it, that the
+heartbeat's :20 pattern is therefore an artifact, does not follow: the heartbeat-check
+stats ONE SPECIFIC FILE, and arm A measured writes to the directory. Different
+operation, different target, different question.
+
+⭐ **THE LESSON, which is the durable part:** a null is only as good as the match
+between what you measured and what you claimed. I refuted "minute 20 is special on
+this mount" and reported it as "the :20 pattern is not real" — a strictly broader
+claim about a target my instrument never touched. A null stated wider than its
+instrument is the same error as an over-claimed positive, and it is harder to catch,
+because a null feels like the conservative direction.
+
+### 1 (as originally written). The ":20 past the hour" pattern — mount-wide test
 
 All six of 2026-10-22's `heartbeat UNREADABLE` alerts landed at **:20**, against a
 check that runs `*/20` (so :00, :20, :40). Six for six looks like p≈0.0014 and looks
@@ -197,3 +213,60 @@ GETATTR probe ends 21:48 and nothing else of mine touches that mount afterward.
 
 ⛔ **Until this resolves, leave the `heartbeat-check` alert text alone.** It
 currently refuses to name a cause, which is the correct state.
+
+### 3. 2026-10-22 21:25 — the :20 effect IS real, and the variable is the TARGET'S AGE
+
+Measured over the last 300 heartbeat-checks (~2.8 days), joined to cronguard run
+times and anchored from the END (1464 runs vs 1411 status lines — the join is only
+sound backwards):
+
+| slot | checks | UNREADABLE | mean heartbeat age when readable |
+|---|---|---|---|
+| :00 | 99 | **0** | 1,315s |
+| :20 | 100 | **7** | **911s** |
+| :40 | 99 | **0** | 1,667s |
+
+Every failure is in the :20 slot. P(all 7 land in one given third) ≈ 5e-4.
+
+⭐ **:20 IS NOT A CLOCK FACT, IT IS AN AGE FACT.** memo-watch `run` is cron'd
+`11,41` and takes **23 seconds** (`run.out` is truncated per run: start 21:11:01,
+mtime 21:11:24 — so an earlier guess that a long run overlaps the :20 check is also
+dead). The heartbeat is written once per run, at ~:11:24 and ~:41:24. The three
+check slots therefore stat a target of systematically different age:
+
+- **:20 → youngest** (~8.6 min nominal) ← the only slot that ever fails
+- :00 → middle (~18.6 min)
+- :40 → oldest (~28.6 min)
+
+The slot means above preserve that exact ordering. The mount is nfs4 with
+**acregmin=acregmax=600**, and 600s falls between the :20 age and the other two.
+⇒ This is the first evidence today that FAVOURS the attribute-cache guess, and it
+sharpens it: the cost is not "a file whose mtime keeps changing", it is **a stat
+landing within acregmax of the target's last write**.
+
+⚠️ **Not proof, and two honest holes.** (a) The 911s mean is above 600s — but it
+averages only the READABLE checks, and if failures are the young ones the mean is
+biased upward by exactly the cases that matter. (b) Still observational.
+
+⚠️ **Mount-wide stall rates do NOT explain it, which is why section 1 was wrong but
+its measurements were not.** On the same mount: GETATTR >1s is 19/3,500 ≈ 0.5% with
+minute 20 unremarkable (2/59, behind minutes 15 and 05); write stalls show no minute
+effect at all. The heartbeat file fails at 25s on 7% of its :20 checks. The file is
+behaving nothing like its neighbours, and only a per-target variable can do that.
+
+⭐ **THE COMBINED MODEL THAT FITS EVERYTHING OBSERVED TODAY** — and it needs both
+terms, which is why each one alone looked wrong:
+- **WHY :20 AND NEVER :00/:40** → the target is youngest there (this section).
+- **WHY TODAY AND NOT 10-20 OR 10-21** → my own probe load (section 2). All 7 fired
+  inside probe windows; the detector was live and silent for two probe-free days.
+⇒ A standing vulnerability at :20, tipped past the 25s timeout only when the mount
+is already loaded.
+
+⭐ **THE DIRECT TEST WAS ALREADY RUNNING BEFORE ANY OF THIS WAS WORKED OUT.** The
+GETATTR probe pairs `getattr_hot` (touched every round, age ~seconds) against
+`getattr_static` (written once at setup, age ~hours) **in the same directory**, which
+is precisely recently-modified vs not. If the age mechanism is real, hot must stall
+more than static. ⚠️ Caveat: hot's age is seconds and the heartbeat's is ~510s at the
+edge of the window — the probe tests deep inside the regime, not at its boundary.
+⛔ And check the discordant counts before reading any p: a calm window is
+uninformative, not a null.
