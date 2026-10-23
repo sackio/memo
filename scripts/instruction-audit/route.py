@@ -395,6 +395,47 @@ def parent_seat(name: str) -> str | None:
     return m.group(1) if m else None
 
 
+def advisory_summary(advisory: list) -> str:
+    """Counts by category, with a handful of examples -- NOT all 118 lines.
+
+    ⛔⛔ THE DIGEST WAS SPENDING MORE THAN THE FINDINGS WERE WORTH. It lists every
+       advisory line and is DM'd to me on every run; at 118 lines and two sweeps
+       a day that is ~2x14k characters of my own context daily, under a
+       permanent token embargo, to re-read a list that has not changed since
+       yesterday. ⭐ An advisory is BY DEFINITION something nobody is going to
+       act on tonight -- so it needs a COUNT and a trend, not an inventory. The
+       full list is one command away (`python3 route.py --dry-run`) for anyone
+       who wants it.
+    ⚠️ Keeps up to 3 examples per bucket, because a count with no exemplar
+       cannot be sanity-checked and silently survives a detector going wrong.
+    """
+    buckets: dict = {}
+    for line in advisory:
+        if line.startswith("UNOWNED code/"):
+            key = "UNOWNED repo path (no seat of that name)"
+        elif line.startswith("UNOWNED host-local:"):
+            key = "UNOWNED host-local skill file"
+        elif line.startswith("UNADDRESSABLE"):
+            key = "UNADDRESSABLE owner (no broker route)"
+        elif "[status/" in line:
+            key = "status row: " + line.split("[status/", 1)[1].split("]", 1)[0]
+        elif "[pin/" in line:
+            key = "pin: " + line.split("[pin/", 1)[1].split("]", 1)[0]
+        else:
+            key = "other"
+        buckets.setdefault(key, []).append(line)
+    out = [f"{len(advisory)} line(s) in {len(buckets)} categor(ies). "
+           f"Full list: python3 scripts/instruction-audit/route.py --dry-run"]
+    for key in sorted(buckets, key=lambda k: -len(buckets[k])):
+        rows = buckets[key]
+        out.append(f"\n  {len(rows):>4}  {key}")
+        for r in sorted(rows)[:3]:
+            out.append(f"          {r[:150]}")
+        if len(rows) > 3:
+            out.append(f"          ... and {len(rows) - 3} more")
+    return "\n".join(out)
+
+
 def post(to, subject, content, attempts=3):
     """DM a seat, PACED, and verify delivery. Returns the broker's response.
 
@@ -469,7 +510,8 @@ def main():
         #    HERE. `unanchored-pin-claim` alone is 930 findings (measured
         #    2026-10-23); appending them to `advisory` would put 930 lines in the
         #    nightly digest, which is how a digest stops being read.
-        if f["group"] in ("unanchored-pin-claim", "dm-pin-oversize"):
+        if f["group"] in ("unanchored-pin-claim", "dm-pin-oversize",
+                          "pin-cites-superseded-memo", "pin-cites-refuted-memo"):
             continue
         if f["group"] in ACTIONABLE:
             by_owner.setdefault(f["a"], []).append(line)
@@ -665,6 +707,53 @@ def main():
             print(f"DM {owner}: sent={r.get('sent')} live={r.get('live')}")
         for l in lines:
             seen.add((owner, l))
+
+    # ── a pin citing a memo that has MOVED ON -> its holder, once ──────────
+    # ⭐ BEN, #memo 2026-10-23 10:15: "if those things change we really need them
+    #   to reference the new memo and keep the pins healthy." Once, not daily:
+    #   the fix is a one-time repoint, and the finding cannot recur for the same
+    #   pair -- once the line cites the heir, the old id is gone from the body.
+    for f in pins:
+        if f["group"] not in ("pin-cites-superseded-memo", "pin-cites-refuted-memo"):
+            continue
+        owner = f["a"]
+        if (owner, f["rest"]) in seen:
+            continue
+        refuted = f["group"] == "pin-cites-refuted-memo"
+        msg = (("A memo your pin cites has been DISPROVED by a probe, so the pin is handing "
+                "you a known-wrong fact every session:\n\n  " if refuted else
+                "A memo your pin cites has been SUPERSEDED, and the pin still points at the "
+                "old one:\n\n  ") + f["rest"] + "\n\n"
+               "⭐ The citation still RESOLVES, which is why no other check catches this: a 200 "
+               "on the id says nothing about whether what it returns still supports your line.\n\n"
+               "⇒ Read the heir and decide. Three outcomes, and CITING BOTH IS OFTEN RIGHT:\n"
+               "  · a replacement -- cite the heir instead;\n"
+               "  · a CONTINUATION, where the heir is PART 2 because the original filled up -- "
+               "cite BOTH, since the original still holds everything it said;\n"
+               "  · a narrowing -- your line may need rewording, not just a new id.\n"
+               "⚠️ `atc` hit the middle case within the hour (2bf49e8c -> 1e9ff47f PART 2) and "
+               "cited both, which is the right answer. The corpus does mark the original "
+               "superseded with `valid_until` set, so the flag is reading the corpus correctly "
+               "-- it just cannot tell a continuation from a replacement, and does not try.\n\n"
+               "⛔ I did not compare the two texts and I am not telling you the line is wrong. "
+               "The finding is only that the thing you cite has been retargeted by its own "
+               "author.\n\n"
+               "Reported once, not nightly -- once the line cites the heir, the old id is no "
+               "longer in your pin and this cannot recur for the same pair.")
+        if dry:
+            print(f"--- would DM {owner} (cited memo moved) ---\n{msg}\n")
+        else:
+            try:
+                r = post(owner, "a memo your pin cites has been superseded", msg)
+                print(f"DM {owner} (cited memo moved): sent={r.get('sent')}")
+            except Unaddressable:
+                unaddressable.append(owner)
+                continue
+            except RuntimeError as e:
+                print(f"⛔ NOT SENT {owner}: {e}")
+                undelivered.append(owner)
+                continue
+        seen.add((owner, f["rest"]))
 
     # ── oversize pins -> their owner, once (size is a design decision) ──────
     # ⛔ NOT a daily nag. A 712,925-char record is either a mistake the owner
@@ -948,7 +1037,7 @@ def main():
                 f"{len(pin_claims)} owner(s); {len(cleared)} line(s) no longer flagged today."
               f"\n\nDEFECTS (routed):\n  "
               + ("\n  ".join(f"{o}: {'; '.join(ls)}" for o, ls in sorted(by_owner.items())) or "none")
-              + "\n\nADVISORY (not routed):\n  " + ("\n  ".join(sorted(advisory)) or "none"))
+              + "\n\nADVISORY (not routed) -- " + advisory_summary(advisory))
     if dry:
         print("--- digest to memo ---\n" + digest)
     else:

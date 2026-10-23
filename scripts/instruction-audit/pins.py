@@ -156,6 +156,67 @@ def anchored(t: str, pref: set) -> bool:
     return False
 
 
+_memo_meta: dict = {}
+_refuted: set | None = None
+
+
+def refuted_ids() -> set:
+    """Memo ids the FREE nightly probe recheck has DISPROVED.
+
+    ⚠️ ABSENT IS NOT EMPTY. No queue file means the recheck has never run, not
+       that every probe holds. Returns an empty set either way, so the caller
+       must not read a zero here as evidence of corpus health -- the same
+       caveat the audit's own selector carries.
+    """
+    global _refuted
+    if _refuted is None:
+        try:
+            q = Path("/mnt/nas/data/code/memo/scripts/memo-audit/refute-queue.json")
+            _refuted = {i[:8] for i in (json.loads(q.read_text()).get("ids") or [])}
+        except Exception:
+            _refuted = set()
+    return _refuted
+
+
+def memo_moved_on(ident: str):
+    """Does this cited memo now point somewhere else, or is it known wrong?
+
+    ⭐⭐ BEN, Slack #memo 2026-10-23 10:15: "if those things change we really need
+       them to reference the new memo and keep the pins healthy." This is that
+       check. A dangling citation is already caught elsewhere; this is the
+       quieter case where the id still RESOLVES, so every other check passes,
+       while what it points at has been superseded or disproved.
+
+    ⛔⛔ AND IT DOES NOT USE `updated_at`, WHICH WAS MY FIRST ATTEMPT AND WAS
+       SELF-INFLICTED NOISE. The nightly audit lane I run TOUCHES memos, so
+       `updated_at` moves on hundreds of them every night; keying on it produced
+       233 findings, and bounding it to a 14-day window still left 143, almost
+       all of them my own footprints. ⇒ A RANKING OR ALERTING SIGNAL MUST NOT BE
+       ONE THE ALERTING PROCESS WRITES -- the identical lesson is already
+       recorded about `get_count` in select-read-weighted.py, and I walked into
+       it again from the other side.
+    ⇒ The two signals that mean something, and neither is written by me:
+         `superseded_by` -- the author retargeted the memo and named the heir,
+           so the pin should cite the heir. 392 live docs carry one.
+         the refute queue -- a probe DISPROVED the memo's own claim, so a pin
+           leaning on it is carrying a known-wrong fact. 37 ids today.
+    ⚠️ `updated_at` != VERIFIED is already a standing warning in my own pin. I
+       had it in front of me and used the field anyway.
+    """
+    if ident[:8] in refuted_ids():
+        return ("refuted", None, None)
+    if ident not in _memo_meta:
+        try:
+            with urllib.request.urlopen(f"http://server4:8000/documents/{ident}",
+                                        timeout=20) as r:
+                d = json.loads(r.read())
+            _memo_meta[ident] = (d.get("superseded_by"), (d.get("title") or "")[:60])
+        except Exception:
+            _memo_meta[ident] = (None, None)
+    heir, title = _memo_meta[ident]
+    return ("superseded", heir, title) if heir else None
+
+
 def is_claim(t: str) -> bool:
     """⭐ ONE DEFINITION OF "CLAIM", used by the drip AND by the headline count.
 
@@ -390,6 +451,37 @@ def main():
                                          "id": rid,
                                          "detail": f"{age if age is not None else '?'}d  "
                                                    f"{t[:110]}{by}"})
+
+            # ── a cited memo that MOVED after the pin cited it ────────────
+            if not retired:
+                try:
+                    born = datetime.fromisoformat(
+                        str(r.get("created_at")).replace("Z", "+00:00")).timestamp()
+                except Exception:
+                    born = None
+                cited = set()
+                for m in RE_FULL.finditer(body):
+                    if is_memo_ref(body, m.start(), m.end(), m.group(0)):
+                        cited.add(m.group(0))
+                for m in RE_SHORT.finditer(body):
+                    i = m.group(1) or m.group(2)
+                    if i and is_memo_ref(body, m.start(), m.end(), i):
+                        cited.add(i)
+                for ident in sorted(cited):
+                    moved = memo_moved_on(ident)
+                    if not moved:
+                        continue
+                    what, heir, title = moved
+                    if what == "refuted":
+                        findings.append({"owner": name, "kind": "pin-cites-refuted-memo",
+                                         "id": rid,
+                                         "detail": f"{ident[:8]} has been DISPROVED by a probe "
+                                                   f"-- your pin is carrying a known-wrong fact"})
+                    else:
+                        findings.append({"owner": name, "kind": "pin-cites-superseded-memo",
+                                         "id": rid,
+                                         "detail": f"{ident[:8]} was SUPERSEDED by {str(heir)[:8]}"
+                                                   f" -- cite the heir: \"{title}\""})
 
             # dangling memo references inside the pin body
             for m in RE_FULL.finditer(body):
