@@ -39,7 +39,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "memo-audit"))
 # ⛔ Both forms, per memo-minder: 11 of 17 checkpoints carry SHORT keys, and a
 #    reader that matches only the anchored form reads those as zero.
 RE_FULL  = re.compile(r'\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b')
-RE_SHORT = re.compile(r'(?<![0-9a-f-])`([0-9a-f]{8})`')     # backticked only: bare 8-hex is far too noisy
+# ⭐ Backticked, OR bare but immediately preceded by "memo". `system` found an
+#    unbackticked `0b96567a` at docker-heal:177 that the backtick-only form missed
+#    (2026-10-23). Bare 8-hex alone is far too noisy; bare-after-"memo" is not.
+RE_SHORT = re.compile(r'(?<![0-9a-f-])(?:`([0-9a-f]{8})`|(?<=memo )([0-9a-f]{8})\b)')
 RE_PATH  = re.compile(r'(?<![\w`])(/(?:mnt|home|opt|srv|etc|var)/[\w./+-]{3,})')
 RE_NET   = re.compile(r'\b((?:https?://)?(?:[a-z0-9-]+\.)*[a-z0-9-]+:\d{2,5})(?:/[\w./-]*)?')
 
@@ -128,6 +131,32 @@ def collect(roots, maxdepth=3):
     return uniq
 
 
+def schedule_ids():
+    """ATC schedule ids, so they are never mistaken for memo ids.
+
+    ⭐⭐ MEASURE, DO NOT GUESS. The cue heuristic below is necessary but NOT
+       sufficient on this fleet, because `memo` is simultaneously a knowledge
+       base, a seat name and a schedule OWNER. A first run reported
+       `50166663` in memo-minder/SKILL.md as a dangling memo ref; the line
+       reads "`50166663` (`memo-minder`, owner memo)" so the cue matched, and
+       the id 404s against the corpus exactly as a dead memo would. It is a
+       live PAUSED ATC SCHEDULE -- measured against the broker 2026-10-23.
+    ⇒ A 404 from memo means "not a memo", NOT "a memo that was deleted".
+       Only a 410 tombstone proves the id was ever a memo at all.
+    """
+    import urllib.request
+    try:
+        with urllib.request.urlopen("http://192.168.1.168:3030/schedules", timeout=15) as r:
+            d = json.loads(r.read())
+    except Exception as e:
+        print(f"⚠️ schedule list unavailable ({e}) -- schedule ids CANNOT be vetoed "
+              f"this run, so expect false positives. This is NOT a clean run.",
+              file=sys.stderr)
+        return None                      # ⛔ None != empty set. Absent evidence, not absence.
+    rows = d if isinstance(d, list) else d.get("schedules", d.get("items", []))
+    return {str(r.get("id", ""))[:8] for r in rows if r.get("id")}
+
+
 def live_ids():
     """Every id in the corpus, plus a first-8 prefix index. Shared cache only."""
     import corpus
@@ -149,9 +178,12 @@ def main():
 
     files = collect(a.roots or ["~/.claude"])
     full, pref = live_ids()
+    sched = schedule_ids()
+    if sched is not None:
+        print(f"broker: {len(sched)} schedule ids vetoed from memo-ref matching", file=sys.stderr)
     print(f"corpus: {len(full)} live ids", file=sys.stderr)
 
-    findings, stats = [], {"files": len(files), "refs": 0, "skipped": 0, "paths": 0, "nets": 0}
+    findings, stats = [], {"files": len(files), "refs": 0, "skipped": 0, "sched": 0, "paths": 0, "nets": 0}
 
     for p in files:
         try:
@@ -165,18 +197,24 @@ def main():
             if not is_memo_ref(text, m.start(), m.end(), m.group(0)):
                 stats["skipped"] += 1
                 continue
+            if sched and m.group(0)[:8] in sched:
+                stats["sched"] += 1
+                continue
             stats["refs"] += 1
             if m.group(0) not in full:
                 findings.append({"file": str(p), "owner": owner, "kind": "dangling-memo-ref",
                                  "ref": m.group(0), "line": text[:m.start()].count("\n") + 1})
         for m in RE_SHORT.finditer(text):
-            if not is_memo_ref(text, m.start(), m.end(), m.group(1)):
+            if not is_memo_ref(text, m.start(), m.end(), (m.group(1) or m.group(2))):
                 stats["skipped"] += 1
                 continue
+            if sched and (m.group(1) or m.group(2)) in sched:
+                stats["sched"] += 1
+                continue
             stats["refs"] += 1
-            if m.group(1) not in pref:
+            if (m.group(1) or m.group(2)) not in pref:
                 findings.append({"file": str(p), "owner": owner, "kind": "dangling-memo-ref",
-                                 "ref": m.group(1) + " (short)",
+                                 "ref": (m.group(1) or m.group(2)) + " (short)",
                                  "line": text[:m.start()].count("\n") + 1})
         if a.paths:
             for m in set(RE_PATH.findall(text)):
@@ -203,6 +241,7 @@ def main():
     print(f"\n=== instruction-surface audit ===")
     print(f"files scanned      : {stats['files']}")
     print(f"memo refs checked  : {stats['refs']}")
+    print(f"ATC schedule ids   : {stats['sched']}  (measured against the broker, not guessed)")
     print(f"hex strings vetoed : {stats['skipped']}  (session/beacon ids, examples, counter-examples)")
     if a.paths: print(f"paths checked      : {stats['paths']}")
     if a.net:   print(f"endpoints checked  : {stats['nets']}")
