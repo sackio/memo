@@ -9,32 +9,148 @@ billing, roughly $5 a run, daily, while ~$790/month of granted credit went
 unspent on the other four accounts.
 
 ⛔ THE KEY IS NEVER PRINTED, NEVER IN ARGV, NEVER EXPORTED TO THE SHELL. It is
-read inside this process and passed to exec in the child's environment only.
+read inside this process and passed to the child's environment only.
 
-Usage:  with-grant-key <command> [args...]
+⭐⭐ THIS SPAWNS AND WATCHES; IT USED TO `exec`. Changed 2026-10-23 so that it
+   can see the child's verdict and RECORD AN ACCOUNT THE API HAS REFUSED.
+   `exec` replaces this process, so the one component that knows which account
+   was billed was structurally unable to learn whether that account still had
+   money. Measured that morning: the audit lane found `agents` empty at 03:16,
+   rolled to `pushbuild`, and wrote nothing down; memo-minder then read a
+   confident stale $111.98 at 06:17 and spent $2.41 over 44 minutes to
+   rediscover the same fact, losing the day's mining. See
+   keyring.mark_exhausted for the full timeline and the rule.
+
+⚠️⚠️ SPAWNING MEANS SIGNALS ARE OURS TO FORWARD, AND FORWARDING TO THE CHILD
+   ALONE IS NOT ENOUGH. The cron line wraps this in `timeout --foreground -k
+   30 3600`, so the TERM lands here rather than on the job. MEASURED
+   2026-10-23 while building this: signalling just `proc` killed the direct
+   child and left its children ORPHANED to PID 1, still running and still
+   holding the inherited stdout pipe open -- so this process then blocked in
+   read() for the command's full duration, and a real `claude` would have gone
+   on billing while cron believed it had killed the run. That is strictly
+   worse than the `exec` this replaced.
+   ⇒ The child gets its OWN PROCESS GROUP (`start_new_session`) and we signal
+   the GROUP, then escalate to SIGKILL inside cron's 30s `-k` window.
+
+⭐⭐ `--min` IS WHY A JOB ROLLS INSTEAD OF DYING BROKE, AND OMITTING IT COST A
+   DAY'S MINING. `keyring.next_acct()` floors at $1.00 unless the caller names
+   the amount it is about to commit. MEASURED 2026-10-23 06:17: `agents` read
+   $1.35 -- over that floor, and the soonest to expire -- so memo-minder, a
+   job that has never cost less than $1.69, was handed it. It died 44 minutes
+   and $2.41 later on HTTP 400 "Credit balance is too low", with no findings,
+   no checkpoint and no minder.log line, while `pushbuild` sat on $87.
+   ⭐ THE RULE THIS BROKE IS WRITTEN IN `next_acct`'S OWN DOCSTRING: "an
+   account that cannot fund the work in hand is not a usable account; ask for
+   the amount you are about to commit, not for a token balance." It had been
+   there since 2026-10-22 and the only caller passed nothing.
+   ⇒ A FIX RECORDED IN THE CALLEE IS NOT A FIX WHILE THE CALLER IGNORES IT.
+⚠️ The default is deliberately NOT $1: every caller of this script is by
+   construction launching a `claude` run, and those cost dollars. If no
+   account can fund it, `next_acct` raises and the job fails in one second
+   with a clear message -- which is strictly better than spending $2.41 to
+   fail in 44 minutes.
+
+Usage:  with-grant-key [--min USD] <command> [args...]
         with-grant-key --which      # print the account it WOULD pick, no key
 """
 import os
+import signal
+import subprocess
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import keyring  # noqa: E402
 
+# Enough of the tail to hold the CLI's final JSON result record, which is where
+# `"result":"Credit balance is too low"` appears. Bounded so a long run cannot
+# grow this process's memory with its own transcript.
+TAIL_BYTES = 256 * 1024
+
+# Seconds between relaying SIGTERM to the job's process group and SIGKILLing
+# it. Must stay comfortably under the cron line's `timeout -k 30`.
+GRACE_S = 15.0
+
+# What a `claude -p` job needs on an account before it is worth starting.
+# memo-minder's measured range is $1.69-$5.00 (minder.log, 2026-10-17..22).
+DEFAULT_MIN_USD = 6.0
+
 
 def main() -> int:
-    if len(sys.argv) < 2:
+    argv = sys.argv[1:]
+    min_usd = DEFAULT_MIN_USD
+    if argv and argv[0] == "--min":
+        if len(argv) < 2:
+            print("--min needs a dollar amount", file=sys.stderr)
+            return 2
+        min_usd, argv = float(argv[1]), argv[2:]
+    if not argv:
         print(__doc__, file=sys.stderr)
         return 2
-    acct = keyring.next_acct()
-    if sys.argv[1] == "--which":
+    acct = keyring.next_acct(min_balance=min_usd)
+    if argv[0] == "--which":
         print(acct)
         return 0
     env = dict(os.environ)
     env.update(keyring.key_env(acct))
     # The account is worth seeing in a cron log; the key is not.
     print(f"with-grant-key: account={acct}", file=sys.stderr, flush=True)
-    os.execvpe(sys.argv[1], sys.argv[1:], env)
+
+    # start_new_session => the child leads its own process group, so one
+    # killpg reaches it AND everything it spawned (claude's own subagents).
+    proc = subprocess.Popen(argv, env=env, stdout=subprocess.PIPE,
+                            start_new_session=True)
+
+    def signal_group(sig) -> None:
+        try:
+            os.killpg(os.getpgid(proc.pid), sig)
+        except (ProcessLookupError, PermissionError):
+            pass
+
+    def relay(signum, _frame):
+        signal_group(signum)
+        if signum == signal.SIGTERM:
+            # Nothing guarantees the group dies on TERM. Escalate before cron's
+            # `-k 30` SIGKILLs US -- if that lands first we are gone and the
+            # group is orphaned again, which is the whole failure above.
+            signal.setitimer(signal.ITIMER_REAL, GRACE_S)
+
+    def on_alarm(_signum, _frame):
+        signal_group(signal.SIGKILL)
+
+    signal.signal(signal.SIGALRM, on_alarm)
+    for sig in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+        signal.signal(sig, relay)
+
+    # ⛔ TEE, DO NOT BUFFER. The caller redirects our stdout to a log and expects
+    #    the child's bytes verbatim and promptly; collecting them to inspect at
+    #    the end would change both. We pass every chunk straight through and
+    #    keep only a bounded tail for the verdict scan.
+    tail = bytearray()
+    out = sys.stdout.buffer
+    assert proc.stdout is not None
+    for chunk in iter(lambda: proc.stdout.read(65536), b""):
+        out.write(chunk)
+        out.flush()
+        tail.extend(chunk)
+        if len(tail) > TAIL_BYTES:
+            del tail[:-TAIL_BYTES]
+    rc = proc.wait()
+
+    # ⚠️ Only on a FAILING run. A successful run whose text merely quotes the
+    #    phrase (this file's own docstring, a memo about the incident) must not
+    #    zero an account that is fine.
+    if rc != 0 and keyring.looks_exhausted(tail.decode("utf-8", "replace")):
+        try:
+            if keyring.mark_exhausted(acct, f"with-grant-key rc={rc}"):
+                print(f"with-grant-key: {acct} is OUT OF CREDIT -- recorded "
+                      f"console_left=0 in grants.json so the next job skips it",
+                      file=sys.stderr, flush=True)
+        except Exception as e:                      # never mask the child's rc
+            print(f"with-grant-key: could not record exhaustion for {acct}: {e}",
+                  file=sys.stderr, flush=True)
+    return rc
 
 
 if __name__ == "__main__":
