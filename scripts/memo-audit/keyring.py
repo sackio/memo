@@ -809,3 +809,77 @@ def acquire_spender_lock(who: str, wait_s: float = 0.0):
     f.write(f"{who} pid={os.getpid()} since={datetime.now(timezone.utc).isoformat()}\n")
     f.flush()
     return f                      # keep the handle alive; closing releases it
+
+
+# ── recording that an account is EMPTY, when the API itself says so ─────────
+EXHAUSTED_SIGNS = (
+    "credit balance is too low",
+    "credit balance too low",
+)
+
+
+def looks_exhausted(text: str) -> bool:
+    """Does this child's output carry the API's own 'out of credit' verdict?
+
+    ⚠️ Matches the MESSAGE, not the status. A bare 400 is any bad request;
+       only the credit wording means the grant is spent.
+    """
+    t = (text or "").lower()
+    return any(s in t for s in EXHAUSTED_SIGNS)
+
+
+def mark_exhausted(acct: str, evidence: str) -> bool:
+    """Record that `acct` has NO credit left, as of now. -> True if it changed.
+
+    ⭐⭐ WHY THIS EXISTS, MEASURED 2026-10-23. `remaining()` is Console-first and
+       correct, but NOTHING EVER WROTE A CONSOLE READ OF ZERO -- so an account
+       the API had already refused went on reading as funded until a human
+       hand-edited this file. Timeline, from spend.jsonl and run.jsonl:
+         03:16  the audit lane's last `agents` call; it rolled to `pushbuild`
+                and finished the night there. IT NEVER RECORDED WHY.
+         06:17  memo-minder starts. grants.json still says console_left
+                $199.68 @ 2026-10-22T15:07Z, minus $87.70 logged today
+                => remaining() = $111.98. `agents` expires soonest, so
+                next_acct picks it with total confidence.
+         07:01  the run dies, 44 min and $2.41 in, HTTP 400 "Credit balance is
+                too low". No findings, no checkpoint, no minder.log line --
+                the whole day's mining lost.
+         07:00  (a human) finally edits console_left to 0.0 by hand.
+    ⭐ THE TRANSFERABLE RULE: A SPENDER THAT DISCOVERS AN ACCOUNT IS DEAD MUST
+       WRITE THAT DOWN. Rolling to the next account makes the CALLER self-heal
+       and keeps the discovery inside that process, so the next caller pays
+       full price to learn the same fact. Self-healing that records nothing
+       just moves the cost onto whoever comes next.
+    ⭐ A 400 FROM BILLING IS A BETTER BALANCE READ THAN ANY SNAPSHOT -- it is
+       the billing system answering about THIS INSTANT, which is exactly what
+       `console_at` wants and what a 16-hour-old Console figure cannot give.
+
+    ⛔ READ/MERGE/WRITE THE RAW FILE, NEVER `load_grants()` OUTPUT. load_grants
+       FILTERS OUT `NEVER` accounts, so writing its dict back would DELETE
+       `admin` -- Laura's real-billing account -- from the shared file.
+    ⛔ grants.json is SHARED TRUTH with the `agents` seat. Back it up, write
+       atomically via a temp file + replace, and never drop an unknown field.
+    """
+    raw = json.loads(GRANTS_PATH.read_text())
+    if acct not in raw:
+        return False
+    g = raw[acct]
+    if g.get("console_left") == 0.0:
+        return False                      # already known empty; nothing to say
+
+    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    prev = g.get("console_left")
+    g["console_left"] = 0.0
+    g["console_at"] = stamp
+    note = (f"{stamp}: MEASURED EMPTY -- the API refused a call with "
+            f"'credit balance is too low' (was console_left={prev}). "
+            f"Recorded by keyring.mark_exhausted from {evidence}.")
+    g["note"] = (note + " | " + g["note"]) if g.get("note") else note
+
+    bak = GRANTS_PATH.with_suffix(
+        f".json.bak-exhausted-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}")
+    bak.write_text(GRANTS_PATH.read_text())
+    tmp = GRANTS_PATH.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(raw, indent=2) + "\n")
+    os.replace(tmp, GRANTS_PATH)
+    return True
