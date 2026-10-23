@@ -483,6 +483,29 @@ def main():
                                          "detail": f"{ident[:8]} was SUPERSEDED by {str(heir)[:8]}"
                                                    f" -- cite the heir: \"{title}\""})
 
+            # ⛔⛔ `memo_refs` IS A SEPARATE STRUCTURED FIELD FROM `body`, AND I
+            #    READ ONLY THE BODY UNTIL NOW. A dead id sitting in `memo_refs`
+            #    was invisible to every check in this file -- and tooling that
+            #    patches only the prose leaves it live, so a seat can fix the
+            #    visible citation and still carry the dead one. Found by
+            #    `thread-tradedesk-12` 2026-10-23 on their own pin, where the
+            #    same dead id (`c0d909d5`, HARD DELETED, no successor) sat in
+            #    BOTH fields. ⭐ A STRUCTURED FIELD IS NOT COVERED BY A PROSE
+            #    SCAN, however thorough the prose scan is.
+            for ref in (r.get("memo_refs") or []):
+                ident = str(ref)
+                if sched and ident[:8] in sched:
+                    continue
+                known = (ident in full) if len(ident) > 8 else (ident[:8] in pref)
+                if known:
+                    continue
+                why = confirm_dangling(ident)
+                if why:
+                    findings.append({"owner": name, "kind": "dangling-memo-ref",
+                                     "id": rid,
+                                     "detail": f"{ident[:8]} [{why}] -- in the memo_refs FIELD, "
+                                               f"not the body: a prose-only fix leaves it"})
+
             # dangling memo references inside the pin body
             for m in RE_FULL.finditer(body):
                 if sched and m.group(0)[:8] in sched:
