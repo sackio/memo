@@ -270,3 +270,68 @@ more than static. ⚠️ Caveat: hot's age is seconds and the heartbeat's is ~51
 edge of the window — the probe tests deep inside the regime, not at its boundary.
 ⛔ And check the discordant counts before reading any p: a calm window is
 uninformative, not a null.
+
+---
+
+## 2026-10-22 21:50 — the GETATTR run: the standing guess is DISCONFIRMED
+
+1,574 rounds, 9,446 samples, 6 hosts, 19:54–21:48, rotating order. All three stat
+targets in ONE directory. ⛔ `stat -c %Y`, never `ls -l` (that is READDIRPLUS).
+
+| arm | what it is | p50 | p95 | >1s | max |
+|---|---|---|---|---|---|
+| `getattr_hot` | same file every round, **rewritten every round** by `setattr_hot` | 4ms | 23ms | 0.2% | 8,532ms |
+| `getattr_static` | same file every round, **written once at setup, never again** | 4ms | 20ms | 0.2% | 1,563ms |
+| `getattr_cold` | `f$((r % 180))` — **a different pool file each round** | 5ms | **213ms** | **1.3%** | **29,378ms** |
+
+| paired, same round | discordant | p |
+|---|---|---|
+| `getattr_hot` vs `getattr_static` | 3 / 3 | 0.68 |
+| `getattr_cold` vs `getattr_static` | **20 / 2** | 0.0003 |
+| `getattr_hot` vs `getattr_cold` | 3 / **21** | 0.0005 |
+
+### What this settles
+
+⛔ **BEING REWRITTEN DOES NOT MAKE A FILE DEARER TO STAT.** `hot` and `static` are
+indistinguishable on every statistic. The heartbeat alert's standing guess — "a file
+whose mtime keeps changing forces a round trip" — **is disconfirmed for GETATTR.**
+
+⭐ **WHAT COSTS IS CACHE RESIDENCY, NOT MUTATION.** `hot` and `static` are both stat'd
+every round (~4.3s apart) so both sit inside `acregmax=600`. The pool cycles every
+180 × 4.3s ≈ **775s, just past the 600s timeout**, so every `cold` stat finds an
+expired entry. That accident of POOL_N makes this a clean residency contrast, and the
+expired arm carries the whole tail — including a **29,378ms** maximum, which is longer
+than the heartbeat-check's own 25s timeout.
+
+⭐⭐ **WHY THE NULL IS READABLE AT ALL — THE COLD ARM IS THE POSITIVE CONTROL.** Six
+discordant rounds would normally be UNINFORMATIVE, not a null; that was pre-registered
+before the run. What rescues it is that the same instrument, in the same window, on
+targets in the same directory, resolved `cold` vs `static` at 20/2. ⇒ The instrument
+demonstrably had the power to see a difference among these three files and found none
+between hot and static. **A null needs a positive control in the same window or it is
+just a quiet instrument.**
+
+### ⛔ What this does NOT settle — the :20 asymmetry survives every mechanism I tried
+
+The heartbeat and its static sibling are **both** stat'd every 1200s, so **both** are
+cache-expired at check time. Residency therefore does not explain why one times out at
+25s while the other answers in 4–31ms. Three candidate mechanisms, all killed today:
+
+1. ⛔ **"A long `run` overlaps the :20 check."** Dead: `run.out` is truncated per run,
+   start 21:11:01, mtime 21:11:24 — **the run takes 23 seconds.**
+2. ⛔ **"The rewritten inode is dearer."** Dead: hot ≈ static, above.
+3. ⛔ **"Stale filehandle after the atomic rename."** Does not fit: the intervals
+   `:40→:00` and `:00→:20` each contain exactly one rename and `:20→:40` contains
+   none, which predicts :00 and :20 both bad. Observed is :20 bad, :00 clean (0/99).
+
+⇒ **The remaining difference between :00 and :20 is only how long ago the rename
+happened — 18.6 min vs 8.6 min, with `acreg*=600`s between them.** That is a
+suggestive coincidence and nothing more. **Do not promote it to a cause.**
+
+### ⚠️ A design note on the control, for when this is next touched
+
+The controls are measured **after** the heartbeat stat has already burned its 25s
+timeout, so they describe the mount ~25s later, not at the same instant. Stalls arrive
+in episodes, so a post-hoc control is systematically weaker than a simultaneous one and
+will tend to read clean. ⛔ NOT changed tonight — the alert text stays frozen until the
+probe-load test resolves.
