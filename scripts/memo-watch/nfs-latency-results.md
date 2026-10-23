@@ -154,6 +154,44 @@ separate them.
 By the time the numbers exist there is a result to explain, and a confound
 recalled afterwards looks like an excuse for a number somebody does not like.
 
-⛔ WHEN THIS ARM ENDS: archive the six raw logs to
-`scripts/memo-watch/nfs-latency-logs/armB-a31-paused-20261023.tar.gz`, as arm A
-did. The host-local path is cleaned and the window cannot be re-run.
+✅ ARCHIVED 2026-10-23 16:10 to
+`scripts/memo-watch/nfs-latency-logs/armB-a31-paused-20261023.tar.gz` (238 KB),
+six logs, 9,998–10,115 lines each, round-trip verified out of the tarball.
+
+### Arm B result — 2026-10-23, collected 16:10
+
+Both arms re-run through the same code path. Arm B trimmed to arm A's 09:29
+start so the windows are paired to within 0.2 host-minutes; untrimmed B gives
+the identical 13.4%, so the 5-minute head start is immaterial.
+
+| | arm A (a31 running) | arm B (a31 paused + noatime + desk reads) |
+|---|---|---|
+| **TIME FRACTION STALLED** (the only poolable one) | **43.2%** | **13.4%** |
+| host-minutes | 2345.6 | 2345.8 |
+| episodes | 6,290 | 3,947 |
+| episode p50 / p95 / max | 5.6s / 28.8s / 292.2s | 3.4s / 13.2s / 40.3s |
+| `timeout 60` hits | 91 | **0** |
+| probes landed | ~6,300/host | ~10,050/host |
+
+⭐ The tail moved more than the headline: max episode 292s → 40s, and the 91
+uninterruptible-sleep timeouts that made arm A's time fraction a FLOOR are gone
+entirely, so arm B's 13.4% is a tighter figure than arm A's 43.2% rather than a
+like-for-like one. The direction of that bias makes the gap a floor too.
+
+⚠️ The probe count ROSE 6.3k → 10.1k per host. That is not extra load: a serial
+sampler spends real time inside each stall, so fewer stalls buys more samples.
+It is a consequence of the result, not an input to it.
+
+⛔⛔ **THIS IS NOT AN a31 EFFECT AND THE DESIGN CANNOT MAKE IT ONE.** Per the
+confound table written at launch above, three things changed together. A 3.2x
+drop is exactly as consistent with `noatime` as with a31 stopping, and the
+tradedesk overflow move is a third live candidate. Reported to `cluster`
+2026-10-23 as "a31 paused + noatime + desk reads", not as an a31 finding.
+
+⭐ **AN ARM C IS AVAILABLE AND IT IS TIME-LIMITED.** a31 resumed 16:05 while
+`noatime` stays on permanently, so a third window — a31 RUNNING, noatime ON —
+separates the two leading candidates with no new configuration at all:
+  - back near arm A's 43% ⇒ a31 is the driver
+  - still near arm B's 13% ⇒ noatime (or the desk reads) is
+⚠️ It decays: every further NAS change folds into the comparison, and the
+longer the gap the weaker the pairing against arms A and B.
