@@ -301,6 +301,14 @@ def main():
     print("\n⛔ A clean run here is NOT 'the instruction files are correct'. It means the")
     print("   ids that were WRITTEN resolve. Claims citing no id are the majority and")
     print("   are invisible to this script -- they need a reader, which is the audit worker.")
+    print("⛔ SCOPE: this run searched the roots given above on THIS HOST only.")
+    print("   Most skills are symlinks into /mnt/nas repos and so are shared fleet-wide,")
+    print("   but HOST-LOCAL instruction files on the other hosts are NOT searched and")
+    print("   are NOT covered by a clean result here. Measured 2026-10-23, ~/.claude")
+    print("   *.md at depth 2: server3 18, server5 19, office 27, server4 many more.")
+    print("   ⇒ Pass those roots over ssh to cover them; a null from one host is not")
+    print("     a null for the fleet. (memo-minder learned this as: a liveness claim")
+    print("     derived from one host is not a liveness claim.)")
 
     if a.json:
         Path(a.json).write_text(json.dumps({"stats": stats, "findings": findings}, indent=1))
