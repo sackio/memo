@@ -173,10 +173,21 @@ phase slack-digests  /usr/bin/timeout  900 python3 "$SLACK/mine.py" --days 1.2 -
 #    is a check that is absent exactly when the fleet is busiest.
 # ⛔ scan.py defaults touch no NFS. Do NOT add --paths while /mnt/nas is degraded:
 #    a GETATTR sweep across 194 files on a mount doing 60s writes is an outage.
-# route.py runs scan.py and pins.py itself, then DMs each owning seat ONLY its
-# NEW defects and sends memo the full digest. ⛔ Printing alone is not
-# maintenance: in cron nobody reads stdout, and the phase still shows green.
-phase instr-audit /usr/bin/timeout 1800 python3 "$INSTR/route.py"
+# route.py drives FOUR detectors across THREE push surfaces, then DMs each owning
+# seat ONLY its NEW defects and sends memo the full digest. ⛔ Printing alone is
+# not maintenance: in cron nobody reads stdout, and the phase still shows green.
+#   sweep.py             -- memo ids in instruction files that no longer resolve
+#   sweep.py --unanchored-- dated quantitative claims carrying NO memo id (drips
+#                           3 seats/night, oldest claim first; 175 found 10-23)
+#   pins.py              -- ATC standing pins + the session-start budget cliff
+#   statuses.py          -- the ATC status board (NEW 2026-10-23, Ben #memo 09:06)
+# ⚠️ TIMEOUT RAISED 1800 -> 3000 THE SAME DAY, and the reason matters more than the
+#    number: 1800 was sized when route.py ran scan.py and pins.py on ONE host. It
+#    now runs sweep.py TWICE over four hosts each, plus statuses.py. A timeout that
+#    was generous for half the work is a silent truncation for all of it -- the
+#    phase records rc=124, but the findings it never reached are indistinguishable
+#    from findings that do not exist.
+phase instr-audit /usr/bin/timeout 3000 python3 "$INSTR/route.py"
 PHASE_RESERVE="$AUDIT_RESERVE_S" \
 phase slack-mine     /usr/bin/timeout 10800 python3 "$SLACK/mine-run.py" --per-worker 4 --concurrency 2 --wait-for-lock 7200
 phase refute-recheck /usr/bin/timeout 1800 python3 refute-recheck.py --queue
@@ -193,9 +204,58 @@ phase candidates     /usr/bin/timeout  900 python3 select-read-weighted.py \
 # (~$20, ~600 memos), not the whole grant -- the split between coverage and
 # depth is Ben's call, not a default this script should quietly make.
 PHASE_RESERVE="$AUDIT_RESERVE_S" \
-phase probe-coverage /usr/bin/timeout 14400 python3 run.py \
-    --candidates candidates-all.json --prompt probe-prompt.md --model sonnet \
-    --batch-size 10 --batches 60 --concurrency 2 --wait-for-lock 7200 --skip-probed
+# ── TONIGHT'S PACED BUDGET, split across the two spending phases ───────
+# ⭐ AUTHORIZED BY BEN, Slack #memo 2026-10-23 09:10 ("yes" to hoisted ask a14):
+#    pace each grant to finish at ITS OWN expiry instead of bursting.
+# ⛔⛔ THE PROBE PHASE USED TO BE A HARDCODED `--batches 60` THAT CONSULTED NO
+#    BUDGET AT ALL. Measured 10-22: it spent $17.68 unconditionally. Under pacing
+#    the whole night is ~$11 today, so the hardcoded phase would have spent 160%
+#    of the night's budget BEFORE the audit phase computed its share -- and the
+#    audit phase, reading `remaining()`, would have seen the money already gone
+#    and quietly run tiny. A cap on one of two spenders is not a cap.
+# ⚠️ THE SPLIT IS A JUDGEMENT, NOT A MEASUREMENT, and it is the knob to turn.
+#    Probes cost $0.072/memo and buy a FALSIFIER; audits cost $0.433/memo and buy
+#    a CORRECTION. Ben's 10-23 09:06 direction is about "correcting issues and
+#    preventing pitfalls", and under scarcity a correction lands today while a
+#    falsifier pays off whenever that memo is next read -- so audit gets the
+#    larger share. Full probe coverage of the remaining 11,409 memos is ~$821
+#    against an $800/month pool: it is a multi-month program either way, and
+#    starving it by a few dollars a night changes its finish date very little.
+export PROBE_SHARE=30                  # percent of the night to the probe lane
+# ⛔ EXPORTED, not a plain shell var: the audit phase reads it via os.environ in a
+#    python subprocess, and an unexported var there silently defaults to 30 -- the
+#    two phases would disagree about the split the moment anyone tuned it.
+NIGHT=$(python3 - <<'PY'
+import sys, os; sys.path.insert(0, os.environ["MEMO_AUDIT_DIR"])
+import keyring
+if not hasattr(keyring, "nightly_budget"):
+    print("\u26d4 IMPORTED THE WRONG keyring (no nightly_budget): %s"
+          % getattr(keyring, "__file__", "?"), file=sys.stderr)
+    sys.exit(3)
+try:
+    print("%.4f" % keyring.nightly_budget())
+except keyring.LedgerUnreadable as e:
+    print(f"spend ledger unreadable: {e}", file=sys.stderr); sys.exit(9)
+except Exception as e:
+    print(f"paced budget not computable: {type(e).__name__}: {e}", file=sys.stderr); sys.exit(9)
+PY
+) || NIGHT=""
+if [ -z "$NIGHT" ]; then
+  # ⛔ Same rule as the audit phase below: an unreadable ledger is NOT a zero
+  #    budget. Skip loudly rather than run a token batch that reads as a success.
+  echo "⛔ PACED BUDGET UNKNOWN — probe and audit phases BOTH SKIPPED."
+  echo "   Check: curl -sS http://192.168.1.168:3030/api-spend/totals | head -c 200"
+  echo "FAILED probe-coverage (budget unknown)"
+  echo "FAILED audit (budget unknown)"
+  NIGHT=0
+else
+  echo "paced budget tonight: \$${NIGHT} (each grant finishes at its own expiry)"
+  PROBE_BATCHES=$(python3 -c "print(max(1,min(400,int($NIGHT*$PROBE_SHARE/100/0.295))))")
+  echo "  probe lane: ${PROBE_SHARE}% -> ~${PROBE_BATCHES} batches at \$0.295/batch measured"
+  phase probe-coverage /usr/bin/timeout 14400 python3 run.py \
+      --candidates candidates-all.json --prompt probe-prompt.md --model sonnet \
+      --batch-size 10 --batches "$PROBE_BATCHES" --concurrency 2 --wait-for-lock 7200 --skip-probed
+fi
 
 # How many batches the remaining grant actually pays for. ⚠️ Derived, never a
 # constant: the cost per memo is ordering-dependent (measured $0.291 stratified
@@ -226,7 +286,10 @@ if not hasattr(keyring, "load_grants"):
              % getattr(keyring, "__file__", "?"), file=sys.stderr)
     sys.exit(3)
 try:
-    budget = sum(keyring.remaining(a) for a in keyring.load_grants())
+    # ⛔ WAS `sum(remaining(a) for a in load_grants())` -- the WHOLE reachable
+    #    pool. That is the burst that spent $171.04 on 10-22 and left 1.7 nights
+    #    of credit. Ben authorized pacing 10-23 09:10 (ask a14).
+    budget = keyring.nightly_budget() * (100 - int(os.environ.get("PROBE_SHARE", "30"))) / 100
 except keyring.LedgerUnreadable as e:
     print(f"spend ledger unreadable: {e}", file=sys.stderr); sys.exit(9)
 except Exception as e:

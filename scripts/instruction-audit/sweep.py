@@ -13,6 +13,14 @@
    wrong. Every host here lands in exactly one of three states -- searched /
    not-searched / errored -- and the summary prints all three, always.
 
+⭐ IT DRIVES EITHER DETECTOR. `--script scan` (default) finds memo ids that no
+   longer resolve; `--script unanchored` finds the opposite defect -- a volatile,
+   dated, quantitative claim carrying NO memo id at all. Ben asked for both in
+   one breath (Slack #memo 2026-10-23 05:57, "should reference memo which we can
+   better control" AND "need to be reverified"), and they are the same sweep over
+   the same files with the same ownership rules, so they share this driver rather
+   than growing a second copy of the ssh/merge/denominator logic.
+
 ⭐ DEDUP IS BY OWNERSHIP, NOT BY PATH. Most skills are symlinks from
    ~/.claude/{skills,agents} into /mnt/nas repos, so they are THE SAME BYTES on
    all four hosts: reporting them per-host would quadruple every finding and
@@ -21,16 +29,16 @@
    per host and tagged, because those genuinely differ -- /home/ben is
    HOST-LOCAL and the same path holds different content on each machine.
 """
-import json, subprocess, sys
+import argparse, json, shlex, subprocess, sys
 from pathlib import Path
 
 HOSTS = ["server4", "server3", "server5", "office"]
 HERE = Path(__file__).resolve().parent
-SCAN = str(HERE / "scan.py")
+SCRIPTS = {"scan": "scan.py", "unanchored": "unanchored.py"}
 TIMEOUT = 600
 
 
-def run_host(host):
+def run_host(host, script, extra):
     """-> (state, findings, stderr). state in searched|unreachable|errored.
 
     ⛔ stdout must be PURE JSON. scan.py prints a human report AND writes the
@@ -42,7 +50,7 @@ def run_host(host):
     script = (
         'set -e\n'
         'f=$(mktemp /tmp/instr-audit.XXXXXX.json)\n'
-        f'python3 {SCAN} "$HOME/.claude" --json "$f" >/dev/null 2>&1\n'
+        f'python3 {HERE / script} "$HOME/.claude" {extra} --json "$f" >/dev/null 2>&1\n'
         'cat "$f"\n'
         'rm -f -- "$f"\n'
     )
@@ -69,20 +77,34 @@ def run_host(host):
 
 
 def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--script", choices=sorted(SCRIPTS), default="scan",
+                    help="which detector to run on every host")
+    a, extra = ap.parse_known_args()
+    script = SCRIPTS[a.script]
+    # ⛔ Quote nothing here and a path with a space breaks the remote `bash -s`.
+    extra_s = " ".join(shlex.quote(x) for x in extra)
+
     results, per_host = {}, {}
     for h in HOSTS:
-        state, findings, err = run_host(h)
+        state, findings, err = run_host(h, script, extra_s)
         per_host[h] = (state, len(findings), err)
         for f in findings:
             f = dict(f)
             owner = f.get("owner", "?")
+            # ⚠️ scan.py findings are identified by `ref` (the dead memo id);
+            #    unanchored.py findings have no ref at all -- the defect IS the
+            #    missing id -- so they are identified by their section title.
+            #    Keying on `ref` alone would collapse EVERY unanchored finding in
+            #    a file into one, because they would all share the key (…, None).
+            ident = f.get("ref") or f.get("section") or f.get("detail", "")[:60]
             if owner.startswith("host-local:"):
-                key = (h, owner, f.get("file"), f.get("line"), f.get("ref"))
+                key = (h, owner, f.get("file"), f.get("line"), ident)
                 f["host"] = h
                 f["owner"] = f"{owner}@{h}"      # addressable: which host to fix on
             else:
                 # same bytes on every host -- one finding, not four
-                key = (owner, Path(f.get("file", "")).name, f.get("line"), f.get("ref"))
+                key = (owner, Path(f.get("file", "")).name, f.get("line"), ident)
             results.setdefault(key, f)
 
     findings = list(results.values())
@@ -90,7 +112,9 @@ def main():
     for f in findings:
         by_owner.setdefault(f.get("owner", "?"), []).append(f)
 
-    print("=== instruction-file audit, ALL HOSTS ===")
+    title = {"scan": "instruction-file audit (dead memo refs)",
+             "unanchored": "instruction-file audit (claims with NO memo id)"}[a.script]
+    print(f"=== {title}, ALL HOSTS ===")
     for h in HOSTS:
         state, n, err = per_host[h]
         mark = {"searched": "✅", "unreachable": "⛔", "errored": "⛔"}[state]
@@ -105,7 +129,11 @@ def main():
         print(f"--- {owner}  ({len(by_owner[owner])}) ---")
         for f in by_owner[owner][:40]:
             loc = f"{Path(f.get('file','?')).name}:{f.get('line','?')}"
-            print(f"  {f.get('kind',''):<18} {loc:<34} {f.get('ref', f.get('detail',''))}")
+            age = f.get("age_days")
+            tail = f.get("ref") or f.get("detail", "")
+            if age is not None:
+                tail = f"{age:>4}d  {tail}"
+            print(f"  {f.get('kind',''):<18} {loc:<34} {tail}")
     if not findings:
         print("no mechanically-checkable defect found on the hosts that WERE searched.")
     return 0

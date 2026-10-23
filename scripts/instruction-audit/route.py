@@ -31,12 +31,30 @@ def get(path):
 
 STATE = Path.home() / ".memo-instruction-audit" / "seen.json"
 MAX_SEATS = 12
+# ⛔⛔ THE UNANCHORED LANE IS A BACKLOG, NOT AN INCIDENT, AND IT MUST DRIP.
+#    Measured fleet-wide 2026-10-23: 175 findings across 65 owners, `server_admin`
+#    alone holding 64. Pushing that through the dangling-ref path would trip
+#    MAX_SEATS and route NOTHING, and raising MAX_SEATS to fit it would DM 65
+#    seats in one night -- the fleet-wide broadcast Ben prohibits without
+#    authorization, and noise that teaches every recipient to filter this sender.
+# ⇒ A few seats a night, OLDEST CLAIM FIRST, never repeated (seen.json). 65
+#   owners drains in ~22 nights and the rottenest claims leave first.
+UNANCHORED_SEATS_PER_NIGHT = 3
+UNANCHORED_MAX_LINES = 12          # per seat; the rest are counted, not listed
+UNANCHORED_MIN_AGE_DAYS = "30"     # a claim dated last week is not yet rot
 
 # ⛔ SEVERITY SPLIT. Only a DEFECT earns a DM. Sitting at 86% of the session-start
 #    budget is a fact about headroom, not something broken, and DMing 12 seats
 #    about headroom every night is exactly how the 2 seats that are genuinely
 #    TRUNCATED get filtered out as noise. Advisories go to the digest only.
 ACTIONABLE = {"OVER-CLIFF", "dangling-memo-ref", "unreadable", "budget-unmeasured"}
+# ⚠️ `no-ttl-never-retires` is DELIBERATELY NOT HERE. It is true of 82 of the 94
+#    live statuses, so routing it would hand one seat a 47-line DM about rows it
+#    posted in July -- bulk hygiene, not an incident. It goes to the digest, where
+#    it is one number someone can act on in one pass. The two that ARE routed are
+#    the ones where a reader can be actively misled TODAY.
+STATUS_ACTIONABLE = {"contradicted-by-later", "dangling-memo-ref",
+                     "churn-posting-not-replacing"}
 HERE = Path(__file__).resolve().parent
 
 # skill directory -> the seat that has DEMONSTRATED ownership by acting on a
@@ -150,6 +168,15 @@ def main():
     #    while three hosts still served the pre-fix text. Routing off the local
     #    scan would have reported that as clean.
     files = parse(run("sweep.py"), "file")
+    # ⭐ The other half of Ben's 05:57 directive: scan.py finds a memo id that no
+    #    longer resolves; this finds a volatile, dated, quantitative claim with NO
+    #    memo id at all -- "should reference memo which we can better control".
+    unanch = parse(run("sweep.py", "--script", "unanchored",
+                       "--min-age-days", UNANCHORED_MIN_AGE_DAYS), "unanchored")
+    # ⭐ The third push surface. Ben, #memo 2026-10-23 09:06: "reminders and
+    #    statuses in ATC". A status is rendered into other seats' session-start
+    #    payload exactly like a pin, and until now nothing watched it.
+    stats = parse(run("statuses.py"), "status")
 
     # pins.py groups by FINDING KIND with owner in col 1; scan.py groups by OWNER.
     by_owner, advisory = {}, []
@@ -182,6 +209,32 @@ def main():
                 f"[file on {host}] {f['a']} {f['rest']}")
             continue
         by_owner.setdefault(owner, []).append(f"[file] {f['a']} {f['rest']}")
+
+    for f in stats:
+        owner, kind = f["group"], f["a"]
+        line = f"[status/{kind}] {f['rest']}"
+        # ⛔ An agent_id that does not resolve to a live subscriber has NO seat to
+        #    tell -- statuses.py already refused to guess one. 89 of these belong
+        #    to two RETIRED guardian seats whose July attestations are still being
+        #    pushed at the fleet; that needs a decision, not a DM into the void.
+        if owner.startswith("unresolved:") or kind not in STATUS_ACTIONABLE:
+            advisory.append(f"{owner}: {line}")
+            continue
+        by_owner.setdefault(owner, []).append(line)
+
+    # ── unanchored claims: own population, own cadence, own message ───────
+    unanch_by_owner = {}
+    for f in unanch:
+        owner = f["group"]
+        prefix = "[no memo id]"
+        if owner.startswith("host-local:"):
+            mapped = owner_for_hostlocal(owner)
+            if not mapped:
+                advisory.append(f"UNOWNED {owner}: {f['a']} {f['rest']}")
+                continue
+            owner, host = mapped
+            prefix = f"[no memo id, on {host}]"
+        unanch_by_owner.setdefault(owner, []).append(f"{prefix} {f['rest']}")
 
     try:
         seen = set(tuple(x) for x in json.loads(STATE.read_text()))
@@ -221,6 +274,46 @@ def main():
         for l in lines:
             seen.add((owner, l))
 
+    # ── drip the unanchored backlog, oldest claim first ───────────────────
+    def oldest(lines):
+        """Age of this seat's rottenest claim. ⚠️ 0, not -1, when no age parses:
+        a line we cannot date must not sort ABOVE a measured 326-day claim."""
+        ages = [int(m.group(1)) for l in lines for m in [re.search(r"\b(\d+)d\b", l)] if m]
+        return max(ages) if ages else 0
+
+    unanch_new = {o: [l for l in ls if (o, l) not in seen]
+                  for o, ls in unanch_by_owner.items()}
+    unanch_new = {o: ls for o, ls in unanch_new.items() if ls}
+    picked = sorted(unanch_new, key=lambda o: -oldest(unanch_new[o]))[:UNANCHORED_SEATS_PER_NIGHT]
+    print(f"\nunanchored: {sum(len(v) for v in unanch_by_owner.values())} claims across "
+          f"{len(unanch_by_owner)} owner(s); {len(unanch_new)} owner(s) not yet told; "
+          f"DMing {len(picked)} tonight (oldest first)")
+
+    for owner in picked:
+        lines = unanch_new[owner]
+        lines.sort(key=lambda l: -(int(m.group(1)) if (m := re.search(r"\b(\d+)d\b", l)) else 0))
+        shown, extra = lines[:UNANCHORED_MAX_LINES], max(0, len(lines) - UNANCHORED_MAX_LINES)
+        msg = ("Instruction files you own carry dated, quantitative claims with NO memo id "
+               "-- so nothing can reverify them and nobody can correct them centrally. "
+               "Oldest first:\n\n  " + "\n  ".join(shown)
+               + (f"\n  ... and {extra} more in the same files." if extra else "")
+               + "\n\nThe fix is not to delete the claim. Put the measurement in a memo and "
+               "cite the id in the line, so a future reader can check whether it still holds "
+               "-- a DATE alone does not make anyone recheck it. Measured 2026-10-23: the "
+               "stale Massive live-feed block carried its date in plain sight and `alpaca` "
+               "built a fill pipeline on it anyway, a month after the bug was fixed.\n\n"
+               "Ben's directive, Slack #memo 2026-10-23 05:57: files anyone relies on should "
+               "reference memo, which we can control and reverify. You make the edit; I detect "
+               "and recheck nightly. I do not edit other seats' files.\n\n"
+               "Reported once. Only NEW claims will be sent again.")
+        if dry:
+            print(f"--- would DM {owner} (unanchored) ---\n{msg}\n")
+        else:
+            r = post(owner, "dated claims in your instruction files carry no memo id", msg)
+            print(f"DM {owner}: sent={r.get('sent')} live={r.get('live')}")
+        for l in lines:
+            seen.add((owner, l))
+
     if not dry:
         STATE.parent.mkdir(parents=True, exist_ok=True)
         STATE.write_text(json.dumps(sorted(seen)))
@@ -228,7 +321,11 @@ def main():
     #    the copy that can notice a finding nobody acted on, which the once-only
     #    per-seat DM is structurally blind to.
     digest = (f"instruction surface, {len(by_owner)} seat(s) with defects, "
-              f"{len(advisory)} advisory.\n\nDEFECTS (routed):\n  "
+              f"{len(advisory)} advisory, "
+              f"{sum(len(v) for v in unanch_by_owner.values())} unanchored claims "
+              f"across {len(unanch_by_owner)} owner(s) "
+              f"({len(unanch_new)} not yet told, {len(picked)} DMed tonight)."
+              f"\n\nDEFECTS (routed):\n  "
               + ("\n  ".join(f"{o}: {'; '.join(ls)}" for o, ls in sorted(by_owner.items())) or "none")
               + "\n\nADVISORY (not routed):\n  " + ("\n  ".join(sorted(advisory)) or "none"))
     if dry:

@@ -379,6 +379,66 @@ def daily_cap(now: datetime | None = None) -> float:
     )
 
 
+def nightly_budget(now: datetime | None = None) -> float:
+    """What tonight may spend: each grant paced to finish exactly at ITS expiry.
+
+    ⭐ AUTHORIZED BY BEN, Slack #memo 2026-10-23 09:10 ("yes", answering the
+       hoisted ask `a14`). This is NOT the retired $40 DAILY_CAP coming back by
+       the side door -- that was a flat constant Ben removed because it stranded
+       credit. This is derived per account from its own remaining balance and its
+       own expiry, so it cannot strand anything: money not spent tonight raises
+       tomorrow's number by exactly what was skipped.
+
+    ⛔⛔ WHY A CEILING EXISTS AT ALL, MEASURED 2026-10-23. The cycle used to take
+       `sum(remaining(a) for a in load_grants())` -- the WHOLE reachable pool --
+       and divide by the per-batch cost. On the night of 10-22 that bought 173
+       batches and spent $171.04 in one window, which drained `agents` to $0 and
+       took $75 of `pushbuild` with it. Reachable credit the next morning was
+       $287.24 against a burn of $171/night: 1.7 nights. The pool is 4 x $200/mo
+       = $26.70/night sustainable, so the lane was running at 6.4x and would have
+       gone DARK roughly 16 days of every month.
+
+    ⭐ THE CONSTRAINT FLIPPED AND THE OLD RULE READ THE WRONG WAY ROUND.
+       Ben's 10-22 direction was "use them up to the amount that we have so that
+       we maximize them" -- aimed at UNDERSPEND BEFORE EXPIRY, which is now
+       solved and demonstrably so: `agents` hit exactly $0.00 before its 10-26
+       expiry. MAXIMIZING A GRANT MEANS SPENDING IT FULLY BEFORE IT EXPIRES. It
+       has never meant spending it as fast as possible, and for a MAINTENANCE
+       lane the output is detection LATENCY, not throughput -- a stale claim
+       found 16 days late is the alpaca case (a Massive feed claim read as
+       current for a month, escalated to the vendor over a bug already fixed).
+
+    ⚠️ Self-correcting, which is the property that makes it safe: this is
+       remaining/days-left, recomputed nightly. Underspend one night and the
+       divisor shrinks while the numerator does not, so the next night is larger.
+       A grant expiring TOMORROW offers its entire balance tonight, via max(1,·).
+
+    ⚠️ It can RISE sharply and that is correct, not a bug: releasing `agents2`'s
+       stranded $200 adds ~$7/night on its own.
+
+    ⛔ Raises LedgerUnreadable (from `remaining`) rather than returning 0.0. An
+       unreadable ledger is not a zero budget -- same trap the cycle's own
+       BATCHES block documents.
+    """
+    now = now or datetime.now(timezone.utc)
+    today = now.date()
+    total = 0.0
+    for acct, g in load_grants().items():
+        left = remaining(acct)
+        if left <= 0:
+            continue
+        exp = g.get("expires")
+        if not exp:
+            # ⚠️ No expiry recorded is NOT "never expires" -- every grant here has
+            #    one. Pace it over a month so an unlabelled account cannot become
+            #    an unbounded one.
+            days = 30
+        else:
+            days = (date.fromisoformat(exp) - today).days
+        total += left / max(1, days)
+    return total
+
+
 def this_actor() -> str:
     """The seat this process bills as. ⚠️ Read from the PARENT env on purpose --
     `key_env()` strips ATC_* from CHILDREN so workers cannot steal the broker
