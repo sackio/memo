@@ -77,6 +77,46 @@ invisible to the query that should find it.
 - If it CONTRADICTS a live memo, supersede that memo and say so — do not leave
   two memos disagreeing and let the next seat pick.
 
+## ⭐ SECOND JOB: A CORRECTION IS A LEAD, NOT A FACT
+
+Ben, Slack #memo 2026-10-23 09:06, verbatim: *"as you audit slack I want you to
+identify things that seats are getting wrong or correcting things ... this whole
+process ... to be about getting the fleet better information, correcting issues
+and preventing pitfalls"*.
+
+So alongside his rulings, watch for **correction events**:
+
+- Ben tells a seat it is wrong — *"no"*, *"that's not right"*, *"actually X"*.
+- A seat retracts or corrects itself, or corrects another seat.
+- Two seats state the same fact differently and nobody reconciles it.
+
+⛔ **THIS DOES NOT REOPEN THE RELAY RULE ABOVE.** You are still not storing a
+seat's measurement as fleet knowledge. What you are recording is narrower and
+more durable: **that a specific claim was WRONG, and what is true instead.**
+That is the thing a future seat cannot re-derive, because the wrong version is
+the one still written down somewhere.
+
+⭐⭐ **THE POINT IS NOT THE CORRECTION — IT IS THE COPY THAT DID NOT GET FIXED.**
+A correction in a channel means a false claim probably still sits in a memo, a
+skill file, a pin or an ATC status, where it goes on being read as current long
+after the conversation scrolled away. This is the measured failure mode on this
+fleet: the Massive live-feed claim was fixed on 2026-09-22, the skill page was
+not, and `alpaca` built a fill pipeline on the dead claim a month later while
+Ben escalated to the vendor over a bug that no longer existed.
+
+⇒ **For every correction you find, go looking for the stale copy.** Search the
+corpus for the WRONG claim, not the right one — the wrong wording is what the
+stale copy still uses. If you find it in a memo, supersede or correct it. If the
+wrong claim is in a file, pin or status you cannot verify from here, put it in
+`route[]` addressed to the owning seat with both versions quoted, and say where
+you think the copy lives. ⛔ Do not edit another seat's files; detectors in
+`scripts/instruction-audit/` recheck those nightly once the seat has fixed them.
+
+⚠️ **A correction nobody contested is still only one side.** If a seat was
+corrected by ANOTHER SEAT and Ben never weighed in, record it as disputed and
+name both claims — do not pick a winner because one sounded more certain. If Ben
+settled it, that is a ruling and the rules above apply.
+
 ## Report
 Finish with a JSON block and nothing after it:
 ```json
@@ -85,8 +125,14 @@ Finish with a JSON block and nothing after it:
              "channel": "#x", "at": "2026-10-22 11:42"}],
  "skipped": [{"why": "task, not knowledge|already in corpus <id>|agent relay",
               "gist": "one sentence"}],
- "route": [{"seat": "<seat>", "finding": "something Ben said that seat must act on",
-            "quote": "verbatim"}],
+ "route": [{"seat": "<seat>", "finding": "something Ben said, or a stale copy of a corrected claim, that seat must act on",
+            "quote": "verbatim", "where": "memo id | file path | pin | status, if known"}],
+ "corrections": [{"wrong": "the claim as it was stated", "right": "what is true instead",
+                  "who": "<seat>", "corrected_by": "ben|<seat>|self",
+                  "settled": true, "quote": "verbatim",
+                  "channel": "#x", "at": "2026-10-23 09:06",
+                  "stale_copy": "memo id / path / pin / status / none found",
+                  "action": "superseded <id>|updated <id>|routed to <seat>|none needed"}],
  "notes": "anything the memo seat must know"}
 ```
 ⛔ Do not claim a write you did not verify by reading the memo back.

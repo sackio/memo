@@ -112,3 +112,48 @@ obvious next question and is **closed**: a 4 KiB fsync'd write is the cheapest o
 ⛔ **Still do not merge the two series or quote one figure for the other** — that was never
 about the residual. It is the cadence result above: a probe-level stall rate is ceilinged by
 cadence and the minute-indicator moves the other way. Only the DURATION RATIO pools.
+
+## Arm B — a31 PAUSED, 2026-10-23 09:24 → 16:00 EDT (RUNNING at time of writing)
+
+Logs: `~/.memo-watch/nfs-latency/<host>.B-a31-paused.log`, six hosts, BOUND=60
+CADENCE=2 serial — identical to arm A. Verified at launch: one prober per host,
+3–5 log lines per 10s, exactly one `# arm` header each.
+
+**a31 state is MEASURED, not relayed.** `system`, 2026-10-23 09:22: SIGSTOP on
+PIDs 8489/6425 at 04:08, state `T` confirmed at 08:07, paused until 16:05.
+⚠️ The probes were launched 09:22 labelled `B-a31-unconfirmed`, killed by PID and
+relaunched 09:24 once `system` answered. Nothing from the unconfirmed label
+survives; its logs were removed before the 09:29 comparison window opened.
+⭐ The label was not guessed in the meantime. "Paused", "running" and
+"unconfirmed" are three states, and collapsing the third into either of the
+first two is how an A/B gets silently corrupted — the arm would have read as
+clean evidence either way.
+
+### ⛔ DO NOT READ B-vs-A AS AN a31 EFFECT
+
+Three things differ between the arms, not one. `system` supplied this list on
+2026-10-23 09:22 and **corrected mine**: of the four NAS changes I proposed as
+confounds, two do not apply, and two I did not know about are live.
+
+| change | live in the 09:29–16:00 window? |
+|---|---|
+| a31 paused | ✅ yes — the intended variable |
+| volume1 → `noatime` (06:02:49) | ✅ yes |
+| tradedesk moves reading volume1 → overflow | ✅ yes, new since arm A |
+| server4 db → server6 zfs send | ⚠️ server4-LOCAL, not NAS |
+| volume1 space freed | ❌ no — snapshots still hold it, first release Mon 03:00 |
+| 10-17 salvage rsync killed (04:34) | ❌ no IO change — it was already SIGSTOPped |
+| files rsync 03:00 → 01:00 (task 14) | ❌ outside the window |
+
+⇒ Record the result as **"a31 paused + noatime + desk reads"**. If arm B comes
+back much cleaner than arm A's 17.22% of writes >1s (n=633), *"we turned on
+noatime"* explains it at least as well as *"a31 stopped"*, and the design cannot
+separate them.
+
+⚠️ **This is why the confound list is written down at LAUNCH, not at analysis.**
+By the time the numbers exist there is a result to explain, and a confound
+recalled afterwards looks like an excuse for a number somebody does not like.
+
+⛔ WHEN THIS ARM ENDS: archive the six raw logs to
+`scripts/memo-watch/nfs-latency-logs/armB-a31-paused-20261023.tar.gz`, as arm A
+did. The host-local path is cleaned and the window cannot be re-run.
