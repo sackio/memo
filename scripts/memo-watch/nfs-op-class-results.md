@@ -419,3 +419,62 @@ branches, the counter and the payload's JSON were exercised; the POST was not.
 
 The cause of the NAS degradation is measured here, not explained. **Why** `/mnt/nas` began
 stalling on CREATE around 2026-10-18 belongs to the seat that owns the mount.
+
+## 2026-10-23 05:45 — the new latency log vindicates itself in eight samples, and the proxy cannot see it
+
+Eight runs of the fixed heartbeat write (45 bytes, create + rename), 02:11 → 05:41, one
+every 30 min. **All eight returned `ok`. Five of the eight exceeded the OLD `timeout 20`.**
+
+| time | result | ms | under old code |
+|---|---|---|---|
+| 02:11 | ok | 101 | ok |
+| 02:41 | ok | 2,525 | ok |
+| 03:11 | ok | 41,572 | **FAIL** |
+| 03:41 | ok | 44,001 | **FAIL** |
+| 04:11 | ok | 11,482 | ok |
+| 04:41 | ok | 62,464 | **FAIL** |
+| 05:11 | ok | 58,404 | **FAIL** |
+| 05:41 | ok | 24,353 | **FAIL** |
+
+⭐⭐ **THIS IS THE CASE FOR RECORDING THE QUANTITY, AND IT ARRIVED WITHIN HOURS.**
+Had `a945ba3` raised `timeout 20`→`90` and nothing else, tonight would read as a
+**perfectly clean night — 8/8 ok, zero alarms** — while the write latency rose ~600×.
+The alarm would have gone silent exactly as the mount got worse. The threshold was the
+only detector, and raising it without replacing it would have destroyed the evidence
+series in the same commit that "fixed" the bug.
+
+⚠️ **62,464 ms is 69% of the new 90 s ceiling.** The headroom bought this morning is
+already mostly spent. If the trend continues the new guard will breach too — but it will
+then fail with the CORRECT message ("could not write heartbeat"), not "HAS NOT RUN".
+
+⛔ **THE INDEPENDENT PROXY DOES NOT CORROBORATE THIS, AND THAT IS NOT A CONTRADICTION.**
+`fleet-ctx-sync` timeouts per hour tonight: 00h=40, 01h=45, 02h=12, 03h=59, 04h=55,
+05h=46 — flat, and indistinguishable from yesterday's 29–91/hour. It cannot see tonight's
+rise because **it is another binary-at-a-threshold instrument** (`timeout 50`), and a
+mount moving from 0.1 s to 62 s spends almost all of that journey below its cliff.
+⇒ Do NOT read the flat proxy as evidence the mount is stable tonight. It is the same
+null-from-a-threshold error this file already documents, arriving from the other side.
+The proxy is a detector of *allocation difficulty past 50 s*; the latency log is a
+*measurement*. Only one of them can answer "how bad is it now".
+
+### Prediction, recorded BEFORE the test that settles it
+
+The credit-cycle audit ends at 06:00. Every sample above is inside that loaded window —
+**including 02:11 at 101 ms**, which is why "my load is the cause" does not already
+explain a 600× rise *within* the load.
+
+- **06:11 and 06:41 are the first quiet-arm samples**, and they are a better test than the
+  `:20` binary arm this was originally designed around, because they are continuous.
+- **If load is the cause**, latency should fall back toward the 0.1–2.5 s range by 06:41.
+- **If the mount itself is degrading**, 06:11/06:41 stay in the tens of seconds.
+  That would favour the chunk-exhaustion account and make the overnight trend
+  independent of anything memo is doing.
+- ⛔ Either way, a single pair is thin. The quiet arm runs to 09:22 and gets better the
+  longer nothing else is launched at `/mnt/nas`.
+
+⛔ **DEFERRED DELIBERATELY:** the paired create test (heartbeat dir vs a distant dir on the
+same mount), which would settle whether the residual is one contended directory or the
+whole mount — and therefore whether server3's frozen "contention is on THIS ONE FILE"
+text can finally be corrected. Running it now would widen the loaded arm and contaminate
+the cleanest natural A/B available. **Run it after 06:41, inside the quiet window, where
+it is also a cleaner measurement.**
