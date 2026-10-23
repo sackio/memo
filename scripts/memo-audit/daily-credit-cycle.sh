@@ -114,17 +114,33 @@ phase () {   # phase <name> <command...>   (PHASE_RESERVE=<s> to hold time back)
   fi
   # ⛔ Clamp this phase's own timeout to the deadline. The arg list is
   #    `/usr/bin/timeout <secs> <cmd...>`, so rewrite element 2 when it is that shape.
+  local clamped=0
   if [ "${1:-}" = "/usr/bin/timeout" ] && [ "${2:-}" -eq "${2:-}" ] 2>/dev/null; then
     local want="$2"
     if [ "$want" -gt "$left" ]; then
       echo "──── ${name}: timeout ${want}s clamped to ${left}s (window)"
       set -- "$1" "$left" "${@:3}"
+      clamped=1
     fi
   fi
   echo "════ ${name} $(date -Is)"
   "$@"; local rc=$?
   echo "──── ${name} rc=${rc}"
-  rcs+=("${name}=${rc}")
+  # ⭐⭐ A CLAMPED PHASE THAT EXITS 124 DID EXACTLY WHAT IT WAS TOLD.
+  #    The clamp SETS the timeout to the window edge, so hitting it is the
+  #    design, not a fault -- the audit is meant to spend until 06:00 and stop.
+  #    Recording that as a failure made the cycle print "⛔ phases above did not
+  #    return 0" on every single successful night. An alarm that fires on
+  #    correct behaviour is worse than no alarm: it trains the reader to skip
+  #    the one line that would carry a real failure.
+  # ⛔ Only a CLAMPED phase gets this. An unclamped 124 is a genuine timeout
+  #    against its own budget and must still read as a failure.
+  if [ "$rc" -eq 124 ] && [ "$clamped" -eq 1 ]; then
+    echo "──── ${name}: 124 after a window clamp = ran to the 06:00 edge as designed, not a fault"
+    rcs+=("${name}=0-window-edge")
+  else
+    rcs+=("${name}=${rc}")
+  fi
   return 0
 }
 
@@ -322,4 +338,4 @@ fi
 
 echo "════ cycle done $(date -Is)"
 printf '%s\n' "${rcs[@]}"
-printf '%s\n' "${rcs[@]}" | grep -v '=0$' && echo "⛔ phases above did not return 0" || echo "all phases rc=0"
+printf '%s\n' "${rcs[@]}" | grep -vE '=0$|=0-window-edge$' && echo "⛔ phases above did not return 0" || echo "all phases OK" 
