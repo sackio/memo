@@ -53,7 +53,16 @@ SKIP_DIR = {".git", "node_modules", "__pycache__", ".venv", "venv",
             #    so they are not part of the surface this audit is about. Scanning
             #    them inflated a first run from 104 files to 637 and produced
             #    hundreds of "dangling refs" that were `originSessionId` frontmatter.
-            "memory", "cache", "todos", "statsig", "shell-snapshots"}
+            "memory", "cache", "todos", "statsig", "shell-snapshots",
+            # ⛔ `~/.claude/backups/` holds pre-symlink COPIES of skill files
+            #    (e.g. skills-pre-symlink-20260916/). Nothing loads them into a
+            #    session, so a finding there is unactionable and unroutable --
+            #    there is no owner to fix a file no one reads. Measured
+            #    2026-10-23 by unanchored.py: 63 of 182 findings on server4 came
+            #    from that one directory, inflating the count 35% and pointing
+            #    at an owner string that is a backup path. Same failure as the
+            #    `memory/` entry above, arriving from a second direction.
+            "backups"}
 
 # ⭐⭐ PRECISION GATE. A bare 32-hex uuid is NOT evidence of a memo reference: this
 #    fleet writes SESSION ids, beacon ids, container ids and image digests in the
