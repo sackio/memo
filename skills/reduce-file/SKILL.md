@@ -82,7 +82,8 @@ found".
 ```
 
 tiktoken `cl100k_base`, JSON out. Identical to
-`mcp__context-helpers__count_tokens_file` (verified equal, 2026-08-24) but needs no
+`mcp__context-helpers__count_tokens_file` (verified equal, 2026-08-24; re-measured
+2026-10-23, memo `577d1a59`) but needs no
 ToolSearch and no per-host MCP config. ⛔ **Never estimate tokens from character count**
 — measured on this fleet, that runs ~8% low on average with 4x density variation, and
 one real document came in at 1.55 chars/token against the assumed ~4.

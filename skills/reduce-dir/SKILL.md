@@ -80,4 +80,5 @@ before delegating, just to see whether the tree fits already
 
 ⛔ **Never estimate tokens from character or byte count.** ⚠️ `cl100k_base` is GPT's
 tokenizer, not Claude's — real and stable (identical counts on all four hosts across
-tiktoken 0.11/0.12/0.13, verified 2026-08-24), but leave ~10% headroom.
+tiktoken 0.11/0.12/0.13, verified 2026-08-24; re-measured 2026-10-23, memo `577d1a59`),
+but leave ~10% headroom.

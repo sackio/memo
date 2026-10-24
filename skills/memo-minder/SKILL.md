@@ -69,7 +69,8 @@ that removing them from cron would be a second change to make.
 ⛔⛔ **THIS WAS WRITTEN AS `http://office:8000` IN 7 PLACES UNTIL 2026-08-21**, including the
 `POST`/`PATCH /documents` calls that store memos. office lost its memo container on 2026-08-10 —
 recorded in this skill's own host table and **never propagated to the commands beside it**.
-Measured 2026-08-21 12:13: `office:8000` is CONNECTION-REFUSED, nothing listens on 8000 there.
+Measured 2026-08-21 12:13 and re-measured 2026-10-23 (memo `833b6938`): `office:8000` is
+CONNECTION-REFUSED, nothing listens on 8000 there.
 ⭐ It never broke a cycle, which is exactly why it survived 11 days: every run used server4 because
 the operator knew office was dead, so **the written instruction and the actual behaviour diverged
 in silence.** ⇒ **When you retire an endpoint, grep for it.** The table documenting a change is not
