@@ -517,7 +517,40 @@ def parent_seat(name: str) -> str | None:
     return m.group(1) if m else None
 
 
-def advisory_summary(advisory: list) -> str:
+FULL_ADVISORY = False
+
+
+# ⭐⭐ A STALE GUARD CLAIM OUTRANKS AN ORDINARY UNCITED FACT. Suggested by
+#    `earnings` via `tradedesk` 2026-10-24, from a live case: a false "this
+#    REFUSES" line sat in pin 548656f8 AND in memo 5bd57a45 for 16 days.
+# ⛔ WHY IT IS WORSE THAN A WRONG FACT: a wrong fact misleads a reader who is
+#    looking. A wrong guard claim stops them looking at all -- they believe the
+#    protection exists and never check, so the failure surfaces as the unguarded
+#    event itself, which is the most expensive possible moment to learn it.
+# ⚠️ DELIBERATELY NARROW. A severity heuristic that matches most lines ranks
+#    nothing. These are assertions that the SYSTEM enforces something, not
+#    prohibitions addressed to the reader -- "⛔ do not X" is an instruction and
+#    must NOT match, or every pin becomes top priority.
+GUARD = re.compile(r'\b(?:refuses?|refused|rejects?|fails? closed|cannot happen|'
+                   r'can never|is impossible|guarantees?|guaranteed|enforced|'
+                   r'will not fire|never fires|fails safe)\b', re.I)
+
+
+def _severity_key(line: str):
+    """Guard claims first, then oldest. Sort key, used with reverse=True.
+
+    ⚠️ TWO LINE SHAPES REACH THIS. The pin lane emits `<pin-id8>  <age>d  <text>`
+       and the unanchored lane emits the age mid-line, so the anchored pattern is
+       tried FIRST and a plain search is the fallback. A single `^(\d+)d` matched
+       NEITHER once before (see the pin-lane comment below) and every line sorted
+       as 0, which renders as "oldest first" while actually preserving input order
+       -- a sort that silently does nothing looks exactly like a sort that worked.
+    """
+    m = re.match(r"\S+\s+(\d+)d\b", line) or re.search(r"\b(\d+)d\b", line)
+    return (1 if GUARD.search(line) else 0, int(m.group(1)) if m else 0)
+
+
+def advisory_summary(advisory: list, full: bool = False) -> str:
     """Counts by category, with a handful of examples -- NOT all 118 lines.
 
     ⛔⛔ THE DIGEST WAS SPENDING MORE THAN THE FINDINGS WERE WORTH. It lists every
@@ -546,14 +579,57 @@ def advisory_summary(advisory: list) -> str:
         else:
             key = "other"
         buckets.setdefault(key, []).append(line)
+    # ⛔⛔ THIS LINE NAMED A COMMAND THAT DOES NOT PRODUCE THE FULL LIST.
+    #    `--dry-run` calls THIS function, which truncates to 3 per bucket, so the
+    #    advertised escape hatch returned the identical digest and the other 100+
+    #    lines were unreachable by the documented route. Caught 2026-10-24 while
+    #    trying to count how many advisories are the same file on 4 hosts.
+    # ⭐ An escape hatch that is never exercised is indistinguishable from one
+    #    that works -- nobody runs it until they need it, and then it fails quietly
+    #    by returning something plausible.
     out = [f"{len(advisory)} line(s) in {len(buckets)} categor(ies). "
-           f"Full list: python3 scripts/instruction-audit/route.py --dry-run"]
+           f"Full list: python3 scripts/instruction-audit/route.py "
+           f"--dry-run --full-advisory"]
+    # ⭐⭐ COLLAPSE THE SAME FINDING REPEATED PER HOST, AND SAY HOW MANY HOSTS.
+    #    A host-local file exists separately on each host, so one defect in a
+    #    copied skill is reported up to 4 times. MEASURED 2026-10-24: 91 lines
+    #    were 44 distinct (detector, file:line) in 24 files.
+    # ⛔⛔ THE MULTIPLICITY IS A PRESENCE MAP, NOT A DRIFT MEASUREMENT. I wrote
+    #    the opposite here hours earlier: "a finding on 1 host means that file
+    #    DIFFERS across the fleet". It does not. MEASURED 2026-10-24: of the 22
+    #    single-host findings, the ones checked are skills that EXIST on one host
+    #    only -- amazon-listing and retail-order-intake are office-only,
+    #    assistant-laura-inbox-sweep is office+server3 -- which memo 8b3b51cb
+    #    already names as legitimate ("host-specific skills exist").
+    # ⚠️ AND THIS LANE CANNOT MEASURE DRIFT AT ALL. A drifted copy whose text
+    #    changed on one host shows up as a finding present there and absent
+    #    elsewhere -- byte-identical in this output to a skill that was never
+    #    installed elsewhere. Separating them needs a CONTENT comparison of files
+    #    present on >= 2 hosts, which this lane does not do.
+    # ⭐ The count is still worth printing: it tells a reader how many hosts an
+    #    edit must reach. That is its only claim.
+    def _collapse(rows: list) -> list:
+        groups: dict = {}
+        for r in rows:
+            m = re.search(r'^(UNOWNED host-local:\S+)@(\w+)(:.*)$', r)
+            if not m:
+                groups.setdefault(r, [])
+                continue
+            k = m.group(1) + "@*" + m.group(3)
+            groups.setdefault(k, []).append(m.group(2))
+        made = []
+        for k, hs in groups.items():
+            made.append(f"{k}  [{len(hs)}/4 hosts: {','.join(sorted(hs))}]" if hs else k)
+        return made
+
     for key in sorted(buckets, key=lambda k: -len(buckets[k])):
-        rows = buckets[key]
-        out.append(f"\n  {len(rows):>4}  {key}")
-        for r in sorted(rows)[:3]:
-            out.append(f"          {r[:150]}")
-        if len(rows) > 3:
+        rows = _collapse(buckets[key])
+        out.append(f"\n  {len(rows):>4}  {key}"
+                   + (f"  ({len(buckets[key])} lines before per-host collapse)"
+                      if len(rows) != len(buckets[key]) else ""))
+        for r in sorted(rows)[: (len(rows) if full else 3)]:
+            out.append(f"          {r if full else r[:150]}")
+        if not full and len(rows) > 3:
             out.append(f"          ... and {len(rows) - 3} more")
     return "\n".join(out)
 
@@ -606,6 +682,7 @@ def post(to, subject, content, attempts=3):
 
 def main():
     dry = "--dry-run" in sys.argv
+    globals()["FULL_ADVISORY"] = "--full-advisory" in sys.argv
     undelivered = []   # seats the broker refused; NOT recorded as told
     unaddressable = []  # seats with no broker route at all -- a different finding
     pins = parse(run("pins.py"), "pin")
@@ -837,7 +914,7 @@ def main():
 
     for owner in picked:
         lines = unanch_new[owner]
-        lines.sort(key=lambda l: -(int(m.group(1)) if (m := re.search(r"\b(\d+)d\b", l)) else 0))
+        lines.sort(key=_severity_key, reverse=True)   # guard claims first, then oldest
         shown, extra = lines[:UNANCHORED_MAX_LINES], max(0, len(lines) - UNANCHORED_MAX_LINES)
         skillfile = any(SKILLFILE.search(l) for l in lines)
         msg = ("Instruction files you own carry dated, quantitative claims with NO memo id "
@@ -1097,8 +1174,7 @@ def main():
         # ⛔ THE AGE IS THE SECOND TOKEN -- `<pin-id8>  <age>d  <text>`. `^(\d+)d`
         #    matched nothing at all, so every line sorted as 0 and "oldest first"
         #    was the pin's own line order wearing a label. Anchor past the id.
-        lines = sorted(lines, key=lambda l: -(int(m.group(1))
-                                              if (m := re.match(r"\S+\s+(\d+)d\b", l)) else 0))
+        lines = sorted(lines, key=_severity_key, reverse=True)  # guards, then oldest
         shown, extra = lines[:PIN_MAX_LINES], max(0, len(lines) - PIN_MAX_LINES)
         prior = max((nag.get(owner, {}).get(claim_key(l), {}).get("n", 0) for l in lines),
                     default=0)
@@ -1206,7 +1282,7 @@ def main():
                 f"{len(pin_claims)} owner(s); {len(cleared)} line(s) no longer flagged today."
               f"\n\nDEFECTS (routed):\n  "
               + ("\n  ".join(f"{o}: {'; '.join(ls)}" for o, ls in sorted(by_owner.items())) or "none")
-              + "\n\nADVISORY (not routed) -- " + advisory_summary(advisory))
+              + "\n\nADVISORY (not routed) -- " + advisory_summary(advisory, full=FULL_ADVISORY))
     if dry:
         print("--- digest to memo ---\n" + digest)
     else:

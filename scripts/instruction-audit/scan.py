@@ -169,6 +169,30 @@ def owner_of(p: Path) -> str:
     return "host-local:" + str(real.parent).replace(os.path.expanduser("~"), "~")
 
 
+# ⛔⛔ `~/.claude` HOLDS RETIRED COPIES OF ITSELF, AND THEY ARE NOT INSTRUCTION
+#    SURFACE. Claude Code reads `~/.claude/skills` and `~/.claude/agents` --
+#    nothing else. But the default root is `~/.claude`, so the walk also
+#    descended `skills-stale-backup-2026-08-24`,
+#    `skills-backup-continuous-scanner-20260819-110653` and
+#    `agents-retired-2026-08-24`. MEASURED 2026-10-24: office carries 3 such
+#    trees, server3 2, server5 1, server4 none -- which alone explains why the
+#    host skill counts ran 147 (s4) to 198 (s3).
+# ⛔ Reporting a line in one of these is worse than noise: the finding is real,
+#    the file is dead, and the fix it invites is an edit to a BACKUP -- which
+#    changes nothing and reads as done.
+# ⚠️ AND IT POISONED A DRIFT MEASUREMENT taken the same morning: "findings
+#    present on only one host" was read as files diverging across the fleet,
+#    when a backup tree that exists on ONE host produces exactly that signature.
+#    ⇒ Before reading per-host presence as drift, exclude trees that are not on
+#      every host BY DESIGN.
+def _retired_tree(parent: Path, name: str) -> bool:
+    """A sibling-of-skills/agents that Claude Code does not read."""
+    if parent.name != ".claude":
+        return False
+    return (name.startswith("skills-") or name.startswith("agents-")
+            or name.endswith("-backup") or ".bak" in name)
+
+
 def collect(roots, maxdepth=3):
     out = []
     for root in roots:
@@ -182,7 +206,8 @@ def collect(roots, maxdepth=3):
             d = Path(dirpath)
             if len(d.parts) - base >= maxdepth:
                 dirnames[:] = []
-            dirnames[:] = [x for x in dirnames if x not in SKIP_DIR]
+            dirnames[:] = [x for x in dirnames
+                           if x not in SKIP_DIR and not _retired_tree(d, x)]
             for fn in filenames:
                 if fn.endswith(".md"):
                     out.append(d / fn)
