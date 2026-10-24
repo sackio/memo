@@ -91,6 +91,33 @@ export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 #    ⚠️ The third outcome is the one that would have been invisible on 0,20,40:
 #      with only one sampled slot inside each 20-minute span there was no within-hour
 #      control, so a fault that was really about TIME read as a fault about SLOT.
+#
+# ⭐ INTERIM 2026-10-23 22:10, AND THE STOPPING RULE IS WRITTEN HERE BEFORE THE REST OF
+#    THE DATA ARRIVES -- which is the only thing that will stop it being re-fitted later.
+#    Since the reversal: 17 runs, 18:05 -> 22:05, ZERO failures and ZERO misses.
+#    :20 ran 4 times (18:20 19:20 20:20 21:20) and passed 4/4; :05 :25 :45 also 4/4.
+#    ⛔ THAT IS NOT YET OUTCOME 2, AND THE TEMPTATION TO CALL IT IS THE WHOLE PROBLEM.
+#      While the fault was live, 11 of the 25 :20-slots from 2026-10-22T13:20 to
+#      2026-10-23T13:20 failed, p = 0.44. FOUR clean :20 runs happen by luck with
+#      probability 0.56^4 = 0.098 even if the fault is FULLY live.
+#      ⇒ A ONE-IN-TEN COINCIDENCE IS NOT A REFUTATION.
+#    ⭐ PRE-REGISTERED: declare "the fault ended ~13:20" only at >= 12 CLEAN :20 RUNS
+#      (0.56^12 = 9.5e-4), reached around 06:20 on 2026-10-24. A SINGLE rc=2 at :20
+#      with the three controls clean ends it earlier and the other way -- outcome 1.
+#    ⚠️ THE DENOMINATOR IS AN ASSUMPTION AND I AM NAMING IT, BECAUSE THE LAST FIGURE I
+#      BUILT THIS WAY WAS WRONG. "25 slots" assumes cron fired at every :20 in that
+#      window. cronguard logs ONLY non-completions -- 11 at :20, all rc=2, zero DEFERRED
+#      and zero rc=99 -- so it can prove no run was deferred or lock-skipped, and it
+#      CANNOT prove cron fired at all. The job's own log cannot settle it either: it
+#      carried NO timestamps until stamp() was added at 13:20 that same day, which is
+#      why it holds exactly one :20 line from the entire fault window.
+#      ⇒ If any :20 slot silently did not fire, the true p is HIGHER and 4 clean runs
+#        are MORE surprising, not less -- the assumption errs against my own conclusion,
+#        which is the only direction in which an unverifiable denominator is safe.
+#    ⚠️ AND THE FRESHNESS NUMBERS ALREADY SAY SOMETHING, FROM INSIDE THE SAME HOURS AS
+#      THE CONTROLS: :20 still reads a 475-518s heartbeat, still the ONLY slot inside
+#      the 600s acattrmax, and it is not failing. The cache story was already dead on
+#      the 5,25,45 data; it is now dead without the time-of-day confound that killed it.
 stamp() { date '+%Y-%m-%dT%H:%M:%S%z'; }
 
 HB=${MEMO_WATCH_HEARTBEAT:-/mnt/nas/data/memo-watch/heartbeat}
