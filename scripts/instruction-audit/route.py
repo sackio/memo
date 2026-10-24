@@ -670,9 +670,21 @@ def advisory_summary(advisory: list, full: bool = False) -> str:
     # ⛔ THE ENDPOINT DOES NOT CLAIM OTHERWISE AND AN EARLIER VERSION OF THIS
     #    COMMENT SAID IT DID. /session-payload states plainly that
     #    max_body_chars "has already done it" worst-case; what it attributes to
-    #    the live board is the at_risk VERDICT, which I have not measured. Four
-    #    exact hits is a strong fit to a formula, not a reading of the
-    #    implementation -- do not cite this as the broker's contract.
+    #    the live board is the at_risk VERDICT, which I have not measured.
+    # ⭐ AND IT IS NOT AN INFERENCE AT ALL -- memo `7071e875` has it from BROKER
+    #    SOURCE, `server/src/reminders.ts:4365`, emitted as
+    #    `TRUNCATE_AT_CHARS - compact.wrapper_chars - BOARD_RESERVE`, with
+    #    `OVERHEAD_BUDGET_CHARS` = 717 (board 500 + rewarm-quiet 147 +
+    #    channel-quiet 67 + newlines 3); `bec2f340` confirms both still current
+    #    2026-10-22. The four seats above are confirmation of a source-read
+    #    formula, not a fit to four points.
+    # ⛔⛔ AND THIS COMMENT FIRST SHIPPED WITH THE OPPOSITE HEDGE -- "a fit to a
+    #    formula, not a reading of the implementation, do not cite this as the
+    #    broker's contract" -- written without a /recall. A hedge is not free:
+    #    it asserts an ABSENCE of knowledge, and that absence was false. It
+    #    would have told the next reader to go re-derive a number the fleet had
+    #    already read out of the source. `7071e875` records a seat making this
+    #    exact mistake on 2026-09-16, "before checking the source".
     PERISHABLE = "re-query http://192.168.1.168:3030/session-payload/<seat> and read .compact.verdict"
 
     for key in sorted(buckets, key=lambda k: -len(buckets[k])):
