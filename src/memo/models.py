@@ -136,6 +136,16 @@ class Document(BaseModel):
     reopenability: Any | None = None
     derived_from: list[str] | None = None
     constitution_meta: dict[str, Any] | None = None
+    # [014] CONTINUATION lineage, kept separate from `superseded_by` because the
+    # two mean opposite things to a reader: a successor says "read that one
+    # INSTEAD", a continuation says "read that one AS WELL, this memo filled up".
+    # ⛔ Default [] and not None, and they are filled on the BULK route as well
+    # as the single GET. A lineage field that is present and always empty turns
+    # every bulk reader into a confident wrong answer — that exact bug shipped
+    # here once, when `/documents` answered `superseded_by: null` for all 11,599
+    # rows including the 402 with a real edge.
+    continues: list[str] = []
+    continued_by: list[str] = []
 
     # populate_by_name so the handler can build this from `_row_to_memo`'s dict
     # (which keys on the COLUMN name `class`) and so existing code that sets
@@ -610,10 +620,23 @@ class SupersedeLinkRequest(BaseModel):
     replacement, NOT for a partial correction — a title reading "CORRECTION to X"
     usually narrows one claim in X, and retiring X would hide a mostly-correct
     document.
+
+    ⭐ `kind="continuation"` IS THE OTHER RELATION, ADDED 2026-10-24 [014]. A memo
+    that filled up and was carried on by a second memo is NOT replaced by it:
+    both stay true, and the parent stays LIVE. Until this existed, the only way
+    to record any relation between two existing documents was supersession, so
+    recording a true fact about 52 memos is what removed them from every default
+    read. ⛔ Choose by what a reader should do: "read that one INSTEAD" is
+    supersede, "read that one AS WELL" is continuation.
     """
     old_id: str
     new_id: str
     actor: str
+    # ⚠️ Defaults to the DESTRUCTIVE reading, which is correct here: every caller
+    # that existed before 014 meant supersession, and changing what their
+    # unchanged request does would be the worse failure. An unrecognised value
+    # is REFUSED rather than defaulted — see db._sync_link_supersession.
+    kind: str = "supersede"
     reason: str | None = None
     operator_directive_ref: dict[str, Any] | None = None
     db_path: str | None = None

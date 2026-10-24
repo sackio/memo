@@ -1305,7 +1305,8 @@ def _sync_resolve_id(db_path: str, doc_id: str) -> dict:
 
 def _sync_link_supersession(db_path: str, old_id: str, new_id: str, actor: str,
                             reason: str | None = None,
-                            operator_directive_ref: dict | None = None) -> dict:
+                            operator_directive_ref: dict | None = None,
+                            kind: str = "supersede") -> dict:
     """Record that an EXISTING document supersedes another EXISTING document.
 
     ⭐⭐ WHY THIS EXISTS, MEASURED 2026-09-28. `supersede()` above does
@@ -1337,6 +1338,14 @@ def _sync_link_supersession(db_path: str, old_id: str, new_id: str, actor: str,
       · the link would close a cycle (new already reaches old going forward)
     """
     conn = _get_or_create_conn(db_path)
+    # ⛔ UNKNOWN KIND IS REFUSED, NOT COERCED TO THE DEFAULT. Silently treating a
+    # typo'd `kind` as 'supersede' would RETIRE the parent — the destructive
+    # reading — in response to a caller who was trying to say the opposite.
+    if kind not in ("supersede", "continuation"):
+        return {"linked": False,
+                "reason": f"unknown kind {kind!r}: use 'supersede' (replaces, retires "
+                          "the parent) or 'continuation' (carries on from it, parent "
+                          "stays live)"}
     if old_id == new_id:
         return {"linked": False, "reason": "old and new are the same document"}
     rows = {r["id"]: r for r in conn.execute(
@@ -1346,14 +1355,24 @@ def _sync_link_supersession(db_path: str, old_id: str, new_id: str, actor: str,
     if new_id not in rows:
         return {"linked": False, "reason": f"new document {new_id} does not exist"}
     if rows[old_id]["valid_until"] is not None:
+        # ⚠️ Also refused for a continuation, deliberately: you cannot carry on
+        # from a memo that has been retired. Clear the expiry or link to the
+        # live version instead.
         return {"linked": False, "reason": f"{old_id} is already superseded"}
     if rows[new_id]["valid_until"] is not None:
         return {"linked": False,
                 "reason": f"successor {new_id} is itself superseded — link to the "
                           "current version instead; follow its lineage forward"}
-    if conn.execute("SELECT 1 FROM supersede_edges WHERE old_id = ? AND new_id = ?",
-                    (old_id, new_id)).fetchone():
-        return {"linked": False, "reason": "edge already exists"}
+    # ⚠️ ONE RELATION PER ORDERED PAIR, regardless of kind. Two documents are
+    # either a replacement or a continuation of each other, never both, and
+    # holding both edges would make `superseded_by` and `continued_by` disagree
+    # about the same pair with no rule for which wins.
+    existing = conn.execute(
+        "SELECT kind FROM supersede_edges WHERE old_id = ? AND new_id = ?",
+        (old_id, new_id)).fetchone()
+    if existing:
+        return {"linked": False,
+                "reason": f"edge already exists (kind={existing['kind']})"}
     # Cycle guard: walk FORWARD from new; if we reach old, this link closes a loop
     # and `get_current`'s lineage walk would not terminate on a fixed point.
     seen, frontier = {new_id}, [new_id]
@@ -1369,14 +1388,21 @@ def _sync_link_supersession(db_path: str, old_id: str, new_id: str, actor: str,
 
     now = time()
     try:
-        conn.execute("UPDATE documents SET valid_until = ?, updated_at = ? WHERE id = ?",
-                     (now, now, old_id))
+        # ⛔⛔ THE ONE LINE THAT MAKES A CONTINUATION DIFFERENT: THE PARENT IS NOT
+        # RETIRED. Setting `valid_until` is what removes a memo from every
+        # default read (FR-115), and a memo that was continued because it filled
+        # up is still entirely true. Doing this unconditionally is what put 52
+        # still-true memos out of reach, found only because `atc` pushed back on
+        # a pin finding and was right.
+        if kind == "supersede":
+            conn.execute("UPDATE documents SET valid_until = ?, updated_at = ? WHERE id = ?",
+                         (now, now, old_id))
         conn.execute(
             "INSERT INTO supersede_edges "
-            "(old_id, new_id, superseded_at, actor, reason, operator_directive_ref) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
+            "(old_id, new_id, superseded_at, actor, reason, operator_directive_ref, kind) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
             (old_id, new_id, now, actor, reason,
-             json.dumps(operator_directive_ref) if operator_directive_ref else None),
+             json.dumps(operator_directive_ref) if operator_directive_ref else None, kind),
         )
         conn.commit()
     except Exception:
@@ -1388,10 +1414,14 @@ def _sync_link_supersession(db_path: str, old_id: str, new_id: str, actor: str,
 
 async def link_supersession(db_path: str | None, old_id: str, new_id: str, actor: str,
                             reason: str | None = None,
-                            operator_directive_ref: dict | None = None) -> dict:
+                            operator_directive_ref: dict | None = None,
+                            kind: str = "supersede") -> dict:
+    """`kind='continuation'` records that `new_id` CARRIES ON from `old_id` and
+    leaves the parent live. [014] Default stays `supersede` so every existing
+    caller keeps its meaning."""
     path = _resolve_path(db_path)
     return await _write_with_lock_retry(_sync_link_supersession, path, old_id, new_id,
-                                        actor, reason, operator_directive_ref)
+                                        actor, reason, operator_directive_ref, kind)
 
 
 async def resolve_id(db_path: str | None, doc_id: str) -> dict:
@@ -1605,14 +1635,20 @@ def _sync_successor_map(db_path: str, doc_ids: list[str]) -> dict[str, dict]:
     # and the list could contradict the single GET intermittently — the worst
     # version of this bug, because it would not reproduce.
     for old, new in conn.execute(
-            "SELECT old_id, new_id FROM supersede_edges ORDER BY superseded_at"):
+            "SELECT old_id, new_id FROM supersede_edges WHERE kind = 'supersede' "
+            "ORDER BY superseded_at"):
         # An append-only log with no FK constraints can hold more than one edge
-        # out of a node, and the corpus has one: c2ae186a was continued by TWO
-        # memos, both of which said so in their own titles, and a 2026-09-28
-        # backfill recorded both 5ms apart. Neither is "the" successor -- that
-        # is a one->many continuation, which this edge table cannot express.
-        # Taking the earliest is arbitrary but it is the SAME arbitrary choice
-        # the per-id walk makes.
+        # out of a node. Taking the earliest is arbitrary, but it is the SAME
+        # arbitrary choice the per-id walk makes, so the two surfaces agree.
+        # ⭐ THE CASE THAT FORCED THIS COMMENT IS NO LONGER A SUPERSESSION AT
+        # ALL. `c2ae186a` was continued by TWO memos, both saying so in their
+        # own titles, and a 2026-09-28 backfill recorded both 5ms apart; this
+        # note used to end "that is a one->many continuation, which this edge
+        # table cannot express." Migration 014 expresses it: those edges carry
+        # `kind='continuation'`, they are filtered out of this loop, and
+        # `continued_by` is a LIST, so nothing has to elect a winner. What
+        # remains arbitrary is a genuine fork between two REPLACEMENTS, which
+        # is a different and still-unresolved thing.
         nxt.setdefault(old, new)
 
     out: dict[str, dict] = {}
@@ -1630,6 +1666,38 @@ def _sync_successor_map(db_path: str, doc_ids: list[str]) -> dict[str, dict]:
 
 async def successor_map(db_path: str | None, doc_ids: list[str]) -> dict[str, dict]:
     return await asyncio.to_thread(_sync_successor_map, _resolve_path(db_path), doc_ids)
+
+
+def _sync_continuation_map(db_path: str, doc_ids: list[str]) -> dict[str, dict]:
+    """`{continues, continued_by}` for MANY ids, in one pass. [014]
+
+    ⭐ BOTH ARE LISTS, AND THAT IS THE FEATURE. A memo that filled up can be
+    continued by more than one, and a single-valued field would have to elect a
+    winner by `ORDER BY ... LIMIT 1` — the arbitrary choice that made the old
+    edge table unable to express this relation at all. `c2ae186a` is the
+    measured case: two continuations recorded 5ms apart, neither of them "the"
+    one.
+
+    ⛔ A CONTINUATION NEVER REDIRECTS THE READER, so there is deliberately no
+    `continuation_tip` mirroring `lineage_tip`. The tip of a supersede chain is
+    where you should read INSTEAD; the next part of a continuation is something
+    you read AS WELL. Offering a "tip" here would invite exactly the substitution
+    this whole change exists to stop.
+    """
+    conn = _get_or_create_conn(db_path)
+    fwd: dict[str, list[str]] = {}
+    back: dict[str, list[str]] = {}
+    for old, new in conn.execute(
+            "SELECT old_id, new_id FROM supersede_edges WHERE kind = 'continuation' "
+            "ORDER BY superseded_at"):
+        fwd.setdefault(old, []).append(new)
+        back.setdefault(new, []).append(old)
+    return {d: {"continues": back.get(d, []), "continued_by": fwd.get(d, [])}
+            for d in doc_ids}
+
+
+async def continuation_map(db_path: str | None, doc_ids: list[str]) -> dict[str, dict]:
+    return await asyncio.to_thread(_sync_continuation_map, _resolve_path(db_path), doc_ids)
 
 
 async def restore_snapshot(db_path: str | None, doc_id: str) -> dict | None:
@@ -1922,11 +1990,16 @@ def _lineage_chain(conn: sqlite3.Connection, doc_id: str) -> list[str]:
     edges are an append-only audit log with no FK constraints, so a cycle is
     possible in principle and must not hang a request.
     """
+    # ⛔⛔ `kind = 'supersede'` IS THE WHOLE POINT OF MIGRATION 014 AND MUST NOT
+    # BE DROPPED FROM EITHER WALK. A continuation edge means "this memo carries
+    # on from that one", and BOTH remain true. Walking it here would report the
+    # parent as `superseded_by` the child — which is precisely the false claim
+    # that retired 52 still-true memos from every default read.
     seen = {doc_id}
     root = doc_id
     while True:
         row = conn.execute(
-            "SELECT old_id FROM supersede_edges WHERE new_id = ? "
+            "SELECT old_id FROM supersede_edges WHERE new_id = ? AND kind = 'supersede' "
             "ORDER BY superseded_at LIMIT 1",
             (root,),
         ).fetchone()
@@ -1938,7 +2011,7 @@ def _lineage_chain(conn: sqlite3.Connection, doc_id: str) -> list[str]:
     chain = [root]
     while True:
         row = conn.execute(
-            "SELECT new_id FROM supersede_edges WHERE old_id = ? "
+            "SELECT new_id FROM supersede_edges WHERE old_id = ? AND kind = 'supersede' "
             "ORDER BY superseded_at LIMIT 1",
             (chain[-1],),
         ).fetchone()

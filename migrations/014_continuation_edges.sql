@@ -1,0 +1,41 @@
+-- 014: tell a CONTINUATION apart from a REPLACEMENT.
+--
+-- Ben, Slack #memo 2026-10-24 ("go"), following the 2026-10-23 11:05 approval
+-- to clear 52 wrongly-expired memos. That clearing was the stopgap; this is
+-- the model change it pointed at.
+--
+-- ⛔ THE DEFECT. A memo that fills up is continued by a second memo ("PART 2",
+-- "continues <id>"), and the only way to record ANY relation between two
+-- existing documents was `/supersede-link` — which means "this one replaces
+-- that one" and sets `valid_until` on the parent, removing it from every
+-- default read. So 52 still-true parents were retired by the act of recording
+-- a true fact about them, and the relationship itself survived only in prose
+-- that a regex had to guess at.
+--
+-- ⭐ WHY A `kind` ON THE EDGE RATHER THAN A COLUMN ON `documents`. The relation
+-- is a property of the LINK, not of either document: the same memo can be the
+-- replacement of one and the continuation of another. The edge table already
+-- carries `actor`, `reason` and `superseded_at`, which a continuation needs
+-- exactly as much as a supersession does. `documents.derived_from` was the
+-- other candidate and was rejected on measurement: it exists on all 12,252
+-- rows and holds '[]' on every one of them, so adopting it would mean building
+-- the whole read path from nothing while leaving 415 edges still asserting the
+-- wrong relation.
+--
+-- ⭐ ONE -> MANY IS THE POINT, NOT AN EDGE CASE. `_sync_successor_map` already
+-- records that `c2ae186a` was continued by TWO memos and that "neither is 'the'
+-- successor -- that is a one->many continuation, which this edge table cannot
+-- express." It can now: `continued_by` is a LIST, and nothing has to pick an
+-- arbitrary winner by `ORDER BY superseded_at LIMIT 1`.
+--
+-- ⚠️ DEFAULT 'supersede' IS LOAD-BEARING. Every one of the 415 existing edges
+-- was written to mean replacement, so the default must preserve that reading
+-- exactly. Reclassifying the 52 known continuations is a SEPARATE, auditable
+-- data step (scripts/memo-audit/backfill-continuation-edges.py) with a dry run
+-- and a read-back — not something a schema migration does silently.
+ALTER TABLE supersede_edges ADD COLUMN kind TEXT NOT NULL DEFAULT 'supersede';
+
+-- Partial: continuations are the rare kind and will stay rare, so indexing the
+-- 'supersede' majority buys nothing.
+CREATE INDEX IF NOT EXISTS supersede_edges_kind_idx
+    ON supersede_edges(kind) WHERE kind <> 'supersede';

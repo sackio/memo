@@ -956,10 +956,23 @@ async def memo_supersede_link(
     old_id: str,
     new_id: str,
     actor: str,
+    kind: str = "supersede",
     reason: str | None = None,
     db_path: str | None = None,
 ) -> dict:
-    """Record that an EXISTING memo supersedes another EXISTING memo. [2026-09-28]
+    """Record that an EXISTING memo supersedes — or CONTINUES — another. [2026-09-28]
+
+    ⭐ `kind="continuation"` [014, 2026-10-24] IS THE OTHER RELATION, AND IT LEAVES
+    THE PARENT LIVE. A memo that filled up and was carried on by a second memo is
+    not replaced by it; both stay true. Until this existed, supersession was the
+    only relation two existing memos could record, so saying something TRUE about
+    52 of them is what removed them from every default read.
+    ⛔ CHOOSE BY WHAT A READER SHOULD DO. "Read that one INSTEAD" = supersede.
+    "Read that one AS WELL, this one filled up" = continuation. An unrecognised
+    `kind` is refused, never quietly treated as supersede — the default is the
+    destructive one.
+    ⭐ A continuation may be one->many: a parent can have several, and
+    `continued_by` on a read is a LIST, so nothing has to elect a winner.
 
     ⭐⭐ WHY THIS IS SEPARATE FROM `memo_supersede`, and why the corpus needed it.
     `memo_supersede` below MINTS the replacement from `content` you supply — it is
@@ -991,7 +1004,7 @@ async def memo_supersede_link(
     """
     old = await _resolve_doc_id_or_404(old_id, db_path)
     new = await _resolve_doc_id_or_404(new_id, db_path)
-    result = await db.link_supersession(db_path, old, new, actor, reason=reason)
+    result = await db.link_supersession(db_path, old, new, actor, reason=reason, kind=kind)
     if not result.get("linked"):
         raise ValueError(result.get("reason", "supersede link refused"))
     return result
@@ -2266,7 +2279,14 @@ async def recall_endpoint(req: RecallRequest):
 
 @app.post("/supersede-link")
 async def supersede_link(req: SupersedeLinkRequest):
-    """Record that one EXISTING document supersedes another. [2026-09-28]
+    """Record that one EXISTING document supersedes — or CONTINUES — another.
+
+    `kind="continuation"` [014, 2026-10-24] records that `new_id` carries on from
+    `old_id` and leaves the parent LIVE. Supersession retires the parent, which
+    is why using it for a continuation removed 52 still-true memos from every
+    default read. Pick by what a reader should do: INSTEAD = supersede, AS WELL
+    = continuation. An unknown `kind` is refused, never defaulted.
+    [originally 2026-09-28]
 
     The counterpart to `/supersede`, which mints the replacement. See
     `db._sync_link_supersession` for why a caller could not express this before and
@@ -2284,7 +2304,8 @@ async def supersede_link(req: SupersedeLinkRequest):
         raise HTTPException(status_code=404, detail=f"new_id {req.new_id} not found")
     result = await db.link_supersession(
         req.db_path, old["id"], new["id"], req.actor,
-        reason=req.reason, operator_directive_ref=req.operator_directive_ref)
+        reason=req.reason, operator_directive_ref=req.operator_directive_ref,
+        kind=req.kind)
     if not result.get("linked"):
         raise HTTPException(status_code=409, detail=result.get("reason", "refused"))
     return result
@@ -2454,6 +2475,11 @@ async def _one_with_lineage(doc: dict, db_path: str | None) -> Document:
     lin = await db.successor(db_path=db_path, doc_id=doc["id"])
     row = dict(doc)
     row.update(lin)
+    # [014] Continuations travel with the supersede lineage, on every surface
+    # that fills one. Filling `superseded_by` here and not `continued_by` would
+    # recreate, for the new relation, exactly the bulk-null defect the docstring
+    # on `_with_lineage` below was written about.
+    row.update((await db.continuation_map(db_path=db_path, doc_ids=[doc["id"]]))[doc["id"]])
     return Document(**row)
 
 
@@ -2465,7 +2491,9 @@ async def _with_lineage(docs: list[dict], db_path: str | None) -> list[Document]
     successor", not as "this route did not look". The single-doc GET already
     did; list and search did not. One edge-table pass covers the whole page.
     """
-    lin = await db.successor_map(db_path=db_path, doc_ids=[d["id"] for d in docs])
+    ids = [d["id"] for d in docs]
+    lin = await db.successor_map(db_path=db_path, doc_ids=ids)
+    cont = await db.continuation_map(db_path=db_path, doc_ids=ids)   # [014]
     out = []
     for d in docs:
         # Copy-then-update rather than `Document(**d, **lin[...])`: the kwargs
@@ -2473,6 +2501,7 @@ async def _with_lineage(docs: list[dict], db_path: str | None) -> list[Document]
         # it would do so at request time on the busiest route in the service.
         row = dict(d)
         row.update(lin[d["id"]])
+        row.update(cont[d["id"]])
         out.append(Document(**row))
     return out
 
@@ -2562,7 +2591,15 @@ async def get_document(doc_id: str, response: Response,
         # Resolved a moment ago and gone now — a real deletion, not a typo.
         await _raise_tombstone_if_deleted(doc_id, db_path)
         raise HTTPException(status_code=404, detail="Document not found")
-    return Document(**doc, **await db.successor(db_path=db_path, doc_id=doc_id))
+    # ⛔ VIA `_one_with_lineage`, NOT A THIRD COPY. This route used to build the
+    # envelope itself with `Document(**doc, **await db.successor(...))`, so when
+    # continuations were added [014] it was the one surface that kept answering
+    # `continued_by: []` — correct on the list route, empty here, which is the
+    # same single-vs-bulk divergence `_with_lineage` exists to prevent, running
+    # the other way. ⚠️ The kwargs form is also what that function's own comment
+    # warns against: it raises TypeError at request time the day either lineage
+    # name becomes a real column.
+    return await _one_with_lineage(doc, db_path)
 
 
 @app.patch("/documents/{doc_id}", response_model=Document)
