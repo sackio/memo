@@ -42,7 +42,13 @@ RE_FULL  = re.compile(r'\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-
 # ⭐ Backticked, OR bare but immediately preceded by "memo". `system` found an
 #    unbackticked `0b96567a` at docker-heal:177 that the backtick-only form missed
 #    (2026-10-23). Bare 8-hex alone is far too noisy; bare-after-"memo" is not.
-RE_SHORT = re.compile(r'(?<![0-9a-f-])(?:`([0-9a-f]{8})`|(?<=memo )([0-9a-f]{8})\b)')
+# ⭐ Also bare after "memoS" (plural) and bare as a LATER item in a citation
+#    LIST -- `network` reported 2026-10-24 that "memos X · Y · Z" matched none of
+#    the three: the plural broke the cue and items 2..n have no cue at all. The
+#    separator alternative below is deliberately loose; `is_memo_ref` is the gate.
+RE_SHORT = re.compile(r'(?<![0-9a-f-])(?:`([0-9a-f]{8})`'
+                      r'|(?:(?<=memo )|(?<=memos ))([0-9a-f]{8})\b'
+                      r'|(?<=[·,;] )([0-9a-f]{8})\b)')
 RE_PATH  = re.compile(r'(?<![\w`])(/(?:mnt|home|opt|srv|etc|var)/[\w./+-]{3,})')
 RE_NET   = re.compile(r'\b((?:https?://)?(?:[a-z0-9-]+\.)*[a-z0-9-]+:\d{2,5})(?:/[\w./-]*)?')
 
@@ -73,7 +79,9 @@ SKIP_DIR = {".git", "node_modules", "__pycache__", ".venv", "venv",
 #    ⇒ Require a memo cue near the ref, and veto the known non-memo contexts.
 CUE   = re.compile(r'memo|/recall|/memorize|corpus|/documents', re.I)
 # the cue as it appears IMMEDIATELY before a citation, which is what marks one
-ADJACENT = re.compile(r'(?:memo|/recall|/memorize|corpus|/documents)\s*[`(\[]?\s*$', re.I)
+# ⭐ `memos?` -- the PLURAL broke the cue entirely: "memos X · Y · Z" cited three
+#    memos and matched none (`network`, 2026-10-24, pin 580693ec).
+ADJACENT = re.compile(r'(?:memos?|/recall|/memorize|corpus|/documents)\s*[`(\[]?\s*$', re.I)
 VETO  = re.compile(r'session|transcript|\.jsonl|originSessionId|beacon|'
                    r'e\.g\.|example|placeholder|captures|WRONG|short-form|'
                    r'sha256|image|digest|container', re.I)
@@ -99,7 +107,27 @@ def is_memo_ref(text: str, start: int, end: int, ident: str) -> bool:
     #    e.g. "WF card ···8040 = `f8c91236`, memo `3126d9c`". Nine false
     #    findings about someone's bank accounts, one DM away from being sent.
     #    A real citation reads "memo `x`" / "(memo `x`)" / "see memo `x`".
-    return bool(ADJACENT.search(text[max(0, start - 18):start]))
+    if ADJACENT.search(text[max(0, start - 18):start]):
+        return True
+    # ⭐⭐ A CITATION LIST HAS A CUE ONLY ON ITS FIRST ITEM. "memos X · Y · Z"
+    #    cues X and leaves Y and Z looking uncited, so the LINE reads as an
+    #    unanchored claim although it cites three memos. Reported by `network`
+    #    2026-10-24 against pin 580693ec. Walk back over complete
+    #    "<id><separator>" groups and re-test the cue at the head of the run.
+    # ⛔ The walk requires the separator to sit IMMEDIATELY before this id, so it
+    #    cannot bridge intervening prose -- which is what keeps the 2026-10-23
+    #    `finance` bank-account case rejected: "···8040 = `f8c91236`, memo `x`"
+    #    walks back from f8c91236 to "WF card ···8040 = `", finds no cue, stops.
+    head = text[ls:start]
+    for _ in range(12):
+        m = re.search(r'`?[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}`?\s*[·,;]\s*`?$'
+                      r'|`?[0-9a-f]{8}`?\s*[·,;]\s*`?$', head)
+        if not m:
+            return False
+        head = head[:m.start()]
+        if ADJACENT.search(head[-18:]):
+            return True
+    return False
 
 
 def owner_of(p: Path) -> str:
