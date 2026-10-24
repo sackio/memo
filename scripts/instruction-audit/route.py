@@ -587,7 +587,22 @@ def advisory_summary(advisory: list, full: bool = False) -> str:
     # ⭐ An escape hatch that is never exercised is indistinguishable from one
     #    that works -- nobody runs it until they need it, and then it fails quietly
     #    by returning something plausible.
+    # ⛔⛔ STAMP IT. EVERY NUMBER BELOW IS A SNAPSHOT AND THIS DIGEST HAS NO
+    #    EXPIRY. It is DM'd to me and read hours later, by which time a figure
+    #    measured at scan time may describe nothing. MEASURED 2026-10-24 14:10:
+    #    all three `at-risk-cliff` rows in that morning's advisory -- bellwether
+    #    8452/8276, tradedesk 7614/7390, thread-freelance-5 7341/7151 -- had
+    #    gone to verdict `under` with shed_chars 0 by the time I read them; the
+    #    seats had shed 568 / 1454 / 1125 chars in the interval.
+    # ⭐ THE COST OF BELIEVING A STALE ONE IS NOT ZERO, AND IT IS NOT SYMMETRIC.
+    #    Acting on those rows means telling three seats to delete 176/190/224
+    #    characters of standing context they need, and they will do it, because
+    #    the instruction arrives carrying a measurement. A missed cliff costs one
+    #    seat its tail; a phantom cliff costs three seats a deletion each and
+    #    teaches them the detector lies.
     out = [f"{len(advisory)} line(s) in {len(buckets)} categor(ies). "
+           f"MEASURED {datetime.now().astimezone():%Y-%m-%d %H:%M %Z} -- "
+           f"figures age; re-measure before acting on any of them. "
            f"Full list: python3 scripts/instruction-audit/route.py "
            f"--dry-run --full-advisory"]
     # ⭐⭐ COLLAPSE THE SAME FINDING REPEATED PER HOST, AND SAY HOW MANY HOSTS.
@@ -622,11 +637,27 @@ def advisory_summary(advisory: list, full: bool = False) -> str:
             made.append(f"{k}  [{len(hs)}/4 hosts: {','.join(sorted(hs))}]" if hs else k)
         return made
 
+    # ⛔ THE CLIFF LANE IS THE PERISHABLE ONE AND IT NEEDS ITS OWN DISCRIMINATOR.
+    #    `/session-payload/<seat>` says so itself: "Never cache the VERDICT --
+    #    over, at_risk and under are answers about a moment, not properties of
+    #    your pin." pins.py quotes that line in its own docstring; this consumer
+    #    did not inherit it, which is the same shape corpus-echo.py already
+    #    records -- a rule recorded against one detector is not recorded against
+    #    the next one you write.
+    # ⚠️ AND IT IS NOT THE BOARD THAT MOVES IT, WHICH THE ENDPOINT'S PROSE
+    #    IMPLIES. MEASURED 2026-10-24 across bellwether/tradedesk/
+    #    thread-freelance-5/memo: max_body_chars == 10000 - wrapper_chars - 717
+    #    EXACTLY on all four, and 717 is a fixed worst-case reserve. The ceiling
+    #    moves with your ITEM COUNT, not with another seat's status post.
+    PERISHABLE = "re-query http://192.168.1.168:3030/session-payload/<seat> and read .compact.verdict"
+
     for key in sorted(buckets, key=lambda k: -len(buckets[k])):
         rows = _collapse(buckets[key])
         out.append(f"\n  {len(rows):>4}  {key}"
                    + (f"  ({len(buckets[key])} lines before per-host collapse)"
                       if len(rows) != len(buckets[key]) else ""))
+        if "cliff" in key:
+            out.append(f"          \u26d4 PERISHABLE -- {PERISHABLE}")
         for r in sorted(rows)[: (len(rows) if full else 3)]:
             out.append(f"          {r if full else r[:150]}")
         if not full and len(rows) > 3:
