@@ -130,6 +130,18 @@ def main():
     a = ap.parse_args()
     now = datetime.now(timezone.utc)
 
+    # ⚠️ `?active=1` DOES NOT DISCRIMINATE -- measured 2026-10-24: `/statuses`,
+    #    `?active=1`, `?active=0` and `?bogusparam=zzz` all return the IDENTICAL
+    #    22 rows. So the filtering below is done by the BROKER's own retention,
+    #    not by this param, and the line 227 "every row here is DELIVERED, not
+    #    archived" is true DESPITE the param rather than because of it.
+    #    ⛔ Do not add a lane that leans on this param to exclude anything.
+    #    ⚠️ What this does NOT establish: whether the broker ignores the param or
+    #    honours it with nothing currently inactive. Identical results cannot
+    #    separate those two, and the distinction only matters if archived rows
+    #    ever start appearing -- at which point this lane would silently audit
+    #    them as live. Same family as the pin's "a scoped lookup silently
+    #    returns UNFILTERED at 200".
     rows = get("/statuses?active=1")
     known = {s.get("id") for s in get("/sessions")} | \
             {o.get("owner") for o in get("/reminders-owners?include_retired=1").get("owners", [])}
