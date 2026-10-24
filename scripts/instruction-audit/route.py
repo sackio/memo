@@ -669,8 +669,27 @@ def advisory_summary(advisory: list, full: bool = False) -> str:
     #    ITEMS before deleting more text.
     # ⛔ THE ENDPOINT DOES NOT CLAIM OTHERWISE AND AN EARLIER VERSION OF THIS
     #    COMMENT SAID IT DID. /session-payload states plainly that
-    #    max_body_chars "has already done it" worst-case; what it attributes to
-    #    the live board is the at_risk VERDICT, which I have not measured.
+    #    max_body_chars "has already done it" worst-case.
+    # ⛔⛔ AND THE VERDICT DOES NOT READ THE LIVE BOARD EITHER -- READ FROM
+    #    SOURCE 2026-10-24, atc `c2d5354`, server/src/reminders.ts:5400:
+    #        const known = bodyChars + wrapperChars;
+    #        if (known >= INLINED_MAX) return "over";
+    #        if (known + BOARD_RESERVE >= INLINED_MAX) return "at_risk";
+    #        return "under";
+    #    INLINED_MAX = TRUNCATE_AT_CHARS = 10000 and BOARD_RESERVE =
+    #    OVERHEAD_BUDGET_CHARS = 717, both compile-time constants. So the
+    #    verdict is a PURE FUNCTION of body + wrapper and can only change when
+    #    the SEAT changes its own pins.
+    # ⚠️ THE ENDPOINT'S PROSE CONFLATES TWO THINGS and I repeated it above
+    #    before checking: "at_risk doubly so: it turns on the CURRENT board,
+    #    which another seat changes without touching you". The live board
+    #    decides whether an at_risk seat is ACTUALLY cut at delivery; it does
+    #    not move the verdict VALUE. Reported to `atc`, who owns that text.
+    # ⇒ SO THE CLIFF FIGURES PERISH FOR A DIFFERENT REASON THAN I FIRST WROTE,
+    #    and the real one is more useful: they go stale because THE HOLDER
+    #    EDITED THEIR PIN. Measured 2026-10-24 -- all three at-risk seats had
+    #    shed body (568 / 1454 / 1125 chars) between scan and read. ⇒ Re-measure
+    #    because the seat may have already fixed it, not because the board moved.
     # ⭐ AND IT IS NOT AN INFERENCE AT ALL -- memo `7071e875` has it from BROKER
     #    SOURCE, `server/src/reminders.ts:4365`, emitted as
     #    `TRUNCATE_AT_CHARS - compact.wrapper_chars - BOARD_RESERVE`, with
