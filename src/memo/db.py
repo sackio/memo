@@ -454,6 +454,40 @@ def _matches_filters(doc: dict, tags: list[str], after: float | None, before: fl
 
 # --- Sync DB operations (called via asyncio.to_thread) ---
 
+def derive_title(content: str, limit: int = 72) -> str | None:
+    """A title taken from the memo's own opening line, for a write that sent none.
+
+    ⛔ DERIVE, DO NOT REFUSE. `title` is optional on both doors and making it
+    required would 422 writes that are otherwise good — and a write refused for
+    want of a label LOSES THE MEMO, which is strictly worse than an unlabelled
+    one. That is the same reasoning already recorded on `StoreRequest.actor`.
+
+    ⭐ WHY IT IS WORTH DOING AT ALL, given how rare it is. An untitled memo is
+    unfindable by name and renders blank in every `/documents` listing, so it is
+    invisible in exactly the view someone scans to notice it. memo-watch detects
+    the COUNT rising and prints a manual recipe — "PATCH a title derived from
+    each memo's own opening line" — which is this function, run by hand, after
+    the fact, by whoever reads the alert. Measured 2026-10-24: 0 of 12,247
+    documents were untitled at 08:20 and one had arrived by 08:41.
+    ⚠️ A snapshot of zero was NOT evidence the case does not occur; it is a rate,
+    and the watch exists because the rate is not zero.
+
+    Returns None when there is nothing to derive from, so the caller stores NULL
+    rather than an empty string — "" would satisfy every untitled check while
+    still rendering blank, which is the defect wearing a disguise.
+    """
+    for line in (content or "").splitlines():
+        line = line.strip().lstrip("#").strip().strip("*_`").strip()
+        if not line:
+            continue
+        if len(line) <= limit:
+            return line
+        cut = line[:limit].rsplit(" ", 1)[0].rstrip(" ,;:.-")
+        return (cut or line[:limit]) + "\u2026"
+    return None
+
+
+
 def _sync_store(db_path: str, content: str, title: str | None, tags: list[str],
                 metadata: dict, embedding: list[float],
                 doc_id: str | None = None,
@@ -489,6 +523,11 @@ def _sync_store(db_path: str, content: str, title: str | None, tags: list[str],
     """
     conn = _get_or_create_conn(db_path)
     doc_id = doc_id or str(uuid.uuid4())
+    # ⭐ A BLANK TITLE IS TREATED AS NO TITLE. "" and "   " pass an `is None`
+    # check and still render blank everywhere, so the two must collapse here or
+    # the derivation is skipped by the exact inputs that need it most.
+    if not (title or "").strip():
+        title = derive_title(content)
     now = time()
     created = created_at if created_at is not None else now
     updated = updated_at if updated_at is not None else now
