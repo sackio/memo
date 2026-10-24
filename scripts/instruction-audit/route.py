@@ -644,11 +644,19 @@ def advisory_summary(advisory: list, full: bool = False) -> str:
     #    did not inherit it, which is the same shape corpus-echo.py already
     #    records -- a rule recorded against one detector is not recorded against
     #    the next one you write.
-    # ⚠️ AND IT IS NOT THE BOARD THAT MOVES IT, WHICH THE ENDPOINT'S PROSE
-    #    IMPLIES. MEASURED 2026-10-24 across bellwether/tradedesk/
-    #    thread-freelance-5/memo: max_body_chars == 10000 - wrapper_chars - 717
-    #    EXACTLY on all four, and 717 is a fixed worst-case reserve. The ceiling
-    #    moves with your ITEM COUNT, not with another seat's status post.
+    # ⭐ WHAT ACTUALLY MOVES THE CEILING IS YOUR ITEM COUNT. MEASURED 2026-10-24
+    #    across bellwether/tradedesk/thread-freelance-5/memo:
+    #    max_body_chars == 10000 - wrapper_chars - 717 EXACTLY on all four
+    #    (wrappers 952/1685/1662/485). 717 is a FIXED worst-case reserve, so
+    #    adding a second pin costs you ceiling; another seat's status post does
+    #    not. ⇒ A seat that shed body and still reads at_risk should count its
+    #    ITEMS before deleting more text.
+    # ⛔ THE ENDPOINT DOES NOT CLAIM OTHERWISE AND AN EARLIER VERSION OF THIS
+    #    COMMENT SAID IT DID. /session-payload states plainly that
+    #    max_body_chars "has already done it" worst-case; what it attributes to
+    #    the live board is the at_risk VERDICT, which I have not measured. Four
+    #    exact hits is a strong fit to a formula, not a reading of the
+    #    implementation -- do not cite this as the broker's contract.
     PERISHABLE = "re-query http://192.168.1.168:3030/session-payload/<seat> and read .compact.verdict"
 
     for key in sorted(buckets, key=lambda k: -len(buckets[k])):
