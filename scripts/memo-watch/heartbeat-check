@@ -118,6 +118,38 @@ export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 #      THE CONTROLS: :20 still reads a 475-518s heartbeat, still the ONLY slot inside
 #      the 600s acattrmax, and it is not failing. The cache story was already dead on
 #      the 5,25,45 data; it is now dead without the time-of-day confound that killed it.
+# ⭐⭐ VERDICT 2026-10-24 06:25 -- OUTCOME 2, AT THE PRE-REGISTERED THRESHOLD, NOT RE-FITTED.
+#    13 clean :20 runs since the reversal armed 2026-10-23T18:13 -- 18:20 19:20 20:20
+#    21:20 22:20 23:20 00:20 01:20 02:20 03:20 04:20 05:20 06:20, every one "fresh"
+#    (475-533s). The rule said >= 12; 0.56^13 = 5.3e-4.
+#    ZERO rc=2 anywhere since arming: the newest rc=2 in /tmp/cronguard-misses.log is
+#    2026-10-23T13:20:01, five hours BEFORE the reversal. Controls :05 :25 :45 are clean
+#    across the same 12.2 hours, so outcome 3 (failures at every slot) is excluded too.
+#    ⇒ THE FAULT ENDED AROUND 2026-10-23 13:20, AND EVERY SLOT-BASED READING OF IT WAS
+#      NOISE -- including the 11-of-11-at-:20 clustering that opened this investigation.
+#
+# ⛔ WHAT THIS DOES NOT SAY. It does not say what the fault WAS, and it does not say that
+#    anything stopped it. 13:20 is the last rc=2 in the observed series, an endpoint, not
+#    a demonstrated cause. a31 resumed 16:05 and volume1 noatime was already on, so the
+#    NAS was not held still. "What made the heartbeat unreadable 11 times in 24h" is
+#    CLOSED AS UNEXPLAINED, not solved. If rc=2 returns, re-open this verdict first.
+#
+# ⭐⭐ THE METHOD IS THE DURABLE PART, AND IT COST THREE DEAD HYPOTHESES TO LEARN IT.
+#    An 11-of-11 clustering in a single slot, with a clean negative control from the same
+#    instrument (4 rc=1 at :40/:40/:00/:00) and equal sampling across slots, looked like
+#    strong evidence -- and was noise. What exposed it was not a better theory. It was
+#    restoring the SUSPECT slot ALONGSIDE its controls so that slot and time were
+#    separated WITHIN each hour, and writing the stopping rule down BEFORE the data
+#    arrived. Both earlier interventions were confounded the same way: each was made
+#    immediately after the last occurrence of an intermittent fault, so "the fix worked"
+#    and "it stopped on its own" predicted identical silence.
+#    ⛔ Do not revive the attribute-cache or contention stories. Both are refuted above,
+#      and :20 is STILL the only slot inside the 600s acattrmax while passing 13/13.
+#
+# ⭐ THE SCHEDULE STAYS 5,20,25,45. It is no longer a discriminator, but it costs nothing,
+#    it keeps the within-hour control that made this readable at all, and reverting it
+#    restores the 0,20,40 sampling that let a fault about TIME read as a fault about SLOT.
+
 stamp() { date '+%Y-%m-%dT%H:%M:%S%z'; }
 
 HB=${MEMO_WATCH_HEARTBEAT:-/mnt/nas/data/memo-watch/heartbeat}
