@@ -65,6 +65,17 @@ by relevance means silence is not absence.
 UNFILTERED results at 200, so an untagged memo is not merely untidy, it is
 invisible to the query that should find it.
 ⛔ **Never store a credential value.** Record where it lives.
+⛔ **Every `POST /documents` carries `"actor": "slack-miner"` — that exact
+string, nothing else.** It is stored as the memo's `authored_by`, which is what
+makes "everything this writer produced" a query you can run.
+⚠️ **Do not invent a name for yourself, and do not improve on this one.**
+Measured 2026-10-24 over 12,247 documents: this field was left unnamed in this
+brief, and 29 memos came back carrying FIVE spellings of one writer —
+`slack-miner`, `slack-archive`, `slack-mining`, `slack-archive-miner`,
+`memo-slack-miner`. Every one of them is reasonable, which is the problem: a
+free-text identity field filled from a model's own judgement drifts by
+construction, and an identifier that drifts groups nothing. The value does not
+need to be the best name available. It needs to be the same one every run.
 
 ## How to write one
 
