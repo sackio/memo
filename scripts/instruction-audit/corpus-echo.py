@@ -7,15 +7,21 @@
    16 days. Correcting the pin left the memo saying it, and the memo is the thing
    a future seat will /recall.
 
-⛔⛔ RANK 1 IS USUALLY THE CORRECTION, NOT THE CARRIER -- MEASURED, AND IT IS WHY
-   THIS DOES NOT REPORT A TOP HIT. Querying the false pin line verbatim returned
-   `d5a516ff` (the CORRECTION) at 0.730 and `5bd57a45` (which still contains the
-   false sentence) at 0.631, rank 4. A correction out-scores its carrier precisely
-   BECAUSE it is about it, so "the top hit is a correction" is the expected shape
-   whether or not anything was repaired. A lane that stopped at rank 1 would read
-   every one of these as already handled. Memo `316537b1` records the SAME contest
-   running the other way (counterweight 0.547 below the carrier 0.632) -- so the
-   order is not controllable in either direction and neither can be assumed.
+⛔⛔ RANK 1 IS THE DOCUMENT *ABOUT* THE CLAIM, WHICH IS NOT THE SAME AS THE ONE
+   THAT IS RIGHT -- AND THIS IS WHY NOTHING HERE REPORTS A TOP HIT. Querying the
+   false pin line verbatim returned `d5a516ff` at 0.730 and `5bd57a45` at 0.631,
+   rank 4. A document whose subject IS a claim out-scores one that merely contains
+   it, so a high score tracks aboutness, never truth.
+⛔⛔ MEASURED THE SAME DAY, AND IT IS THE WHOLE REASON FOR THE CAUTION: `d5a516ff`,
+   the rank-1 hit, was ITSELF FALSE. It declared a pod md5 gate absent; the gate
+   exists and fails closed on 8 live Deployments (`set -e`; `md5sum -c -`; `exec`),
+   verified against `kubectl get deploy -n tradedesk` and 44 `git grep` hits in 16
+   manifests. It has been reversed and retitled. `earnings`: "a correction
+   outranking its carrier only helps when the correction is right."
+   ⇒ For one day the NEWEST document and the HIGHEST-RANKED document were the same
+     document, and it was the wrong one. Neither recency nor rank is evidence.
+   Memo `316537b1` records the contest running the other way too (counterweight
+   0.547, below the carrier at 0.632), so the order is not controllable either way.
 
 ⛔ IT PROPOSES, IT DOES NOT DECIDE. Output is candidates for a human to read. A
    document is not guilty because it ranks well against a false sentence; the
