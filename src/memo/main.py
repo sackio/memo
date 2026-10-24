@@ -385,9 +385,26 @@ async def memo_update(
     prepend: str | None = None,
     expect_content: str | None = None,
     allow_shrink: bool = False,
+    clear_valid_until: bool = False,
+    authored_by: str | None = None,
     db_path: str | None = None,
 ) -> dict | None:
     """Update an existing memo by ID. Only provided fields are changed.
+
+    `clear_valid_until=True` puts a memo back into the DEFAULT READ PATH by
+    clearing its expiry; `superseded_by` is left alone, because the lineage can
+    be true while the expiry is wrong. ⛔ There is deliberately no way to SET an
+    expiry here — that retires a memo from every default read, and it must carry
+    its lineage edge in the same transaction, which is `memo_supersede_link`.
+    ⚠️ It is a BOOLEAN rather than a nullable field on purpose: over this
+    protocol an omitted argument and an explicit null are the same thing, so a
+    nullable `valid_until` could not express "clear it" without guessing. (The
+    REST door can tell them apart via `model_fields_set` and so takes
+    `"valid_until": null` there — same operation, two protocols.)
+
+    `authored_by` CORRECTS the original author. ⚠️ Not the same as recording who
+    made this edit. Passing None leaves it unchanged; clearing it is not offered
+    here, since an unattributed memo is never the goal.
 
     If content is updated, the embedding and token_count are recomputed automatically.
 
@@ -628,6 +645,8 @@ async def memo_update(
         embedding=embedding,
         expect_content=expect_content,
         provider_token_count=provider_token_count,
+        valid_until=None if clear_valid_until else db.UNSET,
+        authored_by=db.UNSET if authored_by is None else authored_by,
     )
     if isinstance(result, dict) and result.get("conflict"):
         # ⚠️ A LOUD refusal. The bug this replaces was a silent no-op reporting
@@ -2602,6 +2621,26 @@ async def update_document(doc_id: str, req: UpdateRequest, request: Request,
         new_content = (base + req.append) if req.append is not None \
             else (req.prepend + base)
 
+    # ⭐ `model_fields_set` IS THE WHOLE MECHANISM FOR THESE TWO, AND IT IS NOT
+    # INTERCHANGEABLE WITH AN `is None` TEST. `valid_until` and `authored_by`
+    # are both legitimately NULL, so `None` cannot mean "absent" for them the
+    # way it does for every other field on this request — see UpdateRequest and
+    # db._Unset. An `is None` test here would clear the expiry on EVERY memo
+    # anyone PATCHes, turning the ordinary edit path into a silent
+    # un-supersession of the corpus.
+    valid_until = req.valid_until if "valid_until" in req.model_fields_set else db.UNSET
+    authored_by = req.authored_by if "authored_by" in req.model_fields_set else db.UNSET
+    # ⛔ CLEAR-ONLY. Setting an expiry retires a memo from the default read path
+    # and must carry its lineage edge in the same transaction — that is
+    # `/supersede-link`, not a bare field write. Refused rather than accepted,
+    # because a memo retired here would stop being served with nothing
+    # recording what replaced it.
+    if valid_until is not db.UNSET and valid_until is not None:
+        raise HTTPException(
+            status_code=422,
+            detail="`valid_until` is clear-only here: send null to put a memo back "
+                   "into the default read path. To RETIRE one, use /supersede-link, "
+                   "which writes the expiry and the lineage edge in one transaction.")
     if new_content is not None:
         embedding, provider_token_count = await _embed_document_counted_or_413(new_content)
     else:
@@ -2616,6 +2655,8 @@ async def update_document(doc_id: str, req: UpdateRequest, request: Request,
         embedding=embedding,
         expect_content=expect_content,
         provider_token_count=provider_token_count,
+        valid_until=valid_until,
+        authored_by=authored_by,
     )
     if isinstance(result, dict) and result.get("conflict"):
         # 409, not a silent overwrite. The bug this accompanies was a no-op that

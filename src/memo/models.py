@@ -290,6 +290,45 @@ class UpdateRequest(PermissiveRequest):
     # comparison lives in `_sync_update` (db.py) and is unconditional there.
     # ⇒ Mismatch is 409, never a silent overwrite. Same contract as `memo_update`.
     expect_content: str | None = None
+    # CLEAR-ONLY. Send `"valid_until": null` to put a memo back into the default
+    # read path; any NON-null value is refused with a 422. [v0.5.2]
+    #
+    # ⛔ WHY NULL IS A VALUE HERE AND ABSENT EVERYWHERE ELSE IN THIS MODEL. Every
+    # other field uses `None` to mean "the caller did not send this", so the
+    # handler can leave the column alone. That convention CANNOT express this
+    # operation, because `null` IS the target value — under it, a PATCH that
+    # never mentioned `valid_until` and a PATCH asking to clear it are the same
+    # object. The handler therefore reads `req.model_fields_set`, which
+    # distinguishes "absent" from "explicitly null", and passes `db.UNSET` for
+    # absent. ⚠️ Declaring the field without that check would clear the expiry
+    # on every document any caller ever PATCHes — a silent un-supersession of
+    # the whole corpus, from a one-line model change that reviews as harmless.
+    #
+    # ⛔ AND WHY SETTING ONE IS REFUSED RATHER THAN SUPPORTED. Writing a
+    # `valid_until` is how a memo leaves the default read path, and `/supersede`
+    # does it in ONE transaction that also writes the lineage edge (db.py
+    # `_sync_supersede`). A bare PATCH could retire a document with no successor
+    # and no edge — the corpus would stop serving it and nothing would say what
+    # replaced it. Clearing has no such pair: it only makes an existing,
+    # fully-linked document readable again.
+    # ⇒ Scope authorised by Ben, Slack #memo 2026-10-23 11:05 ("yes"), for the
+    #   52 continuations wrongly marked expired. `superseded_by` is left alone;
+    #   the lineage is true, only the EXPIRY was wrong.
+    valid_until: float | None = None
+    # The ORIGINAL author, correctable here. ⚠️ Distinct from `actor` above,
+    # which is whoever is making THIS edit — see that field's note. Same
+    # `model_fields_set` contract as `valid_until`: absent leaves the column
+    # alone, explicit null clears it.
+    #
+    # ⭐ IT EXISTS BECAUSE THE COLUMN WAS WRITE-ONCE AND THE WRITER IS A MODEL.
+    # `POST /documents` takes `actor` and stores it; nothing could ever amend
+    # it. Measured 2026-10-24 over 12,247 documents: 29 rows carry FIVE
+    # spellings of one writer — `slack-miner`, `slack-archive`, `slack-mining`,
+    # `slack-archive-miner`, `memo-slack-miner` — because the slack miner is a
+    # `claude -p` worker and its prompt never named the string, so each run
+    # invented one. A free-text identity field filled by a model drifts by
+    # construction, and an identifier that drifts cannot group anything.
+    authored_by: str | None = None
     db_path: str | None = None
 
 

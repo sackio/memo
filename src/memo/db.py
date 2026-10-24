@@ -515,11 +515,34 @@ def _sync_store(db_path: str, content: str, title: str | None, tags: list[str],
     return doc_id
 
 
+class _Unset:
+    """Sentinel for "the caller did not send this field".
+
+    ⛔ EVERY OTHER OPTIONAL ARGUMENT ON THIS PATH USES `None` FOR THAT, AND TWO
+    COLUMNS CANNOT. `valid_until` and `authored_by` are both legitimately
+    NULL-valued, so `None` is a value a caller may want to WRITE — under the
+    usual convention, "leave it alone" and "set it to null" are the same call,
+    and the handler would have to guess. It guessed wrong in the safe-looking
+    direction: leaving alone. That silently makes the clear operation a no-op
+    returning 200, which is the exact failure shape this file already carries
+    three times (`append`, `expect_content` over HTTP, `add_tags`).
+    ⇒ The distinction is carried explicitly instead of inferred.
+    """
+
+    def __repr__(self) -> str:       # so a stray sentinel in a log is obvious
+        return "<UNSET>"
+
+
+UNSET = _Unset()
+
+
 def _sync_update(db_path: str, doc_id: str, content: str | None, title: str | None,
                  tags: list[str] | None, metadata: dict | None,
                  embedding: list[float] | None,
                  expect_content: str | None = None,
-                 provider_token_count: int | None = None) -> dict | None:
+                 provider_token_count: int | None = None,
+                 valid_until: float | None | _Unset = UNSET,
+                 authored_by: str | None | _Unset = UNSET) -> dict | None:
     conn = _get_or_create_conn(db_path)
     row = conn.execute("SELECT * FROM documents WHERE id = ?", (doc_id,)).fetchone()
     if row is None:
@@ -553,11 +576,24 @@ def _sync_update(db_path: str, doc_id: str, content: str | None, title: str | No
         new_provider_count = provider_token_count
     else:
         new_provider_count = existing.get("token_count_qwen3")
+    # ⛔ THESE TWO COLUMNS ARE APPENDED TO THE STATEMENT, NEVER FOLDED INTO THE
+    # FIXED LIST ABOVE. Both are legitimately NULL, so there is no value that
+    # could stand for "unchanged" in a fixed binding — writing them
+    # unconditionally would clear `valid_until` on every ordinary PATCH. See
+    # `_Unset`. The `is not UNSET` test is identity, so a caller passing None
+    # genuinely clears the column.
+    extra_cols, extra_vals = "", []
+    if valid_until is not UNSET:
+        extra_cols += ", valid_until=?"
+        extra_vals.append(valid_until)
+    if authored_by is not UNSET:
+        extra_cols += ", authored_by=?"
+        extra_vals.append(authored_by)
     conn.execute(
         "UPDATE documents SET content=?, title=?, tags=?, metadata=?, token_count=?, "
-        "token_count_qwen3=?, updated_at=? WHERE id=?",
+        "token_count_qwen3=?" + extra_cols + ", updated_at=? WHERE id=?",
         (new_content, new_title, json.dumps(new_tags), json.dumps(new_metadata),
-         new_token_count, new_provider_count, time(), doc_id),
+         new_token_count, new_provider_count, *extra_vals, time(), doc_id),
     )
     if embedding is not None:
         conn.execute("DELETE FROM document_embeddings WHERE doc_id = ?", (doc_id,))
@@ -1339,7 +1375,9 @@ async def update(db_path: str | None, doc_id: str, content: str | None, title: s
                  tags: list[str] | None, metadata: dict | None,
                  embedding: list[float] | None,
                  expect_content: str | None = None,
-                 provider_token_count: int | None = None) -> dict | None:
+                 provider_token_count: int | None = None,
+                 valid_until: float | None | _Unset = UNSET,
+                 authored_by: str | None | _Unset = UNSET) -> dict | None:
     """`expect_content` is an optimistic-concurrency guard for append. [v0.4.0]
 
     An append is read-modify-write, so two concurrent appends can silently drop
@@ -1350,7 +1388,7 @@ async def update(db_path: str | None, doc_id: str, content: str | None, title: s
     path = _resolve_path(db_path)
     result = await _write_with_lock_retry(_sync_update, path, doc_id, content, title,
                                           tags, metadata, embedding, expect_content,
-                                          provider_token_count)
+                                          provider_token_count, valid_until, authored_by)
     # ⛔ Only re-index a write that actually landed. `None` is "no such doc" and
     # `{"conflict": True}` is an optimistic-concurrency REFUSAL — in both cases the
     # stored content is unchanged, and re-chunking `content` would install passages
