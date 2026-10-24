@@ -1,0 +1,23 @@
+{
+  "_README": [
+    "Claims in INSTRUCTION FILES (skills, CLAUDE.md) that the OPERATOR has decided stay",
+    "unanchored. The unanchored lane in route.py drops a finding when, for that owner,",
+    "BOTH `file` and `claim` appear in the finding line.",
+    "",
+    "Match on a SHORT DISTINCTIVE PREFIX of the claim text, never the whole line: the",
+    "line carries an age in days and a line number, and both move. `file` is matched as",
+    "a substring too, so a path suffix is enough.",
+    "",
+    "Every entry names WHO decided and WHERE, because this is the operator's ruling and",
+    "not a silence the auditor granted itself. `who` is the deciding human or seat;",
+    "`where` is the channel and ts a reader can go and check.",
+    "",
+    "EMPTY IS THE CORRECT STARTING STATE. On 2026-10-23 `massive` reported five of their",
+    "lines as decided by Ben; the #massive history shows his bare `ok` (ts 1792803712)",
+    "answered the HOISTED ASK a0u, which was about editing the files, and said nothing",
+    "about the one-offs. An exemption written from that relay would have recorded a",
+    "ruling that does not exist, in the one place nobody would ever re-check.",
+    "",
+    "Shape: { \"<owner-seat>\": [ {\"file\":\"...\", \"claim\":\"...\", \"who\":\"...\", \"where\":\"...\", \"at\":\"YYYY-MM-DD\"} ] }"
+  ]
+}

@@ -116,6 +116,94 @@ def load_exempt() -> dict:
         return json.loads(PIN_EXEMPT.read_text())
     except Exception:
         return {}
+
+
+FILE_EXEMPT = Path(__file__).resolve().parent / "file-exempt.json"
+
+
+def load_file_exempt() -> dict:
+    """Claims in INSTRUCTION FILES that the OPERATOR has decided stay unanchored.
+
+    ⭐ The pin lane has had `pin-exempt.json` since 2026-10-23; this lane had
+       nothing, so a line Ben had already ruled on could only be silenced by
+       `seen.json` -- which is HOST-LOCAL state recording what I DID, not a
+       decision. Losing it re-opens a settled question as a fresh nag.
+    ⚠️ Earned 2026-10-23 22:11: `massive` replied that Ben had decided in Slack
+       #massive (21:00-21:01, "ok") that five dated one-off measurements stay
+       with no memo. That is an answer, not a backlog item, and nothing in this
+       script could record it.
+    ⛔ An exemption names WHO decided and WHERE. A silence I grant myself is not
+       an exemption, it is a detector quietly getting smaller.
+    """
+    try:
+        return json.loads(FILE_EXEMPT.read_text())
+    except Exception:
+        return {}
+
+
+# ⛔⛔ A SECOND, STALE `pin-exempt.json` LIVES IN $HOME NEXT TO THE REAL STATE FILES
+#    AND NOTHING READS IT. Measured 2026-10-23: the repo copy (the one loaded above)
+#    held 14 seats, ~/.memo-instruction-audit/pin-exempt.json held 9 -- a strict
+#    subset, i.e. an abandoned snapshot. The hazard is not the stale content, it is
+#    the NAME and the LOCATION: every other piece of this lane's state (seen.json,
+#    pin-nag.json) lives in that directory, so writing an exemption there is the
+#    natural mistake, and the seat you just exempted keeps being nagged with no error.
+#    ⇒ Do not delete it silently; SAY it is there, every run, until someone resolves it.
+HOME_EXEMPT_DECOY = Path.home() / ".memo-instruction-audit" / "pin-exempt.json"
+
+
+class SeenLedger(set):
+    """`seen.json` as a set whose keys survive a day passing.
+
+    ⛔⛔ THE LANE PROMISED "Reported once. Only NEW claims will be sent again" AND
+       COULD NOT KEEP IT. The key was the whole finding line, and a finding line
+       carries VOLATILE TOKENS -- the claim's age in days above all, which advances
+       every night. MEASURED 2026-10-23: 66 of the 90 recorded keys contained an
+       age token, so 73% of the backlog would have re-fired the next evening as
+       first contact.
+    ⭐ THE PIN LANE ALREADY FIXED EXACTLY THIS in `claim_key` and wrote the lesson
+       down beside it. This lane never got the fix, because the two lanes each
+       built their own key. One defect, two implementations, and only one of them
+       learned -- the same shape as the find/glob split that cost memo-minder a
+       host's worth of sessions.
+    ⚠️ AGE IS NOT THE ONLY VOLATILE TOKEN, and one night's data already proved it:
+       `atc` is in the ledger twice for one pin, as `145,856 chars` and
+       `145,880 chars`. The pin grew by 24 characters between two sweeps and
+       became, to this ledger, a different claim. Comma-grouped counts are
+       normalised for that reason.
+    ⇒ Normalisation can only ever MERGE two claims that were distinct, which costs
+       a notification that is not sent. The un-normalised failure SENDS one that
+       should not be, nightly, to a seat that already acted. Those are not
+       symmetric, and this errs toward silence deliberately.
+    """
+
+    _AGE = re.compile(r"(?<![\w:])(\d+|\?)d(?![\w])")
+    _LINENO = re.compile(r"(\.(?:md|py|sh|json|ya?ml|txt|toml|conf)):\d+", re.I)
+    _GROUPED = re.compile(r"\b\d{1,3}(?:,\d{3})+\b")
+
+    @classmethod
+    def key(cls, pair):
+        owner, line = pair
+        if not isinstance(line, str):
+            return (owner, line)
+        t = cls._LINENO.sub(r"\1:<ln>", line)
+        # Only the FIRST age token. The finding's own age field always precedes
+        # the claim text, so the first match is the volatile one and a later
+        # "retention 30d" inside the claim survives untouched.
+        # ⚠️ THIS WAS WINDOWED TO t[:80] AND THE WINDOW ITSELF LEAKED: two
+        #    `massive` findings carry their age at column 78, so the token
+        #    straddled the boundary, matched nothing, and those two alone would
+        #    still have re-fired nightly -- a fix that worked on 64 of 66 cases
+        #    and whose residue was invisible without counting it.
+        t = cls._AGE.sub("<age>d", t, count=1)
+        t = cls._GROUPED.sub("<n>", t)
+        return (owner, t.strip())
+
+    def add(self, pair):
+        super().add(self.key(pair))
+
+    def __contains__(self, pair):
+        return super().__contains__(self.key(pair))
 # ⚠️ HOST-LOCAL ($HOME), like seen.json. The cycle runs on server4 only (Ben /
 #    system, 10-22), so one ledger is correct -- but a run from another host
 #    would re-introduce every seat as first contact.
@@ -652,10 +740,43 @@ def main():
             continue
         unanch_by_owner.setdefault(owner, []).append(f"{prefix} {f['rest']}")
 
+    # ── operator-decided exemptions, and the decoy that eats them ─────────
+    fexempt = load_file_exempt()
+    n_fexempt = 0
+    for owner in list(unanch_by_owner):
+        rules = fexempt.get(owner, [])
+        if not rules:
+            continue
+        before = len(unanch_by_owner[owner])
+        # ⚠️ `.get` and the isinstance guard are not defensiveness for its own
+        #    sake: this file is hand-edited, it is read by a cron job nobody is
+        #    watching at 22:11, and a KeyError here takes down the whole route
+        #    -- every lane, not just this one.
+        def _hit(line):
+            return any(isinstance(r, dict) and r.get("file") and r.get("claim")
+                       and r["file"] in line and r["claim"] in line for r in rules)
+        unanch_by_owner[owner] = [l for l in unanch_by_owner[owner] if not _hit(l)]
+        n_fexempt += before - len(unanch_by_owner[owner])
+        if not unanch_by_owner[owner]:
+            del unanch_by_owner[owner]
+    if n_fexempt:
+        print(f"unanchored: {n_fexempt} line(s) exempted by operator decision "
+              f"(file-exempt.json)")
+    if HOME_EXEMPT_DECOY.exists():
+        advisory.append(
+            f"DECOY EXEMPTION FILE: {HOME_EXEMPT_DECOY} exists and is READ BY NOTHING. "
+            f"The authoritative copy is {PIN_EXEMPT}. An exemption written to the $HOME "
+            f"path is silently ignored and its seat keeps being nagged.")
+        print(f"⛔ decoy exemption file present and unread: {HOME_EXEMPT_DECOY}")
+
     try:
-        seen = set(tuple(x) for x in json.loads(STATE.read_text()))
+        # ⭐ MIGRATED ON READ, not rewritten by hand: every historical entry is
+        #   re-keyed through the same normaliser, so turning this on does NOT
+        #   re-notify the backlog it was written to suppress.
+        seen = SeenLedger(SeenLedger.key(tuple(x))
+                          for x in json.loads(STATE.read_text()))
     except Exception:
-        seen = set()
+        seen = SeenLedger()
 
     new = {o: [l for l in ls if (o, l) not in seen] for o, ls in by_owner.items()}
     new = {o: ls for o, ls in new.items() if ls}
