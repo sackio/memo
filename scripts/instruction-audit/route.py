@@ -93,8 +93,24 @@ def claim_key(rest: str) -> str:
     ⚠️ The PIN ID is dropped too: a seat that rewrites its pin gets a new id, and
        keying on it would re-introduce every surviving line as first contact.
        The text is the claim; the carrier is not.
+
+    ⛔⛔ AND SO IS EVERY ANNOTATION THE RENDERER APPENDS. MEASURED 2026-10-24:
+       adding a `[cue: "..."]` tag to the finding detail -- a display change,
+       nothing about the claim -- silently voided ALL 13 holder-granted
+       exemptions in one edit, because the key was taken from the RENDERED line.
+       Those are lines whose holders answered "option 3, not a claim" and were
+       promised "I will stop flagging that line". The lane would have re-nagged
+       every one of them that night, politely, while believing it kept its word.
+    ⭐ THE GENERAL FORM, WHICH IS THE PART WORTH KEEPING: an identity derived
+       from a rendered string is invalidated by any change to the renderer, and
+       the breakage is SILENT and reads as new findings. Strip annotations here,
+       and if a future tag is added it must be stripped here in the same commit.
+    ⚠️ `[author X]` is deliberately NOT stripped -- 3 of the 14 stored
+       exemptions were written WITH it, so removing it from the key would break
+       those three in the opposite direction. Measured, not assumed.
     """
     t = re.sub(r"^\S+\s+(?:\d+|\?)d\s+", "", rest).strip()
+    t = re.sub(r'\s*\[cue: "[^"]*"\]', "", t).strip()
     return t
 
 
@@ -1221,9 +1237,13 @@ def main():
                  f"last checked and are still there. I re-check every night and I cannot edit "
                  f"your pin -- only you can." if prior else "")
         msg = ("⛔ YOUR STANDING PIN NEEDS REVISING -- it carries claims nothing can reverify.\n\n"
-               "Each line below says of itself that it was MEASURED, VERIFIED, CONFIRMED or "
-               "OBSERVED -- and cites no memo id, so it cannot be corrected where it was "
-               "learned. (Prohibitions, operator rulings and pin headers are deliberately "
+               "Each line below declares itself an OBSERVATION -- it says measured, "
+               "verified, confirmed, reproduced, observed, benchmarked, timed, as of, "
+               "still open or on the wire -- and cites no memo id, so it cannot be "
+               "corrected where it was learned. The exact word that flagged each line "
+               "is quoted after it as [cue: \"...\"], because the line itself is "
+               "truncated at 110 chars and the cue is often past that point. "
+               "(Prohibitions, operator rulings and pin headers are deliberately "
                "NOT flagged; only self-declared observations are.) Your pin "
                "is spliced in AHEAD of your first turn, so a line that has gone false is read as "
                "established fact by a you with no memory to question it. Oldest first:\n\n  "

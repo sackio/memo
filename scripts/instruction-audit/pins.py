@@ -81,6 +81,12 @@ DIRECTIVE = re.compile(
     #    class I promised not to flag.
     r"|\bben\s+#[a-z0-9_-]+"                             # "Ben #tradedesk 10-20"
     r"|\bben\s+\d{1,2}[-/]\d{1,2}"                       # "Ben 10-20 ..."
+    # ⭐ ADDED 2026-10-24: "BEN'S ASKS: ... benchmark ..." on `b5988c67` was
+    #    flagged as an unanchored measurement. `\bben\b\s*[,:(]` cannot fire
+    #    because the next character is an apostrophe, so a list of the
+    #    operator's own asks read as a rotting observation -- the one class
+    #    this pattern exists to exclude.
+    r"|\bben'?s\b"
     r"|\b(?:per|from|by)\s+ben\b",
     re.I)
 
@@ -247,7 +253,7 @@ def is_claim(t: str) -> bool:
     #    measurement. A line that says "measured/verified/confirmed/as of" has
     #    declared itself an observation of the world -- that is the population
     #    that rots, and the population a memo id can serve.
-    return bool(CUE.search(t))
+    return declared_observation(t) is not None
 
 
 def claim_lines(body: str, min_age_days: int = 0, pref: set | None = None):
@@ -296,7 +302,8 @@ def claim_lines(body: str, min_age_days: int = 0, pref: set | None = None):
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from scan import RE_FULL, RE_SHORT, is_memo_ref, live_ids, schedule_ids, confirm_dangling   # noqa: E402
-from unanchored import CUE, DATE, QTY, has_memo_ref, newest_date   # noqa: E402
+from unanchored import (CUE, DATE, QTY, declared_observation,      # noqa: E402
+                        has_memo_ref, newest_date)
 
 
 def get(path):
@@ -458,11 +465,28 @@ def main():
                     #    session -- but the DM now says who to route it to.
                     author = r.get("author") or ""
                     by = f" [author {author}]" if author and author != name else ""
+                    # ⛔⛔ NAME THE CUE, BECAUSE THE QUOTE IS TRUNCATED AND THE
+                    #    TRUNCATION CAN CUT OFF THE EVIDENCE. MEASURED 2026-10-24
+                    #    on the two seats due a DM that night: `thread-tradedesk-6`
+                    #    line 10231447 ends "...with the project mount (verified)."
+                    #    and `apis` line c9bcf64c carries its "verified" past
+                    #    char 110 -- both were about to be told "this line says of
+                    #    itself it was VERIFIED" above a 110-char fragment
+                    #    containing no such word, and the tradedesk fragment reads
+                    #    as a prohibition ("before any kubectl apply, diff ...").
+                    # ⭐ A seat that cannot see the trigger concludes the DETECTOR
+                    #    is wrong, and pins.py has already been on the receiving
+                    #    end of that: `agents`, `mom` and `thread-code-2` each
+                    #    replied "that line is not in my pin any more" when the
+                    #    real fault was is_retired(). The cue token is 12 chars
+                    #    and makes the finding self-evidencing at any truncation.
                     for age, t in claim_lines(body, min_age_days=0, pref=pref):
+                        m = declared_observation(t)
+                        cue = f' [cue: "{m.group(0)}"]' if m else ""
                         findings.append({"owner": name, "kind": "unanchored-pin-claim",
                                          "id": rid,
                                          "detail": f"{age if age is not None else '?'}d  "
-                                                   f"{t[:110]}{by}"})
+                                                   f"{t[:110]}{cue}{by}"})
 
             # ── a cited memo that MOVED after the pin cited it ────────────
             if not retired:

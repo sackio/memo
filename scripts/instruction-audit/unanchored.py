@@ -48,6 +48,46 @@ HEADING = re.compile(r'^(#{1,6})\s+\S')
 # Someone went and LOOKED. Opinion and design intent are not claims that rot.
 CUE = re.compile(r'\b(measured|verified|confirmed|reproduced|observed|'
                  r'benchmark(?:ed)?|timed|still open|as of|on the wire)\b', re.I)
+# ⛔⛔ CUE MATCHES THE WORD, NOT ITS GRAMMATICAL ROLE -- AND THAT WAS INVISIBLE
+#    UNTIL THE CUE WAS PRINTED BESIDE THE LINE. MEASURED 2026-10-24 on the 14
+#    pin lines queued for DMs that night: roughly half were not observations at
+#    all. "cost ... must be MEASURED AT THE CLOSE" is an imperative,
+#    "Authority = OBSERVED BEHAVIOUR OF THE LIVE SYSTEM" is a definition,
+#    '"measured and rejected" is for a structure that LOST' is a quoted term,
+#    and "THE SHAPES THAT ACTUALLY BITE -- all measured, all mine:" is a list
+#    header. None of them declares that anyone went and looked.
+# ⭐ SAME ADJACENCY RULE corpus-echo.py and scan.py already carry: the marker
+#    must be read IN CONTEXT, not merely found in the string. Applied here to
+#    the 20 characters in front of the cue.
+# ⚠️ USED BY THE PIN LANE ONLY SO FAR (pins.is_claim). unanchored.scan_file
+#    still takes a bare CUE hit, deliberately: the false-positive rate above was
+#    measured on PIN lines and has not been measured on SKILL.md prose, and this
+#    lane DMs 132 seats. Measure there before adopting it -- do not assume a
+#    rule earned on one surface transfers to the next.
+NOT_DECLARATION = re.compile(
+    r"(?:\b(?:must|should|shall|can|could|to|be|being|been|get|gets|"
+    r"always|never)\s+(?:be\s+)?$"      # imperative: "must be measured"
+    r"|[=≡:]\s*(?:\*\*)?$"         # definition: "Authority = OBSERVED ..."
+    r"|[\"“‘'`]$)",           # a quoted term being discussed
+    re.I)
+
+
+def declared_observation(t: str):
+    """The CUE match only where it reads as "someone went and LOOKED".
+
+    Returns the match object, or None when the cue is an imperative, a
+    definition, a quoted term, or the line is a bare header ending in `:`.
+    """
+    # ⚠️ A header introducing a list is not a claim; its items are. Checked
+    #    before the cue so "-- all measured, all mine:" cannot slip through.
+    if t.rstrip().endswith(":"):
+        return None
+    for m in CUE.finditer(t):
+        if not NOT_DECLARATION.search(t[max(0, m.start() - 20):m.start()]):
+            return m
+    return None
+
+
 # A date in a form that pins the claim to an instant.
 DATE = re.compile(r'\b20\d{2}-\d{2}(?:-\d{2})?\b')
 # A magnitude. This is what makes it checkable -- and what makes a reader act.
