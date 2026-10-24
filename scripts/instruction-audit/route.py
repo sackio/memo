@@ -253,6 +253,22 @@ HERE = Path(__file__).resolve().parent
 
 # skill directory -> the seat that has DEMONSTRATED ownership by acting on a
 # finding in it. ⛔ Earn an entry; do not add one from a plausible name match.
+# ⛔⛔ DO NOT TRY TO PARSE THE OWNER OUT OF THE SKILL FILE. MEASURED AND DEAD,
+#    2026-10-24. The idea is obvious and wrong: a file that says "You are the
+#    `memo` seat" would establish ownership from EVIDENCE rather than from a
+#    name match, which is the bar this map sets. Ran it over all 21 distinct
+#    unowned host-local skill dirs across the 4 hosts: ZERO declare a seat.
+# ⭐ POSITIVE CONTROL, because 0/21 from a regex is usually a broken regex and
+#    not a finding: the same pattern extracts "You are the `memo` seat" from
+#    ~/.claude/skills/memo-minder/SKILL.md:10. The detector works; the files
+#    genuinely do not name an owner.
+# ⭐⭐ AND THE REASON REFRAMES THE BUCKET. They say "seat" constantly --
+#    alpaca-account 17 times, laura-work-macbook 13, resource-map 9,
+#    compact-self 9 -- always addressed to WHICHEVER seat is reading
+#    ("get yourself an account", "compact your own session"). Most of this
+#    bucket is FLEET-GENERAL capability, which does not have an owner to find;
+#    what it needs is a designated MAINTAINER, and that is an operator
+#    decision, not a lookup. ⇒ The digest is the right place for them to sit.
 HOSTLOCAL_OWNERS = {
     "docker-heal": "system",      # fixed 3 dead ids 2026-10-23, all four hosts
     # ⭐ CLAIMED BY `cluster`, DM 2026-10-23 10:49, naming each skill itself:
