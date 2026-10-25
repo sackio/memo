@@ -432,6 +432,12 @@ def nightly_budget(now: datetime | None = None) -> float:
             # ⚠️ No expiry recorded is NOT "never expires" -- every grant here has
             #    one. Pace it over a month so an unlabelled account cannot become
             #    an unbounded one.
+            # ⚠️ 30 is a PLACEHOLDER, not the grant length: measured windows run
+            #    18-34 days (memo `34fa4ebc`), so against a real 18-day grant this
+            #    fallback under-paces by 40% and the balance can expire with money
+            #    on it. It errs in the safe direction for the DAILY CAP and the
+            #    unsafe one for WASTE. Record the real `expires` rather than
+            #    relying on it.
             days = 30
         else:
             days = (date.fromisoformat(exp) - today).days
@@ -575,11 +581,19 @@ def next_acct(now: datetime | None = None, min_balance: float = 0.0) -> str:
     2026-10-22 and they are in grants.json now.
 
     ⛔ THE TWO ARE DIFFERENT EVENTS AND ONLY ONE DESTROYS MONEY. Each grant is its
-    own line expiring 30 days after it was GRANTED, so `renews` is when the NEXT
-    grant ARRIVES and `expires` is when the current BALANCE dies. A $60/day burst
-    once lived in this file for 40 minutes built on exactly that conflation, and
-    on 2026-10-22 this seat put a $90/day ask to Ben built on an inverted Console
-    reading. Confirm what a date is OF before using it as a deadline.
+    own line: `renews` is when the NEXT grant ARRIVES, `expires` is when the
+    current BALANCE dies. A $60/day burst once lived in this file for 40 minutes
+    built on exactly that conflation, and on 2026-10-22 this seat put a $90/day
+    ask to Ben built on an inverted Console reading. Confirm what a date is OF
+    before using it as a deadline.
+    ⛔⛔ AND NEVER DERIVE `expires` BY ADDING 30 DAYS TO A GRANT DATE. This
+    docstring asserted "30 days after it was GRANTED" until 2026-10-24; it is
+    FALSE. Measured offsets: pushbuild 10/12→11/11 = 30 d, agents2 10/17→11/20 =
+    34 d, ben 10/21→11/24 = 34 d, agents3 10/25→11/12 = 18 d. Read each grant's
+    "Expires on" off Console, per grant. A derived date errs LATE by up to 12
+    days, so the pacer keeps dribbling against a deadline that has already
+    passed -- money expiring unspent, the exact waste this module exists to
+    prevent. Memo `34fa4ebc`.
     """
     now = now or datetime.now(timezone.utc)
     grants = load_grants()
