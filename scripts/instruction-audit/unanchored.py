@@ -89,13 +89,29 @@ NOT_DECLARATION = re.compile(
 #    WENT AND LOOKED AT. NOT_DECLARATION already carries a definition guard
 #    (`DONE =`), and it misses this because the cue sits far past the 20-char
 #    lookback, deep in the clause the definition introduces.
-# \u26d4 STILL NOT WIDENING IT, AND THIS IS THE REASON RATHER THAN CAUTION: both
-#    instances were resolved AT THE HOLDER -- one exemption, one reword -- which
-#    is what the three-option DM is for. Widening the regex to swallow a whole
-#    clause after `=` buys one fewer DM per seat and pays for it in false
-#    NEGATIVES, which are silent, permanent, and the failure this lane exists to
-#    prevent. A third instance that the holder does NOT resolve is what should
-#    change the code.
+# ⛔ NOT WIDENED ON THOSE TWO, AND THE REASON WAS NOT CAUTION: both were
+#    resolved AT THE HOLDER -- one exemption, one reword -- which is what the
+#    three-option DM is for. Widening to swallow a whole clause after `=` buys
+#    one fewer DM per seat and pays in false NEGATIVES, which are silent,
+#    permanent, and the failure this lane exists to prevent. The trigger
+#    recorded here was: a third instance that the holder does NOT resolve.
+# ⭐⭐ THAT TRIGGER FIRED 2026-10-25 and the code changed -- see GOVERNED and
+#    `_inside_quote` below. `thread-tradedesk-1` declined all THREE of its
+#    flagged lines on pin `59b6da6f` and resolved none: "MEASURED" modifying
+#    slippage in a go-live rule, "measured" inside a command description, and
+#    "as of" inside a quoted TEMPLATE ("absent as of T, re-check at T+n").
+#    Instances 3, 4 and 5, none reworded. Two mechanical shapes covered all
+#    three, and neither is the `=`-clause widening this comment refused.
+# ⛔ MEASURED BEFORE SHIPPING, ON THE WHOLE LIVE POPULATION, NOT ON THE THREE
+#    LINES THAT PROMPTED IT: 35 flagged pin lines across 136 seats -> 32. The 3
+#    dropped are exactly the 3 the holder disputed; the 32 keepers are
+#    unchanged. A rule validated only on its motivating examples cannot show
+#    what it costs.
+# ⚠️ THE `quantum-data` AND `apis` SHAPES ARE STILL NOT COVERED -- a cue attached
+#    to an OWED TASK, or sitting deep in a `DONE =` clause, clears both new
+#    tests. Left alone deliberately: both were holder-resolved, and the
+#    clause-swallowing regex they would need is the one with the false-negative
+#    cost. The same trigger applies to them.
 # ⭐ A CUE GOVERNED BY A PREPOSITION IS AN ADJECTIVE ON THE NEXT NOUN, NOT A
 #    REPORT. "after MEASURED slippage", "vs measured peaks", "on OBSERVED rain"
 #    name a KIND of slippage/peak/rain; nobody is saying they went and looked.
