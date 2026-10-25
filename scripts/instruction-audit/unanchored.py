@@ -96,19 +96,56 @@ NOT_DECLARATION = re.compile(
 #    NEGATIVES, which are silent, permanent, and the failure this lane exists to
 #    prevent. A third instance that the holder does NOT resolve is what should
 #    change the code.
+# ⭐ A CUE GOVERNED BY A PREPOSITION IS AN ADJECTIVE ON THE NEXT NOUN, NOT A
+#    REPORT. "after MEASURED slippage", "vs measured peaks", "on OBSERVED rain"
+#    name a KIND of slippage/peak/rain; nobody is saying they went and looked.
+#    A real report puts the cue ahead of its preposition ("measured ON the
+#    production DB"), so this cannot swallow one.
+GOVERNED = re.compile(r'\b(?:after|on|vs\.?|versus|with|from|than|per|against|'
+                      r'using|of|into|about)\s+$', re.I)
+
+
+def _inside_quote(t: str, pos: int) -> bool:
+    """Is `pos` inside an open double-quoted span?
+
+    ⛔ NOT THE SAME TEST AS NOT_DECLARATION's TRAILING-QUOTE GUARD, WHICH IS WHY
+       THAT GUARD MISSED THE CASE THAT PROMPTED THIS. That one asks whether a
+       quote sits in the 20 chars IMMEDIATELY BEFORE the cue, so it catches a
+       quoted TERM (`"measured and rejected" is for ...`) and is blind to a cue
+       buried mid-quotation: `"absent as of T, re-check at T+n"` opens its quote
+       seven characters too early. Counting delimiters answers the question the
+       lookback only approximates.
+    """
+    seg = t[:pos]
+    return (seg.count('"') + seg.count('\u201c') - seg.count('\u201d')) % 2 == 1
+
+
 def declared_observation(t: str):
     """The CUE match only where it reads as "someone went and LOOKED".
 
     Returns the match object, or None when the cue is an imperative, a
-    definition, a quoted term, or the line is a bare header ending in `:`.
+    definition, a quoted term, a modifier governed by a preposition, or sits
+    inside a quotation -- or when the line is a bare header ending in `:`.
+
+    ⛔⛔ EVERY TEST HERE REJECTS ONE CUE AND KEEPS SCANNING. It must never
+       reject the LINE: a line can carry an adjectival cue AND a real one
+       ("confirmed on measured data that p99 is 40ms"), and a line-level veto
+       would silently drop the claim because of the decoration beside it. That
+       is a FALSE NEGATIVE, which is the failure this lane exists to prevent,
+       and it is invisible. The first draft of the two tests below was written
+       as a line-level filter and had exactly this hole.
     """
     # ⚠️ A header introducing a list is not a claim; its items are. Checked
     #    before the cue so "-- all measured, all mine:" cannot slip through.
     if t.rstrip().endswith(":"):
         return None
     for m in CUE.finditer(t):
-        if not NOT_DECLARATION.search(t[max(0, m.start() - 20):m.start()]):
-            return m
+        before = t[max(0, m.start() - 20):m.start()]
+        if NOT_DECLARATION.search(before) or GOVERNED.search(before):
+            continue
+        if _inside_quote(t, m.start()):
+            continue
+        return m
     return None
 
 
