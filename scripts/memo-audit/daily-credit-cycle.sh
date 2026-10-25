@@ -310,8 +310,39 @@ if [ -z "$BATCHES" ]; then
   echo "FAILED audit (budget unknown)"
 else
   echo "budget buys ~${BATCHES} batches"
+  # ── WITNESS. Freeze the targets BEFORE the run or the night is unverifiable ──
+  # \u26d4\u26d4 THIS WAS MISSING FROM 2026-10-22 UNTIL 2026-10-25 AND FOUR AUDIT RUNS
+  #    WENT UNVERIFIED -- 10-23 x2 and 10-24 x2, roughly $40 of grant whose effect
+  #    on the corpus nobody can diff, because `verify-run.py` needs a snapshot taken
+  #    first and one taken afterwards shows every target untouched. The standing
+  #    rule is DIFF THE CORPUS, NEVER THE WORKER'S REPORT (memos 69f9b27f, e6482116),
+  #    `snapshot-targets.py` was written and committed for exactly this, and the
+  #    pipeline that needed it simply never called it. A tool that exists and is
+  #    not wired in is indistinguishable, in the log, from one that was never built.
+  # \u26a0\ufe0f run.py takes cands[offset : offset + batch_size*batches] -- the HEAD of the
+  #    same file with no --skip-probed here -- so head-N is exactly the target set.
+  #    If that invocation ever gains a filter, this snapshot stops matching it.
+  PRESNAP="runs/pre-snapshot-$(date +%Y%m%dT%H%M%S).json"
+  phase audit-snapshot /usr/bin/timeout 600 python3 snapshot-targets.py \
+      --candidates candidates.json --n "$(( BATCHES * 6 ))" --out "$PRESNAP"
+  RUNDIR_BEFORE=$(ls -dt runs/*/ 2>/dev/null | head -1)
+
   phase audit /usr/bin/timeout 36000 python3 run.py --candidates candidates.json \
       --batch-size 6 --batches "$BATCHES" --concurrency 2 --wait-for-lock 7200
+
+  # \u26a0\ufe0f ONLY IF THE AUDIT ACTUALLY RAN. A skipped or locked-out audit leaves no new
+  #    run dir, and verifying against the previous night's would report every target
+  #    untouched -- a clean-looking diff that means "no audit happened", which is the
+  #    one message it must not be able to produce by accident.
+  RUNDIR_AFTER=$(ls -dt runs/*/ 2>/dev/null | head -1)
+  if [ -s "$PRESNAP" ] && [ -n "$RUNDIR_AFTER" ] && [ "$RUNDIR_AFTER" != "$RUNDIR_BEFORE" ]; then
+    phase audit-verify /usr/bin/timeout 900 python3 verify-run.py \
+        --snapshot "$PRESNAP" --rundir "${RUNDIR_AFTER%/}"
+  else
+    echo "\u26d4 audit-verify SKIPPED: no new run dir (audit did not run) or snapshot missing."
+    echo "   \u26a0\ufe0f This night's audit, if any, is UNVERIFIED -- do not read its batch JSON as a corpus change."
+    rcs+=("audit-verify=SKIPPED-no-run")
+  fi
 fi
 
 # ── what the night actually bought ─────────────────────────────────────
