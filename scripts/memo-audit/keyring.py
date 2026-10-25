@@ -800,11 +800,22 @@ if __name__ == "__main__":
     now = datetime.now(timezone.utc)
     grants = load_grants()
 
-    print(f"{'acct':<10} {'grant':>8} {'spent':>9} {'remaining':>10}  renews")
+    # \u26a0\ufe0f PRINT BOTH DATES. This used to print `renews` alone and label a
+    # missing one "(unknown -- sorts LAST)", which is a claim about the SORT and
+    # is false whenever `expires` is set: next_acct() sorts on `expires or
+    # renews`, so agents3 -- added 2026-10-24 with a known 11/12 expiry and an
+    # unmeasured renewal -- read as parked at the back of the queue in the status
+    # view that this seat and `agents` share, while actually sitting second.
+    # Only an account with NEITHER date sorts last.
+    print(f"{'acct':<10} {'grant':>8} {'spent':>9} {'remaining':>10}  "
+          f"{'renews':<12} deadline")
     for a in sorted(grants):
-        print(f"{a:<10} {float(grants[a].get('monthly') or 0.0):>8.2f} "
+        g = grants[a]
+        deadline = g.get("expires") or g.get("renews")
+        print(f"{a:<10} {float(g.get('monthly') or 0.0):>8.2f} "
               f"{spent(a, now):>9.4f} {remaining(a):>10.2f}  "
-              f"{grants[a].get('renews') or '(unknown -- sorts LAST)'}")
+              f"{(g.get('renews') or '(none)'):<12} "
+              f"{deadline or '(neither -- sorts LAST)'}")
         if grants[a].get("_note"):
             print(f"{'':<10} ↳ {grants[a]['_note']}")
 
