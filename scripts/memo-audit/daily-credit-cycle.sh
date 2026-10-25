@@ -195,7 +195,27 @@ phase slack-digests  /usr/bin/timeout  900 python3 "$SLACK/mine.py" --days 1.2 -
 phase instr-audit /usr/bin/flock /tmp/instr-audit-route.lock /usr/bin/timeout 3000 python3 "$INSTR/route.py"
 PHASE_RESERVE="$AUDIT_RESERVE_S" \
 phase slack-mine     /usr/bin/timeout 10800 python3 "$SLACK/mine-run.py" --per-worker 4 --concurrency 2 --wait-for-lock 7200
-phase refute-recheck /usr/bin/timeout 1800 python3 refute-recheck.py --queue
+# ⛔⛔ GATE THE RECHECK ON THE RUNNER'S OWN CONTROLS, BECAUSE A BROKEN RUNNER
+#    DOES NOT FAIL -- IT PUBLISHES. refute-recheck writes refute-queue.json,
+#    pins.py reads it, and route.py DMs the holder "a memo your pin cites has
+#    been DISPROVED, so the pin is handing you a known-wrong fact every
+#    session". A wrong verdict therefore leaves this host and asks a seat to
+#    edit a correct pin. MEASURED 2026-10-25: `_run_grep` matched without re.M,
+#    11 of 48 refutations were false, and three of them reached `atc`, `nginx`
+#    and `servers` as exactly that DM. Two disputed it; one had not yet.
+# ⭐ refute.py HAS CARRIED 19 CONTROLS THE WHOLE TIME AND THE CYCLE NEVER RAN
+#    THEM. A control nothing invokes is indistinguishable from one that was
+#    never written -- the same finding as snapshot-targets.py (2a838c2), one
+#    phase apart in this very file.
+phase refute-selftest /usr/bin/timeout 120 python3 refute.py --self-test
+if [[ " ${rcs[*]} " == *" refute-selftest=0 "* ]]; then
+  phase refute-recheck /usr/bin/timeout 1800 python3 refute-recheck.py --queue
+else
+  echo "⛔ refute-recheck SKIPPED: the runner's own controls failed. The previous"
+  echo "   queue stands; a stale queue repeats yesterday's verdicts, a queue"
+  echo "   written by a broken runner mails new false ones to pin holders."
+  rcs+=("refute-recheck=SKIPPED-selftest")
+fi
 phase candidates-all /usr/bin/timeout 1800 python3 select-all.py --out candidates-all.json
 phase candidates     /usr/bin/timeout  900 python3 select-read-weighted.py \
                          --candidates candidates-all.json --out candidates.json --top 0
