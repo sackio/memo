@@ -81,6 +81,21 @@ NOT_DECLARATION = re.compile(
 #    never saw -- and widening a detector on a paraphrase is how a wrong rule
 #    gets in. ONE instance is not a pattern: left alone on purpose, so a SECOND
 #    one is visible as the second rather than as the first.
+# \u2b50 AND IT IS NOW THE SECOND, FOUND THE SAME NIGHT BY CHECKING INSTEAD OF
+#    ASSUMING: `apis` is holder-exempted for "PROJECT: apis \u2014 DONE = every BUILD
+#    item ... passes Apify's daily auto-check, verified ..." \u2014 reason recorded
+#    2026-10-23, "a target, not an observation". Same category as quantum-data's:
+#    THE CUE ATTACHES TO A GOAL OR AN OWED DELIVERABLE, NOT TO SOMETHING SOMEONE
+#    WENT AND LOOKED AT. NOT_DECLARATION already carries a definition guard
+#    (`DONE =`), and it misses this because the cue sits far past the 20-char
+#    lookback, deep in the clause the definition introduces.
+# \u26d4 STILL NOT WIDENING IT, AND THIS IS THE REASON RATHER THAN CAUTION: both
+#    instances were resolved AT THE HOLDER -- one exemption, one reword -- which
+#    is what the three-option DM is for. Widening the regex to swallow a whole
+#    clause after `=` buys one fewer DM per seat and pays for it in false
+#    NEGATIVES, which are silent, permanent, and the failure this lane exists to
+#    prevent. A third instance that the holder does NOT resolve is what should
+#    change the code.
 def declared_observation(t: str):
     """The CUE match only where it reads as "someone went and LOOKED".
 
