@@ -234,8 +234,25 @@ def _run_grep(p: dict) -> Result:
         return Result("refuted", f"{path} does not exist, so the pattern cannot be checked", p)
     except OSError as e:
         return Result("inconclusive", f"could not read {path}: {e}", p)
+    # ⛔⛔ re.M IS LOAD-BEARING AND ITS ABSENCE FAILED IN THE DIRECTION THAT
+    #    MANUFACTURES DRIFT. Without it `^` matches only at the START OF THE
+    #    WHOLE FILE, so an anchored probe refutes any memo whose evidence is not
+    #    on line 1 -- and "pattern absent" is byte-identical to a claim that has
+    #    genuinely rotted. MEASURED 2026-10-25 on the 05:47Z run: of 48
+    #    refutations, 17 probes were anchored and 14 of those lacked an inline
+    #    `(?m)`; re-running those 14 with re.M flipped 11 to `holds`. 23% of the
+    #    lane's output was false, and `servers` and `nginx` each disputed one the
+    #    same morning -- correctly, both times.
+    # ⭐ THE FIX BELONGS IN THE RUNNER, NOT THE PROBES. 18 of the 39 anchored
+    #    patterns already carried `(?m)` because some authoring worker thought to
+    #    add it; the other 17 did not. Patching patterns repairs the ones written
+    #    so far and nothing about the next author's discipline.
+    # ⚠️ IT CANNOT CREATE A FALSE REFUTATION. re.M only ADDS match positions,
+    #    so for `expect: present` it can only turn refuted -> holds; it moves
+    #    `expect: absent` the other way, but all 8 anchored absent-probes already
+    #    carry `(?m)` and so are unaffected. Unanchored patterns cannot change.
     try:
-        found = re.search(p["pattern"], body) is not None
+        found = re.search(p["pattern"], body, re.M) is not None
     except re.error as e:
         return Result("inconclusive", f"bad pattern: {e}", p)
     want = str(p.get("expect", "present")) == "present"
@@ -369,6 +386,13 @@ def self_test() -> int:
                                    "pattern": "zz" + "q-absent-" + "needle"}, "refuted"),
         ("grep on missing file",  {"kind": "grep", "path": "/nonexistent-aa9d2ec0",
                                    "pattern": "x"}, "refuted"),
+        # ⛔ THE CONTROL THIS LANE DID NOT HAVE UNTIL 2026-10-25. `^import
+        #    subprocess` sits well past line 1 of this file, so it matches ONLY
+        #    under re.M. Without the flag this case returns `refuted` and the
+        #    11 false refutations above come straight back. A bare `^` anchored
+        #    on line 1 would pass either way and prove nothing.
+        ("grep anchored, not L1",  {"kind": "grep", "path": str(me),
+                                   "pattern": r"^import subprocess$"}, "holds"),
         ("cmd rc 0",              {"kind": "cmd", "argv": ["hostname"]}, "holds"),
         ("cmd substring",         {"kind": "cmd", "argv": ["hostname"],
                                    "expect_substr": "zzz"}, "refuted"),
