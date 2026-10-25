@@ -72,6 +72,15 @@ NOT_DECLARATION = re.compile(
     re.I)
 
 
+# \u26a0\ufe0f ONE KNOWN MISS, RECORDED AND DELIBERATELY NOT ACTED ON. `quantum-data`
+#    2026-10-24 22:13: a flagged line's "measured" belonged to a TASK THEY OWE
+#    (\u201csend GB/day after day 1\u201d), not to an observation. NOT_DECLARATION looks at
+#    the 20 chars before the cue for an imperative, a definition or a quote, and
+#    an obligation phrased as a plain future clears all three. They reworded the
+#    line before I could read it, so what I have is their paraphrase of a line I
+#    never saw -- and widening a detector on a paraphrase is how a wrong rule
+#    gets in. ONE instance is not a pattern: left alone on purpose, so a SECOND
+#    one is visible as the second rather than as the first.
 def declared_observation(t: str):
     """The CUE match only where it reads as "someone went and LOOKED".
 

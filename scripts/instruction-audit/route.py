@@ -1375,17 +1375,25 @@ def main():
     # ⭐ The digest carries the FULL current set, not just the new ones -- it is
     #    the copy that can notice a finding nobody acted on, which the once-only
     #    per-seat DM is structurally blind to.
+    # \u26d4 NAME THE LANE IN BOTH COUNTS. These are two DIFFERENT populations --
+    #    `unanch_by_owner` is claims in guide/skill/agent FILES, `pin_claims` is
+    #    claims in standing PINS -- and both were rendered with the bare word
+    #    "unanchored". On 2026-10-24 they both happened to total 8, over 2 owners
+    #    and 6 owners respectively, and the digest read as one number contradicting
+    #    itself. A reader who distrusts the arithmetic stops reading the findings.
     digest = (f"instruction surface, {len(by_owner)} seat(s) with defects, "
               f"{len(advisory)} advisory, "
               f"{sum(len(v) for v in unanch_by_owner.values())} unanchored claims "
-              f"across {len(unanch_by_owner)} owner(s) "
+              f"IN FILES across {len(unanch_by_owner)} owner(s) "
               f"({len(unanch_new)} not yet told, {len(picked)} DMed tonight)."
               + (f"\n\n⛔ PIN HOLDERS ASKED {PIN_ESCALATE_DAYS}+ TIMES, LINE STILL THERE "
                  f"-- Ben asked to be told: "
                  + ", ".join(f"{o} (x{n})" for o, n in sorted(overdue, key=lambda x: -x[1]))
                  if overdue else "")
-              + f"\n\nPIN CLAIMS: {sum(len(v) for v in pin_claims.values())} unanchored across "
-                f"{len(pin_claims)} owner(s); {len(cleared)} line(s) no longer flagged today."
+              + f"\n\nPIN CLAIMS (separate lane): {sum(len(v) for v in pin_claims.values())} "
+                f"unanchored across {len(pin_claims)} owner(s); {len(cleared)} line(s) no "
+                f"longer flagged today; asked {len(picked_pins)} tonight "
+                f"({len(repeats)} repeat, {len(fresh)} new)."
               f"\n\nDEFECTS (routed):\n  "
               + ("\n  ".join(f"{o}: {'; '.join(ls)}" for o, ls in sorted(by_owner.items())) or "none")
               + "\n\nADVISORY (not routed) -- " + advisory_summary(advisory, full=FULL_ADVISORY))
