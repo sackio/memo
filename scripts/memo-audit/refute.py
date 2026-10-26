@@ -150,6 +150,12 @@ def validate(p: dict) -> None:
             raise Unsafe("path must be absolute")
         if kind == "grep" and not p.get("pattern"):
             raise Unsafe("grep needs a pattern")
+        host = p.get("host")
+        if host is not None:
+            if not _host_is_lan(str(host)):
+                raise Unsafe(f"host {host!r} is not on the LAN")
+            if not SAFE_TOKEN.match(path):
+                raise Unsafe(f"path {path!r} is not safe to cross a remote shell")
 
     elif kind == "cmd":
         argv = p.get("argv")
@@ -213,27 +219,112 @@ def _run_http(p: dict) -> Result:
     return _judge(p, body)
 
 
+def _ssh(host: str, argv: list, p: dict):
+    """Run a read-only argv on `host`. Returns (CompletedProcess, None) or
+    (None, reason) where a reason means INCONCLUSIVE -- the probe did not run.
+
+    ⛔ EVERY FAILURE HERE IS `inconclusive`, NEVER `refuted`. An unreachable
+       host, a timeout and a refused key all mean the claim WAS NOT TESTED, and
+       the one thing this lane must never do is publish a disproof it did not
+       earn: `refute-recheck` queues refuted ids and `route.py` DMs their pin
+       holders "a memo your pin cites has been DISPROVED."
+    """
+    for a in argv:
+        if not SAFE_TOKEN.match(a):
+            return None, f"token {a!r} is not safe to cross a remote shell"
+    cmd = ["ssh", "-p", "4999", "-o", "BatchMode=yes", "-o", "ConnectTimeout=8",
+           f"ben@{host}", "--", " ".join(shlex.quote(a) for a in argv)]
+    try:
+        cp = subprocess.run(cmd, capture_output=True, text=True,
+                            timeout=_check_timeout(p))          # never shell=True
+    except subprocess.TimeoutExpired:
+        return None, (f"ssh to {host} timed out after {_check_timeout(p)}s — "
+                      "a timeout is not a zero")
+    except (OSError, ValueError) as e:
+        return None, f"could not ssh to {host}: {e}"
+    if cp.returncode == 255:
+        return None, (f"ssh to {host} failed (rc 255) — host not searched, "
+                      "not a clean result")
+    return cp, None
+
+
 def _run_path(p: dict) -> Result:
     want_exists = str(p.get("expect", "exists")) == "exists"
-    try:
-        here = Path(p["path"]).exists()
-    except OSError as e:                                 # an NFS stall, typically
-        return Result("inconclusive", f"stat failed: {e}", p)
+    host = p.get("host")
+    if host:
+        # ⛔⛔ `host` WAS ACCEPTED, VALIDATED AND THEN SILENTLY IGNORED HERE
+        #    until 2026-10-26. The probe was stat'ed on whatever box the runner
+        #    happened to be on -- server4 -- and the verdict published under
+        #    the authority of a host it never contacted. MEASURED: 1 probe in
+        #    842 did this, `6c548a84` (server6's backup dir). Its `refuted`
+        #    happened to match what server6 really holds, which is exactly why
+        #    nothing caught it: a method that cannot be trusted still agrees
+        #    with reality most of the time, and only the disagreements bill.
+        cp, why = _ssh(host, ["test", "-e", p["path"]], p)
+        if why is not None:
+            return Result("inconclusive", why, p)
+        if cp.returncode not in (0, 1):
+            return Result("inconclusive",
+                          f"test -e on {host} returned rc {cp.returncode}, which "
+                          f"is neither present nor absent: {cp.stderr.strip()[:120]}", p)
+        here = cp.returncode == 0
+        where = f" on {host}"
+    else:
+        where = ""
+        try:
+            here = Path(p["path"]).exists()
+        except OSError as e:                             # an NFS stall, typically
+            return Result("inconclusive", f"stat failed: {e}", p)
     if here is not want_exists:
         return Result("refuted",
-                      f"{p['path']} {'exists' if here else 'is absent'}, "
+                      f"{p['path']}{where} {'exists' if here else 'is absent'}, "
                       f"expected {'exists' if want_exists else 'absent'}", p)
-    return Result("holds", f"{p['path']} as expected", p)
+    return Result("holds", f"{p['path']}{where} as expected", p)
 
 
 def _run_grep(p: dict) -> Result:
     path = Path(p["path"])
-    try:
-        body = path.read_text("utf-8", "replace")[:MAX_READ]
-    except FileNotFoundError:
-        return Result("refuted", f"{path} does not exist, so the pattern cannot be checked", p)
-    except OSError as e:
-        return Result("inconclusive", f"could not read {path}: {e}", p)
+    host = p.get("host")
+    want = str(p.get("expect", "present")) == "present"
+
+    # ⛔⛔ A MISSING FILE DOES NOT REFUTE AN `expect: absent` PROBE, AND THIS
+    #    FUNCTION SAID IT DID until 2026-10-26 -- it returned `refuted` from
+    #    the FileNotFoundError branch, above and before `expect` was ever read.
+    #    So a probe asserting "pattern X is NOT in file Y" reported X as FOUND
+    #    in a file that does not exist. ⚠️ IT FAILS IN THE DIRECTION THAT
+    #    MANUFACTURES DRIFT, and it is LATENT, not quiet: MEASURED 2026-10-26,
+    #    43 grep probes carry `expect: absent` and 0 of their files were
+    #    missing, so the lane has never once exercised this branch. It fires
+    #    the day any of those 43 paths is renamed, deleted or moved to another
+    #    host -- precisely the day the memo most deserves a careful look.
+    # ⭐ For `expect: present` a missing file IS a refutation: the cited
+    #    evidence is gone. The two cases differ and must not share a branch.
+    def _missing() -> Result:
+        if want:
+            return Result("refuted",
+                          f"{path} does not exist, so the pattern it cited is gone", p)
+        return Result("inconclusive",
+                      f"{path} does not exist, so an `absent` claim about its "
+                      "contents cannot be tested — this is not a refutation", p)
+
+    if host:
+        cp, why = _ssh(host, ["cat", "--", str(path)], p)
+        if why is not None:
+            return Result("inconclusive", why, p)
+        if cp.returncode != 0:
+            err = cp.stderr.strip()
+            if "No such file" in err:
+                return _missing()
+            return Result("inconclusive",
+                          f"could not read {path} on {host}: {err[:120]}", p)
+        body = cp.stdout[:MAX_READ]
+    else:
+        try:
+            body = path.read_text("utf-8", "replace")[:MAX_READ]
+        except FileNotFoundError:
+            return _missing()
+        except OSError as e:
+            return Result("inconclusive", f"could not read {path}: {e}", p)
     # ⛔⛔ re.M IS LOAD-BEARING AND ITS ABSENCE FAILED IN THE DIRECTION THAT
     #    MANUFACTURES DRIFT. Without it `^` matches only at the START OF THE
     #    WHOLE FILE, so an anchored probe refutes any memo whose evidence is not
@@ -255,12 +346,12 @@ def _run_grep(p: dict) -> Result:
         found = re.search(p["pattern"], body, re.M) is not None
     except re.error as e:
         return Result("inconclusive", f"bad pattern: {e}", p)
-    want = str(p.get("expect", "present")) == "present"
+    where = f"{path}{' on ' + host if host else ''}"
     if found is not want:
         return Result("refuted",
-                      f"pattern {'found' if found else 'absent'} in {path}, "
+                      f"pattern {'found' if found else 'absent'} in {where}, "
                       f"expected {'present' if want else 'absent'}", p)
-    return Result("holds", f"pattern as expected in {path}", p)
+    return Result("holds", f"pattern as expected in {where}", p)
 
 
 def _run_cmd(p: dict) -> Result:
@@ -413,13 +504,47 @@ def self_test() -> int:
         ("shell metachars",       {"kind": "cmd", "argv": ["ls", "; rm -rf /"],
                                    "host": "server4"}, "inconclusive"),
         ("absurd timeout",        {"kind": "path", "path": "/", "timeout": 99999}, "inconclusive"),
+
+        # ⛔ THE CONTROLS THIS LANE DID NOT HAVE UNTIL 2026-10-26.
+        # ⭐ BOTH REMOTE CASES DISCRIMINATE, which is the only reason they are
+        #    worth their ssh. `/mnt/fast4` is server4-local (verified absent on
+        #    server3 and server5, 2026-10-26), so a runner that IGNORES `host`
+        #    stats it here, finds it, and answers `holds` -- failing the
+        #    control. A runner that honours `host` reaches server3 and answers
+        #    `refuted`. A control that passes either way proves nothing; the
+        #    canary that covered one verb of this runner and read as proof of
+        #    the runner is the mistake these are written against.
+        # ⚠️ `inconclusive` is ACCEPTED here so that a genuinely unreachable
+        #    server3 does not fail the gate and skip the whole recheck lane.
+        #    It is NOT a loophole: the unfixed runner returns `holds`, which is
+        #    in neither set.
+        ("path host honoured",    {"kind": "path", "path": "/mnt/fast4",
+                                   "host": "server3"}, ("refuted", "inconclusive")),
+        ("grep host honoured",    {"kind": "grep", "host": "server3",
+                                   "path": "/mnt/fast4/nginx/conf/site:agent.pushbuild.com",
+                                   "pattern": "server_name"}, ("refuted", "inconclusive")),
+        ("path host not on LAN",  {"kind": "path", "path": "/", "host": "example.com"},
+                                  "inconclusive"),
+        # ⛔⛔ THE ONE THAT MATTERS. A missing file cannot show that a pattern
+        #    is ABSENT from it, and this branch returned `refuted` -- reporting
+        #    the forbidden pattern as FOUND in a file that does not exist. 43
+        #    probes carry `expect: absent`; none has yet hit a missing file, so
+        #    the lane has never exercised it. Without the fix this case returns
+        #    `refuted` and the control fails.
+        ("grep absent, no file",  {"kind": "grep", "path": "/nonexistent-aa9d2ec0",
+                                   "pattern": "x", "expect": "absent"}, "inconclusive"),
     ]
     bad = 0
     for name, probe, want in cases:
+        # ⚠️ `want` may be a TUPLE of acceptable verdicts -- used only where an
+        #    unreachable LAN host would otherwise fail the gate and skip the
+        #    recheck. Never widen one to make a failing control pass.
+        wants = (want,) if isinstance(want, str) else tuple(want)
         got = run(probe)
-        ok = got.verdict == want
+        ok = got.verdict in wants
         bad += not ok
-        print(f"  {'✅' if ok else '⛔'} {name:24s} want={want:13s} got={got.verdict:13s} {got.detail[:70]}")
+        label = want if isinstance(want, str) else "|".join(wants)
+        print(f"  {'✅' if ok else '⛔'} {name:24s} want={label:21s} got={got.verdict:13s} {got.detail[:70]}")
     print(f"\n{len(cases) - bad}/{len(cases)} controls pass")
     return 1 if bad else 0
 
