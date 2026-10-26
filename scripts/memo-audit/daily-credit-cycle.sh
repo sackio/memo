@@ -209,7 +209,7 @@ phase slack-mine     /usr/bin/timeout 10800 python3 "$SLACK/mine-run.py" --per-w
 #    phase apart in this very file.
 phase refute-selftest /usr/bin/timeout 120 python3 refute.py --self-test
 if [[ " ${rcs[*]} " == *" refute-selftest=0 "* ]]; then
-  phase refute-recheck /usr/bin/timeout 1800 python3 refute-recheck.py --queue
+  phase refute-recheck /usr/bin/timeout 1800 python3 refute-recheck.py --queue --notify memo
 else
   echo "⛔ refute-recheck SKIPPED: the runner's own controls failed. The previous"
   echo "   queue stands; a stale queue repeats yesterday's verdicts, a queue"

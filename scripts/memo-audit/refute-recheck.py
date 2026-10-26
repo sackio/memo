@@ -34,7 +34,84 @@ import refute                                           # noqa: E402
 HERE = Path(__file__).resolve().parent
 QUEUE = HERE / "refute-queue.json"
 STREAKS = HERE / "refute-streaks.json"
+STUCK_TOLD = HERE / "refute-stuck-told.json"
+BROKER = "http://192.168.1.168:3030"
 STUCK_AT = 3                      # consecutive refutations before we stop paying
+
+
+def _dm(to: str, subject: str, content: str) -> tuple[bool, str]:
+    """Send one DM. Returns (delivered, why) -- ATTEMPTED IS NOT DELIVERED."""
+    body = json.dumps({"to": to, "from": "memo", "durable": True,
+                       "priority": "info", "subject": subject,
+                       "content": content}).encode()
+    req = urllib.request.Request(BROKER + "/messages", data=body,
+                                 headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            res = json.loads(r.read())
+    except OSError as e:
+        return False, f"broker unreachable: {e}"
+    if (res.get("sent") or 0) >= 1:
+        return True, "sent"
+    return False, res.get("drop_reason") or "unknown"
+
+
+def notify_stuck(stuck: list[str], refuted: dict, streaks: dict, to: str) -> None:
+    """DM the seat about probes that have just gone STUCK.
+
+    ⛔⛔ THE STUCK LINE USED TO BE A print() AND NOTHING ELSE. The rule's own
+       comment says "the cheap fix is a human reading one line" -- and that
+       line went to a cron log on a headless host. MEASURED 2026-10-26: 32
+       memos were stuck, 10 of them refuted on 9 CONSECUTIVE NIGHTS, and no
+       person had been told about any of them. A value computed and not
+       delivered is indistinguishable from one never computed; this is the
+       fifth instance of that same fault in this repo (snapshot-targets.py
+       never called, refute.py --self-test never run, route.py's
+       unaddressable/undelivered printed after the digest was posted, the
+       refute queue dropped by select-all.py's age filter, and this).
+    ⭐ IT SENDS THE DELTA, NEVER THE STANDING SET. 32 ids every night is noise
+       a reader learns to skip, which is the same failure wearing a different
+       hat. A told-ledger means a seat hears about a probe once, when it
+       becomes actionable.
+    """
+    told = set()
+    if STUCK_TOLD.exists():
+        try:
+            told = set(json.loads(STUCK_TOLD.read_text()).get("ids") or [])
+        except ValueError:
+            told = set()           # ⚠️ a torn ledger is not an empty one, but
+                                   #    re-telling is the safe direction here
+    fresh = [i for i in stuck if i not in told]
+    if not fresh:
+        return                     # ⛔ nothing needed -> send nothing
+    # ⚠️ CAP THE BODY, NAME THE REMAINDER. The first delivery carries the whole
+    #    untold backlog -- 32 on 2026-10-26 -- and a DM nobody finishes reading
+    #    is a delivery only on paper.
+    SHOW = 15
+    shown = sorted(fresh, key=lambda i: -int(streaks.get(i) or 0))[:SHOW]
+    lines = [f"  {i[:8]}  refuted {streaks.get(i, '?')}x  {refuted[i]['title'][:64]}\n"
+             f"            {refuted[i]['detail'][:100]}" for i in shown]
+    if len(fresh) > SHOW:
+        lines.append(f"  ... and {len(fresh) - SHOW} more, worst-first; all of them in {QUEUE}")
+    ok, why = _dm(to, f"{len(fresh)} probe(s) now STUCK — the audit cannot fix them",
+        f"{len(fresh)} memo(s) have been refuted past the {STUCK_AT}-night threshold and are "
+        f"NO LONGER queued for the paid audit:\n\n" + "\n".join(lines) +
+        "\n\n⚠️ STUCK means the audit was paid and the refutation SURVIVED it, so the "
+        "evidence points at the probe rather than the corpus — but that is a default, not a "
+        "finding. A probe can also be RIGHT about a memo the audit failed to correct; "
+        "verified by hand 2026-10-26, 50419040 and 944a78fa are both genuine (the nginx "
+        "conf really does use a prefix block and `return 301`, not the regex block and 404 "
+        "those memos claim). Read the probe and the memo before believing either.\n"
+        f"\nFull list incl. ones you were told about before: {QUEUE}")
+    # ⛔ RECORD ONLY WHAT WAS DELIVERED. Marking a failed send as told loses it
+    #    permanently and silently -- the one outcome worse than not sending.
+    if ok:
+        STUCK_TOLD.write_text(json.dumps(
+            {"at": datetime.now(timezone.utc).isoformat(),
+             "ids": sorted(told | set(fresh))}, indent=1))
+        print(f"   ⇒ DMed {to} about {len(fresh)} newly-stuck probe(s)")
+    else:
+        print(f"   ⛔ NOT DELIVERED to {to} ({why}) — NOT recorded as told, will retry")
 
 
 def corpus(api: str, limit: int = 20000) -> list[dict]:
@@ -54,6 +131,8 @@ def main() -> int:
     ap.add_argument("--report", default=str(HERE / "refute-report.json"))
     ap.add_argument("--queue", action="store_true",
                     help="write the refuted ids where the next audit run reads them")
+    ap.add_argument("--notify", default="",
+                    help="DM this seat when a probe goes STUCK (delta only, once per id)")
     a = ap.parse_args()
 
     docs = corpus(a.api)
@@ -121,6 +200,8 @@ def main() -> int:
         if stuck:
             print("   ⇒ a memo the audit keeps failing to fix is evidence about "
                   "the probe. Read it before spending again.")
+            if a.notify:
+                notify_stuck(stuck, refuted, streaks, a.notify)
 
     # ⚠️ exit 0 even with refutations: a refuted memo is the system WORKING.
     # Only a probe set that cannot run is an operational failure.
