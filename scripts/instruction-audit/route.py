@@ -523,6 +523,22 @@ SENDER_RPM = 28                 # 30 is the cap; leave room for my own replies
 _sent_at: list[float] = []
 
 
+def _delivery_tag(owner, new, unaddressable, undelivered, dry=False) -> str:
+    """What actually happened to this owner's notice tonight.
+
+    ⛔ FOUR OUTCOMES, NEVER TWO. "attempted" and "delivered" are different
+       claims, and collapsing them is how a digest reports a finding as handled
+       when nobody was reachable to handle it.
+    """
+    if owner in set(unaddressable):
+        return "NO ROUTE -- reached nobody"
+    if owner in set(undelivered):
+        return "SEND REFUSED -- will retry"
+    if owner not in new:
+        return "already told, NOT re-sent"
+    return "would be DMed (dry run -- delivery UNTESTED)" if dry else "DMed tonight"
+
+
 class Unaddressable(RuntimeError):
     """The broker has no route to this name at all (`drop_reason:
     "no_resolution"`). ⭐ A DIFFERENT FINDING FROM A FAILED SEND, because no
@@ -1394,8 +1410,41 @@ def main():
                 f"unanchored across {len(pin_claims)} owner(s); {len(cleared)} line(s) no "
                 f"longer flagged today; asked {len(picked_pins)} tonight "
                 f"({len(repeats)} repeat, {len(fresh)} new)."
-              f"\n\nDEFECTS (routed):\n  "
-              + ("\n  ".join(f"{o}: {'; '.join(ls)}" for o, ls in sorted(by_owner.items())) or "none")
+              # ⛔⛔ THIS BLOCK USED TO BE HEADED "DEFECTS (routed)" AND BUILT FROM
+              #    `by_owner`, WHICH IS EVERY DEFECT -- NOT `new`, WHICH IS WHAT WAS
+              #    ACTUALLY SENT. A line suppressed by the seen ledger ("Reported
+              #    once") therefore printed every night under a header that reads as
+              #    HANDLED. MEASURED 2026-10-26: `exome`'s dangling-memo-ref had been
+              #    listed as "routed" on consecutive nights with ZERO sends, while the
+              #    advisory lane in the same digest said that seat was last delivered
+              #    to 48 days ago. Two true statements, one digest, opposite meanings.
+              # ⚠️ IN --dry-run NOTHING IS ATTEMPTED, so `unaddressable` is empty and
+              #    every pending owner would read as delivered. Say "would DM" there:
+              #    a dry run cannot know addressability without sending.
+              + f"\n\nDEFECTS ({len(new)} {'would be DMed' if dry else 'DMed tonight'}; the rest "
+                f"were told once and are NOT re-sent -- a tag of `already told` is NOT "
+                f"evidence anyone read it):\n  "
+              # ⛔ THE TAG KEYS ON THE OUTCOME, NOT ON MEMBERSHIP IN `new`. `new` is
+              #    what was ATTEMPTED; a seat can be in it and still have reached
+              #    nobody. The first draft of this tag printed "DMed tonight" beside
+              #    "NO ROUTE -- reached nobody" for `exome` in the same digest, which
+              #    is the very defect this block was written to remove.
+              + ("\n  ".join(
+                  f"{o} [{_delivery_tag(o, new, unaddressable, undelivered, dry)}]: "
+                  f"{'; '.join(ls)}" for o, ls in sorted(by_owner.items())) or "none")
+              # ⛔ AND SURFACE DELIVERY FAILURES IN THE DIGEST, NOT ONLY ON STDOUT.
+              #    `unaddressable` and `undelivered` are computed with care above and
+              #    were printed at a line the nightly cron sends to a log nobody reads,
+              #    AFTER this digest is posted. A value computed and not delivered is
+              #    indistinguishable from one never computed -- the same defect as
+              #    snapshot-targets.py (2a838c2) and refute.py's unrun self-test
+              #    (dc51b5a). All sends happen above, so both lists are final here.
+              + (f"\n\n⛔ NOT DELIVERED: broker has NO ROUTE to "
+                 f"{', '.join(sorted(set(unaddressable)))} -- their findings reached nobody."
+                 if unaddressable else "")
+              + (f"\n\n⛔ SEND REFUSED by the broker for "
+                 f"{', '.join(sorted(set(undelivered)))} -- NOT recorded as told, will retry."
+                 if undelivered else "")
               + "\n\nADVISORY (not routed) -- " + advisory_summary(advisory, full=FULL_ADVISORY))
     if dry:
         print("--- digest to memo ---\n" + digest)
