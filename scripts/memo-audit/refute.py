@@ -378,6 +378,26 @@ def _run_cmd(p: dict) -> Result:
     return _judge(p, body)
 
 
+def refuted_ids() -> set[str]:
+    """Memos the free nightly recheck disproved since the last run.
+
+    ⚠️ ABSENT IS NOT EMPTY. No queue file means the recheck has never run, not
+    that every probe holds -- so this returns an empty set either way and the
+    CALLER must not read a zero here as evidence of corpus health.
+
+    ⭐ IT LIVES HERE, NOT IN A SELECTOR, BECAUSE TWO SELECTORS NEED IT AND THIS
+       REPO HAS ALREADY PAID FOR TWO IMPLEMENTATIONS OF ONE JOB -- memo-minder
+       enumerated sessions with shell `find` while transcript-passages used
+       Python `glob`, and the `find` path silently returned 0 on the busiest
+       host for weeks. One definition, imported twice.
+    """
+    q = Path(__file__).resolve().parent / "refute-queue.json"
+    try:
+        return set(json.loads(q.read_text()).get("ids") or [])
+    except (OSError, ValueError):
+        return set()
+
+
 RUNNERS = {"http": _run_http, "path": _run_path, "grep": _run_grep, "cmd": _run_cmd}
 
 

@@ -42,6 +42,8 @@ from __future__ import annotations
 import argparse, base64, json, subprocess, sys
 from pathlib import Path
 
+import refute                  # the one definition of refuted_ids()
+
 HERE = Path(__file__).resolve().parent
 CONTAINER = "memo-v2"
 
@@ -91,20 +93,6 @@ def audited_ids() -> set[str]:
             continue                      # attempted, refused or failed != audited
         done.update(d.get("ids") or [])
     return done
-
-
-def refuted_ids() -> set[str]:
-    """Memos the free nightly recheck disproved since the last run.
-
-    ⚠ ABSENT IS NOT EMPTY. No queue file means the recheck has never run, not
-    that every probe holds -- so this returns an empty set either way and the
-    CALLER must not read a zero here as evidence of corpus health.
-    """
-    q = HERE / "refute-queue.json"
-    try:
-        return set(json.loads(q.read_text()).get("ids") or [])
-    except (OSError, ValueError):
-        return set()
 
 
 def pin_cited_ids() -> set[str]:
@@ -184,7 +172,7 @@ def main() -> int:
     cands = json.loads(Path(a.candidates).read_text())
     counts = read_counts()
     done = audited_ids()
-    refuted = refuted_ids()
+    refuted = refute.refuted_ids()
 
     # ⭐ A REFUTED PROBE RE-ENTERS THE BACKLOG EVEN IF IT WAS AUDITED BEFORE.
     # That is the point of the probe loop: the free nightly recheck found the

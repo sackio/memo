@@ -53,20 +53,43 @@ def main() -> int:
     out = ap.parse_args().out
 
     import corpus as _corpus
+    import refute                  # refuted_ids(): the one definition
     docs = _corpus.load(api=MEMO)      # ~78 MB per full fetch; share one copy
     now = datetime.now(timezone.utc).timestamp()
     live = [d for d in docs if d.get("valid_until") is None]
 
+    # ⛔⛔ A MEMO A PROBE HAS DISPROVED SKIPS THESE THREE FILTERS. They are
+    #    HEURISTICS estimating "is this worth a look": too short to audit, too
+    #    fresh to have drifted, nothing checkable in it. A failed probe is
+    #    DIRECT EVIDENCE answering that same question, and it beats every
+    #    estimate of it.
+    # ⭐⭐ MEASURED 2026-10-26, AND THIS IS WHY IT MATTERS: of 39 refuted memos,
+    #    7 were queued for the paid audit and ALL 7 were dropped right here by
+    #    `age_d < 2` -- ages 0.05 to 1.07 days. The queue reached the audit with
+    #    ZERO entries. The exclusion is SELF-REINFORCING: a refutation gets the
+    #    memo edited (by its holder, answering the DM route.py sends, or by the
+    #    audit itself), the edit refreshes `updated_at`, and the refreshed memo
+    #    is then "too fresh to have drifted" -- so the very response to a
+    #    refutation is what hides it from the lane meant to resolve it.
+    # ⚠️ select-read-weighted.py ALREADY carries the intended escape, and says
+    #    so: "A REFUTED PROBE RE-ENTERS THE BACKLOG EVEN IF IT WAS AUDITED
+    #    BEFORE... drift is exactly what the grant should be buying." That
+    #    escape runs one stage too late -- it re-admits ids past the
+    #    audited-ids ledger, in a pool THIS script has already dropped them
+    #    from. An escape downstream of the filter it is meant to undo is not an
+    #    escape.
+    refuted = refute.refuted_ids()
     rows = []
     for d in live:
         body = (d.get("title") or "") + "\n" + (d.get("content") or "")
-        if len(body) < 120:
+        spared = d["id"] in refuted
+        if len(body) < 120 and not spared:
             continue                       # nothing to audit
         age_d = (now - (d.get("updated_at") or now)) / 86400.0
-        if age_d < 2:
+        if age_d < 2 and not spared:
             continue                       # written today; nothing has drifted yet
         check = sum(w * min(3, len(rx.findall(body))) for w, rx in SIGNALS)
-        if check <= 0:
+        if check <= 0 and not spared:
             continue
         score = check * (1.0 + min(age_d, 180) / 60.0)
         if RULING.search(body):
