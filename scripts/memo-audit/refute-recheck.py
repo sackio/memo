@@ -81,6 +81,21 @@ def notify_stuck(stuck: list[str], refuted: dict, streaks: dict, to: str) -> Non
         except ValueError:
             told = set()           # ⚠️ a torn ledger is not an empty one, but
                                    #    re-telling is the safe direction here
+    # ⛔⛔ PRUNE BEFORE THE EARLY RETURN, NOT AFTER THE SEND. The first version
+    #    of this pruned only as a side effect of writing the ledger on a
+    #    successful send, so an id that stopped being stuck stayed recorded as
+    #    told until some UNRELATED new stuck id happened to trigger a write. A
+    #    memo fixed, then broken again in a quiet stretch, would never be
+    #    re-reported. Keep the told-ledger in step with the stuck list on every
+    #    run, including runs that send nothing.
+    keep = told & set(stuck)
+    if keep != told:
+        STUCK_TOLD.write_text(json.dumps(
+            {"at": datetime.now(timezone.utc).isoformat(),
+             "ids": sorted(keep)}, indent=1))
+        print(f"   [told-ledger] forgot {len(told - keep)} id(s) no longer stuck")
+        told = keep
+
     fresh = [i for i in stuck if i not in told]
     if not fresh:
         return                     # ⛔ nothing needed -> send nothing
@@ -106,6 +121,15 @@ def notify_stuck(stuck: list[str], refuted: dict, streaks: dict, to: str) -> Non
     # ⛔ RECORD ONLY WHAT WAS DELIVERED. Marking a failed send as told loses it
     #    permanently and silently -- the one outcome worse than not sending.
     if ok:
+        # ⛔ FORGET AN ID THAT IS NO LONGER STUCK. `streaks` already drops a memo
+        #    the moment its probe comes back (`streaks.pop` on a `holds`), and the
+        #    told-ledger must drop it too -- otherwise a memo that is fixed and
+        #    LATER goes stuck again is silently never re-reported, because its id
+        #    is still sitting in the told set from months ago. Intersecting with
+        #    the CURRENT stuck list is what keeps the two ledgers in step.
+        #    (Found in my own patch the same night I wrote it: tonight 944a78fa
+        #    and 50419040 were corrected and will flip to `holds`, so they are
+        #    exactly the ids this would have stranded.)
         STUCK_TOLD.write_text(json.dumps(
             {"at": datetime.now(timezone.utc).isoformat(),
              "ids": sorted(told | set(fresh))}, indent=1))
