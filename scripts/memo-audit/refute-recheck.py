@@ -201,7 +201,18 @@ def main() -> int:
             print("   ⇒ a memo the audit keeps failing to fix is evidence about "
                   "the probe. Read it before spending again.")
             if a.notify:
-                notify_stuck(stuck, refuted, streaks, a.notify)
+                # ⛔ A NOTIFICATION FAULT MUST NOT FAIL THE RECHECK. The queue is
+                #    already written by this point; letting an OSError from the
+                #    told-ledger write or an odd broker reply propagate would set
+                #    refute-recheck=1, and daily-credit-cycle.sh reads a non-zero
+                #    rc there as "the lane is broken". Telling nobody is bad;
+                #    telling nobody AND reporting the whole lane as failed is
+                #    worse, because it hides a queue that is in fact correct.
+                try:
+                    notify_stuck(stuck, refuted, streaks, a.notify)
+                except Exception as e:                       # noqa: BLE001
+                    print(f"   ⛔ stuck notification FAILED ({type(e).__name__}: {e}) "
+                          f"-- queue is still correct, nobody was told")
 
     # ⚠️ exit 0 even with refutations: a refuted memo is the system WORKING.
     # Only a probe set that cannot run is an operational failure.
